@@ -1,0 +1,299 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Sign Up | Spacers</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#323729",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#4b4358",
+                        "tertiary": "#ffffff",
+                        "on-secondary": "#2d3038",
+                        "inverse-surface": "#e0e5d0",
+                        "on-primary-container": "#4a6f00",
+                        "on-tertiary-fixed": "#1f182b",
+                        "surface-bright": "#363b2d",
+                        "on-error": "#690005",
+                        "surface-container-lowest": "#0b1005",
+                        "outline-variant": "#424934",
+                        "inverse-on-surface": "#2d3224",
+                        "tertiary-fixed-dim": "#cec2dc",
+                        "on-primary-fixed": "#121f00",
+                        "primary-fixed-dim": "#96da00",
+                        "on-secondary-fixed-variant": "#44474e",
+                        "inverse-primary": "#466800",
+                        "surface-tint": "#96da00",
+                        "primary-container": "#aff82a",
+                        "background": "#101509",
+                        "surface-dim": "#101509",
+                        "on-secondary-container": "#b6b8c1",
+                        "primary-fixed": "#aff82a",
+                        "on-tertiary-container": "#6a6077",
+                        "on-surface": "#e0e5d0",
+                        "surface": "#101509",
+                        "outline": "#8c947b",
+                        "on-tertiary": "#352d41",
+                        "on-primary": "#223600",
+                        "surface-container": "#1d2115",
+                        "on-primary-fixed-variant": "#344e00",
+                        "on-background": "#e0e5d0",
+                        "tertiary-fixed": "#eaddf8",
+                        "tertiary-container": "#eaddf8",
+                        "surface-container-highest": "#323729",
+                        "secondary-fixed-dim": "#c4c6d0",
+                        "surface-container-low": "#191d11",
+                        "secondary-fixed": "#e0e2ec",
+                        "surface-container-high": "#272c1e",
+                        "secondary-container": "#464951",
+                        "secondary": "#c4c6d0",
+                        "on-surface-variant": "#c2caae",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed": "#191c22",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#ffffff"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "lg": "24px",
+                        "sidebar-width": "260px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "gutter": "20px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-xl": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #0F1115; /* Level 0 Background as per Style Guidance */
+            color: #e0e5d0;
+            overflow-x: hidden;
+        }
+        .glass-panel {
+            background: rgba(28, 31, 38, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(62, 68, 80, 0.5);
+        }
+        .neon-glow {
+            box-shadow: 0 0 15px rgba(175, 248, 42, 0.3);
+        }
+        .department-dropdown-transition {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-md font-body-md">
+<!-- Background Atmospheric Effect -->
+<div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-fixed/5 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-container/5 blur-[120px] rounded-full"></div>
+</div>
+<!-- Sign Up Container -->
+<main class="relative z-10 w-full max-w-[480px]">
+<!-- Brand Header -->
+<div class="text-center mb-xl">
+<h1 class="font-headline-xl text-headline-xl text-primary-fixed tracking-tight">Spacers</h1>
+<p class="font-body-md text-on-surface-variant mt-xs">Mission Control Onboarding</p>
+</div>
+<!-- Form Card -->
+<div class="glass-panel rounded-xl p-lg shadow-2xl">
+<form class="space-y-lg" id="signupForm" onsubmit="return false;">
+<!-- Full Name Field -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" for="full_name">Full Name</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">person</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-11 pr-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary-fixed focus:border-primary-fixed transition-all placeholder:text-outline" id="full_name" name="full_name" placeholder="John Doe" type="text">
+</div>
+</div>
+<!-- Email Field -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" for="email">Email Address</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">mail</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-11 pr-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary-fixed focus:border-primary-fixed transition-all placeholder:text-outline" id="email" name="email" placeholder="john.doe@circlecorp.io" type="email">
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" for="password">Password</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">lock</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-11 pr-md text-on-surface focus:outline-none focus:ring-1 focus:ring-primary-fixed focus:border-primary-fixed transition-all placeholder:text-outline" id="password" name="password" placeholder="••••••••" type="password">
+</div>
+</div>
+<!-- Department Selector (Custom Dropdown) -->
+<div class="space-y-xs relative">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Select Department</label>
+<div class="flex items-center justify-between w-full bg-surface-container-low border border-outline-variant rounded-lg py-md px-md text-on-surface cursor-pointer hover:border-outline transition-all" id="deptDropdownTrigger">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant">corporate_fare</span>
+<span class="text-on-surface" id="selectedDeptText">Choose your team...</span>
+</div>
+<span class="material-symbols-outlined transition-transform duration-300" id="chevronIcon">expand_more</span>
+</div>
+<!-- Dropdown Content -->
+<div class="hidden absolute top-[calc(100%+8px)] left-0 w-full glass-panel rounded-lg shadow-xl z-20 overflow-hidden border border-outline-variant/50" id="deptDropdownContent">
+<div class="p-sm bg-surface-container-high/50 border-b border-outline-variant">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-sm top-1/2 -translate-y-1/2 text-sm text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container-low border-none text-body-sm py-sm pl-8 pr-sm rounded focus:ring-0" id="deptSearch" placeholder="Search departments..." type="text">
+</div>
+</div>
+<ul class="max-h-48 overflow-y-auto font-body-sm" id="deptList">
+<li class="px-md py-sm hover:bg-primary-fixed/10 hover:text-primary-fixed cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary-fixed" data-value="Engineering">Engineering</li>
+<li class="px-md py-sm hover:bg-primary-fixed/10 hover:text-primary-fixed cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary-fixed" data-value="Marketing">Marketing</li>
+<li class="px-md py-sm hover:bg-primary-fixed/10 hover:text-primary-fixed cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary-fixed" data-value="HR">HR</li>
+<li class="px-md py-sm hover:bg-primary-fixed/10 hover:text-primary-fixed cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary-fixed" data-value="Design">Design</li>
+<li class="px-md py-sm hover:bg-primary-fixed/10 hover:text-primary-fixed cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary-fixed" data-value="Operations">Operations</li>
+<li class="px-md py-sm hover:bg-primary-fixed/10 hover:text-primary-fixed cursor-pointer transition-colors border-l-2 border-transparent hover:border-primary-fixed" data-value="Security">Security</li>
+</ul>
+</div>
+<div class="flex items-start gap-xs mt-sm">
+<span class="material-symbols-outlined text-[14px] text-on-secondary-container mt-[2px]">info</span>
+<p class="font-label-sm text-label-sm text-on-secondary-container leading-tight italic">
+                            Joining a department requires approval from the department lead.
+                        </p>
+</div>
+</div>
+<!-- Action Button -->
+<button class="w-full bg-primary-fixed text-on-primary-fixed font-bold py-md rounded-lg neon-glow hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center gap-sm" type="submit">
+<span class="">Sign Up</span>
+<span class="material-symbols-outlined">arrow_forward</span>
+</button>
+<!-- Footer Links -->
+<div class="pt-md text-center">
+<p class="font-body-sm text-on-surface-variant">
+                        Already have an account? 
+                        <a class="text-primary-fixed font-semibold hover:underline" href="#">Log in</a>
+</p>
+</div>
+</form>
+</div>
+<!-- Branding Decoration -->
+<div class="mt-lg flex items-center justify-center gap-lg opacity-40 grayscale hover:grayscale-0 transition-all duration-700">
+<div class="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-md">shield</span> Secure
+            </div>
+<div class="w-1 h-1 bg-outline rounded-full"></div>
+<div class="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-md">bolt</span> Fast
+            </div>
+<div class="w-1 h-1 bg-outline rounded-full"></div>
+<div class="flex items-center gap-xs font-label-md text-label-md text-on-surface-variant">
+<span class="material-symbols-outlined text-md">deployed_code</span> Modular
+            </div>
+</div>
+</main>
+<script>
+        // Custom Dropdown Logic
+        const trigger = document.getElementById('deptDropdownTrigger');
+        const content = document.getElementById('deptDropdownContent');
+        const chevron = document.getElementById('chevronIcon');
+        const selectedText = document.getElementById('selectedDeptText');
+        const listItems = document.querySelectorAll('#deptList li');
+        const searchInput = document.getElementById('deptSearch');
+
+        // Toggle dropdown
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            content.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        });
+
+        // Close dropdown on click outside
+        document.addEventListener('click', (e) => {
+            if (!trigger.contains(e.target) && !content.contains(e.target)) {
+                content.classList.add('hidden');
+                chevron.classList.remove('rotate-180');
+            }
+        });
+
+        // Search Filter
+        searchInput.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            listItems.forEach(item => {
+                const text = item.textContent.toLowerCase();
+                item.style.display = text.includes(term) ? 'block' : 'none';
+            });
+        });
+
+        // Selection
+        listItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                const value = e.target.getAttribute('data-value');
+                selectedText.textContent = value;
+                selectedText.classList.remove('text-on-surface-variant');
+                selectedText.classList.add('text-on-surface');
+                content.classList.add('hidden');
+                chevron.classList.remove('rotate-180');
+                
+                // Visual feedback
+                trigger.classList.add('border-primary-fixed');
+                setTimeout(() => trigger.classList.remove('border-primary-fixed'), 400);
+            });
+        });
+
+        // Prevent dropdown click from bubbling
+        content.addEventListener('click', (e) => e.stopPropagation());
+
+        // Simple Form Interactivity
+        const form = document.getElementById('signupForm');
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const originalContent = btn.innerHTML;
+            
+            btn.disabled = true;
+            btn.innerHTML = `<span class="material-symbols-outlined animate-spin">progress_activity</span> Processing...`;
+            
+            setTimeout(() => {
+                btn.innerHTML = `<span class="material-symbols-outlined">check_circle</span> Success`;
+                btn.classList.replace('bg-primary-fixed', 'bg-green-500');
+                
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalContent;
+                    btn.classList.replace('bg-green-500', 'bg-primary-fixed');
+                }, 2000);
+            }, 1500);
+        });
+    </script>
+
+
+</body></html>
