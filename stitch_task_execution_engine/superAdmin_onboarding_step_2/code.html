@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Set Up Your Teams | Spacer</title>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: '#b6ff33',
+            surface: {
+              DEFAULT: '#101509',
+              dim: '#101509',
+              bright: '#363b2d',
+              lowest: '#0b1005',
+              low: '#191d11',
+            }
+          },
+          borderRadius: {
+            'custom': '8px',
+          }
+        }
+      }
+    }
+  </script>
+<style data-purpose="custom-layout">
+    body {
+      background-color: #101509;
+      color: #ffffff;
+      font-family: 'Inter', sans-serif;
+    }
+    /* Hierarchy visualization styling */
+    .hierarchy-line {
+      border-left: 1px solid rgba(255, 255, 255, 0.1);
+      margin-left: 20px;
+      padding-left: 24px;
+      position: relative;
+    }
+    .hierarchy-line::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 16px;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    /* Glassmorphism card */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    /* Atmospheric glow */
+    .glow-overlay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 30% 30%, rgba(182, 255, 51, 0.05) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: -1;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex overflow-hidden">
+<!-- BEGIN: LeftPane -->
+<!-- Brand identity and hierarchy preview -->
+<section class="w-1/2 relative flex flex-col border-r border-white/10 p-12 overflow-y-auto" data-purpose="brand-preview-pane">
+<div class="glow-overlay"></div>
+<!-- Branding -->
+<div class="mb-12">
+<div class="flex items-center gap-2 mb-4">
+<div class="w-6 h-6 bg-brand rounded-sm flex items-center justify-center">
+<svg fill="none" height="14" stroke="black" stroke-linecap="round" stroke-linejoin="round" stroke-width="3" viewbox="0 0 24 24" width="14"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.83a.5.5 0 0 0-.838-.376L16 11"></path><rect height="12" rx="2" width="14" x="2" y="6"></rect></svg>
+</div>
+<span class="font-bold text-sm tracking-widest text-white">SPACER</span>
+</div>
+<p class="text-zinc-400 max-w-sm text-sm leading-relaxed">
+        One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place
+      </p>
+</div>
+<!-- Hierarchy Visualizer -->
+<div class="mt-10 flex-grow" data-purpose="hierarchy-visualizer">
+<!-- Organization Level -->
+<div class="glass-card rounded-custom p-4 flex items-center justify-between mb-8 max-w-md">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold">
+<svg class="w-5 h-5" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+</div>
+<span class="font-semibold text-sm">Circle Corp</span>
+</div>
+<button class="text-zinc-500 hover:text-white">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+</button>
+</div>
+<!-- Teams Level -->
+<div class="hierarchy-line">
+<div class="flex items-center gap-2 mb-4 group cursor-pointer">
+<span class="text-white font-medium text-sm">Development Team</span>
+<svg class="w-3 h-3 text-zinc-500" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>
+</div>
+<!-- Project Level -->
+<div class="hierarchy-line">
+<div class="glass-card rounded-custom px-4 py-2 flex items-center justify-between mb-3 w-48 text-zinc-300 text-xs">
+<div class="flex items-center gap-2">
+<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M12 4v16m8-8H4"></path></svg>
+<span>Project Launch</span>
+</div>
+<svg class="w-3 h-3" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+<div class="glass-card rounded-custom px-4 py-2 flex items-center justify-between w-48 text-zinc-300 text-xs">
+<div class="flex items-center gap-2">
+<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M3 13h18M3 7h18M3 19h18"></path></svg>
+<span>App Redesign</span>
+</div>
+<svg class="w-3 h-3" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</div>
+</div>
+</div>
+<!-- Personal Workspace Level -->
+<div class="mt-8">
+<div class="flex items-center gap-2 mb-4">
+<span class="text-white font-medium text-sm">My Space (personal workspace)</span>
+</div>
+<div class="hierarchy-line">
+<div class="text-[10px] text-zinc-500 mb-2 font-bold uppercase tracking-wider">My Task</div>
+<div class="glass-card rounded-custom p-4 w-56 border-white/5">
+<div class="text-[11px] font-semibold text-zinc-100 mb-1">Fix auth token expiry bug</div>
+<div class="text-[10px] text-zinc-500 leading-tight">Sessions dropping before timeout period ends — users getting logged...</div>
+</div>
+<!-- Separator Line for Tasks -->
+<div class="h-8 border-l border-white/10 ml-4"></div>
+<div class="glass-card rounded-custom p-4 w-56 border-white/5">
+<div class="text-[11px] font-semibold text-zinc-100 mb-1">Fix auth token expiry bug</div>
+<div class="text-[10px] text-zinc-500 leading-tight">Sessions dropping before timeout period ends — users getting logged...</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- END: LeftPane -->
+<!-- BEGIN: RightPane -->
+<!-- Onboarding Form -->
+<main class="w-1/2 flex flex-col items-start justify-center px-24 bg-surface-dim" data-purpose="onboarding-form-pane">
+<div class="w-full max-w-lg">
+<span class="text-[11px] font-medium text-zinc-500 uppercase tracking-[0.2em] mb-4 block">Step 2 of 3</span>
+<h1 class="text-4xl font-bold text-white mb-6">Set up your teams</h1>
+<p class="text-zinc-400 text-sm mb-12 leading-relaxed">
+        Start with the teams that are most ready to adopt Spacer.<br/>
+        Many organizations begin with three teams and expand as adoption grows.
+      </p>
+<form class="space-y-8" data-purpose="teams-setup-form" onsubmit="return false;">
+<!-- Input Group -->
+<div class="space-y-3">
+<label class="block text-sm font-semibold text-zinc-200">
+            Create Teams (Type a team name, then click Add Team.)
+          </label>
+<div class="relative flex gap-2">
+<input class="w-full bg-surface-lowest border border-white/10 rounded-custom px-4 py-3 text-sm focus:ring-1 focus:ring-brand focus:border-brand transition-all text-white placeholder:text-zinc-600" placeholder="e.g. Design, Engineering, Marketing" type="text"/>
+<button class="absolute right-2 top-2 bottom-2 px-4 bg-zinc-800/50 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold rounded-custom border border-white/5 flex items-center gap-1 transition-colors" type="button">
+              Add Team <span class="text-lg leading-none">+</span>
+</button>
+</div>
+</div>
+<!-- Teams Added Section -->
+<div class="space-y-3">
+<label class="block text-sm font-semibold text-zinc-200">
+            Teams Added
+          </label>
+<div class="w-full h-24 border border-dashed border-white/10 rounded-custom bg-surface-lowest/30 flex items-center justify-center">
+<!-- Reference shows this as empty initially -->
+</div>
+</div>
+<!-- Submit Button -->
+<div class="pt-4">
+<button class="w-full py-4 bg-zinc-800/40 text-zinc-500 font-bold rounded-custom cursor-not-allowed border border-white/5 transition-all hover:bg-zinc-800/60" type="submit">
+            Continue
+          </button>
+</div>
+</form>
+</div>
+</main>
+<!-- END: RightPane -->
+</body></html>
