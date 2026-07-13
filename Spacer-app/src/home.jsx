@@ -1,18 +1,22 @@
 import Sidebar from "./partials/sidebar"
 import Header from "./partials/header"
+import ProjectPanel from "./components/ProjectPanel"
+import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
 
 function Home() {
     const [userEmail, setUserEmail] = useState("")
     const [userData, setUserData] = useState(null)
+    const [selectedProject, setSelectedProject] = useState(null)
+    const [previewFile, setPreviewFile] = useState(null)
 
     useEffect(() => {
         const email = localStorage.getItem("userEmail")
         if (email) {
             setUserEmail(email)
             const fetchUser = async () => {
-                const { data, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle();
+                const { data, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle()
                 if (error) console.log(error)
                 if (data) {
                     console.log("User profile:", data)
@@ -24,9 +28,10 @@ function Home() {
             console.log("No user email found")
         }
     }, [])
+
     return (
         <>
-            <Sidebar />
+            <Sidebar onProjectSelect={setSelectedProject} />
             <Header />
             <main className="ml-[260px] flex-1 flex flex-col min-h-screen">
                 <div className="p-lg space-y-lg">
@@ -36,7 +41,7 @@ function Home() {
                         <p className="text-on-surface-variant font-body-md mt-1">Here's what's on your plate in this workspace.</p>
                     </section>
 
-                    {/* METRICS ROW */}
+                    {/* METRICS ROW — original four cards, untouched */}
                     <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
                         <div className="glass-card p-lg rounded-xl flex flex-col">
                             <p className="text-headline-xl font-bold">0</p>
@@ -80,7 +85,6 @@ function Home() {
                                     <h3 className="font-headline-md font-semibold text-on-surface">Recent activity</h3>
                                 </div>
                                 <div className="flex-1 overflow-y-auto p-md space-y-md">
-                                    {/* ACTIVITY ITEMS */}
                                     <div className="flex gap-md items-start group">
                                         <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0 font-bold text-[10px] text-on-surface-variant">SA</div>
                                         <div className="flex-1 min-w-0">
@@ -93,12 +97,30 @@ function Home() {
                     </div>
                 </div>
             </main>
+
             {/* Floating Action Button */}
             <button className="fixed bottom-lg right-lg w-14 h-14 bg-primary-fixed text-on-primary-fixed rounded-full flex items-center justify-center shadow-xl shadow-primary-fixed/30 hover:scale-110 active:scale-95 transition-all z-50 group">
                 <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">add</span>
             </button>
+
+            {/* Project panel */}
+            {selectedProject && (
+                <ProjectPanel
+                    project={selectedProject}
+                    onClose={() => setSelectedProject(null)}
+                    onPreview={setPreviewFile}
+                />
+            )}
+
+            {/* Document viewer */}
+            {previewFile && (
+                <DocViewer
+                    file={previewFile}
+                    onClose={() => setPreviewFile(null)}
+                />
+            )}
         </>
     )
 }
 
-export default Home;
+export default Home
