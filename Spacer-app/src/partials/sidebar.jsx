@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom"
 import { supabase } from "../supabase";
 import { useState, useEffect } from "react";
+import CreateProjectModal from "./CreateProjectModal";
 
 export default function Sidebar() {
+    const [showCreateModal, setShowCreateModal] = useState(false);
     const [projects, setProjects] = useState([]);
     useEffect(() => {
         const fetchProjects = async () => {
@@ -17,14 +19,15 @@ export default function Sidebar() {
     }, []);
 
     const addProject = async () => {
-        const { data, error } = await supabase.from("project_spaces").insert({
-            name: window.prompt("Enter new project name:")
-        })
-        if (error) {
-            console.log(error)
-        } else {
-            console.log(data)
-        }
+    const { data, error } = await supabase.from("project_spaces").insert({
+        name: window.prompt("Enter new project name:")
+    })
+    if (error) {
+        console.log(error)
+    } else {
+        console.log(data)
+    }
+
     }
     return (
         <aside className="fixed left-0 top-0 h-full w-sidebar-width border-r border-outline-variant bg-surface-container-lowest flex flex-col py-lg z-50">
@@ -40,10 +43,10 @@ export default function Sidebar() {
                     <span className="material-symbols-outlined text-on-surface-variant text-sm">unfold_more</span>
                 </div>
             </div>
-            <button className="mx-lg mb-lg py-sm px-md bg-primary-container text-on-primary-container font-semibold rounded-lg flex items-center justify-center gap-sm hover:scale-[0.98] transition-transform" onClick={addProject}>
-                <span className="material-symbols-outlined">add</span>
-                <span className="font-label-md">New Project</span>
-            </button>
+            <button className="mx-lg mb-lg py-sm px-md bg-primary-container text-on-primary-container font-semibold rounded-lg flex items-center justify-center gap-sm hover:scale-[0.98] transition-transform" onClick={() => setShowCreateModal(true)}>
+    <span className="material-symbols-outlined">add</span>
+    <span className="font-label-md">New Project</span>
+</button>
             <nav className="flex-1 overflow-y-auto px-2">
                 <div className="mb-md">
                     <Link to="/" className="relative bg-primary-container text-on-primary-container font-semibold rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm">
@@ -94,6 +97,12 @@ export default function Sidebar() {
                     <span className="font-label-md">Settings</span>
                 </div>
             </div>
+            {showCreateModal && (
+    <CreateProjectModal
+        onClose={() => setShowCreateModal(false)}
+        onCreated={(project) => setProjects((prev) => [...prev, project])}
+    />
+)}
         </aside>
     )
 }
