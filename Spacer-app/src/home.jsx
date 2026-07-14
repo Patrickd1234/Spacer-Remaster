@@ -8,8 +8,6 @@ import { supabase } from "./supabase"
 function Home() {
     const [userEmail, setUserEmail] = useState("")
     const [userData, setUserData] = useState(null)
-    const [selectedProject, setSelectedProject] = useState(null)
-    const [previewFile, setPreviewFile] = useState(null)
 
     useEffect(() => {
         const email = localStorage.getItem("userEmail")
@@ -31,7 +29,7 @@ function Home() {
 
     return (
         <>
-            <Sidebar onProjectSelect={setSelectedProject} />
+            <Sidebar />
             <Header />
             <main className="ml-[260px] flex-1 flex flex-col min-h-screen">
                 <div className="p-lg space-y-lg">
