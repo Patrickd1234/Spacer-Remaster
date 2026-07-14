@@ -6,6 +6,10 @@ import { supabase } from "./supabase"
 function Home() {
     const [userEmail, setUserEmail] = useState("")
     const [userData, setUserData] = useState(null)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const [sidebarHovered, setSidebarHovered] = useState(false)
+    const [searchQuery, setSearchQuery] = useState("")
+    const sidebarExpanded = !sidebarCollapsed || sidebarHovered
 
     useEffect(() => {
         const email = localStorage.getItem("userEmail")
@@ -26,9 +30,17 @@ function Home() {
     }, [])
     return (
         <>
-            <Sidebar />
-            <Header />
-            <main className="ml-[260px] flex-1 flex flex-col min-h-screen">
+            <Sidebar
+                collapsed={sidebarCollapsed}
+                hovered={sidebarHovered}
+                searchQuery={searchQuery}
+                userEmail={userEmail}
+                userData={userData}
+                onToggle={() => setSidebarCollapsed((prev) => !prev)}
+                onHoverChange={setSidebarHovered}
+            />
+            <Header searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <main className={`${sidebarExpanded ? "ml-[260px]" : "ml-[72px]"} transition-all duration-300 ease-out flex-1 flex flex-col min-h-screen`}>
                 <div className="p-lg space-y-lg">
                     {/* GREETING SECTION */}
                     <section>
