@@ -4,6 +4,8 @@ import Home from './home'
 import Login from './Login'
 import Signup from './signup'
 import LaunchOrganization from './Launch_Organization'
+import ProjectPage from './project_page'
+import Onboarding from './onboarding'
 import Reports from './Reports'
 import { supabase } from './supabase'
 
