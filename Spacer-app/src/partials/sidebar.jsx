@@ -117,8 +117,9 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                             </div>
                         ))}
                     </div>
-                )}
+                </div>
             </nav>
+        
             <div className="mt-auto px-2 border-t border-outline-variant pt-md">
                 <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
                     <span className="material-symbols-outlined">menu_book</span>
