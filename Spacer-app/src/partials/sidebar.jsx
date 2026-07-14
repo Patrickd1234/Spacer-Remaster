@@ -13,7 +13,7 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
     useEffect(() => {
         const fetchProjects = async () => {
-            const { data, error } = await supabase.from("project_spaces").select("*");
+            const { data, error } = await supabase.from("project_spaces").select('*, membership!inner_team_space_id(user_id)').eq('membership.user_id', supabase.auth.user().id);
             if (error) {
                 console.log(error);
             } else {
@@ -34,6 +34,7 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
     }
 
     }
+
     return (
         <aside
             className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-outline-variant bg-surface-container-lowest flex flex-col py-lg z-50 transition-all duration-300 ease-out`}
@@ -102,72 +103,36 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                     )}
                 </div>
                 {/* PROJECTS SECTION */}
-                {expanded && (
-                    <div className="mt-lg px-2">
-                        <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm">Projects</p>
-                        <div className="space-y-0.5">
-                            {visibleProjects.length > 0 ? (
-                                visibleProjects.map((project) => (
-                                    <div
-                                        key={project.id}
-                                        className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}>
-                                        <div className="flex items-center gap-md">
-                                            <span className="font-body-md">{project.name}</span>
-                                        </div>
-                                        <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>
-                                    </div>
-                                ))
-                            ) : (
-                                normalizedQuery && <p className="px-md text-sm text-on-surface-variant">No projects match your search.</p>
-                            )}
-                        </div>
+                <div className="mt-lg px-2">
+                    <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm">Projects</p>
+                    <div className="space-y-0.5">
+                        {projects.map((project) => (
+                            <div
+                                key={project.id}
+                                className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}>
+                                <div className="flex items-center gap-md">
+                                    <span className="font-body-md">{project.name}</span>
+                                </div>
+                                <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>
+                            </div>
+                        ))}
                     </div>
                 )}
             </nav>
             <div className="mt-auto px-2 border-t border-outline-variant pt-md">
-                {matchesSearch("Profile") && (
-                    <div>
-                        <button
-                            type="button"
-                            className="w-full text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer"
-                            onClick={() => setShowProfilePanel((prev) => !prev)}
-                        >
-                            <span className="material-symbols-outlined">person</span>
-                            {expanded && <span className="font-label-md">Profile</span>}
-                        </button>
-                        {showProfilePanel && expanded && (
-                            <div className="mx-2 mt-2 rounded-xl border border-outline-variant bg-surface-container-high p-3 text-sm">
-                                <p className="font-label-md text-on-surface">{userData?.name || "User"}</p>
-                                <p className="text-on-surface-variant break-all">{userEmail || "No email available"}</p>
-                            </div>
-                        )}
-                    </div>
-                )}
-                {matchesSearch("Knowledge Base") && (
-                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                        <span className="material-symbols-outlined">menu_book</span>
-                        {expanded && <span className="font-label-md">Knowledge Base</span>}
-                    </div>
-                )}
-                {matchesSearch("Reports") && (
-                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                        <span className="material-symbols-outlined">bar_chart</span>
-                        {expanded && <span className="font-label-md">Reports</span>}
-                    </div>
-                )}
-                {matchesSearch("Settings") && (
-                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                        <span className="material-symbols-outlined">settings</span>
-                        {expanded && <span className="font-label-md">Settings</span>}
-                    </div>
-                )}
+                <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                    <span className="material-symbols-outlined">menu_book</span>
+                    <span className="font-label-md">Knowledge Base</span>
+                </div>
+                <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                    <span className="material-symbols-outlined">bar_chart</span>
+                    <span className="font-label-md">Reports</span>
+                </div>
+                <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                    <span className="material-symbols-outlined">settings</span>
+                    <span className="font-label-md">Settings</span>
+                </div>
             </div>
-            {showCreateModal && (
-    <CreateProjectModal
-        onClose={() => setShowCreateModal(false)}
-        onCreated={(project) => setProjects((prev) => [...prev, project])}
-    />
-)}
         </aside>
     )
 }

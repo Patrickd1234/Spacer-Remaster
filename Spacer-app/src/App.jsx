@@ -4,6 +4,9 @@ import Home from './home'
 import Login from './Login'
 import Signup from './signup'
 import LaunchOrganization from './Launch_Organization'
+import ProjectPage from './project_page'
+import Onboarding from './onboarding'
+import Reports from './Reports'
 import { supabase } from './supabase'
 
 function App() {
@@ -11,7 +14,6 @@ function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check active session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       if (session && session.user) {
@@ -24,7 +26,6 @@ function App() {
       setLoading(false)
     })
 
-    // Listen to changes in auth state
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session && session.user) {
@@ -50,10 +51,11 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
-        <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
-        <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
-        <Route path="/launch" element={session ? <LaunchOrganization /> : <Navigate to="/login" replace />} />
+        <Route path="/"        element={session ? <Home />               : <Navigate to="/login"   replace />} />
+        <Route path="/login"   element={!session ? <Login />             : <Navigate to="/"        replace />} />
+        <Route path="/signup"  element={!session ? <Signup />            : <Navigate to="/"        replace />} />
+        <Route path="/launch"  element={session ? <LaunchOrganization /> : <Navigate to="/login"   replace />} />
+        <Route path="/reports" element={session ? <Reports />            : <Navigate to="/login"   replace />} />
       </Routes>
     </Router>
   )

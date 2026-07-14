@@ -27,7 +27,7 @@ export default function LaunchOrganization() {
             if (userError || !userData?.user) {
                 throw new Error("You must be logged in to launch an organization.");
             }
-            
+
             const { error } = await supabase.functions.invoke('launch-organization', {
                 body: {
                     organization_name: orgName.trim(),
@@ -50,7 +50,7 @@ export default function LaunchOrganization() {
 
             setStatus("success")
             setTimeout(() => {
-                navigate("/")
+                navigate("/onboarding")
             }, 1500)
 
         } catch (err) {
@@ -62,137 +62,138 @@ export default function LaunchOrganization() {
 
     return (
         <>
-            <main className="h-[calc(100vh-64px)] overflow-y-auto relative flex items-center justify-center min-h-screen bg-background text-on-background">
-                {/* Animated Background Decor */}
-                <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-fixed/5 blur-[120px] rounded-full"></div>
-                    <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-primary-container/5 blur-[120px] rounded-full"></div>
-                </div>
-
-                <div className="max-w-4xl mx-auto px-lg py-xl flex flex-col items-center justify-center min-h-full relative z-10 w-full">
-                    {/* Header Section */}
-                    <div className="text-center mb-xl">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-container/10 border border-primary-container/30 mb-md">
-                            <span className="material-symbols-outlined text-primary-fixed text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>rocket_launch</span>
+            <main class="flex h-screen w-full">
+                {/* BEGIN: LeftPane (Branding & Visualization) */}
+                <section class="hidden lg:flex flex-col w-1/2 p-16 relative overflow-hidden bg-surface-dim" data-purpose="branding-visuals">
+                    {/* Top Branding Section */}
+                    <div class="z-10 mb-20">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-6 h-6 bg-brand rounded-sm flex items-center justify-center">
+                                <svg class="w-4 h-4 text-black" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                            </div>
+                            <span class="font-bold text-lg tracking-widest uppercase">SPACER</span>
                         </div>
-                        <h2 className="font-headline-xl text-headline-xl text-on-surface mb-xs tracking-tight">Launch Your Organization</h2>
-                        <p className="font-body-lg text-body-lg text-on-surface-variant max-w-md mx-auto">Set up your workspace and invite your team to get started.</p>
+                        <p class="text-gray-400 max-w-sm text-sm leading-relaxed">
+                            One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place.
+                        </p>
                     </div>
-                    
-                    {/* Form Container */}
-                    <div className="w-full max-w-xl glass-panel p-xl rounded-xl shadow-2xl">
-                        <form className="space-y-lg" onSubmit={handleSubmit}>
-                            {errorMsg && (
-                                <div className="p-md rounded-lg bg-error-container/20 border border-error text-error text-body-sm">
-                                    {errorMsg}
+                    {/* Workspace Hierarchy Visualization */}
+                    <div class="relative z-10 flex flex-col items-start space-y-4">
+                        {/* Organization Level */}
+                        <div class="flex items-center gap-3 bg-surface-bright/20 border border-white/10 p-3 rounded-custom w-80 glass-panel">
+                            <div class="w-8 h-8 bg-blue-500/20 rounded flex items-center justify-center border border-blue-500/30">
+                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                            </div>
+                            <span class="font-medium text-sm">Circle Corp</span>
+                            <div class="ml-auto text-gray-500">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7"></path></svg>
+                            </div>
+                        </div>
+                        {/* Tree Connections & Team Level */}
+                        <div class="ml-6 border-l border-white/10 pl-8 space-y-6 py-2">
+                            {/* Team Header */}
+                            <div class="relative">
+                                <div class="absolute -left-8 top-4 w-8 h-px bg-white/10"></div>
+                                <div class="flex items-center gap-2 mb-4">
+                                    <span class="text-sm font-semibold">Development Team</span>
+                                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
                                 </div>
-                            )}
-
-                            {/* Organization Name */}
-                            <div className="space-y-xs">
-                                <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider block">Organization Name</label>
-                                <div className="relative">
-                                    <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">domain</span>
-                                    <input 
-                                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-12 pr-md py-md text-on-surface placeholder:text-outline focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all outline-none font-body-md text-body-md" 
-                                        placeholder="Enter your organization's name (e.g. Circle Corp)" 
-                                        type="text"
-                                        value={orgName}
-                                        onChange={(e) => setOrgName(e.target.value)}
-                                        required
-                                    />
+                                {/* Project Items */}
+                                <div class="space-y-3 ml-4">
+                                    <div class="flex items-center gap-3 bg-white/5 border border-white/5 p-2 px-4 rounded-custom w-64">
+                                        <span class="text-gray-400 text-xs">✨ Project Launch</span>
+                                        <svg class="ml-auto w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                                    </div>
+                                    <div class="flex items-center gap-3 bg-white/10 border border-white/10 p-2 px-4 rounded-custom w-64 neon-glow">
+                                        <span class="text-white text-xs">💻 App Redesign</span>
+                                        <svg class="ml-auto w-3 h-3 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* Team Name */}
-                            <div className="space-y-xs">
-                                <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider block">Team Name</label>
-                                <div className="relative">
-                                    <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">corporate_fare</span>
-                                    <input 
-                                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-12 pr-md py-md text-on-surface placeholder:text-outline focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all outline-none font-body-md text-body-md" 
-                                        placeholder="Enter your team's name (e.g. Engineering)" 
-                                        type="text"
-                                        value={teamName}
-                                        onChange={(e) => setTeamName(e.target.value)}
-                                        required
-                                    />
+                            {/* My Space Section */}
+                            <div class="relative pt-4">
+                                <div class="absolute -left-8 top-8 w-8 h-px bg-white/10"></div>
+                                <div class="flex items-center gap-2 mb-4">
+                                    <span class="text-sm font-semibold">My Space <span class="text-gray-500 font-normal">(personal workspace)</span></span>
+                                </div>
+                                {/* Task Card */}
+                                <div class="ml-4 p-4 bg-surface-container border border-white/5 rounded-custom w-72 shadow-2xl">
+                                    <p class="text-[10px] text-gray-500 mb-2 font-medium">My Task</p>
+                                    <div class="p-3 bg-white/5 rounded-md border border-white/5">
+                                        <p class="text-xs font-medium mb-1">Fix auth token expiry bug</p>
+                                        <p class="text-[10px] text-gray-500">Sessions dropping before timeout period ends — users getting logged...</p>
+                                    </div>
                                 </div>
                             </div>
-
-                            {/* Dept Head Email */}
-                            <div className="space-y-xs">
-                                <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider block">Department Head Email</label>
-                                <div className="relative">
-                                    <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">admin_panel_settings</span>
-                                    <input 
-                                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-12 pr-md py-md text-on-surface placeholder:text-outline focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all outline-none font-body-md text-body-md" 
-                                        placeholder="head@company.com" 
-                                        type="email"
-                                        value={deptHeadEmail}
-                                        onChange={(e) => setDeptHeadEmail(e.target.value)}
-                                        required
-                                    />
+                        </div>
+                    </div>
+                    {/* Decorative background glow */}
+                    <div class="absolute -bottom-24 -left-24 w-96 h-96 bg-brand opacity-5 blur-[120px] rounded-full"></div>
+                </section>
+                {/* END: LeftPane */}
+                {/* Central Divider */}
+                <div class="vertical-divider h-full"></div>
+                {/* BEGIN: RightPane (Onboarding Form) */}
+                <section class="flex-1 flex flex-col justify-center items-center px-8 lg:px-20 bg-surface" data-purpose="onboarding-form">
+                    <div class="max-w-md w-full">
+                        {/* Step Indicator */}
+                        <span class="text-xs font-medium text-gray-500 mb-6 block">Step 1 of 3</span>
+                        {/* Header */}
+                        <header class="mb-10">
+                            <h1 class="text-4xl font-bold text-white mb-4 tracking-tight">Create Your Organization</h1>
+                            <p class="text-gray-400 text-sm leading-relaxed">
+                                One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place.
+                            </p>
+                        </header>
+                        {/* Form */}
+                        <form action="#" class="space-y-6" method="POST">
+                            {/* Field: Company Name */}
+                            <div data-purpose="input-group">
+                                <label class="block text-sm font-medium text-gray-300 mb-2" for="company-name">
+                                    Company Name <span class="text-red-500">*</span>
+                                </label>
+                                <input class="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600" id="company-name" placeholder="Enter company name" required="" type="text" />
+                            </div>
+                            {/* Field: Email */}
+                            <div data-purpose="input-group">
+                                <label class="block text-sm font-medium text-gray-300 mb-2" for="email">
+                                    Company Email/Personal Email <span class="text-red-500">*</span>
+                                </label>
+                                <input class="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600" id="email" placeholder="Enter company email" required="" type="email" />
+                            </div>
+                            {/* Field: Password */}
+                            <div class="relative" data-purpose="input-group">
+                                <label class="block text-sm font-medium text-gray-300 mb-2" for="password">
+                                    Password <span class="text-red-500">*</span>
+                                </label>
+                                <div class="relative">
+                                    <input class="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600 pr-10" id="password" placeholder="Enter Password" required="" type="password" />
+                                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300" type="button">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                                    </button>
                                 </div>
                             </div>
-
-                            {/* Team Member Emails */}
-                            <div className="space-y-xs">
-                                <div className="flex justify-between items-center">
-                                    <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider block">Team Member Emails</label>
-                                    <span className="font-label-sm text-label-sm text-outline">Optional</span>
+                            {/* Terms Checkbox */}
+                            <div class="flex items-start gap-3">
+                                <div class="flex items-center h-5">
+                                    <input class="h-4 w-4 rounded border-white/10 bg-surface-dim text-brand focus:ring-brand" id="terms" name="terms" required="" type="checkbox" />
                                 </div>
-                                <div className="relative">
-                                    <textarea 
-                                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-md text-on-surface placeholder:text-outline focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all outline-none font-body-md text-body-md resize-none" 
-                                        placeholder="Enter emails separated by commas or new lines..." 
-                                        rows="4"
-                                        value={teamMemberEmails}
-                                        onChange={(e) => setTeamMemberEmails(e.target.value)}
-                                    />
-                                </div>
-                                <p className="font-label-sm text-label-sm text-on-surface-variant/60 flex items-center gap-xs">
-                                    <span className="material-symbols-outlined text-sm">info</span>
-                                    They will receive an automated invitation link.
-                                </p>
+                                <label class="text-sm text-gray-400" for="terms">
+                                    To establish an Organization, please accept our <a class="text-brand hover:underline" href="#">Terms &amp; Services</a>
+                                </label>
                             </div>
-
-                            {/* Action Button */}
-                            <div className="pt-md">
-                                <button 
-                                    className={`w-full font-bold py-md rounded-lg flex items-center justify-center gap-sm neon-glow transition-all active:scale-95 group ${
-                                        status === "success" 
-                                            ? "bg-green-500 text-white" 
-                                            : "bg-primary-fixed text-on-primary-fixed hover:brightness-110"
-                                    }`} 
-                                    type="submit"
-                                    disabled={status === "submitting" || status === "success"}
-                                >
-                                    <span className="font-headline-md text-headline-md">
-                                        {status === "submitting" ? "Launching..." : status === "success" ? "Launched!" : "Launch Organization"}
-                                    </span>
-                                    <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                                </button>
-                            </div>
+                            {/* Submit Button */}
+                            <button class="w-full py-4 px-6 bg-surface-container border border-white/5 text-gray-600 font-bold rounded-custom transition-all hover:bg-white/5 cursor-not-allowed mt-4" disabled="" type="submit">
+                                Create Account
+                            </button>
+                            {/* Sign In Link */}
+                            <p class="text-center text-sm text-gray-400 mt-6">
+                                Already have an account? <a class="text-brand hover:underline" href="#">Sign in</a>
+                            </p>
                         </form>
                     </div>
-
-                    {/* Footer Note */}
-                    <div className="mt-lg flex items-center gap-md">
-                        <div className="flex -space-x-3">
-                            <div className="w-8 h-8 rounded-full border-2 border-background overflow-hidden">
-                                <img className="w-full h-full object-cover" alt="User Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBMBAzzW7LrswGOm_6w3OLPMEdXB_vsX-KK1gQr1N1zi289QhDxxjyYw71A7XG9Whjel8CcaDsqBparyDR2u-d0Szl-nWlQeI9bQsb0jFjIHA0yqUfMqQiEqqxFdxhzcodrKNrFlbmmvH8T_FeapyO41bNvdm0GqxpQh7QUJQrWdtcy3PQ9dYaZfXyEgMJITr5RMWCA1uSmqcjGszyO3FIbcot8-AjYyNrBDpVs5pCwUQMF2x4FqBJWIYEJwP1Z-Pr_EY8m2X-YITQ6" />
-                            </div>
-                            <div className="w-8 h-8 rounded-full border-2 border-background overflow-hidden">
-                                <img className="w-full h-full object-cover" alt="User Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJYD2uHJRbm0DJ9StEIEmY8Sy8bChkumU6XGKrk7oKysr7SeRu33ibvEFFggC8j9RZgux1hiuD2xmjCwNVQfIYPfLwZeE1WTiG_cl8JqxMsFq_PUSykPUMXcpBhSDHBmZWnUdrl1AoyGrNGycQ24FF2i-OxpYCfB5uSjwMrHK2-im-p3VXeSOSRS3_0vrSYy7sIbQp4scNxXxxj-sR3deXMW9V5ZKXwkVtRogLK4iQA6DKG6Le1WX4-K6B3wp_xNUU6Dj3Vm9ROycA" />
-                            </div>
-                            <div className="w-8 h-8 rounded-full border-2 border-background overflow-hidden">
-                                <img className="w-full h-full object-cover" alt="User Avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAN-nK4OLleH5md9uCEaoZb1HqfRZtegrqZQF28MZH_ggTup93lMpapYMuFG8w3w6V6OTdvjx90lUZvg1nB18FkGYvgC5HDw5010DQhwqay3PiIpElS2W2dHtDGV4sHGqFITIUOwq7ve2RCY12XpL7tlWmzjbbcInhe2rnlz0MV4g0kxLLZgn0F9NcFCiMpL1QuMojT3s6C-9i1xKWDPJ-Odas71Kd5OdJ78E-kyOFjVDh3A5RIt-U4tASj6JsFALGrhVMpTlXyeNbc" />
-                            </div>
-                        </div>
-                        <p className="font-label-md text-label-md text-on-surface-variant">Join 500+ teams already using Lumina Mission Control.</p>
-                    </div>
-                </div>
+                </section>
+                {/* END: RightPane */}
             </main>
         </>
     )
