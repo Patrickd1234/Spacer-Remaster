@@ -96,7 +96,41 @@ export default function Sidebar() {
                     <span className="material-symbols-outlined">settings</span>
                     <span className="font-label-md">Settings</span>
                 </div>
-            </div>
-        </aside>
-    )
+                <span className="material-symbols-outlined text-sm group-hover:text-on-surface">chevron_right</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </nav>
+
+      {/* Footer nav */}
+      <div className="mt-auto px-2 border-t border-outline-variant pt-md">
+
+        {/* Knowledge Base */}
+        <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+          <span className="material-symbols-outlined">menu_book</span>
+          <span className="font-label-md">Knowledge Base</span>
+        </div>
+
+        {/* Reports — NOW a real link to /reports */}
+        <Link
+          to="/reports"
+          className={`rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm transition-colors
+            ${isActive("/reports")
+              ? "bg-primary-container text-on-primary-container font-semibold"
+              : "text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"}`}
+        >
+          <span className="material-symbols-outlined">bar_chart</span>
+          <span className="font-label-md">Reports</span>
+        </Link>
+
+        {/* Settings */}
+        <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+          <span className="material-symbols-outlined">settings</span>
+          <span className="font-label-md">Settings</span>
+        </div>
+
+      </div>
+    </aside>
+  )
 }
