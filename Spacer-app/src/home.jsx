@@ -8,6 +8,8 @@ import { supabase } from "./supabase"
 function Home() {
     const [userEmail, setUserEmail] = useState("")
     const [userData, setUserData] = useState(null)
+    const [selectedProject, setSelectedProject] = useState(null)
+    const [previewFile, setPreviewFile] = useState(null)
 
     useEffect(() => {
         const email = localStorage.getItem("userEmail")

@@ -7,7 +7,7 @@ import Header from "./partials/header"
 
 function ProjectPage() {
     const location = useLocation()
-    const { project_id } = useParams()
+    const { id: project_id } = useParams()
     const [project_name, setProjectName] = useState("Website Redesign")
     const [project_description, setProjectDescription] = useState("Next-gen corporate portal focusing on accessibility, high-performance rendering, and seamless brand integration across all touchpoints.")
     const [project_status, setProjectStatus] = useState("In Progress")

@@ -141,6 +141,18 @@ const mockFrom = (tableName) => {
             return builder;
         },
 
+        order(field, options) {
+            return builder;
+        },
+
+        async single() {
+            const items = getItems();
+            const filtered = items.filter(item => {
+                return filters.every(f => item[f.field] === f.value);
+            });
+            return { data: filtered[0] || null, error: null };
+        },
+
         async maybeSingle() {
             const items = getItems();
             const filtered = items.filter(item => {

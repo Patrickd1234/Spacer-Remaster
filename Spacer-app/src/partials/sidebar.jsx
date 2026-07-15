@@ -13,11 +13,13 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
     useEffect(() => {
         const fetchProjects = async () => {
-            const { data, error } = await supabase.from("project_spaces").select('*, membership!inner_team_space_id(user_id)').eq('membership.user_id', supabase.auth.user().id);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const { data, error } = await supabase.from("project_spaces").select('*');
             if (error) {
                 console.log(error);
             } else {
-                setProjects(data);
+                setProjects(data || []);
             }
         };
         fetchProjects();
@@ -107,14 +109,15 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                     <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm">Projects</p>
                     <div className="space-y-0.5">
                         {projects.map((project) => (
-                            <div
+                            <Link
+                                to={`/project_page/${project.id}`}
                                 key={project.id}
-                                className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}>
+                                className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group">
                                 <div className="flex items-center gap-md">
                                     <span className="font-body-md">{project.name}</span>
                                 </div>
                                 <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>
-                            </div>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -134,6 +137,15 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                     <span className="font-label-md">Settings</span>
                 </div>
             </div>
+
+            {showCreateModal && (
+                <CreateProjectModal
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={(newProject) => {
+                        setProjects(prev => [...prev, newProject]);
+                    }}
+                />
+            )}
         </aside>
     )
 }

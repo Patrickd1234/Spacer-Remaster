@@ -51,11 +51,12 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/"        element={session ? <Home />               : <Navigate to="/login"   replace />} />
-        <Route path="/login"   element={!session ? <Login />             : <Navigate to="/"        replace />} />
-        <Route path="/signup"  element={!session ? <Signup />            : <Navigate to="/"        replace />} />
-        <Route path="/launch"  element={session ? <LaunchOrganization /> : <Navigate to="/login"   replace />} />
-        <Route path="/reports" element={session ? <Reports />            : <Navigate to="/login"   replace />} />
+        <Route path="/"                  element={session ? <Home />               : <Navigate to="/login"   replace />} />
+        <Route path="/login"             element={!session ? <Login />             : <Navigate to="/"        replace />} />
+        <Route path="/signup"            element={!session ? <Signup />            : <Navigate to="/"        replace />} />
+        <Route path="/launch"            element={session ? <LaunchOrganization /> : <Navigate to="/login"   replace />} />
+        <Route path="/reports"           element={session ? <Reports />            : <Navigate to="/login"   replace />} />
+        <Route path="/project_page/:id"  element={session ? <ProjectPage />        : <Navigate to="/login"   replace />} />
       </Routes>
     </Router>
   )
