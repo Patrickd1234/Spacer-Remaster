@@ -127,7 +127,8 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                     <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm">Projects</p>
                     <div className="space-y-0.5">
                         {projects.map((project) => (
-                            <div
+                            <Link
+                                to={`/project_page/${project.id}`}
                                 key={project.id}
                                 className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}><Link to="/project_page/:project_id">
                                     <div className="flex items-center gap-md">
@@ -135,7 +136,7 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                                     </div>
                                 </Link>
                                 <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>
-                            </div>
+                            </Link>
                         ))}
                     </div>
                 </div>
@@ -155,6 +156,15 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                     <Link to="/settings"><span className="font-label-md">Settings</span></Link>
                 </div>
             </div>
+
+            {showCreateModal && (
+                <CreateProjectModal
+                    onClose={() => setShowCreateModal(false)}
+                    onCreated={(newProject) => {
+                        setProjects(prev => [...prev, newProject]);
+                    }}
+                />
+            )}
         </aside>
     )
 }
