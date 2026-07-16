@@ -1,13 +1,46 @@
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "../supabase";
 import { useState, useEffect } from "react";
 import CreateProjectModal from "./CreateProjectModal";
 
-export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, searchQuery = "", userEmail = "", userData = null }) {
+export default function Sidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [projects, setProjects] = useState([]);
-    const [showProfilePanel, setShowProfilePanel] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);
+    const [hovered, setHovered] = useState(false);
     const expanded = !collapsed || hovered;
+
+    const handleToggle = () => {
+        const next = !collapsed;
+        setCollapsed(next);
+        setHovered(false);
+        onCollapsedChange?.(next);
+    };
+
+    const handleMouseEnter = () => {
+        if (collapsed) setHovered(true);
+    };
+
+    const handleMouseLeave = () => {
+        setHovered(false);
+    };
+
+    // Clicking the sidebar body while hover-expanded pins it open
+    const handleSidebarClick = () => {
+        if (collapsed && hovered) {
+            setCollapsed(false);
+            setHovered(false);
+            onCollapsedChange?.(false);
+        }
+    };
+    const navigate = useNavigate();
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        localStorage.removeItem("userId");
+        localStorage.removeItem("userEmail");
+        navigate("/login");
+    };
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
@@ -56,105 +89,120 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
     }
 
     return (
-        <aside
-            className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-outline-variant bg-surface-container-lowest flex flex-col py-lg z-50 transition-all duration-300 ease-out`}
-            onMouseEnter={() => {
-                if (collapsed) onHoverChange(true)
-            }}
-            onMouseLeave={() => {
-                if (collapsed) onHoverChange(false)
-            }}
-        >
-            <div className="px-lg mb-xl">
-                <div className={`flex items-center ${expanded ? "gap-sm mb-xs" : "justify-center mb-sm"}`}>
-                    <button
-                        type="button"
-                        onClick={onToggle}
-                        className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-surface-variant transition-colors"
-                        title={expanded ? "Collapse sidebar" : "Expand sidebar"}
-                    >
-                        <span className="material-symbols-outlined text-sm">{expanded ? "chevron_left" : "chevron_right"}</span>
-                    </button>
+        <>
+            <aside
+                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-outline-variant bg-surface-container-lowest flex flex-col py-lg z-50 transition-all duration-300 ease-out overflow-hidden`}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleSidebarClick}
+            >
+                <div className="px-lg mb-xl">
+                    <div className={`flex items-center ${expanded ? "gap-sm mb-xs" : "justify-center mb-sm"}`}>
+                        <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleToggle(); }}
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-surface-variant transition-colors"
+                            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                        >
+                            <span className="material-symbols-outlined text-sm">{collapsed ? "chevron_right" : "chevron_left"}</span>
+                        </button>
+                        {expanded && (
+                            <div className="flex items-center gap-sm">
+                                <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
+                                    <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>circle</span>
+                                </div>
+                                <h1 className="font-headline-lg text-headline-lg font-bold text-on-background">Spacers</h1>
+                            </div>
+                        )}
+                    </div>
                     {expanded && (
-                        <div className="flex items-center gap-sm">
-                            <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
-                                <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>circle</span>
+                        <div className="flex items-center justify-between group cursor-pointer">
+                            <p className="font-label-md text-label-md text-on-surface-variant">Switch Workspace</p>
+                            <span className="material-symbols-outlined text-on-surface-variant text-sm">unfold_more</span>
+                        </div>
+                    )}
+                </div>
+                <button className={`mx-lg mb-lg py-sm px-md bg-primary-container text-on-primary-container font-semibold rounded-lg flex items-center justify-center gap-sm hover:scale-[0.98] transition-transform ${expanded ? "" : "px-0"}`} onClick={() => setShowCreateModal(true)} title="New Project">
+                    <span className="material-symbols-outlined">add</span>
+                    {expanded && <span className="font-label-md">New Project</span>}
+                </button>
+                <nav className="flex-1 overflow-y-auto px-2">
+                    <div className="mb-md">
+                        {matchesSearch("Home") && (
+                            <Link to="/" className="relative bg-primary-container text-on-primary-container font-semibold rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm">
+                                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>home</span>
+                                {expanded && <span className="font-body-md">Home</span>}
+                            </Link>
+                        )}
+                        {matchesSearch("Messages") && (
+                            <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer group">
+                                <span className="material-symbols-outlined">chat</span>
+                                {expanded && <span className="font-body-md">Messages</span>}
                             </div>
-                            <h1 className="font-headline-lg text-headline-lg font-bold text-on-background">Spacers</h1>
-                        </div>
-                    )}
-                </div>
-                {expanded && (
-                    <div className="flex items-center justify-between group cursor-pointer">
-                        <p className="font-label-md text-label-md text-on-surface-variant">Switch Workspace</p>
-                        <span className="material-symbols-outlined text-on-surface-variant text-sm">unfold_more</span>
-                    </div>
-                )}
-            </div>
-            <button className={`mx-lg mb-lg py-sm px-md bg-primary-container text-on-primary-container font-semibold rounded-lg flex items-center justify-center gap-sm hover:scale-[0.98] transition-transform ${expanded ? "" : "px-0"}`} onClick={() => setShowCreateModal(true)} title="New Project">
-                <span className="material-symbols-outlined">add</span>
-                {expanded && <span className="font-label-md">New Project</span>}
-            </button>
-            <nav className="flex-1 overflow-y-auto px-2">
-                <div className="mb-md">
-                    {matchesSearch("Home") && (
-                        <Link to="/" className="relative bg-primary-container text-on-primary-container font-semibold rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm">
-                            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>home</span>
-                            {expanded && <span className="font-body-md">Home</span>}
-                        </Link>
-                    )}
-                    {matchesSearch("Messages") && (
-                        <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer group">
-                            <span className="material-symbols-outlined">chat</span>
-                            {expanded && <span className="font-body-md">Messages</span>}
-                        </div>
-                    )}
-                    {matchesSearch("Department") && (
-                        <Link to="/department" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                            <span className="material-symbols-outlined">groups</span>
-                            {expanded && <span className="font-body-md">Department</span>}
-                        </Link>
-                    )}
-                    {matchesSearch("Calendar") && (
-                        <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                            <span className="material-symbols-outlined">calendar_today</span>
-                            {expanded && <span className="font-body-md">Calendar</span>}
-                        </div>
-                    )}
-                </div>
-                {/* PROJECTS SECTION */}
-                <div className="mt-lg px-2">
-                    <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm">Projects</p>
-                    <div className="space-y-0.5">
-                        {projects.map((project) => (
-                            <div
-                                key={project.id}
-                                className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}><Link to="/project_page/:project_id">
-                                    <div className="flex items-center gap-md">
-                                        <span className="font-body-md">{project.name}</span>
-                                    </div>
-                                </Link>
-                                <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>
+                        )}
+                        {matchesSearch("Department") && (
+                            <Link to="/department" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                                <span className="material-symbols-outlined">groups</span>
+                                {expanded && <span className="font-body-md">Department</span>}
+                            </Link>
+                        )}
+                        {matchesSearch("Calendar") && (
+                            <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                                <span className="material-symbols-outlined">calendar_today</span>
+                                {expanded && <span className="font-body-md">Calendar</span>}
                             </div>
-                        ))}
+                        )}
                     </div>
-                </div>
-            </nav>
+                    {/* PROJECTS SECTION */}
+                    <div className="mt-lg px-2">
+                        {expanded && <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm whitespace-nowrap">Projects</p>}
+                        <div className="space-y-0.5">
+                            {projects.map((project) => (
+                                <div
+                                    key={project.id}
+                                    className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}>
+                                    {expanded && <Link to="/project_page/:project_id">
+                                        <div className="flex items-center gap-md">
+                                            <span className="font-body-md whitespace-nowrap">{project.name}</span>
+                                        </div>
+                                    </Link>}
+                                    {expanded && <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </nav>
 
-            <div className="mt-auto px-2 border-t border-outline-variant pt-md">
-                <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                    <span className="material-symbols-outlined">menu_book</span>
-                    <span className="font-label-md">Knowledge Base</span>
+                <div className="mt-auto px-2 border-t border-outline-variant pt-md">
+                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                        <span className="material-symbols-outlined">menu_book</span>
+                        {expanded && <span className="font-label-md whitespace-nowrap">Knowledge Base</span>}
+                    </div>
+                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                        <span className="material-symbols-outlined">bar_chart</span>
+                        {expanded && <Link to="/reports"><span className="font-label-md whitespace-nowrap">Reports</span></Link>}
+                    </div>
+                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                        <span className="material-symbols-outlined">settings</span>
+                        {expanded && <Link to="/settings"><span className="font-label-md whitespace-nowrap">Settings</span></Link>}
+                    </div>
+                    <button
+                        onClick={handleLogout}
+                        className="w-full text-error hover:bg-error/10 rounded-lg mx-0 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer"
+                        title="Log out"
+                    >
+                        <span className="material-symbols-outlined">logout</span>
+                        {expanded && <span className="font-label-md whitespace-nowrap">Log out</span>}
+                    </button>
                 </div>
-                <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                    <span className="material-symbols-outlined">bar_chart</span>
-                    <Link to="/reports"><span className="font-label-md">Reports</span></Link>
-                </div>
-                <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                    <span className="material-symbols-outlined">settings</span>
-                    <Link to="/settings"><span className="font-label-md">Settings</span></Link>
-                </div>
-            </div>
-        </aside>
+            </aside>
+
+            {showCreateModal && (
+                <CreateProjectModal
+                    onClose={() => setShowCreateModal(false)}
+                    onProjectCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
+                />
+            )}
+        </>
     )
 }
