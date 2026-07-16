@@ -117,11 +117,33 @@ const mockFrom = (tableName) => {
     const setItems = (items) => localStorage.setItem(cleanTable, JSON.stringify(items));
 
     let filters = [];
+    let pendingInsert = null;
+    let pendingUpdate = null;
+    let pendingDelete = false;
+    let shouldSelect = false;
+    let limitCount = null;
 
-    const builder = {
-        async insert(data) {
+    const applyFilters = (items) => {
+        return items.filter(item => {
+            return filters.every(f => {
+                // Handle JSON path notation like "new_state->>project_id"
+                if (f.field.includes("->>")) {
+                    const [jsonCol, jsonKey] = f.field.split("->>");
+                    const jsonVal = item[jsonCol];
+                    if (jsonVal && typeof jsonVal === "object") {
+                        return jsonVal[jsonKey] === f.value;
+                    }
+                    return false;
+                }
+                return item[f.field] === f.value;
+            });
+        });
+    };
+
+    const resolveData = () => {
+        if (pendingInsert) {
             const items = getItems();
-            const toInsert = Array.isArray(data) ? data : [data];
+            const toInsert = Array.isArray(pendingInsert) ? pendingInsert : [pendingInsert];
             const inserted = toInsert.map(item => ({
                 id: item.id || "mock-id-" + Math.random().toString(36).substring(2, 9),
                 created_at: new Date().toISOString(),
@@ -129,10 +151,70 @@ const mockFrom = (tableName) => {
             }));
             items.push(...inserted);
             setItems(items);
-            return { data: inserted, error: null };
+            if (shouldSelect) return { data: inserted.length === 1 ? inserted[0] : inserted, isInsert: true };
+            return { data: inserted, isInsert: true };
+        }
+        if (pendingUpdate) {
+            const items = getItems();
+            const updated = [];
+            const newItems = items.map(item => {
+                const match = filters.every(f => {
+                    if (f.field.includes("->>")) {
+                        const [jsonCol, jsonKey] = f.field.split("->>");
+                        return item[jsonCol]?.[jsonKey] === f.value;
+                    }
+                    return item[f.field] === f.value;
+                });
+                if (match) {
+                    const updatedItem = { ...item, ...pendingUpdate };
+                    updated.push(updatedItem);
+                    return updatedItem;
+                }
+                return item;
+            });
+            setItems(newItems);
+            return { data: updated, isUpdate: true };
+        }
+        if (pendingDelete) {
+            const items = getItems();
+            const remaining = items.filter(item => {
+                return !filters.every(f => {
+                    if (f.field.includes("->>")) {
+                        const [jsonCol, jsonKey] = f.field.split("->>");
+                        return item[jsonCol]?.[jsonKey] === f.value;
+                    }
+                    return item[f.field] === f.value;
+                });
+            });
+            setItems(remaining);
+            return { data: null, isDelete: true };
+        }
+        // Plain select
+        let result = applyFilters(getItems());
+        if (limitCount !== null) {
+            result = result.slice(0, limitCount);
+        }
+        return { data: result };
+    };
+
+    const builder = {
+        insert(data) {
+            pendingInsert = data;
+            return builder;
+        },
+
+        update(data) {
+            pendingUpdate = data;
+            return builder;
+        },
+
+        delete() {
+            pendingDelete = true;
+            return builder;
         },
 
         select(fields = "*") {
+            shouldSelect = true;
             return builder;
         },
 
@@ -145,28 +227,33 @@ const mockFrom = (tableName) => {
             return builder;
         },
 
+        limit(count) {
+            limitCount = count;
+            return builder;
+        },
+
         async single() {
-            const items = getItems();
-            const filtered = items.filter(item => {
-                return filters.every(f => item[f.field] === f.value);
-            });
-            return { data: filtered[0] || null, error: null };
+            const result = resolveData();
+            if (result.isInsert) {
+                const d = Array.isArray(result.data) ? result.data[0] : result.data;
+                return { data: d || null, error: null };
+            }
+            if (result.isUpdate) {
+                return { data: result.data[0] || null, error: null };
+            }
+            if (result.isDelete) {
+                return { data: null, error: null };
+            }
+            return { data: result.data[0] || null, error: null };
         },
 
         async maybeSingle() {
-            const items = getItems();
-            const filtered = items.filter(item => {
-                return filters.every(f => item[f.field] === f.value);
-            });
-            return { data: filtered[0] || null, error: null };
+            return builder.single();
         },
 
         then(onfulfilled, onrejected) {
-            const items = getItems();
-            const filtered = items.filter(item => {
-                return filters.every(f => item[f.field] === f.value);
-            });
-            return Promise.resolve({ data: filtered, error: null }).then(onfulfilled, onrejected);
+            const result = resolveData();
+            return Promise.resolve({ data: result.data, error: null }).then(onfulfilled, onrejected);
         }
     };
 
