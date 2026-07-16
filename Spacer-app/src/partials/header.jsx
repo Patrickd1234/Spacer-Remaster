@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-function Header({ searchQuery, onSearchChange }) {
+function Header({ searchQuery = "", onSearchChange = () => {} }) {
     const [showNotifications, setShowNotifications] = useState(false);
 
     return (

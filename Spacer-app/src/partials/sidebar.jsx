@@ -13,28 +13,46 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
     useEffect(() => {
         const fetchProjects = async () => {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) return;
-            const { data, error } = await supabase.from("project_spaces").select('*');
-            if (error) {
-                console.log(error);
+            const userId = localStorage.getItem("userId");
+            if (!userId) {
+                const { data, error } = await supabase.from("project_spaces").select("*");
+                if (!error && data) setProjects(data);
+                return;
+            }
+
+            // Get team spaces the user is a member of
+            const { data: memberData, error: memberError } = await supabase
+                .from("memberships")
+                .select("team_space_id")
+                .eq("user_id", userId);
+
+            if (memberError || !memberData || memberData.length === 0) {
+                // Fallback if membership table/rows aren't found or RLS handles access directly
+                const { data, error } = await supabase.from("project_spaces").select("*");
+                if (error) console.log(error);
+                else setProjects(data || []);
             } else {
-                setProjects(data || []);
+                const teamIds = memberData.map((m) => m.team_space_id);
+                const { data, error } = await supabase
+                    .from("project_spaces")
+                    .select("*")
+                    .in("team_space_id", teamIds);
+                if (error) console.log(error);
+                else setProjects(data || []);
             }
         };
         fetchProjects();
     }, []);
 
     const addProject = async () => {
-    const { data, error } = await supabase.from("project_spaces").insert({
-        name: window.prompt("Enter new project name:")
-    })
-    if (error) {
-        console.log(error)
-    } else {
-        console.log(data)
-    }
-
+        const { data, error } = await supabase.from("project_spaces").insert({
+            name: window.prompt("Enter new project name:")
+        })
+        if (error) {
+            console.log(error)
+        } else {
+            console.log(data)
+        }
     }
 
     return (
@@ -92,10 +110,10 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                         </div>
                     )}
                     {matchesSearch("Department") && (
-                        <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                        <Link to="/department" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
                             <span className="material-symbols-outlined">groups</span>
                             {expanded && <span className="font-body-md">Department</span>}
-                        </div>
+                        </Link>
                     )}
                     {matchesSearch("Calendar") && (
                         <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
@@ -112,17 +130,18 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                             <Link
                                 to={`/project_page/${project.id}`}
                                 key={project.id}
-                                className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group">
-                                <div className="flex items-center gap-md">
-                                    <span className="font-body-md">{project.name}</span>
-                                </div>
+                                className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}><Link to="/project_page/:project_id">
+                                    <div className="flex items-center gap-md">
+                                        <span className="font-body-md">{project.name}</span>
+                                    </div>
+                                </Link>
                                 <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>
                             </Link>
                         ))}
                     </div>
                 </div>
             </nav>
-        
+
             <div className="mt-auto px-2 border-t border-outline-variant pt-md">
                 <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
                     <span className="material-symbols-outlined">menu_book</span>
@@ -130,11 +149,11 @@ export default function Sidebar({ collapsed, onToggle, hovered, onHoverChange, s
                 </div>
                 <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
                     <span className="material-symbols-outlined">bar_chart</span>
-                    <span className="font-label-md">Reports</span>
+                    <Link to="/reports"><span className="font-label-md">Reports</span></Link>
                 </div>
                 <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
                     <span className="material-symbols-outlined">settings</span>
-                    <span className="font-label-md">Settings</span>
+                    <Link to="/settings"><span className="font-label-md">Settings</span></Link>
                 </div>
             </div>
 
