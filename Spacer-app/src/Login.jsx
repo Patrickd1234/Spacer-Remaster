@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 
 function Login() {
-    const [coords, setCoords] = useState({ x: 0, y: 0 })
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
@@ -24,19 +23,16 @@ function Login() {
         window.location.reload()
     }
 
-    useEffect(() => {
-        const handleMouseMove = (e) => {
-            const x = (e.clientX / window.innerWidth - 0.5) * 40
-            const y = (e.clientY / window.innerHeight - 0.5) * 40
-            setCoords({ x, y })
-        }
-        window.addEventListener("mousemove", handleMouseMove)
-        return () => window.removeEventListener("mousemove", handleMouseMove)
-    }, [])
-
     const handleSubmit = async (e) => {
         e.preventDefault()
         setErrorMsg("")
+
+        if (isDemoMode && email === "test@example.com" && password === "password") {
+            localStorage.setItem("userId", "demo-user")
+            localStorage.setItem("userEmail", "test@example.com")
+            navigate("/")
+            return
+        }
 
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email,
@@ -48,158 +44,248 @@ function Login() {
             setErrorMsg(error.message)
         } else {
             console.log("Logged in user:", data)
-            // Persistently store the user ID and email in localStorage
             if (data && data.user) {
                 localStorage.setItem("userId", data.user.id)
                 localStorage.setItem("userEmail", data.user.email)
             }
-            // Redirect to home dashboard
             navigate("/")
         }
     }
 
+    const isEmailError = errorMsg.toLowerCase().includes("email") || errorMsg.toLowerCase().includes("user not found")
+    const isPasswordError = errorMsg.toLowerCase().includes("password") || errorMsg.toLowerCase().includes("invalid login credentials")
+
     return (
-        <div className="bg-background text-on-background min-h-screen flex items-center justify-center p-md relative overflow-hidden">
-            {/* Demo Mode Toggle Badge */}
-            <div className="absolute top-md right-md z-50">
-                <div className="glass-panel px-md py-sm rounded-full flex items-center gap-sm text-body-sm bg-surface-container-low/60 border border-outline-variant/30 backdrop-blur-md">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isDemoMode ? "bg-primary-fixed animate-pulse shadow-[0_0_8px_#aff82a]" : "bg-outline"}`}></span>
-                    <span className="font-label-md text-on-surface uppercase tracking-wider text-[10px]">Demo Mode: {isDemoMode ? "ON" : "OFF"}</span>
-                    <button
-                        type="button"
-                        onClick={toggleDemoMode}
-                        className="px-sm py-[2px] bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded hover:brightness-110 transition-all cursor-pointer uppercase tracking-wider"
-                    >
-                        Toggle
-                    </button>
+        <div className="min-h-screen bg-[#181a20] flex overflow-hidden">
+            {/* Top Error Toast */}
+            {errorMsg && (
+                <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
+                    <div className="w-8 h-8 rounded border border-white/20 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-white text-[18px]">error</span>
+                    </div>
+                    <p className="text-white text-[14px] leading-tight">
+                        {errorMsg === "Invalid login credentials" 
+                            ? "Your email doesn't exist in our system, try creating an account or check your password." 
+                            : errorMsg}
+                    </p>
+                </div>
+            )}
+
+            {/* Demo Mode Toggle (hidden in normal view, absolute positioned) */}
+            <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
+                <button onClick={toggleDemoMode} className="text-xs bg-[#2D3139] text-white px-2 py-1 rounded">
+                    Demo: {isDemoMode ? "ON" : "OFF"}
+                </button>
+            </div>
+
+            {/* Left Side: Visual/Brand (Hidden on mobile) */}
+            <div className="hidden lg:flex w-[55%] relative flex-col px-16 py-12 border-r border-[#2D3139]/30">
+                {/* Abstract Glowing Backgrounds */}
+                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#2A3A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
+                <div className="absolute bottom-[-10%] right-[10%] w-[400px] h-[400px] bg-[#3B2A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
+                <div className="absolute bottom-[20%] left-[-5%] w-[300px] h-[300px] bg-[#1A4A3A] rounded-full blur-[100px] opacity-40 mix-blend-screen pointer-events-none" />
+
+                {/* Branding */}
+                <div className="relative z-10 mb-12">
+                    <div className="flex items-center gap-2 mb-8">
+                        <span className="material-symbols-outlined text-white font-bold text-[24px]">token</span>
+                        <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
+                    </div>
+                    <p className="text-white text-[20px] leading-relaxed max-w-md">
+                        One workspace for every team. HR, Design, Dev and Marketing—each in their own space, all in one place
+                    </p>
+                </div>
+
+                {/* Decorative Widget */}
+                <div className="relative z-10 w-full max-w-[420px] bg-[#1C1F26]/80 backdrop-blur-xl border border-[#2D3139] rounded-2xl p-6 shadow-2xl mt-4">
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-white text-[20px]">star</span>
+                            <span className="text-white font-bold text-[16px]">To-do</span>
+                            <span className="text-[#8c947b] text-[14px]">2</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[#8c947b]">
+                            <span className="material-symbols-outlined text-[18px]">more_horiz</span>
+                            <span className="material-symbols-outlined text-[18px]">add</span>
+                        </div>
+                    </div>
+
+                    {/* Task Card 1 */}
+                    <div className="border-b border-[#2D3139] pb-6 mb-6">
+                        <div className="flex gap-2 mb-4">
+                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">edit</span> To do
+                            </span>
+                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+                                <span className="material-symbols-outlined text-red-500 text-[12px]">flag</span> High Priority
+                            </span>
+                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+                                <span className="material-symbols-outlined text-blue-500 text-[12px]">web</span> Website
+                            </span>
+                        </div>
+                        <h3 className="text-white text-[15px] font-medium mb-1">Review Website Design 2.0</h3>
+                        <div className="flex items-center gap-2 text-[#8c947b] text-[13px] mb-4">
+                            <span className="material-symbols-outlined text-[16px]">subdirectory_arrow_right</span>
+                            <span>C - level review phase</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex -space-x-2">
+                                <img src="https://i.pravatar.cc/150?img=11" alt="avatar" className="w-7 h-7 rounded-full border-2 border-[#1C1F26]" />
+                                <img src="https://i.pravatar.cc/150?img=12" alt="avatar" className="w-7 h-7 rounded-full border-2 border-[#1C1F26]" />
+                                <div className="w-7 h-7 rounded-full border-2 border-[#1C1F26] bg-[#aff82a] flex items-center justify-center text-black text-[10px] font-bold">TJ</div>
+                            </div>
+                            <div className="flex items-center gap-4 text-[#8c947b] text-[13px]">
+                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">chat_bubble</span> 5</div>
+                                <div className="flex items-center gap-1 text-[#F25C05]"><span className="material-symbols-outlined text-[16px]">calendar_today</span> Tomorrow</div>
+                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">radio_button_unchecked</span> 20%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Task Card 2 */}
+                    <div className="border-b border-[#2D3139] pb-6 mb-6">
+                        <div className="flex gap-2 mb-4">
+                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">edit</span> To do
+                            </span>
+                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+                                <span className="material-symbols-outlined text-blue-400 text-[12px]">flag</span> Normal
+                            </span>
+                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
+                                <span className="material-symbols-outlined text-pink-500 text-[12px]">dashboard</span> Dashboard
+                            </span>
+                        </div>
+                        <h3 className="text-white text-[15px] font-medium mb-1">Review React Components</h3>
+                        <div className="flex items-center gap-2 text-[#8c947b] text-[13px] mb-4">
+                            <span className="material-symbols-outlined text-[16px]">subdirectory_arrow_right</span>
+                            <span>New react components code review</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <div className="flex -space-x-2">
+                                <div className="w-7 h-7 rounded-full border-2 border-[#1C1F26] bg-[#A1C9F1] flex items-center justify-center text-black text-[10px] font-bold">MA</div>
+                                <div className="w-7 h-7 rounded-full border-2 border-[#1C1F26] bg-[#aff82a] flex items-center justify-center text-black text-[10px] font-bold">TJ</div>
+                            </div>
+                            <div className="flex items-center gap-4 text-[#8c947b] text-[13px]">
+                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">chat_bubble</span> 5</div>
+                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">calendar_today</span> 25 July</div>
+                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">radio_button_unchecked</span> 0%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 text-white font-semibold cursor-pointer">
+                        <span className="material-symbols-outlined text-[#8c947b]">add</span> Add Task
+                    </div>
                 </div>
             </div>
 
-            {/* Background Atmospheric Elements */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div
-                    className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-primary-fixed/5 rounded-full blur-[120px] transition-transform duration-200 ease-out"
-                    style={{ transform: `translate(${coords.x}px, ${coords.y}px)` }}
-                />
-                <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-secondary-container/10 rounded-full blur-[100px]" />
-            </div>
+            {/* Right Side: Sign In Form */}
+            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[#181a20] relative z-10">
+                <div className="w-full max-w-[420px] mx-auto">
+                    {/* Abstract colorful icon */}
+                    <div className="w-10 h-10 mb-6 flex items-center justify-center">
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 5C11.716 5 5 11.716 5 20C5 28.284 11.716 35 20 35C28.284 35 35 28.284 35 20C35 11.716 28.284 5 20 5ZM26.5 15C27.88 15 29 16.12 29 17.5C29 18.88 27.88 20 26.5 20C25.12 20 24 18.88 24 17.5C24 16.12 25.12 15 26.5 15ZM13.5 15C14.88 15 16 16.12 16 17.5C16 18.88 14.88 20 13.5 20C12.12 20 11 18.88 11 17.5C11 16.12 12.12 15 13.5 15ZM20 30C15.58 30 11.83 27.14 10.23 23H29.77C28.17 27.14 24.42 30 20 30Z" fill="url(#paint0_linear)"/>
+                            <defs>
+                                <linearGradient id="paint0_linear" x1="5" y1="5" x2="35" y2="35" gradientUnits="userSpaceOnUse">
+                                    <stop stopColor="#4361EE" />
+                                    <stop offset="0.5" stopColor="#F72585" />
+                                    <stop offset="1" stopColor="#aff82a" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
 
-            {/* LOGIN PANEL */}
-            <main className="relative z-10 w-full max-w-[1100px] grid md:grid-cols-2 glass-panel overflow-hidden rounded-xl shadow-2xl">
-                {/* Left Side: Visual/Brand */}
-                <div className="hidden md:flex flex-col justify-between p-xl bg-surface-container-low border-r border-outline-variant relative overflow-hidden">
-                    {/* Branding */}
-                    <div className="flex items-center gap-sm">
-                        <div className="w-10 h-10 bg-primary-fixed rounded flex items-center justify-center shadow-[0_0_15px_rgba(182,255,51,0.4)]">
-                            <span className="material-symbols-outlined text-on-primary-fixed font-bold">circle</span>
-                        </div>
-                        <h1 className="font-headline-md text-headline-md font-bold tracking-tight text-primary-fixed">Spacers</h1>
-                    </div>
-                    {/* Decorative Centerpiece */}
-                    <div className="relative py-xl">
-                        <div className="space-y-md">
-                            <h2 className="font-headline-xl text-headline-xl text-on-surface leading-tight">
-                                Command the <br />
-                                <span className="text-primary-fixed">Mission Control</span>
-                            </h2>
-                            <p className="font-body-lg text-body-lg text-on-surface-variant max-w-[340px]">
-                                High-performance workspace for elite engineering teams. Secure your entry to the grid.
-                            </p>
-                        </div>
-                        {/* Abstract Data Viz Decoration */}
-                        <div className="mt-xl flex gap-xs items-end h-16">
-                            <div className="w-1 bg-primary-fixed/20 h-4 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed/40 h-8 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed/60 h-12 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed h-16 rounded-full shadow-[0_0_8px_rgba(182,255,51,0.6)]"></div>
-                            <div className="w-1 bg-primary-fixed/80 h-10 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed/40 h-6 rounded-full"></div>
-                        </div>
-                    </div>
-                    {/* Footer Quote */}
-                    <div className="border-l-2 border-primary-fixed pl-md">
-                        <p className="font-label-md text-label-md text-on-surface italic opacity-80">
-                            "Precision is not an option; it's the standard."
-                        </p>
-                    </div>
-                    {/* Background Image Integration */}
-                    <div className="absolute inset-0 -z-10 opacity-10">
-                        <div className="w-full h-full" data-alt="A dark, sophisticated architectural shot of a high-tech server room or data center with linear neon green lights recessed in the ceiling and floor. The perspective is symmetrical, leading the eye into a deep, vanishing point. The overall aesthetic is cinematic, midnight charcoal, and technically precise." style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCS5Ph6jhiO80EQWsIKNc7e8gmdkEXn5gRywJnQItEA1H1LKPKdlaJxodFYLZNL8wPJw01TDWW9tNLas5-mtIttY3DVR5v_BbuMvr9xEhSLf4Cdjz33q2Pbr7vbOa9dygB7Xj6iixNgjej7UkOVfwUms_Y4eUVbJG2cqaEDVDKXFNMTRCouoaN7ysfb0M8eUwNu_gEipvd8vdHAKdcCceEpG8O_usbej8TchhpNByDQHg0EiAFEIIT6KQ')" }}></div>
-                    </div>
-                </div>
-                {/* Right Side: Sign In Form */}
-                <div className="flex flex-col justify-center p-xl lg:px-24 bg-surface-container">
-                    {/* Mobile Logo */}
-                    <div className="md:hidden flex items-center gap-sm mb-xl">
-                        <div className="w-8 h-8 bg-primary-fixed rounded flex items-center justify-center">
-                            <span className="material-symbols-outlined text-on-primary-fixed text-[20px] font-bold">circle</span>
-                        </div>
-                        <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">Spacers</h1>
-                    </div>
-                    <div className="mb-xl">
-                        <h3 className="font-headline-lg text-headline-lg text-on-surface mb-sm flex items-center gap-sm">
-                            <span>Sign In</span>
-                            {isDemoMode && (
-                                <span className="px-sm py-[2px] bg-primary-fixed/15 border border-primary-fixed/30 rounded text-primary-fixed text-[11px] font-bold uppercase tracking-wider">Demo Mode</span>
+                    <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Welcome Back</h2>
+                    <p className="text-[#8c947b] text-[15px] mb-10 leading-relaxed">
+                        Welcome back! Let's collaborate with our team and unleash our potential!
+                    </p>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Email Input */}
+                        <div className="relative">
+                            <input 
+                                type="email" 
+                                id="email"
+                                placeholder="Email address" 
+                                className={`w-full bg-transparent border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#424934]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                value={email} 
+                                onChange={(e) => setEmail(e.target.value)} 
+                                required 
+                            />
+                            {isEmailError && (
+                                <p className="text-red-500 text-[12px] mt-2 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">error</span> Your email doesn't exist
+                                </p>
                             )}
-                        </h3>
-                        <p className="font-body-md text-body-md text-on-surface-variant">
-                            {isDemoMode
-                                ? "Use any email/password to sign in to your local workspace."
-                                : "Enter your credentials to access the terminal."
-                            }
-                        </p>
-                    </div>
-                    <form action="#" className="space-y-lg" method="POST" onSubmit={handleSubmit}>
-                        {/* Error Message */}
-                        {errorMsg && (
-                            <div className="p-sm bg-error-container/20 border border-error text-error text-body-sm rounded-lg">
-                                {errorMsg}
-                            </div>
-                        )}
+                        </div>
 
-                        {/* Email Field */}
-                        <div className="space-y-xs">
-                            <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" htmlFor="email">Email Address</label>
-                            <div className="relative group transition-all duration-200 focus-within:scale-[1.01]">
-                                <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">mail</span>
-                                <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-md text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="email" placeholder="name@company.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                            </div>
+                        {/* Password Input */}
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? "text" : "password"} 
+                                id="password"
+                                placeholder="Password" 
+                                className={`w-full bg-transparent border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#424934]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                value={password} 
+                                onChange={(e) => setPassword(e.target.value)} 
+                                required 
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">
+                                    {showPassword ? "visibility_off" : "visibility"}
+                                </span>
+                            </button>
+                            {isPasswordError && (
+                                <p className="text-red-500 text-[12px] mt-2 flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[14px]">error</span> Password is incorrect try again
+                                </p>
+                            )}
                         </div>
-                        {/* Password Field */}
-                        <div className="space-y-xs">
-                            <div className="flex justify-between items-center">
-                                <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" htmlFor="password">Password</label>
-                            </div>
-                            <div className="relative group transition-all duration-200 focus-within:scale-[1.01]">
-                                <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">lock</span>
-                                <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-12 text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="password" placeholder="••••••••" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed transition-colors"
-                                    tabIndex={-1}
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
-                                >
-                                    <span className="material-symbols-outlined text-[20px]">{showPassword ? "visibility_off" : "visibility"}</span>
-                                </button>
-                            </div>
+
+                        {/* Forgot Password */}
+                        <div className="flex justify-end mt-2 mb-6">
+                            <a href="#" className="text-[#aff82a] text-[13px] hover:underline">Forgot Password</a>
                         </div>
-                        {/* Action Button */}
-                        <button className="w-full bg-primary-fixed hover:bg-primary-container text-on-primary-fixed font-label-md text-label-md py-md rounded-lg flex items-center justify-center gap-sm transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(175,248,42,0.15)] hover:shadow-[0_4px_25px_rgba(175,248,42,0.3)]" type="submit">
-                            Sign In
-                            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+
+                        {/* Sign In Button */}
+                        <button 
+                            type="submit" 
+                            className="w-full bg-[#1C1F26] hover:bg-[#2D3139] text-[#8c947b] hover:text-white font-medium text-[15px] py-3.5 rounded-xl border border-[#2D3139] transition-all"
+                        >
+                            Sign in
                         </button>
-                        {/* Footer Links */}
-                        <div className="pt-md text-center">
-                            <p className="font-body-sm text-on-surface-variant">
-                                Don't have an account?{" "}
-                                <Link className="text-primary-fixed font-semibold hover:underline" to="/signup">Sign up</Link>
+
+                        <div className="flex items-center gap-4 my-6">
+                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                            <span className="text-[#8c947b] text-[13px]">or</span>
+                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                        </div>
+
+                        {/* Social Login */}
+                        <button type="button" className="w-full bg-[#181a20] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all mb-3">
+                            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
+                            Sign in with Google
+                        </button>
+                        
+                        <button type="button" className="w-full bg-[#181a20] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all">
+                            <span className="material-symbols-outlined text-[20px]">apple</span>
+                            Sign in with Apple
+                        </button>
+
+                        {/* Create Account Link */}
+                        <div className="text-center mt-8">
+                            <p className="text-[#8c947b] text-[14px]">
+                                Don't have an account? <Link to="/signup" className="text-[#aff82a] hover:underline">Create Account</Link>
                             </p>
                         </div>
                     </form>
                 </div>
-            </main>
+            </div>
         </div>
     )
 }
