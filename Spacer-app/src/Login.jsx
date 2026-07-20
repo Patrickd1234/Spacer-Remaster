@@ -6,6 +6,7 @@ function Login() {
     const [coords, setCoords] = useState({ x: 0, y: 0 })
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
+    const [showPassword, setShowPassword] = useState(false)
     const [errorMsg, setErrorMsg] = useState("")
     const navigate = useNavigate()
 
@@ -36,12 +37,12 @@ function Login() {
     const handleSubmit = async (e) => {
         e.preventDefault()
         setErrorMsg("")
-        
+
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password,
         })
-        
+
         if (error) {
             console.error(error)
             setErrorMsg(error.message)
@@ -64,8 +65,8 @@ function Login() {
                 <div className="glass-panel px-md py-sm rounded-full flex items-center gap-sm text-body-sm bg-surface-container-low/60 border border-outline-variant/30 backdrop-blur-md">
                     <span className={`w-2.5 h-2.5 rounded-full ${isDemoMode ? "bg-primary-fixed animate-pulse shadow-[0_0_8px_#aff82a]" : "bg-outline"}`}></span>
                     <span className="font-label-md text-on-surface uppercase tracking-wider text-[10px]">Demo Mode: {isDemoMode ? "ON" : "OFF"}</span>
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         onClick={toggleDemoMode}
                         className="px-sm py-[2px] bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded hover:brightness-110 transition-all cursor-pointer uppercase tracking-wider"
                     >
@@ -76,8 +77,8 @@ function Login() {
 
             {/* Background Atmospheric Elements */}
             <div className="fixed inset-0 pointer-events-none z-0">
-                <div 
-                    className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-primary-fixed/5 rounded-full blur-[120px] transition-transform duration-200 ease-out" 
+                <div
+                    className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-primary-fixed/5 rounded-full blur-[120px] transition-transform duration-200 ease-out"
                     style={{ transform: `translate(${coords.x}px, ${coords.y}px)` }}
                 />
                 <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-secondary-container/10 rounded-full blur-[100px]" />
@@ -143,8 +144,8 @@ function Login() {
                             )}
                         </h3>
                         <p className="font-body-md text-body-md text-on-surface-variant">
-                            {isDemoMode 
-                                ? "Use any email/password to sign in to your local workspace." 
+                            {isDemoMode
+                                ? "Use any email/password to sign in to your local workspace."
                                 : "Enter your credentials to access the terminal."
                             }
                         </p>
@@ -172,7 +173,16 @@ function Login() {
                             </div>
                             <div className="relative group transition-all duration-200 focus-within:scale-[1.01]">
                                 <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">lock</span>
-                                <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-md text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="password" placeholder="••••••••" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                                <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-12 text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="password" placeholder="••••••••" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed transition-colors"
+                                    tabIndex={-1}
+                                    aria-label={showPassword ? "Hide password" : "Show password"}
+                                >
+                                    <span className="material-symbols-outlined text-[20px]">{showPassword ? "visibility_off" : "visibility"}</span>
+                                </button>
                             </div>
                         </div>
                         {/* Action Button */}
