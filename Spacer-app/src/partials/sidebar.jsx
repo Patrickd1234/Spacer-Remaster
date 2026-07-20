@@ -147,10 +147,10 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                             </Link>
                         )}
                         {matchesSearch("Calendar") && (
-                            <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                            <Link to="/calendar" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
                                 <span className="material-symbols-outlined">calendar_today</span>
                                 {expanded && <span className="font-body-md">Calendar</span>}
-                            </div>
+                            </Link>
                         )}
                     </div>
                     {/* PROJECTS SECTION */}
@@ -161,7 +161,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                 <div
                                     key={project.id}
                                     className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}>
-                                    {expanded && <Link to="/project_page/:project_id">
+                                    {expanded && <Link to={`/project_page/${project.id}`}>
                                         <div className="flex items-center gap-md">
                                             <span className="font-body-md whitespace-nowrap">{project.name}</span>
                                         </div>
@@ -182,10 +182,11 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         <span className="material-symbols-outlined">bar_chart</span>
                         {expanded && <Link to="/reports"><span className="font-label-md whitespace-nowrap">Reports</span></Link>}
                     </div>
-                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                        <span className="material-symbols-outlined">settings</span>
-                        {expanded && <Link to="/settings"><span className="font-label-md whitespace-nowrap">Settings</span></Link>}
+                    <div className="text-on-surface-variant/50 rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm cursor-not-allowed" title="Settings are currently disabled">
+                        <span className="material-symbols-outlined opacity-50">settings</span>
+                        {expanded && <span className="font-label-md whitespace-nowrap opacity-50">Settings</span>}
                     </div>
+
                     <button
                         onClick={handleLogout}
                         className="w-full text-error hover:bg-error/10 rounded-lg mx-0 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer"
