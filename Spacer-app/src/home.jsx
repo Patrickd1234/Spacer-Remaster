@@ -89,6 +89,7 @@ function Home() {
     const [userData, setUserData] = useState(null)
     const [selectedProject, setSelectedProject] = useState(null)
     const [previewFile, setPreviewFile] = useState(null)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
     // Superadmin role state
     const [userRole, setUserRole] = useState(null)
@@ -191,9 +192,9 @@ function Home() {
 
     return (
         <>
-            <Sidebar />
+            <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <Header />
-            <main className="ml-[260px] flex-1 flex flex-col min-h-screen">
+            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col min-h-screen transition-all duration-300 ease-out`}>
                 <div className="p-lg space-y-lg">
 
                     {/* ── GREETING ──────────────────────────────────────── */}
