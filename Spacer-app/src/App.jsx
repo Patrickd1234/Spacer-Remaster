@@ -8,6 +8,7 @@ import ProjectPage from './project_page'
 import Onboarding from './onboarding'
 import Reports from './Reports'
 import Department from './Department'
+import CalendarView from './CalendarView'
 import { supabase } from './supabase'
 
 function App() {
@@ -59,6 +60,7 @@ function App() {
         <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
         <Route path="/reports" element={session ? <Reports /> : <Navigate to="/login" replace />} />
         <Route path="/department" element={session ? <Department /> : <Navigate to="/login" replace />} />
+        <Route path="/calendar" element={session ? <CalendarView /> : <Navigate to="/login" replace />} />
         <Route path="/project_page/:project_id" element={session ? <ProjectPage /> : <Navigate to="/login" replace />} />
       </Routes>
     </Router>
