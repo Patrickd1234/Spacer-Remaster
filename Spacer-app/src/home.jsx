@@ -13,20 +13,138 @@ function Home() {
     const [previewFile, setPreviewFile] = useState(null)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+    // Superadmin role state
+    const [userRole, setUserRole] = useState(null)
+    const [roleLoading, setRoleLoading] = useState(true)
+
+    // Org stats (superadmin only)
+    const [orgStats, setOrgStats] = useState({ members: null, teams: null, activeProjects: null })
+    const [teams, setTeams] = useState([])
+    const [teamPage, setTeamPage] = useState(0)
+    const TEAMS_PER_PAGE = 3
+
+    // User tasks (non-superadmin only)
+    const [userTasks, setUserTasks] = useState([])
+    const [tasksLoading, setTasksLoading] = useState(false)
+
     useEffect(() => {
         const email = localStorage.getItem("userEmail")
-        if (email) {
-            setUserEmail(email)
-            const fetchUser = async () => {
-                const { data, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle()
-                if (error) console.log(error)
-                if (data) {
-                    setUserData(data)
+        if (email) setUserEmail(email)
+
+        const init = async () => {
+            try {
+                // 1. Get authenticated user
+                const { data: authData } = await supabase.auth.getUser()
+                const userId = authData?.user?.id
+
+                if (!userId) { setRoleLoading(false); return }
+
+                // 2. Fetch user profile
+                const { data: profile } = await supabase
+                    .from("users")
+                    .select("*")
+                    .eq("id", userId)
+                    .maybeSingle()
+                if (profile) setUserData(profile)
+
+                // 3. Query memberships table for current user's role
+                const { data: membership, error: memError } = await supabase
+                    .from("memberships")
+                    .select("role")
+                    .eq("user_id", userId)
+                    .maybeSingle()
+
+                if (memError) console.warn("membership fetch error:", memError)
+
+                const role = membership?.role ?? null
+                setUserRole(role)
+
+                // 4. Branch on role: org data for superadmin, personal tasks for others
+                if (role === "superadmin") {
+                    await fetchOrgData()
+                } else {
+                    await fetchUserTasks(userId)
                 }
+            } catch (err) {
+                console.error("Home init error:", err)
+            } finally {
+                setRoleLoading(false)
             }
-            fetchUser()
         }
+
+        init()
     }, [])
+
+    const fetchOrgData = async () => {
+        try {
+            // Total members
+            const { data: allMembers } = await supabase.from("memberships").select("id")
+            const memberCount = allMembers?.length ?? 0
+
+            // Teams from team_spaces table
+            const { data: teamSpaces } = await supabase.from("team_spaces").select("id, name, status")
+            const teamCount = teamSpaces?.length ?? 0
+
+            // Active project spaces
+            const { data: activeProjects } = await supabase.from("project_spaces").select("id")
+            const projectCount = activeProjects?.length ?? 0
+
+            setOrgStats({ members: memberCount, teams: teamCount, activeProjects: projectCount })
+
+            // Per-team member & project counts
+            if (teamSpaces && teamSpaces.length > 0) {
+                const enriched = await Promise.all(
+                    teamSpaces.map(async (ts) => {
+                        const { data: mems } = await supabase
+                            .from("memberships").select("id").eq("team_space_id", ts.id)
+                        const { data: projs } = await supabase
+                            .from("project_spaces").select("id").eq("team_space_id", ts.id)
+                        return {
+                            ...ts,
+                            member_count: mems?.length ?? 0,
+                            project_count: projs?.length ?? 0,
+                            status: ts.status || "ON TRACK",
+                        }
+                    })
+                )
+                setTeams(enriched)
+            }
+        } catch (err) {
+            console.error("Org data fetch error:", err)
+        }
+    }
+
+    // ── Fetch tasks assigned to the current user only ────────────────────────
+    const fetchUserTasks = async (userId) => {
+        setTasksLoading(true)
+        try {
+            // SELECT * FROM tasks WHERE assignee_id = <userId>
+            const { data, error } = await supabase
+                .from("tasks")
+                .select("*")
+                .eq("assignee_id", userId)
+
+            if (error) {
+                console.warn("tasks fetch error:", error)
+            } else {
+                setUserTasks(data || [])
+            }
+        } catch (err) {
+            console.error("fetchUserTasks error:", err)
+        } finally {
+            setTasksLoading(false)
+        }
+    }
+
+    const isSuperAdmin = userRole === "superadmin"
+    const totalTeamPages = Math.ceil(teams.length / TEAMS_PER_PAGE)
+    const visibleTeams = teams.slice(teamPage * TEAMS_PER_PAGE, teamPage * TEAMS_PER_PAGE + TEAMS_PER_PAGE)
+
+    // Derived task buckets — only the current user's tasks, grouped by status
+    const todoTasks = userTasks.filter(t => t.status === "todo")
+    const inProgressTasks = userTasks.filter(t => t.status === "in_progress")
+    const doneTasks = userTasks.filter(t => t.status === "done")
+    const openCount = todoTasks.length + inProgressTasks.length
 
     return (
         <>
@@ -71,18 +189,18 @@ function Home() {
                         {/* Metric 1 */}
                         <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
                             <div>
-                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">16</h2>
+                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">{tasksLoading ? "..." : openCount}</h2>
                                 <p className="text-[#8c947b] text-[15px]">My Open Task</p>
                             </div>
                             <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
                                 <span className="w-1.5 h-1.5 rounded-full bg-[#8c947b]"></span>
-                                Spread across 4 projects
+                                Spread across multiple projects
                             </div>
                         </div>
                         {/* Metric 2 */}
                         <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
                             <div>
-                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">8</h2>
+                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">{isSuperAdmin ? orgStats.activeProjects ?? "..." : "8"}</h2>
                                 <p className="text-[#8c947b] text-[15px]">Active Projects</p>
                             </div>
                             <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
@@ -93,8 +211,8 @@ function Home() {
                         {/* Metric 3 */}
                         <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
                             <div>
-                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">24</h2>
-                                <p className="text-[#8c947b] text-[15px]">Team Members</p>
+                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">{isSuperAdmin ? orgStats.members ?? "..." : "24"}</h2>
+                                <p className="text-[#8c947b] text-[15px]">{isSuperAdmin ? "Org Members" : "Team Members"}</p>
                             </div>
                             <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
                                 <span className="material-symbols-outlined text-[14px] rotate-[-45deg]">arrow_forward</span>

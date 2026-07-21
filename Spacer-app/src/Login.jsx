@@ -64,8 +64,8 @@ function Login() {
                         <span className="material-symbols-outlined text-white text-[18px]">error</span>
                     </div>
                     <p className="text-white text-[14px] leading-tight">
-                        {errorMsg === "Invalid login credentials" 
-                            ? "Your email doesn't exist in our system, try creating an account or check your password." 
+                        {errorMsg === "Invalid login credentials"
+                            ? "Your email doesn't exist in our system, try creating an account or check your password."
                             : errorMsg}
                     </p>
                 </div>
@@ -185,7 +185,7 @@ function Login() {
                     {/* Abstract colorful icon */}
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
                         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20 5C11.716 5 5 11.716 5 20C5 28.284 11.716 35 20 35C28.284 35 35 28.284 35 20C35 11.716 28.284 5 20 5ZM26.5 15C27.88 15 29 16.12 29 17.5C29 18.88 27.88 20 26.5 20C25.12 20 24 18.88 24 17.5C24 16.12 25.12 15 26.5 15ZM13.5 15C14.88 15 16 16.12 16 17.5C16 18.88 14.88 20 13.5 20C12.12 20 11 18.88 11 17.5C11 16.12 12.12 15 13.5 15ZM20 30C15.58 30 11.83 27.14 10.23 23H29.77C28.17 27.14 24.42 30 20 30Z" fill="url(#paint0_linear)"/>
+                            <path d="M20 5C11.716 5 5 11.716 5 20C5 28.284 11.716 35 20 35C28.284 35 35 28.284 35 20C35 11.716 28.284 5 20 5ZM26.5 15C27.88 15 29 16.12 29 17.5C29 18.88 27.88 20 26.5 20C25.12 20 24 18.88 24 17.5C24 16.12 25.12 15 26.5 15ZM13.5 15C14.88 15 16 16.12 16 17.5C16 18.88 14.88 20 13.5 20C12.12 20 11 18.88 11 17.5C11 16.12 12.12 15 13.5 15ZM20 30C15.58 30 11.83 27.14 10.23 23H29.77C28.17 27.14 24.42 30 20 30Z" fill="url(#paint0_linear)" />
                             <defs>
                                 <linearGradient id="paint0_linear" x1="5" y1="5" x2="35" y2="35" gradientUnits="userSpaceOnUse">
                                     <stop stopColor="#4361EE" />
@@ -204,14 +204,14 @@ function Login() {
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Email Input */}
                         <div className="relative">
-                            <input 
-                                type="email" 
+                            <input
+                                type="email"
                                 id="email"
-                                placeholder="Email address" 
+                                placeholder="Email address"
                                 className={`w-full bg-transparent border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#424934]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
-                                value={email} 
-                                onChange={(e) => setEmail(e.target.value)} 
-                                required 
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
                             />
                             {isEmailError && (
                                 <p className="text-red-500 text-[12px] mt-2 flex items-center gap-1">
@@ -222,14 +222,14 @@ function Login() {
 
                         {/* Password Input */}
                         <div className="relative">
-                            <input 
-                                type={showPassword ? "text" : "password"} 
+                            <input
+                                type={showPassword ? "text" : "password"}
                                 id="password"
-                                placeholder="Password" 
+                                placeholder="Password"
                                 className={`w-full bg-transparent border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#424934]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
-                                value={password} 
-                                onChange={(e) => setPassword(e.target.value)} 
-                                required 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
                             />
                             <button
                                 type="button"
@@ -253,8 +253,8 @@ function Login() {
                         </div>
 
                         {/* Sign In Button */}
-                        <button 
-                            type="submit" 
+                        <button
+                            type="submit"
                             className="w-full bg-[#1C1F26] hover:bg-[#2D3139] text-[#8c947b] hover:text-white font-medium text-[15px] py-3.5 rounded-xl border border-[#2D3139] transition-all"
                         >
                             Sign in
@@ -271,7 +271,7 @@ function Login() {
                             <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
                             Sign in with Google
                         </button>
-                        
+
                         <button type="button" className="w-full bg-[#181a20] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all">
                             <span className="material-symbols-outlined text-[20px]">apple</span>
                             Sign in with Apple
