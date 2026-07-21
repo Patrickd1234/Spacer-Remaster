@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase";
 
-const CustomDropdown = ({ options, value, onChange, placeholder }) => {
+const CustomDropdown = ({ options, value, onChange, placeholder, direction = "down" }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
 
@@ -24,12 +24,12 @@ const CustomDropdown = ({ options, value, onChange, placeholder }) => {
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <span className={!selectedOption ? "text-on-surface-variant/60" : ""}>{selectedOption ? selectedOption.label : placeholder}</span>
-                <span className="material-symbols-outlined text-on-surface-variant text-[20px] transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                <span className="material-symbols-outlined text-on-surface-variant text-[20px] transition-transform duration-200" style={{ transform: isOpen ? (direction === 'up' ? 'rotate(180deg)' : 'rotate(180deg)') : 'rotate(0deg)' }}>
                     expand_more
                 </span>
             </div>
             {isOpen && (
-                <div className="absolute z-10 mt-xs w-full bg-surface-container border border-outline-variant rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.5)] max-h-60 overflow-y-auto overflow-x-hidden">
+                <div className={`absolute z-50 w-full bg-surface-container border border-outline-variant rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.5)] max-h-60 overflow-y-auto overflow-x-hidden ${direction === 'up' ? 'bottom-full mb-xs' : 'top-full mt-xs'}`}>
                     {options.map((opt) => (
                         <div 
                             key={opt.value}
@@ -48,31 +48,35 @@ const CustomDropdown = ({ options, value, onChange, placeholder }) => {
     );
 };
 
-export default function CreateTaskModal({ projectId, organizationId, teamSpaceId, initialStatus = "todo", onClose, onCreated }) {
+export default function CreateTaskModal({ projectId, organizationId, teamSpaceId, initialStatus = "todo", initialDate = "", onClose, onCreated, isInline = false }) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [dueDate, setDueDate] = useState("");
+    const [dueDate, setDueDate] = useState(initialDate);
     const [priority, setPriority] = useState("medium");
     const [assigneeId, setAssigneeId] = useState("");
+    const [selectedProjectId, setSelectedProjectId] = useState(projectId || "");
+    const [projects, setProjects] = useState([]);
     
     const [users, setUsers] = useState([]);
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
+        if (!projectId && organizationId) {
+            const fetchProjects = async () => {
+                const { data } = await supabase.from("projects").select("id, title").eq("organization_id", organizationId);
+                if (data) setProjects(data);
+            };
+            fetchProjects();
+        }
+    }, [projectId, organizationId]);
+
+    useEffect(() => {
+        // Fetch users in this organization
+        if (!organizationId) return;
         const fetchUsers = async () => {
-            if (!organizationId) return;
-            const { data, error } = await supabase
-                .from("users")
-                .select("id, name")
-                .eq("organization_id", organizationId)
-                .order("name");
-                
-            if (error) {
-                console.error("Error fetching users:", error);
-            } else {
-                setUsers(data || []);
-            }
+            const { data } = await supabase.from("users").select("id, name").eq("organization_id", organizationId);
+            if (data) setUsers(data);
         };
         fetchUsers();
     }, [organizationId]);
@@ -85,8 +89,10 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
             return;
         }
 
-        if (!projectId || !organizationId) {
-            setError("Missing project or organization context.");
+        const finalProjectId = projectId || selectedProjectId;
+
+        if (!finalProjectId || !organizationId) {
+            setError("Please select a project.");
             return;
         }
 
@@ -96,7 +102,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
         const { data, error } = await supabase
             .from("tasks")
             .insert({
-                project_id: projectId,
+                project_id: finalProjectId,
                 organization_id: organizationId,
                 title: title.trim(),
                 description: description.trim() || null,
@@ -122,7 +128,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
             entity_id: data.id,
             actor_id: userData?.user?.id || null,
             action: "created",
-            new_state: { project_id: projectId, title: data.title }
+            new_state: { project_id: finalProjectId, title: data.title }
         };
         await supabase.from("activity_log").insert(logEntry);
 
@@ -130,13 +136,12 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
         onClose();
     };
 
-    return (
-        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-md bg-background/80 backdrop-blur-sm" onClick={onClose}>
-            <div
-                className="bg-surface-container rounded-xl border border-outline-variant w-full max-w-lg shadow-2xl overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+    const content = (
+        <div
+            className={`bg-surface-container rounded-xl border border-outline-variant flex flex-col ${isInline ? 'w-full h-full border-none rounded-none' : 'w-full max-w-lg shadow-2xl overflow-visible'}`}
+            onClick={(e) => !isInline && e.stopPropagation()}
+        >
+            <div className={`p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-high shrink-0 ${isInline ? 'hidden' : ''}`}>
                     <div>
                         <h2 className="font-headline-lg text-headline-lg text-primary-container">Create New Task</h2>
                         <p className="font-body-sm text-on-surface-variant">Add a new actionable item to your project backlog.</p>
@@ -147,6 +152,20 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 </div>
 
                 <div className="p-lg space-y-lg">
+                    {!projectId && (
+                        <div className="space-y-xs">
+                            <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider">
+                                Project
+                            </label>
+                            <CustomDropdown 
+                                options={projects.map(p => ({ value: p.id, label: p.title }))}
+                                value={selectedProjectId}
+                                onChange={setSelectedProjectId}
+                                placeholder="Select a project"
+                            />
+                        </div>
+                    )}
+
                     <div className="space-y-xs">
                         <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider" htmlFor="task-title">
                             Task Name
@@ -181,7 +200,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                         <input
                             id="task-deadline"
                             className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all [color-scheme:dark]"
-                            type="date"
+                            type="datetime-local"
                             value={dueDate}
                             onChange={(e) => setDueDate(e.target.value)}
                         />
@@ -200,6 +219,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                                 value={assigneeId}
                                 onChange={setAssigneeId}
                                 placeholder="Select assignee"
+                                direction="up"
                             />
                         </div>
                         
@@ -217,6 +237,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                                 value={priority}
                                 onChange={setPriority}
                                 placeholder="Select priority"
+                                direction="up"
                             />
                         </div>
                     </div>
@@ -240,6 +261,13 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     </button>
                 </div>
             </div>
+    );
+
+    if (isInline) return content;
+
+    return (
+        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-md bg-background/80 backdrop-blur-sm" onClick={onClose}>
+            {content}
         </div>
     );
 }

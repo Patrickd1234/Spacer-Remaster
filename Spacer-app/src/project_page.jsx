@@ -14,9 +14,13 @@ function ProjectPage() {
     const [project_status, setProjectStatus] = useState("In Progress")
     const [project_due_date, setProjectDueDate] = useState("")
     const [project_tasks, setProjectTasks] = useState([])
+    const [project_events, setProjectEvents] = useState([])
     const [activityLog, setActivityLog] = useState([])
     const [activeTab, setActiveTab] = useState("summary")
     const [organizationId, setOrganizationId] = useState("")
+    const [selectedDateEvents, setSelectedDateEvents] = useState(null)
+    const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
+    const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [teamSpaceId, setTeamSpaceId] = useState("")
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false)
     const [createTaskInitialStatus, setCreateTaskInitialStatus] = useState("todo")
@@ -24,6 +28,18 @@ function ProjectPage() {
     const [selectedTask, setSelectedTask] = useState(null)
     const [orgUsers, setOrgUsers] = useState([])
     const [calendarMonth, setCalendarMonth] = useState(new Date())
+    const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
+
+    const updateTaskPriority = async (taskId, newPriority) => {
+        setSelectedTask(prev => prev ? { ...prev, priority: newPriority } : null)
+        setProjectTasks(prevTasks =>
+            prevTasks.map(t =>
+                String(t.id) === String(taskId) ? { ...t, priority: newPriority } : t
+            )
+        )
+        const { error } = await supabase.from('tasks').update({ priority: newPriority }).eq('id', taskId)
+        if (error) console.error("Error updating priority", error)
+    }
 
     const handleDragStart = (e, taskId) => {
         e.dataTransfer.setData("taskId", taskId)
@@ -145,6 +161,19 @@ function ProjectPage() {
             }
         }
 
+        const fetchEvents = async () => {
+            if (!project_id) return
+            const { data, error } = await supabase
+                .from("calendar_events")
+                .select("*")
+                .eq("project_id", project_id)
+            if (error) {
+                console.error("Error fetching events:", error)
+            } else {
+                setProjectEvents(data || [])
+            }
+        }
+
         const fetchActivity = async () => {
             if (!project_id) return
             const { data, error } = await supabase
@@ -163,6 +192,7 @@ function ProjectPage() {
 
         fetchProject()
         fetchTasks()
+        fetchEvents()
         fetchActivity()
     }, [project_id])
 
@@ -280,8 +310,14 @@ function ProjectPage() {
                                     { key: "todo", label: "Backlog", dotColor: "bg-outline-variant" },
                                     { key: "in_progress", label: "Doing", dotColor: "bg-[#3b82f6]" },
                                     { key: "done", label: "Done", dotColor: "bg-primary-fixed-dim" },
+                                    { key: "overdue", label: "Overdue", dotColor: "bg-error" },
                                 ].map(column => {
-                                    const columnTasks = project_tasks.filter(t => t.status === column.key);
+                                    const columnTasks = project_tasks.filter(t => {
+                                        if (t.status === "done") return column.key === "done";
+                                        const isOverdue = t.due_date && new Date(t.due_date) < new Date();
+                                        if (isOverdue) return column.key === "overdue";
+                                        return column.key === t.status;
+                                    });
                                     return (
                                         <div
                                             key={column.key}
@@ -290,9 +326,9 @@ function ProjectPage() {
                                                     ? 'bg-surface-container-high ring-1 ring-primary-fixed-dim/40'
                                                     : 'bg-surface-container/50'
                                             }`}
-                                            onDragOver={(e) => { e.preventDefault(); setDragOverColumn(column.key); }}
+                                            onDragOver={(e) => { if (column.key !== 'overdue') { e.preventDefault(); setDragOverColumn(column.key); } }}
                                             onDragLeave={() => setDragOverColumn(null)}
-                                            onDrop={(e) => { handleDrop(e, column.key); setDragOverColumn(null); }}
+                                            onDrop={(e) => { if (column.key !== 'overdue') { handleDrop(e, column.key); } setDragOverColumn(null); }}
                                         >
                                             {/* Column Header */}
                                             <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
@@ -302,13 +338,15 @@ function ProjectPage() {
                                                     <span className="text-[10px] text-on-surface-variant bg-surface-container-highest rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
                                                 </div>
                                                 <div className="flex items-center gap-[2px]">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
-                                                        className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[16px]">add</span>
-                                                    </button>
+                                                    {column.key !== 'overdue' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
+                                                            className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors cursor-pointer"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px]">add</span>
+                                                        </button>
+                                                    )}
                                                     <button type="button" className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors cursor-pointer">
                                                         <span className="material-symbols-outlined text-[16px]">more_horiz</span>
                                                     </button>
@@ -372,7 +410,9 @@ function ProjectPage() {
                                                                 {task.due_date && (
                                                                     <span className="flex items-center gap-[3px] text-[10px]">
                                                                         <span className="material-symbols-outlined text-[13px]">calendar_today</span>
-                                                                        {new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                                        {task.due_date.includes('T') || task.due_date.includes(' ') 
+                                                                            ? new Date(task.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                                                                            : new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                                                     </span>
                                                                 )}
                                                                 <button
@@ -396,19 +436,148 @@ function ProjectPage() {
                                             </div>
 
                                             {/* Add Task Footer */}
-                                            <button
-                                                type="button"
-                                                onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
-                                                className="flex items-center gap-xs px-md py-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 transition-colors cursor-pointer rounded-b-xl text-[12px] font-label-md border-t border-outline-variant/10"
-                                            >
-                                                <span className="material-symbols-outlined text-[15px]">add</span>
-                                                Add Task
-                                            </button>
+                                            {column.key !== 'overdue' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
+                                                    className="flex items-center gap-xs px-md py-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 transition-colors cursor-pointer rounded-b-xl text-[12px] font-label-md border-t border-outline-variant/10"
+                                                >
+                                                    <span className="material-symbols-outlined text-[15px]">add</span>
+                                                    Add Task
+                                                </button>
+                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
+                    )}
+
+                    {selectedDateEvents && (
+                        <>
+                            {/* Backdrop */}
+                            <div 
+                                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+                                onClick={() => setSelectedDateEvents(null)}
+                            ></div>
+                            {/* Sidebar */}
+                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-surface-container-high border-l border-outline-variant/30 shadow-2xl flex flex-col transform transition-transform duration-300">
+                                <div className="flex items-center justify-between p-lg border-b border-outline-variant/20 shrink-0">
+                                    <h2 className="font-headline-md text-on-surface">
+                                        Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                                    </h2>
+                                    <div className="flex items-center gap-sm relative">
+                                        <button 
+                                            className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors relative" 
+                                            onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
+                                        >
+                                            <span className="material-symbols-outlined">add</span>
+                                        </button>
+                                        {sidebarActionMenuOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
+                                                <div className="absolute right-0 top-full mt-1 w-48 bg-surface-container-highest border border-outline-variant/30 rounded-lg shadow-xl z-[70] overflow-hidden">
+                                                    <button 
+                                                        className="w-full text-left px-4 py-3 hover:bg-surface-variant transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
+                                                        onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">task</span> Add Task
+                                                    </button>
+                                                    <button 
+                                                        className="w-full text-left px-4 py-3 hover:bg-surface-variant transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
+                                                        onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">event</span> Add Meeting
+                                                    </button>
+                                                </div>
+                                            </>
+                                        )}
+                                        <button className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
+                                            <span className="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="p-lg overflow-y-auto flex-1 scroll-hide space-y-md">
+                                    {creatingInSidebar === 'task' ? (
+                                        <div className="h-full flex flex-col">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
+                                                <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
+                                            </button>
+                                            <CreateTaskModal
+                                                projectId={project_id}
+                                                organizationId={organizationId}
+                                                teamSpaceId={teamSpaceId}
+                                                initialStatus="todo"
+                                                initialDate={selectedDateEvents ? `${selectedDateEvents.getFullYear()}-${String(selectedDateEvents.getMonth()+1).padStart(2,'0')}-${String(selectedDateEvents.getDate()).padStart(2,'0')}T09:00` : ""}
+                                                isInline={true}
+                                                onClose={() => setCreatingInSidebar(null)}
+                                                onCreated={(newTask) => {
+                                                    setProjectTasks(prev => [newTask, ...prev])
+                                                    setCreatingInSidebar(null)
+                                                }}
+                                            />
+                                        </div>
+                                    ) : creatingInSidebar === 'meeting' ? (
+                                        <div className="h-full flex flex-col">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
+                                                <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
+                                            </button>
+                                            <div className="flex-1 flex items-center justify-center bg-surface-container rounded-xl border border-outline-variant/20 border-dashed p-6 text-center">
+                                                <p className="text-on-surface-variant italic">Meeting creation functionality coming soon...</p>
+                                            </div>
+                                        </div>
+                                    ) : (() => {
+                                        const formatYMD = (date) => {
+                                            if (!date) return ""
+                                            const y = date.getFullYear()
+                                            const m = String(date.getMonth() + 1).padStart(2, '0')
+                                            const d = String(date.getDate()).padStart(2, '0')
+                                            return `${y}-${m}-${d}`
+                                        }
+                                        const dateString = formatYMD(selectedDateEvents);
+                                        const dayTasks = project_tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString);
+                                        const dayEvents = project_events.filter(e => e.event_date && e.event_date.substring(0, 10) === dateString);
+                                        
+                                        const combined = [
+                                            ...dayEvents.map(e => ({ ...e, isEvent: true, sortTime: new Date(e.event_date).getTime(), originalDateStr: e.event_date })),
+                                            ...dayTasks.map(t => ({ ...t, isTask: true, sortTime: new Date(t.due_date).getTime(), originalDateStr: t.due_date }))
+                                        ].sort((a, b) => a.sortTime - b.sortTime);
+
+                                        if (combined.length === 0) {
+                                            return <p className="text-on-surface-variant text-center italic py-md">Nothing scheduled for this day.</p>;
+                                        }
+
+                                        return combined.map(item => (
+                                            <div 
+                                                key={(item.isEvent ? 'evt-' : 'tsk-') + item.id} 
+                                                onClick={() => {
+                                                    if (!item.isEvent) {
+                                                        setSelectedTask(item);
+                                                    }
+                                                }}
+                                                className={`bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
+                                                        item.isEvent ? 'bg-[#9c27b0]/20 text-[#9c27b0]' : 'bg-primary-fixed-dim/20 text-primary-fixed-dim'
+                                                    }`}>
+                                                        <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
+                                                        {item.isEvent ? 'Event' : 'Task'}
+                                                    </span>
+                                                    <span className="text-xs text-on-surface-variant font-medium">
+                                                        {(item.originalDateStr.includes('T') || item.originalDateStr.includes(' ')) 
+                                                            ? new Date(item.sortTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                                                            : 'All Day'}
+                                                    </span>
+                                                </div>
+                                                <h3 className="font-body-lg text-on-surface font-semibold mt-1">{item.title}</h3>
+                                                {item.description && <p className="text-body-sm text-on-surface-variant line-clamp-2">{item.description}</p>}
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                            </div>
+                        </>
                     )}
 
                     {/* Public Files Tab */}
@@ -609,19 +778,34 @@ function ProjectPage() {
                                             {calendarDays.map((date, idx) => {
                                                 const dateString = formatYMD(date);
                                                 const dayTasks = date ? project_tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString) : [];
+                                                const dayEvents = date ? project_events.filter(e => e.event_date && e.event_date.substring(0, 10) === dateString) : [];
                                                 const isToday = dateString === formatYMD(new Date());
                                                 
                                                 return (
-                                                    <div key={idx} className={`min-h-[140px] p-2 transition-colors ${date ? 'bg-surface-container-high hover:bg-surface-container-highest' : 'bg-surface-container-lowest/50'}`}>
+                                                    <div 
+                                                        key={idx} 
+                                                        onClick={() => date && setSelectedDateEvents(date)}
+                                                        className={`min-h-[140px] p-2 transition-colors cursor-pointer ${date ? 'bg-surface-container-high hover:bg-surface-container-highest' : 'bg-surface-container-lowest/50'}`}
+                                                    >
                                                         {date && (
                                                             <>
                                                                 <div className={`text-right mb-2 flex items-center justify-end gap-1.5 ${isToday ? 'font-bold' : 'text-on-surface-variant'} text-body-md`}>
+                                                                    {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#9c27b0]" title={`${dayEvents.length} event(s)`}></span>}
                                                                     {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed-dim" title={`${dayTasks.length} task(s)`}></span>}
                                                                     <span className={isToday ? 'inline-block w-7 h-7 leading-7 text-center bg-[#8bc34a] text-black font-bold rounded-full' : ''}>
                                                                         {date.getDate()}
                                                                     </span>
                                                                 </div>
                                                                 <div className="space-y-1.5">
+                                                                    {dayEvents.map(event => (
+                                                                        <div 
+                                                                            key={`evt-${event.id}`} 
+                                                                            className="px-2 py-1 text-[11px] font-bold rounded cursor-pointer transition-transform hover:scale-[1.02] truncate border bg-[#9c27b0]/10 text-[#9c27b0] border-[#9c27b0]/30"
+                                                                            title={event.title}
+                                                                        >
+                                                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">event</span> {event.title}</span>
+                                                                        </div>
+                                                                    ))}
                                                                     {dayTasks.map(task => (
                                                                         <div 
                                                                             key={task.id} 
@@ -678,7 +862,7 @@ function ProjectPage() {
                     ></div>
                     
                     {/* Sidebar */}
-                    <div className="relative w-full max-w-md bg-surface-container-high shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-outline-variant/30">
+                    <div className="relative w-1/2 bg-surface-container-high shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-outline-variant/30">
                         {/* Header */}
                         <div className="flex items-center justify-between p-lg border-b border-outline-variant/30 bg-surface-container-highest">
                             <h2 className="font-headline-md text-primary-container font-bold flex items-center gap-sm">
@@ -702,15 +886,39 @@ function ProjectPage() {
                                         <span className="material-symbols-outlined text-[14px]">flag</span>
                                         {selectedTask.status.replace('_', ' ')}
                                     </span>
-                                    <span className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs ${
-                                        selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
-                                        selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
-                                        selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
-                                        'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
-                                    }`}>
-                                        <span className="material-symbols-outlined text-[14px]">bolt</span>
-                                        {selectedTask.priority || 'Normal'}
-                                    </span>
+                                    <div className="relative">
+                                        <button 
+                                            className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity ${
+                                                selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
+                                                selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
+                                                selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
+                                                'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
+                                            }`}
+                                            onClick={() => setPriorityDropdownOpen(!priorityDropdownOpen)}
+                                        >
+                                            <span className="material-symbols-outlined text-[14px]">bolt</span>
+                                            {selectedTask.priority || 'Normal'}
+                                        </button>
+                                        {priorityDropdownOpen && (
+                                            <>
+                                                <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
+                                                <div className="absolute left-0 top-full mt-1 w-32 bg-surface-container-highest border border-outline-variant/30 rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
+                                                    {['low', 'medium', 'high', 'urgent'].map(p => (
+                                                        <button 
+                                                            key={p}
+                                                            className={`text-left px-4 py-2 hover:bg-surface-variant transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-on-surface'}`}
+                                                            onClick={() => {
+                                                                updateTaskPriority(selectedTask.id, p);
+                                                                setPriorityDropdownOpen(false);
+                                                            }}
+                                                        >
+                                                            {p}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             
@@ -753,7 +961,11 @@ function ProjectPage() {
                                         <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
                                     </h3>
                                     <p className="font-body-md text-on-surface font-semibold mt-1">
-                                        {selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : <span className="italic opacity-70">No deadline</span>}
+                                        {selectedTask.due_date ? (
+                                            selectedTask.due_date.includes('T') || selectedTask.due_date.includes(' ')
+                                                ? new Date(selectedTask.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
+                                                : new Date(selectedTask.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                                        ) : <span className="italic opacity-70">No deadline</span>}
                                     </p>
                                 </div>
                             </div>
