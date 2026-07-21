@@ -48,7 +48,7 @@ const CustomDropdown = ({ options, value, onChange, placeholder }) => {
     );
 };
 
-export default function CreateTaskModal({ projectId, organizationId, teamSpaceId, onClose, onCreated }) {
+export default function CreateTaskModal({ projectId, organizationId, teamSpaceId, initialStatus = "todo", onClose, onCreated }) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [dueDate, setDueDate] = useState("");
@@ -104,7 +104,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 priority: priority,
                 assignee_id: assigneeId || null,
                 created_by: userData?.user?.id || null,
-                status: "todo"
+                status: initialStatus
             })
             .select()
             .single();
