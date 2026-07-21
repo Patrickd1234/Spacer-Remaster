@@ -45,9 +45,19 @@ function Department() {
                 setUserRole(role)
                 setUserTeamId(teamId)
 
+                let orgId = authData?.user?.user_metadata?.organization_id;
+                if (!orgId && membership?.team_space_id) {
+                    const { data: tsData } = await supabase
+                        .from("team_spaces")
+                        .select("organization_id")
+                        .eq("id", membership.team_space_id)
+                        .maybeSingle();
+                    orgId = tsData?.organization_id;
+                }
+
                 // 3. Branch on role
-                if (role === "superadmin") {
-                    await fetchAllTeams()          // superadmin sees all teams
+                if (role === "super_admin" || role === "superadmin") {
+                    await fetchAllTeams(orgId)     // superadmin sees all org teams
                 } else {
                     await fetchTeamMembers(teamId) // admin/member only see their team
                 }
@@ -62,17 +72,19 @@ function Department() {
 
     // ─────────────────────────────────────────────────────────────────────────
     // SUPERADMIN: fetch all team_spaces, then load members for the first one
-    const fetchAllTeams = async () => {
-        const { data: teams, error } = await supabase
-            .from("team_spaces")
-            .select("id, name, status")
+    const fetchAllTeams = async (orgId) => {
+        let teamQuery = supabase.from("team_spaces").select("id, name")
+        if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
+        
+        const { data: teams, error } = await teamQuery
 
         if (error) { console.warn("team_spaces error:", error); return }
 
+        console.log("DEBUG: Fetched org teams from database:", teams)
         setAllTeams(teams || [])
         if (teams && teams.length > 0) {
             setActiveTeam(teams[0])
-            await fetchTeamMembers(teams[0].id)
+            await fetchTeamMembers(teams[0].id, "superadmin", teams.map(t => t.id))
         }
     }
 
@@ -117,7 +129,7 @@ function Department() {
     }
 
     // ── Derived values
-    const isSuperAdmin = userRole === "superadmin"
+    const isSuperAdmin = userRole === "super_admin" || userRole === "superadmin"
     const isAdmin      = userRole === "admin"
     const canManage    = isSuperAdmin || isAdmin
 

@@ -138,8 +138,17 @@ function Home() {
                 setUserRole(role)
 
                 // 4. Branch on role: org data for superadmin, personal tasks for others
-                if (role === "superadmin") {
-                    await fetchOrgData()
+                if (role === "super_admin" || role === "superadmin") {
+                    let orgId = authData?.user?.user_metadata?.organization_id;
+                    if (!orgId && membership?.team_space_id) {
+                        const { data: tsData } = await supabase
+                            .from("team_spaces")
+                            .select("organization_id")
+                            .eq("id", membership.team_space_id)
+                            .maybeSingle();
+                        orgId = tsData?.organization_id;
+                    }
+                    await fetchOrgData(orgId)
                 } else {
                     await fetchUserTasks(userId)
                 }
@@ -153,19 +162,30 @@ function Home() {
         init()
     }, [])
 
-    const fetchOrgData = async () => {
+    const fetchOrgData = async (orgId) => {
         try {
-            // Total members
-            const { data: allMembers } = await supabase.from("memberships").select("id")
-            const memberCount = allMembers?.length ?? 0
-
             // Teams from team_spaces table
-            const { data: teamSpaces } = await supabase.from("team_spaces").select("id, name, status")
+            let teamQuery = supabase.from("team_spaces").select("id, name")
+            if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
+            const { data: teamSpaces, error } = await teamQuery
+            console.log("DEBUG: fetchOrgData orgId =", orgId, "teamSpaces =", teamSpaces, "error =", error)
             const teamCount = teamSpaces?.length ?? 0
 
-            // Active project spaces
-            const { data: activeProjects } = await supabase.from("project_spaces").select("id")
-            const projectCount = activeProjects?.length ?? 0
+            const teamIds = teamSpaces?.map(ts => ts.id) || []
+
+            // Total members based on fetched teams
+            let memberCount = 0
+            if (teamIds.length > 0) {
+                const { data: allMembers } = await supabase.from("memberships").select("id").in("team_space_id", teamIds)
+                memberCount = allMembers?.length ?? 0
+            }
+
+            // Active project spaces based on fetched teams
+            let projectCount = 0
+            if (teamIds.length > 0) {
+                const { data: activeProjects } = await supabase.from("project_spaces").select("id").in("team_space_id", teamIds)
+                projectCount = activeProjects?.length ?? 0
+            }
 
             setOrgStats({ members: memberCount, teams: teamCount, activeProjects: projectCount })
 
@@ -214,7 +234,8 @@ function Home() {
         }
     }
 
-    const isSuperAdmin = userRole === "superadmin"
+    const isSuperAdmin = userRole === "super_admin" || userRole === "superadmin"
+    const isAdmin = userRole === "admin"
     const totalTeamPages = Math.ceil(teams.length / TEAMS_PER_PAGE)
     const visibleTeams = teams.slice(teamPage * TEAMS_PER_PAGE, teamPage * TEAMS_PER_PAGE + TEAMS_PER_PAGE)
 
@@ -235,7 +256,7 @@ function Home() {
                     <section className="flex items-start justify-between">
                         <div>
                             <h1 className="text-headline-xl font-bold text-on-surface flex items-center gap-2">
-                                {isSuperAdmin ? "Circle Corp" : `Hello, ${userData?.name || userEmail || "User"} 👋`}
+                                {isSuperAdmin ? `Hello, ${userData?.name || userEmail || "User"} 👋` : `Hello, ${userData?.name || userEmail || "User"} 👋`}
                             </h1>
                             <p className="text-on-surface-variant font-body-md mt-1">
                                 {isSuperAdmin
