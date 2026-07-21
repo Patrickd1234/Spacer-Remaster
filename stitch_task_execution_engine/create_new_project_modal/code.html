@@ -1,0 +1,454 @@
+<!DOCTYPE html><html class="dark" lang="en" style="width: 1280px; height: 1024px; overflow: hidden; position: relative;"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Spacers - Create New Project</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #101509;
+      color: #e0e5d0;
+      margin: 0;
+      overflow: hidden;
+    }
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    /* Custom Scrollbar for Dark Theme */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #101509;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #323729;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #424934;
+    }
+    .modal-overlay {
+      backdrop-filter: blur(8px);
+      background-color: rgba(11, 16, 5, 0.8);
+    }
+  </style>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          "colors": {
+            "surface-container-highest": "#323729",
+            "on-tertiary-container": "#6a6077",
+            "primary": "#ffffff",
+            "secondary": "#c4c6d0",
+            "on-error-container": "#ffdad6",
+            "on-surface-variant": "#c2caae",
+            "surface-container-low": "#191d11",
+            "on-secondary-container": "#b6b8c1",
+            "surface-container": "#1d2115",
+            "tertiary-fixed-dim": "#cec2dc",
+            "primary-container": "#aff82a",
+            "on-secondary": "#2d3038",
+            "surface-bright": "#363b2d",
+            "on-primary-container": "#4a6f00",
+            "on-background": "#e0e5d0",
+            "surface-dim": "#101509",
+            "surface": "#101509",
+            "on-secondary-fixed": "#191c22",
+            "on-secondary-fixed-variant": "#44474e",
+            "surface-variant": "#323729",
+            "secondary-fixed": "#e0e2ec",
+            "background": "#101509",
+            "on-tertiary-fixed": "#1f182b",
+            "on-tertiary": "#352d41",
+            "outline": "#8c947b",
+            "surface-container-lowest": "#0b1005",
+            "on-primary": "#223600",
+            "secondary-fixed-dim": "#c4c6d0",
+            "on-tertiary-fixed-variant": "#4b4358",
+            "tertiary-fixed": "#eaddf8",
+            "secondary-container": "#464951",
+            "primary-fixed-dim": "#96da00",
+            "inverse-surface": "#e0e5d0",
+            "inverse-primary": "#466800",
+            "error-container": "#93000a",
+            "error": "#ffb4ab",
+            "tertiary-container": "#eaddf8",
+            "inverse-on-surface": "#2d3224",
+            "surface-tint": "#96da00",
+            "on-surface": "#e0e5d0",
+            "on-primary-fixed": "#121f00",
+            "surface-container-high": "#272c1e",
+            "primary-fixed": "#aff82a",
+            "tertiary": "#ffffff",
+            "outline-variant": "#424934",
+            "on-primary-fixed-variant": "#344e00",
+            "on-error": "#690005"
+          },
+          "borderRadius": {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          "spacing": {
+            "sidebar-width": "260px",
+            "lg": "24px",
+            "base": "4px",
+            "xl": "32px",
+            "xs": "4px",
+            "sm": "8px",
+            "gutter": "20px",
+            "md": "16px"
+          },
+          "fontFamily": {
+            "headline-md": ["Inter"],
+            "body-lg": ["Inter"],
+            "headline-xl": ["Inter"],
+            "headline-lg": ["Inter"],
+            "body-sm": ["Inter"],
+            "label-sm": ["Inter"],
+            "label-md": ["Inter"],
+            "body-md": ["Inter"]
+          },
+          "fontSize": {
+            "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+            "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+            "headline-xl": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+            "headline-lg": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+            "body-sm": ["12px", {"lineHeight": "18px", "fontWeight": "400"}],
+            "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "500"}],
+            "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+            "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+          }
+        },
+      },
+    }
+  </script>
+</head>
+<body class="bg-background text-on-surface">
+<!-- Side Navigation Bar (Shared Component Anchor) -->
+<aside class="fixed left-0 top-0 h-full w-sidebar-width border-r border-outline-variant bg-background flex flex-col py-lg z-10">
+<div class="px-md mb-xl">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container">adjust</span>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary-container">Spacers</h1>
+<p class="font-label-md text-label-md text-on-surface-variant opacity-70">Mission Control</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<div class="flex items-center gap-md px-md py-sm text-primary-container border-l-4 border-primary-container bg-surface-container-high transition-all duration-200 ease-in-out">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span class="font-label-md text-label-md">Messages</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined">corporate_fare</span>
+<span class="font-label-md text-label-md">Department</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-label-md text-label-md">Calendar</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined">folder_open</span>
+<span class="font-label-md text-label-md">Projects</span>
+</div>
+</nav>
+<div class="px-md mt-auto pt-lg space-y-1">
+<button class="w-full bg-primary-container text-on-primary-container py-sm rounded-lg font-label-md text-label-md font-bold mb-md hover:opacity-90 transition-all">
+        New Workspace
+      </button>
+<div class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all duration-200 ease-in-out cursor-pointer">
+<span class="material-symbols-outlined">help</span>
+<span class="font-label-md text-label-md">Support</span>
+</div>
+</div>
+</aside>
+<!-- Top Navigation Bar (Shared Component Anchor) -->
+<header class="fixed top-0 left-sidebar-width right-0 h-16 border-b border-outline-variant bg-background flex justify-between items-center px-lg z-10">
+<div class="flex items-center bg-surface-container rounded-full px-md py-xs w-96">
+<span class="material-symbols-outlined text-on-surface-variant mr-sm">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md w-full placeholder:text-on-surface-variant/50" placeholder="Search mission data..." type="text">
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">apps</span>
+</button>
+<div class="h-8 w-[1px] bg-outline-variant mx-xs"></div>
+<button class="border border-outline-variant text-on-surface px-md py-xs rounded-full font-label-md hover:bg-surface-container transition-all">
+        New Document
+      </button>
+<button class="bg-primary-container text-on-primary-container px-md py-xs rounded-full font-label-md font-bold hover:opacity-90 transition-all">
+        New Task
+      </button>
+<div class="w-10 h-10 rounded-full border-2 border-primary-container p-0.5 ml-xs overflow-hidden">
+<img class="w-full h-full object-cover rounded-full" data-alt="Close up portrait of a professional female project manager with sleek dark hair and a confident expression, set against a dark, tech-focused office background with neon green lighting accents. The lighting is moody and cinematic, reflecting a high-performance mission control aesthetic with charcoal and vibrant green tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhZtM6tkXTe_wQDS0ci8yr5KkNVLXjK1QTuqgVjlQNiIH3rDQ05PPQuA1YhXTRM67VgxFOKP45JJym06xxOJFFDxsoBVfmMRgWEar8Hxz1T2nEqLrTKQzQbfkwViZm7STJRbGK8Lh-9wI9TGpk0dkAp9uLF95P3qD6Nd80gTtHbwpCR8AdRAESo-T20fbFcRNDMNLXXqNEb1XPi1bogj1z7mbEv2ImpLsoSJ5W4LbJATIEc3tVMCQ5hw">
+</div>
+</div>
+</header>
+<!-- Background Content (Home Dashboard) -->
+<main class="ml-sidebar-width pt-16 p-lg h-screen overflow-y-auto">
+<div class="max-w-7xl mx-auto">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-headline-xl text-headline-xl mb-xs">Dashboard</h2>
+<p class="font-body-md text-on-surface-variant">Real-time status of your active operations.</p>
+</div>
+<div class="flex gap-sm">
+<div class="px-md py-sm bg-surface-container rounded-xl border border-outline-variant">
+<p class="font-label-sm text-label-sm uppercase opacity-50">Active Projects</p>
+<p class="font-headline-md text-headline-md text-primary-container">12</p>
+</div>
+<div class="px-md py-sm bg-surface-container rounded-xl border border-outline-variant">
+<p class="font-label-sm text-label-sm uppercase opacity-50">Team Velocity</p>
+<p class="font-headline-md text-headline-md text-primary-container">84%</p>
+</div>
+</div>
+</div>
+<!-- Bento Grid Layout for Dashboard Items -->
+<div class="grid grid-cols-12 gap-lg mb-lg">
+<div class="col-span-8 bg-surface-container rounded-xl border border-outline-variant p-lg relative overflow-hidden">
+<div class="flex justify-between items-start mb-md relative z-10">
+<h3 class="font-headline-md text-headline-md">Project Trajectory</h3>
+<span class="material-symbols-outlined text-primary-container">monitoring</span>
+</div>
+<div class="h-64 flex items-end gap-2 relative z-10">
+<!-- Simulated Bar Chart -->
+<div class="flex-1 bg-surface-container-highest rounded-t-md h-1/2"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-md h-3/4"></div>
+<div class="flex-1 bg-primary-container rounded-t-md h-2/3"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-md h-full"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-md h-1/3"></div>
+<div class="flex-1 bg-primary-container rounded-t-md h-4/5"></div>
+<div class="flex-1 bg-surface-container-highest rounded-t-md h-1/2"></div>
+</div>
+</div>
+<div class="col-span-4 bg-surface-container rounded-xl border border-outline-variant p-lg flex flex-col justify-between">
+<div>
+<h3 class="font-headline-md text-headline-md mb-md">Active Tasks</h3>
+<ul class="space-y-sm">
+<li class="flex items-center gap-sm p-sm bg-surface-container-high rounded-lg">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-body-md">Refactor Core API</span>
+</li>
+<li class="flex items-center gap-sm p-sm bg-surface-container-high rounded-lg">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-body-md">Update Design Tokens</span>
+</li>
+<li class="flex items-center gap-sm p-sm bg-surface-container-high rounded-lg">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+<span class="font-body-md">Client Sync Meeting</span>
+</li>
+</ul>
+</div>
+<button class="w-full py-sm text-center font-label-md text-on-surface-variant hover:text-on-surface border border-outline-variant rounded-lg mt-md">
+            View All Tasks
+          </button>
+</div>
+</div>
+<div class="grid grid-cols-3 gap-lg">
+<!-- Project Card 1 -->
+<div class="bg-surface-container rounded-xl border border-outline-variant p-md hover:border-primary-container transition-colors cursor-pointer group">
+<div class="flex justify-between mb-md">
+<span class="font-label-sm text-label-sm px-sm py-0.5 bg-surface-container-highest text-primary-container rounded uppercase tracking-wider">Mission Alpha</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary-container transition-colors">more_horiz</span>
+</div>
+<h4 class="font-headline-md text-headline-md mb-sm">Cloud Infrastructure Migration</h4>
+<div class="flex items-center gap-sm mb-md">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close-up of a diverse professional team member, creative director, with thick-rimmed glasses and a thoughtful expression, warm lighting in a dark modern studio environment with deep charcoal and neon green accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfKK254RT-JIMCXUyX-pVDxkAJdWgms-VpS8jS6hFLDW-bvavCXYOFeGjXmCYcpNJnCrdooMzQg_x-JkeG8-QPNA3YnVni_FI1HgneEIoF2mFZ-O1kAQRhoJpQ5tOyZ2AJ5dkfzmlayMRbAzmA8p50Nla6gGCKjhOE4pcYTy4FHt4VKYet5nk9uuhJ_tf3NWQe3RWYGySkAkz2GJfMwswTMn0X9tHsT9hJovECSoeWccLkbQpMWEVueA">
+</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Portrait of a young software engineer with a focused gaze and minimalist headphones, bathed in soft neon green light from computer monitors in a dark-themed high-tech office space." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAoxeSGJOYhSTnexS630KVUcXl8rBdGP37Kdq2-SgnOyXhasROVzVK97uCZZ0VatAE0jgiV6pB_UFNHevOcpJByfEdCQ_iIergbULPwrldna3jn8wLtaLml-LyWTRWfAe3v8TsgbKiYMFj9F0lWesltMfkn4z7on67stOa_5MaQ_zLDop82vpFalvcNhpaThmggx6MGBf-PjqHq5aTerjS8hi1lu9XhYg8GzIWug1U4_rJqi3_gqh7iIg">
+</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container bg-surface-container-highest flex items-center justify-center font-label-sm text-label-sm">+2</div>
+</div>
+<p class="text-on-surface-variant font-body-sm">4 Members</p>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full w-2/3"></div>
+</div>
+<div class="flex justify-between mt-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Progress</span>
+<span class="font-label-sm text-label-sm text-primary-container">66%</span>
+</div>
+</div>
+<!-- Project Card 2 -->
+<div class="bg-surface-container rounded-xl border border-outline-variant p-md hover:border-primary-container transition-colors cursor-pointer group">
+<div class="flex justify-between mb-md">
+<span class="font-label-sm text-label-sm px-sm py-0.5 bg-surface-container-highest text-primary-container rounded uppercase tracking-wider">Project Omega</span>
+<span class="material-symbols-outlined text-on-surface-variant group-hover:text-primary-container transition-colors">more_horiz</span>
+</div>
+<h4 class="font-headline-md text-headline-md mb-sm">Mobile App Redesign</h4>
+<div class="flex items-center gap-sm mb-md">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Headshot of a senior UX designer with a friendly smile, professional and modern aesthetic, illuminated by subtle side-lighting in a tech-forward studio with dark grey and vibrant lime green colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOI0Bp61OhAMmWMMw9y006JTMote7rRITKSYFyZgF3fMU--4DVTauNv87ZqHlpYCuJQTJkoSs9n6kOkTkQjie1olOP0PnOe5fveWd4WL87NPWgNY0ENEWFys0R6acG6xd-ru1oW6Dd4Gcyv8RAJFTifVHyToBFanMt3liOvtauERQf8198UqLw59J5b4yP2TjpBP3xiMnQKx8bFGxdcjQqM1Ffk5XHD3Wmf8Brj8eni466v8ysJ5E7iQ">
+</div>
+<div class="w-8 h-8 rounded-full border-2 border-surface-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Confident female developer with curly hair and a business-casual blazer, set against a background of glowing code and mission control screens with dark backgrounds and neon green highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5TkAnO0dRO9jEkPI54sMQ1nvRKgbFU7OfZhuDmPCHATBdo2ynozYXxsezim8LOCc0_IDqtG_0fnE5AD-Qbn7sCaPlMzibAELOaYLwVIIe0e3XoHWnYF6bKjAzC7XCbCjpM95Solur4CRrMyNUm3OwobFUhEC0VJOOGhHDavjXkXgotnbxegfAV5XB8dvx0YPNRQme8O4Rub490F9Y3Bc3WNlVne2xBQadEu2KL3niyGfmGSPu8_ch_A">
+</div>
+</div>
+<p class="text-on-surface-variant font-body-sm">2 Members</p>
+</div>
+<div class="w-full bg-surface-container-highest h-1 rounded-full overflow-hidden">
+<div class="bg-primary-container h-full w-1/4"></div>
+</div>
+<div class="flex justify-between mt-xs">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Progress</span>
+<span class="font-label-sm text-label-sm text-primary-container">25%</span>
+</div>
+</div>
+<!-- Project Card 3 (Empty State / CTA) -->
+<div class="bg-surface-container rounded-xl border-2 border-dashed border-outline-variant p-md flex flex-col items-center justify-center text-center hover:bg-surface-container-high hover:border-primary-container transition-all cursor-pointer group">
+<div class="w-12 h-12 rounded-full bg-surface-container-highest flex items-center justify-center mb-md group-hover:bg-primary-container group-hover:text-on-primary-container transition-all">
+<span class="material-symbols-outlined">add</span>
+</div>
+<h4 class="font-headline-md text-headline-md mb-xs">Initialize Mission</h4>
+<p class="font-body-sm text-on-surface-variant">Start a new project deployment.</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Modal Overlay -->
+<div class="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-md" id="projectModal">
+<div class="bg-surface-container rounded-xl border border-outline-variant w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+<!-- Modal Header -->
+<div class="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary-container">Create New Project</h2>
+<p class="font-body-sm text-on-surface-variant">Define the parameters for your new mission.</p>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface transition-colors" onclick="closeModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Modal Body (Form) -->
+<div class="p-lg space-y-lg">
+<!-- Project Name -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface uppercase tracking-wider" for="proj-name">Project Name</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all placeholder:text-on-surface-variant/40" id="proj-name" placeholder="e.g. Operation Nightfall" type="text">
+<div class="absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant/30 group-focus-within:text-primary-container transition-colors">
+<span class="material-symbols-outlined">label</span>
+</div>
+</div>
+</div>
+<!-- Deadline -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface uppercase tracking-wider" for="deadline">Deadline</label>
+<div class="relative group">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all [color-scheme:dark]" id="deadline" type="date">
+<div class="absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant/30 group-focus-within:text-primary-container transition-colors pointer-events-none">
+<span class="material-symbols-outlined">calendar_today</span>
+</div>
+</div>
+</div>
+<!-- Add Members -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface uppercase tracking-wider" for="members">Add Members</label>
+<div class="relative mb-sm">
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all placeholder:text-on-surface-variant/40" id="members" placeholder="Search by name or email..." type="text">
+<div class="absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant">
+<span class="material-symbols-outlined">person_search</span>
+</div>
+</div>
+<!-- Suggested People List -->
+<div class="space-y-xs max-h-32 overflow-y-auto pr-xs">
+<div class="flex items-center justify-between p-xs hover:bg-surface-container-high rounded-lg cursor-pointer transition-colors group">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-primary-container/20">
+<img class="w-full h-full object-cover" data-alt="Small avatar of a smiling young developer with bright eyes, set against a dark grey background with hints of neon green light." src="https://lh3.googleusercontent.com/aida-public/AB6AXuByYmgkgPx-pfquELldVxdjUqVKyp_O23C4m3xKg_WPck0Li8fPyHl5jv5K0TDhUjQgu_r0CSgpS809ZNr7KBccTIuhOBTEThZg7LID1La5UGjHEwwV7RVxPBMycSEBM576gsZTVO8dbhL3nt8UvWJd1SFjqn8hhnEfAkl7x5bew4EAj_B-F4U3UeC9ng9-2WbzE1UzOaN6Z3Up62pivYZKLk_ko_yBis00LVND_D8WsrMH5eltbByDwQ">
+</div>
+<div>
+<p class="font-label-md text-label-md">Alex Chen</p>
+
+</div>
+</div>
+<button class="text-on-surface-variant group-hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">add_circle</span>
+</button>
+</div>
+<div class="flex items-center justify-between p-xs hover:bg-surface-container-high rounded-lg cursor-pointer transition-colors group">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full overflow-hidden bg-primary-container/20">
+<img class="w-full h-full object-cover" data-alt="Professional avatar portrait of a creative design lead with a sleek ponytail and minimal glasses, lit by soft green accent lighting in a dark high-tech studio." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiy4QJLoaSuc7j2TMG9_D0kFvfvHSa4g3lujeBZjp3dhZi0spcPDqLy_JXKnC6enmL3hZ1GZrDSE5YGKC3mXtx9f4wgjruDgnQD73FEDg6eEuL_zbML6UnoBV_7JzfxGRVeG9smz9TF_POQbJvzSQkjdvimZ_qG-SDRVD8UgschMa--QSgrhk3qWY2nQqw_TYFbMZwJrs0weKcVI0TeZcNZB6jvL1zxE5iUWiSxE-iyGsmi-aJfOgT4g">
+</div>
+<div>
+<p class="font-label-md text-label-md">Sarah Miller</p>
+
+</div>
+</div>
+<button class="text-on-surface-variant group-hover:text-primary-container transition-colors">
+<span class="material-symbols-outlined">add_circle</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal Footer -->
+<div class="p-lg pt-0 flex gap-md">
+<button class="flex-1 py-sm border border-outline-variant rounded-lg font-label-md text-label-md font-bold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all" onclick="closeModal()">
+          Cancel
+        </button>
+<button class="flex-1 py-sm bg-primary-container text-on-primary-container rounded-lg font-label-md text-label-md font-bold hover:opacity-90 shadow-[0_0_20px_rgba(175,248,42,0.2)] transition-all" onclick="createProject()">
+          Create Project
+        </button>
+</div>
+</div>
+</div>
+<script>
+    function closeModal() {
+      const modal = document.getElementById('projectModal');
+      modal.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+      modal.classList.remove('flex');
+      modal.classList.add('hidden');
+    }
+
+    function createProject() {
+      const name = document.getElementById('proj-name').value;
+      if (name) {
+        alert(`Initializing project: ${name}`);
+        closeModal();
+      } else {
+        alert('Please specify a project name.');
+      }
+    }
+
+    // Micro-interaction for inputs
+    document.querySelectorAll('input').forEach(input => {
+      input.addEventListener('focus', () => {
+        input.parentElement.classList.add('scale-[1.01]');
+      });
+      input.addEventListener('blur', () => {
+        input.parentElement.classList.remove('scale-[1.01]');
+      });
+    });
+  </script>
+
+
+<div id="snapdom-sandbox" data-snapdom-sandbox="true" aria-hidden="true" style="position: absolute; left: -9999px; top: -9999px; width: 0px; height: 0px; overflow: hidden;"></div>
+
+</body></html>

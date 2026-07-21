@@ -1,0 +1,254 @@
+<!DOCTYPE html><html class="dark" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Sign In | Spacers Mission Control</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0F1115;
+            margin: 0;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(28, 31, 38, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid #2D3139;
+        }
+        .neon-glow:focus {
+            box-shadow: 0 0 15px rgba(182, 255, 51, 0.2);
+        }
+        @keyframes subtle-pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        .animate-pulse-slow {
+            animation: subtle-pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-variant": "#323729",
+                        "error-container": "#93000a",
+                        "on-tertiary-fixed-variant": "#4b4358",
+                        "tertiary": "#ffffff",
+                        "on-secondary": "#2d3038",
+                        "inverse-surface": "#e0e5d0",
+                        "on-primary-container": "#4a6f00",
+                        "on-tertiary-fixed": "#1f182b",
+                        "surface-bright": "#363b2d",
+                        "on-error": "#690005",
+                        "surface-container-lowest": "#0b1005",
+                        "outline-variant": "#424934",
+                        "inverse-on-surface": "#2d3224",
+                        "tertiary-fixed-dim": "#cec2dc",
+                        "on-primary-fixed": "#121f00",
+                        "primary-fixed-dim": "#96da00",
+                        "on-secondary-fixed-variant": "#44474e",
+                        "inverse-primary": "#466800",
+                        "surface-tint": "#96da00",
+                        "primary-container": "#aff82a",
+                        "background": "#101509",
+                        "surface-dim": "#101509",
+                        "on-secondary-container": "#b6b8c1",
+                        "primary-fixed": "#aff82a",
+                        "on-tertiary-container": "#6a6077",
+                        "on-surface": "#e0e5d0",
+                        "surface": "#101509",
+                        "outline": "#8c947b",
+                        "on-tertiary": "#352d41",
+                        "on-primary": "#223600",
+                        "surface-container": "#1d2115",
+                        "on-primary-fixed-variant": "#344e00",
+                        "on-background": "#e0e5d0",
+                        "tertiary-fixed": "#eaddf8",
+                        "tertiary-container": "#eaddf8",
+                        "surface-container-highest": "#323729",
+                        "secondary-fixed-dim": "#c4c6d0",
+                        "surface-container-low": "#191d11",
+                        "secondary-fixed": "#e0e2ec",
+                        "surface-container-high": "#272c1e",
+                        "secondary-container": "#464951",
+                        "secondary": "#c4c6d0",
+                        "on-surface-variant": "#c2caae",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed": "#191c22",
+                        "on-error-container": "#ffdad6",
+                        "primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "lg": "24px",
+                        "sidebar-width": "260px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "gutter": "20px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-xl": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-xl": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "body-sm": ["12px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "500" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background min-h-screen flex items-center justify-center p-md">
+<!-- Background Atmospheric Elements -->
+<div class="fixed inset-0 pointer-events-none z-0">
+<div class="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-primary-fixed/5 rounded-full blur-[120px] animate-pulse-slow" style="transform: translate(3.78125px, -6.5625px);"></div>
+<div class="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-secondary-container/10 rounded-full blur-[100px]"></div>
+</div>
+<main class="relative z-10 w-full max-w-[1100px] grid md:grid-cols-2 glass-panel overflow-hidden rounded-xl shadow-2xl">
+<!-- Left Side: Visual/Brand -->
+<div class="hidden md:flex flex-col justify-between p-xl bg-surface-container-low border-r border-outline-variant relative overflow-hidden">
+<!-- Branding -->
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 bg-primary-fixed rounded flex items-center justify-center shadow-[0_0_15px_rgba(182,255,51,0.4)]">
+<span class="material-symbols-outlined text-on-primary-fixed font-bold">circle</span>
+</div>
+<h1 class="font-headline-md text-headline-md font-bold tracking-tight text-primary-fixed">Spacers</h1>
+</div>
+<!-- Decorative Centerpiece -->
+<div class="relative py-xl">
+<div class="space-y-md">
+<h2 class="font-headline-xl text-headline-xl text-on-surface leading-tight">
+                        Command the <br>
+<span class="text-primary-fixed">Mission Control</span>
+</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-[340px]">
+                        High-performance workspace for elite engineering teams. Secure your entry to the grid.
+                    </p>
+</div>
+<!-- Abstract Data Viz Decoration -->
+<div class="mt-xl flex gap-xs items-end h-16">
+<div class="w-1 bg-primary-fixed/20 h-4 rounded-full"></div>
+<div class="w-1 bg-primary-fixed/40 h-8 rounded-full"></div>
+<div class="w-1 bg-primary-fixed/60 h-12 rounded-full"></div>
+<div class="w-1 bg-primary-fixed h-16 rounded-full shadow-[0_0_8px_rgba(182,255,51,0.6)]"></div>
+<div class="w-1 bg-primary-fixed/80 h-10 rounded-full"></div>
+<div class="w-1 bg-primary-fixed/40 h-6 rounded-full"></div>
+</div>
+</div>
+<!-- Footer Quote -->
+<div class="border-l-2 border-primary-fixed pl-md">
+<p class="font-label-md text-label-md text-on-surface italic opacity-80">
+                    "Precision is not an option; it's the standard."
+                </p>
+</div>
+<!-- Background Image Integration -->
+<div class="absolute inset-0 -z-10 opacity-10">
+<div class="w-full h-full" data-alt="A dark, sophisticated architectural shot of a high-tech server room or data center with linear neon green lights recessed in the ceiling and floor. The perspective is symmetrical, leading the eye into a deep, vanishing point. The overall aesthetic is cinematic, midnight charcoal, and technically precise." style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuCS5Ph6jhiO80EQWsIKNc7e8gmdkEXn5gRywJnQItEA1H1LKPKdlaJxodFYLZNL8wPJw01TDWW9tNLas5-mtIttY3DVR5v_BbuMvr9xEhSLf4Cdjz33q2Pbr7vbOa9dygB7Xj6iixNgjej7UkOVfwUms_Y4eUVbJG2cqaEDVDKXFNMTRCouoaN7ysfb0M8eUwNu_gEipvd8vdHAKdcCceEpG8O_usbej8TchhpNByDQHg0EiAFEIIT6KQ&quot;);"></div>
+</div>
+</div>
+<!-- Right Side: Sign In Form -->
+<div class="flex flex-col justify-center p-xl lg:px-24 bg-surface-container">
+<!-- Mobile Logo -->
+<div class="md:hidden flex items-center gap-sm mb-xl">
+<div class="w-8 h-8 bg-primary-fixed rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-fixed text-[20px] font-bold">circle</span>
+</div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary-fixed">Spacers</h1>
+</div>
+<div class="mb-xl">
+<h3 class="font-headline-lg text-headline-lg text-on-surface mb-sm">Sign In</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Enter your credentials to access the terminal.</p>
+</div>
+<form action="#" class="space-y-lg" method="POST" onsubmit="return false;">
+<!-- Email Field -->
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" for="email">Email Address</label>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">mail</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-md text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="email" placeholder="name@company.com" type="email">
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-xs">
+<div class="flex justify-between items-center">
+<label class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" for="password">Password</label>
+
+</div>
+<div class="relative group">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">lock</span>
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-md text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="password" placeholder="••••••••" type="password">
+</div>
+</div>
+<!-- Remember Me Toggle (Micro-interaction) -->
+<div class="flex items-center gap-sm">
+<input class="w-4 h-4 bg-surface-container-low border-outline-variant rounded text-primary-fixed focus:ring-primary-fixed focus:ring-offset-background" id="remember" type="checkbox">
+<label class="font-label-md text-label-md text-on-surface-variant cursor-pointer select-none" for="remember">Keep me signed in for 30 days</label>
+</div>
+<!-- Action Button -->
+<button class="w-full bg-primary-fixed hover:bg-primary-container text-on-primary-fixed font-label-md text-label-md py-md rounded-lg flex items-center justify-center gap-sm transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(175,248,42,0.15)] hover:shadow-[0_4px_25px_rgba(175,248,42,0.3)]" type="submit">
+                    Sign In
+                    <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</form>
+<!-- Social/Alternative Sign In -->
+
+</div>
+</main>
+<!-- Interactive Elements / Micro-interactions -->
+<script>
+        // Subtle Mouse parallax for decorative elements
+        document.addEventListener('mousemove', (e) => {
+            const glow = document.querySelector('.animate-pulse-slow');
+            if (glow) {
+                const x = (e.clientX / window.innerWidth - 0.5) * 40;
+                const y = (e.clientY / window.innerHeight - 0.5) * 40;
+                glow.style.transform = `translate(${x}px, ${y}px)`;
+            }
+        });
+
+        // Simple input focus tracking
+        const inputs = document.querySelectorAll('input');
+        inputs.forEach(input => {
+            input.addEventListener('focus', () => {
+                input.parentElement.style.transform = 'scale(1.01)';
+                input.parentElement.style.transition = 'transform 0.2s ease-out';
+            });
+            input.addEventListener('blur', () => {
+                input.parentElement.style.transform = 'scale(1)';
+            });
+        });
+    </script>
+
+
+
+
+</body></html>
