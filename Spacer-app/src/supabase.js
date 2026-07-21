@@ -273,13 +273,5 @@ const mockSupabase = {
     functions: mockFunctions
 };
 
-// Export client with dynamic switching
-export const supabase = new Proxy({}, {
-    get(target, prop) {
-        const useMock = localStorage.getItem("use_mock_supabase") === "true";
-        if (useMock) {
-            return mockSupabase[prop] || realSupabase[prop];
-        }
-        return realSupabase[prop];
-    }
-});
+// Export client directly so it only uses the live database
+export const supabase = realSupabase;
