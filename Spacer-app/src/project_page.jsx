@@ -357,13 +357,16 @@ function ProjectPage() {
                                                         {/* Footer */}
                                                         <div className="flex items-center justify-between mt-auto pt-sm border-t border-outline-variant/20">
                                                             <div className="flex items-center gap-sm text-on-surface-variant">
-                                                                {task.assignee_id && (
-                                                                    <div className="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center" title={task.assignee?.name || 'Assigned'}>
-                                                                        <span className="text-[9px] font-bold text-on-surface-variant uppercase">
-                                                                            {task.assignee?.name?.charAt(0) || '?'}
-                                                                        </span>
-                                                                    </div>
-                                                                )}
+                                                                {(() => {
+                                                                    const assignee = orgUsers.find(u => u.id === task.assignee_id);
+                                                                    return task.assignee_id ? (
+                                                                        <div className="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center" title={assignee?.name || 'Assigned'}>
+                                                                            <span className="text-[9px] font-bold text-on-surface-variant uppercase">
+                                                                                {assignee?.name?.charAt(0) || '?'}
+                                                                            </span>
+                                                                        </div>
+                                                                    ) : null;
+                                                                })()}
                                                             </div>
                                                             <div className="flex items-center gap-sm text-on-surface-variant">
                                                                 {task.due_date && (
@@ -731,16 +734,19 @@ function ProjectPage() {
                                     <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">person</span> Assignee
                                     </h3>
-                                    {selectedTask.assignee ? (
-                                        <div className="flex items-center gap-sm mt-1">
-                                            <div className="w-6 h-6 rounded-full bg-surface-variant flex items-center justify-center text-[10px] font-bold text-on-surface-variant uppercase">
-                                                {selectedTask.assignee.name.charAt(0)}
+                                    {(() => {
+                                        const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
+                                        return assignee ? (
+                                            <div className="flex items-center gap-sm mt-1">
+                                                <div className="w-6 h-6 rounded-full bg-surface-variant flex items-center justify-center text-[10px] font-bold text-on-surface-variant uppercase">
+                                                    {assignee.name.charAt(0)}
+                                                </div>
+                                                <p className="font-body-md text-on-surface font-semibold">{assignee.name}</p>
                                             </div>
-                                            <p className="font-body-md text-on-surface font-semibold">{selectedTask.assignee.name}</p>
-                                        </div>
-                                    ) : (
-                                        <p className="font-body-md text-on-surface mt-1 italic opacity-70">Unassigned</p>
-                                    )}
+                                        ) : (
+                                            <p className="font-body-md text-on-surface mt-1 italic opacity-70">Unassigned</p>
+                                        );
+                                    })()}
                                 </div>
                                 <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
                                     <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
