@@ -8,6 +8,8 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const [projects, setProjects] = useState([]);
     const [collapsed, setCollapsed] = useState(false);
     const [hovered, setHovered] = useState(false);
+    const [showProfilePanel, setShowProfilePanel] = useState(false);
+
     const expanded = !collapsed || hovered;
 
     const handleToggle = () => {
@@ -187,6 +189,10 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         {expanded && <span className="font-label-md whitespace-nowrap opacity-50">Settings</span>}
                     </div>
 
+                    <Link to="/profile" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
+                        <span className="material-symbols-outlined">person</span>
+                        {expanded && <span className="font-label-md whitespace-nowrap">Profile</span>}
+                    </Link>
                     <button
                         onClick={handleLogout}
                         className="w-full text-error hover:bg-error/10 rounded-lg mx-0 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer"
