@@ -28,7 +28,7 @@ function Profile() {
         department: "Engineering & Design",
         location: "San Francisco, CA",
         bio: "Passionate about building intuitive workspace products and user-centered design systems.",
-        website: "https://spacers.app"
+        website: "https://openspace.finance/"
     })
 
     // Draft values during editing
@@ -91,7 +91,7 @@ function Profile() {
                 department: data?.department || "Engineering & Design",
                 location: data?.location || "San Francisco, CA",
                 bio: data?.bio || "Passionate about building intuitive workspace products and user-centered design systems.",
-                website: data?.website || "https://spacers.app"
+                website: data?.website || "https://openspace.finance/"
             }
             setProfile(next)
             setDraft(next)
@@ -300,8 +300,8 @@ function Profile() {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${activeTab === tab.id
-                                            ? "bg-white/10 text-lime-300 border border-lime-400/30 shadow-md"
-                                            : "text-neutral-400 hover:text-white hover:bg-white/5"
+                                        ? "bg-white/10 text-lime-300 border border-lime-400/30 shadow-md"
+                                        : "text-neutral-400 hover:text-white hover:bg-white/5"
                                         }`}
                                 >
                                     <span className="material-symbols-outlined text-lg">{tab.icon}</span>
@@ -349,7 +349,7 @@ function Profile() {
                                                 <div className="flex items-center justify-between">
                                                     <span>Portfolio:</span>
                                                     <a href={profile.website} target="_blank" rel="noreferrer" className="text-lime-400 hover:underline">
-                                                        spacers.app
+                                                        openspace.finance
                                                     </a>
                                                 </div>
                                             </div>
@@ -713,7 +713,7 @@ function Profile() {
                                     {/* Notifications Section */}
                                     <div className="space-y-4">
                                         <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider">Notifications</h3>
-                                        
+
                                         {[
                                             { key: "emailAlerts", label: "Email Notifications", desc: "Receive immediate emails for critical project updates." },
                                             { key: "taskUpdates", label: "Task Assignments", desc: "Get notified when tasks are assigned to you." },

@@ -4,85 +4,7 @@ import ProjectPanel from "./components/ProjectPanel"
 import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
-
-// ─── Team icon map ──────────────────────────────────────────────────────────
-const TEAM_ICONS = {
-    Development: "code",
-    Marketing: "campaign",
-    HR: "person_search",
-    Finance: "account_balance",
-    Design: "palette",
-    default: "groups",
-}
-
-const TEAM_STATUS_COLOR = {
-    "ON TRACK": "#9ddc5a",
-    "NEEDS ATTENTION": "#f59e0b",
-    "AT RISK": "#ef4444",
-}
-
-// ─── StatCard ────────────────────────────────────────────────────────────────
-function StatCard({ value, label, sub, subIcon, subColor }) {
-    return (
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-sm relative overflow-hidden group cursor-default hover:border-[rgba(182,255,51,0.25)] transition-all duration-300">
-            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                style={{ background: "radial-gradient(circle, rgba(182,255,51,0.1) 0%, transparent 70%)" }} />
-            <p className="text-4xl font-bold text-on-surface tracking-tight">{value}</p>
-            <p className="text-on-surface-variant font-body-sm">{label}</p>
-            {sub && (
-                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mt-auto"
-                    style={{ color: subColor || "#9ddc5a" }}>
-                    {subIcon && <span className="material-symbols-outlined text-[12px]">{subIcon}</span>}
-                    {sub}
-                </p>
-            )}
-        </div>
-    )
-}
-
-// ─── TeamCard ─────────────────────────────────────────────────────────────────
-function TeamCard({ team }) {
-    const icon = TEAM_ICONS[team.name] || TEAM_ICONS.default
-    const statusLabel = team.status || "ON TRACK"
-    const statusColor = TEAM_STATUS_COLOR[statusLabel] || TEAM_STATUS_COLOR["ON TRACK"]
-
-    return (
-        <div className="glass-card rounded-xl p-md flex flex-col gap-sm min-w-[220px] flex-1 hover:border-[rgba(182,255,51,0.25)] transition-all duration-300">
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-sm">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: "rgba(182,255,51,0.1)", border: "1px solid rgba(182,255,51,0.15)" }}>
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: "#9ddc5a" }}>{icon}</span>
-                    </div>
-                    <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-on-surface-variant">Team</p>
-                        <p className="font-semibold text-on-surface text-sm">{team.name}</p>
-                    </div>
-                </div>
-                <span className="material-symbols-outlined text-on-surface-variant text-base cursor-pointer hover:text-on-surface transition-colors">more_horiz</span>
-            </div>
-            <div className="space-y-1 mt-1">
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-on-surface-variant text-xs">
-                        <span className="material-symbols-outlined text-[14px]">person</span>Members
-                    </span>
-                    <span className="font-semibold text-on-surface text-sm">{team.member_count ?? "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-on-surface-variant text-xs">
-                        <span className="material-symbols-outlined text-[14px]">grid_view</span>Projects
-                    </span>
-                    <span className="font-semibold text-on-surface text-sm">{team.project_count ?? "—"}</span>
-                </div>
-            </div>
-            <div className="flex items-center gap-2 mt-auto pt-sm border-t border-outline-variant">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>Status</span>
-                <span className="ml-auto text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
-            </div>
-        </div>
-    )
-}
+import { Link } from "react-router-dom"
 
 function Home() {
     const [userEmail, setUserEmail] = useState("")
@@ -248,298 +170,425 @@ function Home() {
     return (
         <>
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
-            <Header />
-            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col min-h-screen transition-all duration-300 ease-out`}>
-                <div className="p-lg space-y-lg">
+            {/* Main content wrapper */}
+            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col min-h-screen transition-all duration-300 ease-out bg-[#0F1115] text-[#e0e5d0]`}>
+                {/* Top Navbar */}
+                <header className="px-lg py-md flex items-center justify-between border-b border-[#2D3139]">
+                    <div className="flex items-center gap-2 text-[#8c947b]">
+                        <span className="material-symbols-outlined text-[20px]">home</span>
+                        <span className="font-body-md font-medium text-[#e0e5d0]">Home</span>
+                    </div>
+                    <div className="flex items-center gap-md">
+                        <button className="flex items-center gap-2 px-md py-sm bg-[#1C1F26] border border-[#2D3139] hover:border-[#424934] rounded-lg text-body-sm transition-colors">
+                            <span className="material-symbols-outlined text-[16px]">description</span>
+                            New Document
+                        </button>
+                        <button className="flex items-center gap-2 px-md py-sm bg-[#1C1F26] border border-[#2D3139] hover:border-[#424934] rounded-lg text-body-sm transition-colors">
+                            <span className="material-symbols-outlined text-[16px]">task</span>
+                            New Task
+                        </button>
+                        <button className="flex items-center gap-2 px-md py-sm bg-[#1C1F26] border border-[#2D3139] hover:border-[#424934] rounded-lg text-body-sm transition-colors">
+                            <span className="material-symbols-outlined text-[16px]">phone_in_talk</span>
+                            New Meeting
+                        </button>
+                    </div>
+                </header>
 
-                    {/* ── GREETING ──────────────────────────────────────── */}
-                    <section className="flex items-start justify-between">
-                        <div>
-                            <h1 className="text-headline-xl font-bold text-on-surface flex items-center gap-2">
-                                {isSuperAdmin ? `Hello, ${userData?.name || userEmail || "User"} 👋` : `Hello, ${userData?.name || userEmail || "User"} 👋`}
-                            </h1>
-                            <p className="text-on-surface-variant font-body-md mt-1">
-                                {isSuperAdmin
-                                    ? "Organization's overview and activity."
-                                    : "Here's what's on your plate in this workspace."}
-                            </p>
+                <div className="p-lg space-y-xl max-w-[1400px] w-full mx-auto">
+                    {/* GREETING SECTION */}
+                    <section>
+                        <h1 className="text-[28px] font-semibold text-white flex items-center gap-2">
+                            Hello {userData?.name || userEmail.split('@')[0] || "User"}! 👋
+                        </h1>
+                        <p className="text-[#8c947b] text-[18px] mt-1 font-medium">
+                            Here's what's happening in <span className="text-white">Circle Corp Dev Team</span>
+                        </p>
+                    </section>
+
+                    {/* METRICS ROW */}
+                    <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
+                        {/* Metric 1 */}
+                        <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
+                            <div>
+                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">{tasksLoading ? "..." : openCount}</h2>
+                                <p className="text-[#8c947b] text-[15px]">My Open Task</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#8c947b]"></span>
+                                Spread across multiple projects
+                            </div>
                         </div>
-                        <div className="flex items-center gap-1 text-on-surface-variant text-xs mt-1">
-                            <span className="material-symbols-outlined text-sm">home</span>
-                            <span>/</span>
-                            <span>Home</span>
+                        {/* Metric 2 */}
+                        <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
+                            <div>
+                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">{isSuperAdmin ? orgStats.activeProjects ?? "..." : "8"}</h2>
+                                <p className="text-[#8c947b] text-[15px]">Active Projects</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
+                                <span className="material-symbols-outlined text-[14px]">sync</span>
+                                Current sprint ends 11 Jul
+                            </div>
+                        </div>
+                        {/* Metric 3 */}
+                        <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
+                            <div>
+                                <h2 className="text-[40px] font-bold text-white leading-none mb-2">{isSuperAdmin ? orgStats.members ?? "..." : "24"}</h2>
+                                <p className="text-[#8c947b] text-[15px]">{isSuperAdmin ? "Org Members" : "Team Members"}</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
+                                <span className="material-symbols-outlined text-[14px] rotate-[-45deg]">arrow_forward</span>
+                                2 Active members
+                            </div>
+                        </div>
+                        {/* Metric 4 */}
+                        <div className="bg-[#1C1F26] border border-[#2D3139] p-lg rounded-xl flex flex-col justify-between min-h-[140px]">
+                            <div>
+                                <h2 className="text-[40px] font-bold text-[#ffb4ab] leading-none mb-2">5</h2>
+                                <p className="text-[#ffb4ab] text-[15px]">Task Due Today</p>
+                            </div>
+                            <div className="flex items-center gap-2 mt-4 text-[#8c947b] text-[12px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-[#8c947b]"></span>
+                                3 not started yet
+                            </div>
                         </div>
                     </section>
 
-                    {/* ── LOADING SKELETON ──────────────────────────────── */}
-                    {roleLoading && (
-                        <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
-                            {[...Array(4)].map((_, i) => (
-                                <div key={i} className="glass-card p-lg rounded-xl flex flex-col gap-sm animate-pulse">
-                                    <div className="h-8 w-16 bg-surface-container-highest rounded" />
-                                    <div className="h-3 w-24 bg-surface-container-highest rounded mt-1" />
-                                </div>
-                            ))}
-                        </section>
-                    )}
-
-                    {/* ── SUPERADMIN: ORG SUMMARY CARDS ─────────────────── */}
-                    {isSuperAdmin && !roleLoading && (
-                        <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
-                            <StatCard
-                                label="Members"
-                                value={orgStats.members ?? "—"}
-                                sub="Company Members"
-                                subIcon="person"
-                            />
-                            <StatCard
-                                label="Teams"
-                                value={orgStats.teams ?? "—"}
-                                sub="Across the Organization"
-                                subIcon="grid_view"
-                            />
-                            <StatCard
-                                label="Active Projects"
-                                value={orgStats.activeProjects ?? "—"}
-                                sub="Currently in Progress"
-                                subIcon="fiber_manual_record"
-                                subColor="#9ddc5a"
-                            />
-                            <StatCard
-                                label="Requires Attention"
-                                value={teams.filter(t => t.status === "NEEDS ATTENTION" || t.status === "AT RISK").length}
-                                sub="Pending Leadership Decisions"
-                                subIcon="flag"
-                                subColor="#ef4444"
-                            />
-                        </section>
-                    )}
-
-                    {/* ── NON-SUPERADMIN: PERSONAL TASK METRICS ─────────── */}
-                    {!isSuperAdmin && !roleLoading && (
-                        <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold">{tasksLoading ? "—" : todoTasks.length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">To do</p>
+                    {/* MAIN CONTENT AREA */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-xl">
+                        
+                        {/* LEFT COLUMN: MY TASK */}
+                        <div className="lg:col-span-2 space-y-md">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-[20px] font-semibold text-white">My Task</h3>
+                                <Link to="/tasks" className="text-[#aff82a] text-[14px] hover:underline">View all task</Link>
                             </div>
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold text-primary-fixed">{tasksLoading ? "—" : inProgressTasks.length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">In progress</p>
-                            </div>
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold text-primary-container">{tasksLoading ? "—" : doneTasks.length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">Done</p>
-                            </div>
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold text-error">{tasksLoading ? "—" : userTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done").length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">Overdue</p>
-                            </div>
-                        </section>
-                    )}
-
-                    {/* ── SUPERADMIN: TEAM OVERVIEW + RECENT ACTIVITY ───── */}
-                    {isSuperAdmin && !roleLoading && (
-                        <div className="grid grid-cols-12 gap-lg">
-                            {/* Team Overview */}
-                            <div className="col-span-12 lg:col-span-8">
-                                <div className="flex items-center justify-between mb-md">
-                                    <h2 className="font-headline-md font-semibold text-on-surface">Team Overview</h2>
-                                    {totalTeamPages > 1 && (
-                                        <div className="flex items-center gap-sm text-on-surface-variant text-xs">
-                                            <button
-                                                id="team-prev-btn"
-                                                onClick={() => setTeamPage(p => Math.max(0, p - 1))}
-                                                disabled={teamPage === 0}
-                                                className="p-1 rounded hover:bg-surface-variant disabled:opacity-30 transition-colors"
-                                            >
-                                                <span className="material-symbols-outlined text-base">chevron_left</span>
-                                            </button>
-                                            <span>
-                                                {teamPage * TEAMS_PER_PAGE + 1}–{Math.min((teamPage + 1) * TEAMS_PER_PAGE, teams.length)} out of {teams.length}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
+                                
+                                {/* Task Card 1 */}
+                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md hover:border-[#424934] transition-colors cursor-pointer">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-[#ffb4ab] bg-[#ffb4ab]/10 px-2 py-1 rounded-md">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-[#ffb4ab]"></span> Overdue
                                             </span>
-                                            <button
-                                                id="team-next-btn"
-                                                onClick={() => setTeamPage(p => Math.min(totalTeamPages - 1, p + 1))}
-                                                disabled={teamPage >= totalTeamPages - 1}
-                                                className="p-1 rounded hover:bg-surface-variant disabled:opacity-30 transition-colors"
-                                            >
-                                                <span className="material-symbols-outlined text-base">chevron_right</span>
-                                            </button>
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-[#ffb4ab] bg-[#1C1F26] border border-[#2D3139] px-2 py-1 rounded-md">
+                                                <span className="material-symbols-outlined text-[12px]">flag</span> Urgent <span className="material-symbols-outlined text-[12px]">expand_more</span>
+                                            </span>
                                         </div>
-                                    )}
+                                        <div className="flex -space-x-2">
+                                            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">TJ</div>
+                                            <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">MG</div>
+                                            <div className="w-6 h-6 rounded-full bg-[#2D3139] flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-[#8c947b]">+2</div>
+                                        </div>
+                                    </div>
+                                    <p className="text-[12px] text-[#8c947b] mb-1">Website Redesign</p>
+                                    <h4 className="text-[15px] font-semibold text-white mb-2">Fix auth token expiry bug</h4>
+                                    <p className="text-[13px] text-[#8c947b] line-clamp-2 mb-6">Sessions dropping before timeout period ends - users getting logged...</p>
+                                    
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-[12px]">
+                                            <span className="text-[#8c947b]">progress</span>
+                                            <span className="text-white">30%</span>
+                                        </div>
+                                        <div className="h-1 bg-[#2D3139] rounded-full overflow-hidden">
+                                            <div className="h-full bg-[#ffb4ab] w-[30%]"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center text-[12px] text-[#8c947b] pt-4 border-t border-[#2D3139]">
+                                        <div className="flex items-center gap-4">
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">chat_bubble</span> 5</span>
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">format_list_bulleted</span> 2/5</span>
+                                        </div>
+                                        <span className="flex items-center gap-1 text-[#ffb4ab]"><span className="material-symbols-outlined text-[14px]">calendar_today</span> 25 July</span>
+                                    </div>
                                 </div>
 
-                                {teams.length === 0 ? (
-                                    <div className="glass-card rounded-xl p-xl flex flex-col items-center justify-center text-center min-h-[200px] gap-3">
-                                        <span className="material-symbols-outlined text-4xl text-on-surface-variant">groups</span>
-                                        <p className="text-on-surface-variant font-body-md">No teams found in the organization yet.</p>
+                                {/* Task Card 2 */}
+                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md hover:border-[#424934] transition-colors cursor-pointer">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-blue-400 bg-blue-400/10 px-2 py-1 rounded-md">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span> In progress
+                                            </span>
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-yellow-400 bg-[#1C1F26] border border-[#2D3139] px-2 py-1 rounded-md">
+                                                <span className="material-symbols-outlined text-[12px]">flag</span> High <span className="material-symbols-outlined text-[12px]">expand_more</span>
+                                            </span>
+                                        </div>
+                                        <div className="flex -space-x-2">
+                                            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">TJ</div>
+                                            <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">MG</div>
+                                            <div className="w-6 h-6 rounded-full bg-[#2D3139] flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-[#8c947b]">+2</div>
+                                        </div>
                                     </div>
-                                ) : (
-                                    <div className="flex gap-md flex-wrap">
-                                        {visibleTeams.map(team => (
-                                            <TeamCard key={team.id} team={team} />
-                                        ))}
+                                    <p className="text-[12px] text-[#8c947b] mb-1">Website Redesign</p>
+                                    <h4 className="text-[15px] font-semibold text-white mb-2">Refactor dashboard data layer</h4>
+                                    <p className="text-[13px] text-[#8c947b] line-clamp-2 mb-6">Move API calls to custom hooks, remove prop drilling across components...</p>
+                                    
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-[12px]">
+                                            <span className="text-[#8c947b]">progress</span>
+                                            <span className="text-white">50%</span>
+                                        </div>
+                                        <div className="h-1 bg-[#2D3139] rounded-full overflow-hidden">
+                                            <div className="h-full bg-blue-500 w-[50%]"></div>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
+                                    
+                                    <div className="flex justify-between items-center text-[12px] text-[#8c947b] pt-4 border-t border-[#2D3139]">
+                                        <div className="flex items-center gap-4">
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">chat_bubble</span> 7</span>
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">format_list_bulleted</span> 3/5</span>
+                                        </div>
+                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> 30 July</span>
+                                    </div>
+                                </div>
 
-                            {/* Recent Activity */}
-                            <div className="col-span-12 lg:col-span-4">
-                                <div className="flex items-center justify-between mb-md">
-                                    <h2 className="font-headline-md font-semibold text-on-surface">Recent Activity</h2>
-                                    <button id="see-recent-btn" className="text-xs text-on-surface-variant hover:text-on-surface transition-colors">
-                                        See recent activities
+                                {/* Task Card 3 */}
+                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md hover:border-[#424934] transition-colors cursor-pointer">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-yellow-400 bg-yellow-400/10 px-2 py-1 rounded-md">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span> In review
+                                            </span>
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-yellow-400 bg-[#1C1F26] border border-[#2D3139] px-2 py-1 rounded-md">
+                                                <span className="material-symbols-outlined text-[12px]">flag</span> High <span className="material-symbols-outlined text-[12px]">expand_more</span>
+                                            </span>
+                                        </div>
+                                        <div className="flex -space-x-2">
+                                            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">TJ</div>
+                                            <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">MG</div>
+                                            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">OL</div>
+                                            <div className="w-6 h-6 rounded-full bg-[#2D3139] flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-[#8c947b]">+2</div>
+                                        </div>
+                                    </div>
+                                    <p className="text-[12px] text-[#8c947b] mb-1">Website Redesign</p>
+                                    <h4 className="text-[15px] font-semibold text-white mb-2">Fix auth token expiry bug</h4>
+                                    <p className="text-[13px] text-[#8c947b] line-clamp-2 mb-6">Sessions dropping before timeout period ends - users getting logged...</p>
+                                    
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-[12px]">
+                                            <span className="text-[#8c947b]">progress</span>
+                                            <span className="text-white">20%</span>
+                                        </div>
+                                        <div className="h-1 bg-[#2D3139] rounded-full overflow-hidden">
+                                            <div className="h-full bg-yellow-500 w-[20%]"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center text-[12px] text-[#8c947b] pt-4 border-t border-[#2D3139]">
+                                        <div className="flex items-center gap-4">
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">chat_bubble</span> 5</span>
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">format_list_bulleted</span> 2/5</span>
+                                        </div>
+                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> 1 August</span>
+                                    </div>
+                                </div>
+                                
+                                {/* Task Card 4 */}
+                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md hover:border-[#424934] transition-colors cursor-pointer">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-gray-300 bg-gray-300/10 px-2 py-1 rounded-md">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300"></span> To do
+                                            </span>
+                                            <span className="flex items-center gap-1 text-[11px] font-medium text-gray-400 bg-[#1C1F26] border border-[#2D3139] px-2 py-1 rounded-md">
+                                                <span className="material-symbols-outlined text-[12px]">flag</span> Normal <span className="material-symbols-outlined text-[12px]">expand_more</span>
+                                            </span>
+                                        </div>
+                                        <div className="flex -space-x-2">
+                                            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">TJ</div>
+                                            <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26]">MG</div>
+                                            <div className="w-6 h-6 rounded-full bg-[#2D3139] flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-[#8c947b]">-2</div>
+                                        </div>
+                                    </div>
+                                    <p className="text-[12px] text-[#8c947b] mb-1">Website Redesign</p>
+                                    <h4 className="text-[15px] font-semibold text-white mb-2">Document API endpoints — v2 spec</h4>
+                                    <p className="text-[13px] text-[#8c947b] line-clamp-2 mb-6">Create OpenAPI spec for the new auth and payments endpoints...</p>
+                                    
+                                    <div className="space-y-2 mb-6">
+                                        <div className="flex justify-between text-[12px]">
+                                            <span className="text-[#8c947b]">progress</span>
+                                            <span className="text-white">0%</span>
+                                        </div>
+                                        <div className="h-1 bg-[#2D3139] rounded-full overflow-hidden">
+                                            <div className="h-full bg-gray-500 w-[0%]"></div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex justify-between items-center text-[12px] text-[#8c947b] pt-4 border-t border-[#2D3139]">
+                                        <div className="flex items-center gap-4">
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">chat_bubble</span> 1</span>
+                                            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">format_list_bulleted</span> 0/5</span>
+                                        </div>
+                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[14px]">calendar_today</span> 10 August</span>
+                                    </div>
+                                </div>
+                                
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: RECENT ACTIVITY */}
+                        <div className="lg:col-span-1 space-y-md">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-[20px] font-semibold text-white">Recent Activities</h3>
+                                <button className="text-[#aff82a] text-[14px] hover:underline">See recent activities</button>
+                            </div>
+                            <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md h-full min-h-[500px]">
+                                <div className="flex items-center justify-between mb-6">
+                                    <button className="flex items-center gap-1 text-[14px] font-medium text-white">
+                                        Today <span className="material-symbols-outlined text-[16px]">expand_more</span>
                                     </button>
                                 </div>
-                                <div className="glass-card rounded-xl p-md space-y-md min-h-[200px]">
-                                    <div className="flex gap-md items-start">
-                                        <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0 font-bold text-[10px] text-on-surface-variant">SA</div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-body-sm"><span className="font-bold text-on-surface">No Activity Yet</span></p>
-                                            <p className="text-[10px] text-on-surface-variant mt-0.5">—</p>
+                                
+                                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-[#2D3139] before:to-transparent">
+                                    
+                                    {/* Activity 1 */}
+                                    <div className="relative flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-[12px] font-bold text-white shrink-0 z-10 border-4 border-[#1C1F26]">TJ</div>
+                                        <div className="flex-1 min-w-0 bg-[#0F1115] border border-[#2D3139] rounded-lg p-3">
+                                            <p className="text-[13px] text-[#e0e5d0] mb-2">
+                                                <span className="font-semibold text-white">Temi Joolaso</span> commented on <span className="text-[#aff82a] cursor-pointer hover:underline">Fix auth token expiry bug</span>
+                                            </p>
+                                            <div className="bg-[#1C1F26] p-3 rounded border border-[#2D3139] text-[#8c947b] text-[13px] italic mb-3">
+                                                "Reproduced the issue on Safari too — seems like the refresh token isn't being persisted correctly after a tab restore."
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8c947b]">
+                                                <span>9:14 AM</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="text-blue-400">Commented</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px] text-[#aff82a]">folder</span> Website Redesign</span>
+                                            </div>
                                         </div>
                                     </div>
+                                    
+                                    {/* Activity 2 */}
+                                    <div className="relative flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-[12px] font-bold text-white shrink-0 z-10 border-4 border-[#1C1F26]">MR</div>
+                                        <div className="flex-1 min-w-0 bg-[#0F1115] border border-[#2D3139] rounded-lg p-3">
+                                            <p className="text-[13px] text-[#e0e5d0] mb-3">
+                                                <span className="font-semibold text-white">Maya Ricard</span> moved <span className="text-[#aff82a] cursor-pointer hover:underline">Payments module - code review</span> from In Progress → In Review
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8c947b]">
+                                                <span>9:14 AM</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="text-[#aff82a]">Status Change</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px] text-[#aff82a]">folder</span> Website Redesign</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Activity 3 */}
+                                    <div className="relative flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-pink-600 flex items-center justify-center text-[12px] font-bold text-white shrink-0 z-10 border-4 border-[#1C1F26]">AK</div>
+                                        <div className="flex-1 min-w-0 bg-[#0F1115] border border-[#2D3139] rounded-lg p-3">
+                                            <p className="text-[13px] text-[#e0e5d0] mb-3">
+                                                <span className="font-semibold text-white">Ade Kolade</span> assigned <span className="text-[#aff82a] cursor-pointer hover:underline">Document API endpoints — v2 spec</span> to you
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8c947b]">
+                                                <span>9:14 AM</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="text-orange-400">Assigned to you</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px] text-[#aff82a]">folder</span> Project launch</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Activity 4 */}
+                                    <div className="relative flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-[12px] font-bold text-white shrink-0 z-10 border-4 border-[#1C1F26]">TJ</div>
+                                        <div className="flex-1 min-w-0 bg-[#0F1115] border border-[#2D3139] rounded-lg p-3">
+                                            <p className="text-[13px] text-[#e0e5d0] mb-3">
+                                                <span className="font-semibold text-white">Temi Joolaso</span> uploaded <b>auth-flow-revised.fig</b> to <span className="text-[#aff82a] cursor-pointer hover:underline">Fix auth token expiry bug</span>
+                                            </p>
+                                            <div className="flex flex-wrap items-center gap-3 text-[11px] text-[#8c947b]">
+                                                <span>9:14 AM</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="text-blue-400">File upload</span>
+                                                <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px] text-[#aff82a]">folder</span> Website Redesign</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                 </div>
                             </div>
                         </div>
-                    )}
+                    </div>
 
-                    {/* ── NON-SUPERADMIN: PERSONAL WORK BOARD ───────────── */}
-                    {!isSuperAdmin && !roleLoading && (
-                        <div className="grid grid-cols-12 gap-lg">
-                            {/* Task Kanban — 3 columns */}
-                            <div className="col-span-12 lg:col-span-8">
-                                <div className="flex items-center justify-between mb-md">
-                                    <h3 className="font-headline-md font-semibold text-on-surface">My open work</h3>
-                                    <span className="text-label-sm text-on-surface-variant">
-                                        {tasksLoading ? "Loading…" : `${openCount} open item${openCount !== 1 ? "s" : ""}`}
-                                    </span>
-                                </div>
-
-                                {tasksLoading ? (
-                                    <div className="grid grid-cols-3 gap-md">
-                                        {[...Array(3)].map((_, i) => (
-                                            <div key={i} className="glass-card rounded-xl p-md space-y-sm animate-pulse">
-                                                <div className="h-3 w-16 bg-surface-container-highest rounded" />
-                                                <div className="h-10 w-full bg-surface-container-highest rounded-lg" />
-                                                <div className="h-10 w-full bg-surface-container-highest rounded-lg" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : openCount === 0 && doneTasks.length === 0 ? (
-                                    <div className="glass-card rounded-xl flex flex-col items-center justify-center p-xl text-center min-h-[420px]">
-                                        <div className="text-5xl mb-4">🎉</div>
-                                        <h4 className="font-headline-md text-on-surface font-semibold">You're all caught up</h4>
-                                        <p className="text-on-surface-variant font-body-md max-w-xs mt-2">Nothing assigned to you is open right now.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
-
-                                        {/* ── To-Do column ── */}
-                                        <div className="glass-card rounded-xl flex flex-col">
-                                            <div className="p-md border-b border-outline-variant flex items-center justify-between">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className="w-2 h-2 rounded-full bg-on-surface-variant" />
-                                                    <span className="font-semibold text-on-surface text-sm">To‑Do</span>
-                                                </div>
-                                                <span className="text-xs text-on-surface-variant">{todoTasks.length}</span>
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto p-sm space-y-sm max-h-[380px]">
-                                                {todoTasks.length === 0 ? (
-                                                    <p className="text-xs text-on-surface-variant text-center py-lg">No tasks here</p>
-                                                ) : todoTasks.map(task => (
-                                                    <div key={task.id} className="glass-card rounded-lg p-sm hover:border-[rgba(182,255,51,0.2)] transition-all cursor-default group">
-                                                        <p className="text-sm font-semibold text-on-surface truncate">{task.title || task.name || "Untitled"}</p>
-                                                        {task.description && <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">{task.description}</p>}
-                                                        {task.due_date && (
-                                                            <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#9ddc5a" }}>
-                                                                <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                                                {new Date(task.due_date).toLocaleDateString()}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* ── In Progress column ── */}
-                                        <div className="glass-card rounded-xl flex flex-col">
-                                            <div className="p-md border-b border-outline-variant flex items-center justify-between">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className="w-2 h-2 rounded-full" style={{ background: "#f59e0b" }} />
-                                                    <span className="font-semibold text-on-surface text-sm">In Progress</span>
-                                                </div>
-                                                <span className="text-xs text-on-surface-variant">{inProgressTasks.length}</span>
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto p-sm space-y-sm max-h-[380px]">
-                                                {inProgressTasks.length === 0 ? (
-                                                    <p className="text-xs text-on-surface-variant text-center py-lg">No tasks here</p>
-                                                ) : inProgressTasks.map(task => (
-                                                    <div key={task.id} className="glass-card rounded-lg p-sm hover:border-[rgba(182,255,51,0.2)] transition-all cursor-default">
-                                                        <p className="text-sm font-semibold text-on-surface truncate">{task.title || task.name || "Untitled"}</p>
-                                                        {task.description && <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">{task.description}</p>}
-                                                        {task.due_date && (
-                                                            <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#f59e0b" }}>
-                                                                <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                                                {new Date(task.due_date).toLocaleDateString()}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* ── Done column ── */}
-                                        <div className="glass-card rounded-xl flex flex-col">
-                                            <div className="p-md border-b border-outline-variant flex items-center justify-between">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className="w-2 h-2 rounded-full" style={{ background: "#9ddc5a" }} />
-                                                    <span className="font-semibold text-on-surface text-sm">Done</span>
-                                                </div>
-                                                <span className="text-xs text-on-surface-variant">{doneTasks.length}</span>
-                                            </div>
-                                            <div className="flex-1 overflow-y-auto p-sm space-y-sm max-h-[380px]">
-                                                {doneTasks.length === 0 ? (
-                                                    <p className="text-xs text-on-surface-variant text-center py-lg">No tasks here</p>
-                                                ) : doneTasks.map(task => (
-                                                    <div key={task.id} className="glass-card rounded-lg p-sm opacity-70 hover:opacity-100 transition-all cursor-default">
-                                                        <p className="text-sm font-semibold text-on-surface truncate line-through decoration-on-surface-variant">{task.title || task.name || "Untitled"}</p>
-                                                        {task.description && <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">{task.description}</p>}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Recent Activity */}
-                            <div className="col-span-12 lg:col-span-4">
-                                <div className="glass-card rounded-xl flex flex-col min-h-[480px]">
-                                    <div className="p-md border-b border-outline-variant bg-surface-container-low/50 rounded-t-xl">
-                                        <h3 className="font-headline-md font-semibold text-on-surface">Recent activity</h3>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto p-md space-y-md">
-                                        <div className="flex gap-md items-start group">
-                                            <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0 font-bold text-[10px] text-on-surface-variant">SA</div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-body-sm"><span className="font-bold text-on-surface">No Activity Yet</span></p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    {/* MEETINGS SECTION */}
+                    <div className="space-y-md">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[20px] font-semibold text-white">Meetings</h3>
+                            <button className="text-[#aff82a] text-[14px] hover:underline">View all meetings</button>
                         </div>
-                    )}
-
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-xl">
+                            
+                            {/* Meeting 1 */}
+                            <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md hover:border-[#424934] transition-colors">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3 text-[12px] text-[#8c947b]">
+                                        <span className="font-semibold text-white">9:00 - 9:30 AM</span>
+                                        <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                        <span>30 mins</span>
+                                    </div>
+                                    <div className="flex -space-x-2">
+                                        <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-white">TJ</div>
+                                        <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-white">MG</div>
+                                        <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-white">CL</div>
+                                        <div className="w-6 h-6 rounded-full bg-[#2D3139] flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-[#8c947b]">+2</div>
+                                    </div>
+                                </div>
+                                <div className="mb-6">
+                                    <h4 className="text-[16px] font-semibold text-white mb-1">Daily standup — Dev team</h4>
+                                    <p className="text-[#aff82a] text-[13px]">Website redesign</p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button className="flex-1 flex items-center justify-center gap-2 bg-[#0F1115] border border-[#2D3139] hover:bg-[#2D3139] text-white py-2 rounded-lg text-[13px] font-medium transition-colors">
+                                        <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
+                                    </button>
+                                    <button className="flex-1 flex items-center justify-center gap-2 bg-[#0F1115] border border-[#2D3139] hover:bg-[#2D3139] text-white py-2 rounded-lg text-[13px] font-medium transition-colors">
+                                        <span className="material-symbols-outlined text-[16px]">description</span> Meeting notes
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Meeting 2 */}
+                            <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-md hover:border-[#424934] transition-colors">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3 text-[12px] text-[#8c947b]">
+                                        <span className="font-semibold text-white">9:00 - 9:30 AM</span>
+                                        <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                        <span>30 mins</span>
+                                    </div>
+                                    <div className="flex -space-x-2">
+                                        <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-white">TJ</div>
+                                        <div className="w-6 h-6 rounded-full bg-yellow-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-white">MG</div>
+                                        <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-white">CL</div>
+                                        <div className="w-6 h-6 rounded-full bg-[#2D3139] flex items-center justify-center text-[10px] font-bold border-2 border-[#1C1F26] text-[#8c947b]">+2</div>
+                                    </div>
+                                </div>
+                                <div className="mb-6">
+                                    <h4 className="text-[16px] font-semibold text-white mb-1">Daily standup — Dev team</h4>
+                                    <p className="text-[#aff82a] text-[13px]">Website redesign</p>
+                                </div>
+                                <div className="flex gap-3">
+                                    <button className="flex-1 flex items-center justify-center gap-2 bg-[#0F1115] border border-[#2D3139] hover:bg-[#2D3139] text-white py-2 rounded-lg text-[13px] font-medium transition-colors">
+                                        <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
+                                    </button>
+                                    <button className="flex-1 flex items-center justify-center gap-2 bg-[#0F1115] border border-[#2D3139] hover:bg-[#2D3139] text-white py-2 rounded-lg text-[13px] font-medium transition-colors">
+                                        <span className="material-symbols-outlined text-[16px]">description</span> Meeting notes
+                                    </button>
+                                </div>
+                            </div>
+                            
+                        </div>
+                    </div>
                 </div>
             </main>
-
-            {/* Floating Action Button */}
-            <button className="fixed bottom-lg right-lg w-14 h-14 bg-primary-fixed text-on-primary-fixed rounded-full flex items-center justify-center shadow-xl shadow-primary-fixed/30 hover:scale-110 active:scale-95 transition-all z-50 group">
-                <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">add</span>
-            </button>
 
             {/* Project panel */}
             {selectedProject && (
