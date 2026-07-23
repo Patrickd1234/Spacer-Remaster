@@ -25,7 +25,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         setHovered(false);
     };
 
-    // Clicking the sidebar body while hover-expanded pins it open
     const handleSidebarClick = () => {
         if (collapsed && hovered) {
             setCollapsed(false);
@@ -44,6 +43,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
+
     useEffect(() => {
         const fetchProjects = async () => {
             const userId = localStorage.getItem("userId");
@@ -53,14 +53,12 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                 return;
             }
 
-            // Get team spaces the user is a member of
             const { data: memberData, error: memberError } = await supabase
                 .from("memberships")
                 .select("team_space_id")
                 .eq("user_id", userId);
 
             if (memberError || !memberData || memberData.length === 0) {
-                // Fallback if membership table/rows aren't found or RLS handles access directly
                 const { data, error } = await supabase.from("project_spaces").select("*");
                 if (error) console.log(error);
                 else setProjects(data || []);
@@ -77,124 +75,173 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         fetchProjects();
     }, []);
 
-    const addProject = async () => {
-        const { data, error } = await supabase.from("project_spaces").insert({
-            name: window.prompt("Enter new project name:")
-        })
-        if (error) {
-            console.log(error)
-        } else {
-            console.log(data)
-        }
-    }
+    const displayName = userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
+    const displayEmail = userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
 
     return (
         <>
             <aside
-                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-outline-variant bg-surface-container-lowest flex flex-col py-lg z-50 transition-all duration-300 ease-out overflow-hidden`}
+                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-[#2D3139] bg-[#111318] flex flex-col py-6 z-50 transition-all duration-300 ease-out overflow-hidden`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleSidebarClick}
             >
-                <div className="px-lg mb-xl">
-                    <div className={`flex items-center ${expanded ? "gap-sm mb-xs" : "justify-center mb-sm"}`}>
+                {/* BRAND HEADER & TOGGLE */}
+                <div className="px-5 mb-6">
+                    <div className={`flex items-center ${expanded ? "justify-between mb-4" : "justify-center"}`}>
+                        {expanded && (
+                            <div className="flex items-center gap-2">
+                                <div className="w-7 h-7 rounded bg-[#5b644d] flex items-center justify-center text-white">
+                                    <span className="material-symbols-outlined text-[18px]">widgets</span>
+                                </div>
+                                <h1 className="font-bold text-[18px] text-white tracking-wide">Circle Corp</h1>
+                            </div>
+                        )}
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-                            className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant hover:bg-surface-variant transition-colors"
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1e2025] text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors"
                             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                         >
-                            <span className="material-symbols-outlined text-sm">{collapsed ? "chevron_right" : "chevron_left"}</span>
+                            <span className="material-symbols-outlined text-[18px]">{collapsed ? "chevron_right" : "chevron_left"}</span>
                         </button>
-                        {expanded && (
-                            <div className="flex items-center gap-sm">
-                                <div className="w-8 h-8 rounded bg-primary-container flex items-center justify-center">
-                                    <span className="material-symbols-outlined text-on-primary-container" style={{ fontVariationSettings: "'FILL' 1" }}>circle</span>
-                                </div>
-                                <h1 className="font-headline-lg text-headline-lg font-bold text-on-background">Spacers</h1>
-                            </div>
-                        )}
                     </div>
+
                     {expanded && (
-                        <div className="flex items-center justify-between group cursor-pointer">
-                            <p className="font-label-md text-label-md text-on-surface-variant">Switch Workspace</p>
-                            <span className="material-symbols-outlined text-on-surface-variant text-sm">unfold_more</span>
+                        <div className="flex items-center justify-between px-3 py-2 bg-[#1e2025] border border-[#2D3139] rounded-lg cursor-pointer hover:border-[#3d424d] transition-colors group">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px]">
+                                    C
+                                </div>
+                                <span className="text-[13px] font-medium text-white truncate max-w-[130px]">Circle Corp HQ</span>
+                            </div>
+                            <span className="material-symbols-outlined text-[#8c947b] text-[18px] group-hover:text-white transition-colors">unfold_more</span>
                         </div>
                     )}
                 </div>
-                <button className={`mx-lg mb-lg py-sm px-md bg-primary-container text-on-primary-container font-semibold rounded-lg flex items-center justify-center gap-sm hover:scale-[0.98] transition-transform ${expanded ? "" : "px-0"}`} onClick={() => setShowCreateModal(true)} title="New Project">
-                    <span className="material-symbols-outlined">add</span>
-                    {expanded && <span className="font-label-md">New Project</span>}
-                </button>
-                <nav className="flex-1 overflow-y-auto px-2">
-                    <div className="mb-md">
+
+                {/* NEW PROJECT BUTTON */}
+                <div className="px-4 mb-6">
+                    <button 
+                        className={`w-full py-2.5 px-3 bg-[#5b644d] text-white font-medium text-[14px] rounded-lg flex items-center justify-center gap-2 hover:bg-[#6c765c] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
+                        onClick={() => setShowCreateModal(true)} 
+                        title="New Project"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">add</span>
+                        {expanded && <span>New Project</span>}
+                    </button>
+                </div>
+
+                {/* NAVIGATION ITEMS */}
+                <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
+                    <div className="space-y-1">
                         {matchesSearch("Home") && (
-                            <Link to="/" className="relative bg-primary-container text-on-primary-container font-semibold rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm">
-                                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>home</span>
-                                {expanded && <span className="font-body-md">Home</span>}
+                            <Link to="/" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">home</span>
+                                {expanded && <span className="font-medium text-[14px]">Home</span>}
                             </Link>
                         )}
                         {matchesSearch("Messages") && (
-                            <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer group">
-                                <span className="material-symbols-outlined">chat</span>
-                                {expanded && <span className="font-body-md">Messages</span>}
+                            <div className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center justify-between px-3 py-2 cursor-pointer transition-colors group">
+                                <div className="flex items-center gap-3">
+                                    <span className="material-symbols-outlined text-[20px]">chat</span>
+                                    {expanded && <span className="font-medium text-[14px]">Messages</span>}
+                                </div>
+                                {expanded && <span className="bg-[#5b644d] text-white text-[11px] font-bold px-2 py-0.5 rounded-full">12</span>}
                             </div>
                         )}
                         {matchesSearch("Department") && (
-                            <Link to="/department" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                                <span className="material-symbols-outlined">groups</span>
-                                {expanded && <span className="font-body-md">Department</span>}
+                            <Link to="/department" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">groups</span>
+                                {expanded && <span className="font-medium text-[14px]">Department</span>}
                             </Link>
                         )}
                         {matchesSearch("Calendar") && (
-                            <Link to="/calendar" className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                                <span className="material-symbols-outlined">calendar_today</span>
-                                {expanded && <span className="font-body-md">Calendar</span>}
+                            <Link to="/calendar" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">calendar_today</span>
+                                {expanded && <span className="font-medium text-[14px]">Calendar</span>}
                             </Link>
                         )}
                     </div>
+
                     {/* PROJECTS SECTION */}
-                    <div className="mt-lg px-2">
-                        {expanded && <p className="px-md font-label-md text-on-surface-variant uppercase tracking-wider mb-sm whitespace-nowrap">Projects</p>}
-                        <div className="space-y-0.5">
-                            {projects.map((project) => (
-                                <div
-                                    key={project.id}
-                                    className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 transition-colors flex items-center justify-between px-md py-sm cursor-pointer group" onClick={() => console.log("Open project", project.id)}>
-                                    {expanded && <Link to={`/project_page/${project.id}`}>
-                                        <div className="flex items-center gap-md">
-                                            <span className="font-body-md whitespace-nowrap">{project.name}</span>
+                    <div>
+                        {expanded && (
+                            <div className="flex items-center justify-between px-3 mb-2">
+                                <span className="text-[11px] font-bold tracking-wider text-[#8c947b] uppercase">Projects</span>
+                                <span className="material-symbols-outlined text-[#8c947b] text-[16px] cursor-pointer hover:text-white" onClick={() => setShowCreateModal(true)}>add</span>
+                            </div>
+                        )}
+                        <div className="space-y-1">
+                            {visibleProjects.length > 0 ? (
+                                visibleProjects.map((project, idx) => {
+                                    const colors = ["text-green-500", "text-pink-500", "text-red-500", "text-blue-500", "text-amber-500"];
+                                    const iconColor = colors[idx % colors.length];
+                                    return (
+                                        <div
+                                            key={project.id}
+                                            className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center px-3 py-2 cursor-pointer transition-colors group"
+                                        >
+                                            {expanded && (
+                                                <Link to={`/project_page/${project.id}`} className="flex items-center gap-3 w-full min-w-0">
+                                                    <span className={`material-symbols-outlined text-[20px] ${iconColor}`}>book</span>
+                                                    <span className="font-medium text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">{project.name}</span>
+                                                </Link>
+                                            )}
+                                            {expanded && <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>}
                                         </div>
-                                    </Link>}
-                                    {expanded && <span className="material-symbols-outlined text-on-surface-variant text-sm group-hover:text-on-surface">chevron_right</span>}
-                                </div>
-                            ))}
+                                    );
+                                })
+                            ) : (
+                                expanded && (
+                                    <div className="text-[#8c947b] text-[13px] px-3 py-1 italic">No projects found</div>
+                                )
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="space-y-1 mb-4">
+                        <div className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <span className="material-symbols-outlined text-[20px]">school</span>
+                            {expanded && <span className="font-medium text-[14px] whitespace-nowrap">Knowledge Base</span>}
+                        </div>
+                        <div className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <span className="material-symbols-outlined text-[20px]">bar_chart</span>
+                            {expanded && <Link to="/reports" className="font-medium text-[14px] whitespace-nowrap w-full">Reports</Link>}
                         </div>
                     </div>
                 </nav>
 
-                <div className="mt-auto px-2 border-t border-outline-variant pt-md">
-                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                        <span className="material-symbols-outlined">menu_book</span>
-                        {expanded && <span className="font-label-md whitespace-nowrap">Knowledge Base</span>}
-                    </div>
-                    <div className="text-on-surface-variant hover:bg-surface-variant hover:text-on-surface rounded-lg mx-2 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer">
-                        <span className="material-symbols-outlined">bar_chart</span>
-                        {expanded && <Link to="/reports"><span className="font-label-md whitespace-nowrap">Reports</span></Link>}
-                    </div>
-                    <div className="text-on-surface-variant/50 rounded-lg mx-2 my-1 flex items-center gap-md px-md py-sm cursor-not-allowed" title="Settings are currently disabled">
-                        <span className="material-symbols-outlined opacity-50">settings</span>
-                        {expanded && <span className="font-label-md whitespace-nowrap opacity-50">Settings</span>}
-                    </div>
-
+                {/* USER PROFILE & LOGOUT FOOTER */}
+                <div className="mt-auto px-4 border-t border-[#2D3139] pt-4 pb-2">
                     <button
                         onClick={handleLogout}
-                        className="w-full text-error hover:bg-error/10 rounded-lg mx-0 my-1 transition-colors flex items-center gap-md px-md py-sm cursor-pointer"
+                        className="w-full text-[#8c947b] hover:text-red-400 hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors mb-3"
                         title="Log out"
                     >
-                        <span className="material-symbols-outlined">logout</span>
-                        {expanded && <span className="font-label-md whitespace-nowrap">Log out</span>}
+                        <span className="material-symbols-outlined text-[20px]">logout</span>
+                        {expanded && <span className="font-medium text-[14px] whitespace-nowrap">Log out</span>}
                     </button>
+                    
+                    {expanded ? (
+                        <div className="flex items-center justify-between px-3 cursor-pointer group">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139] shrink-0">
+                                    {displayName.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-white text-[14px] font-medium leading-tight truncate">{displayName}</span>
+                                    <span className="text-[#8c947b] text-[12px] truncate">{displayEmail}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex justify-center px-3 cursor-pointer" title={displayName}>
+                            <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139]">
+                                {displayName.charAt(0).toUpperCase()}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </aside>
 

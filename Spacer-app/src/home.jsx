@@ -16,7 +16,7 @@ const TEAM_ICONS = {
 }
 
 const TEAM_STATUS_COLOR = {
-    "ON TRACK": "#9ddc5a",
+    "ON TRACK": "#aff82a",
     "NEEDS ATTENTION": "#f59e0b",
     "AT RISK": "#ef4444",
 }
@@ -24,15 +24,15 @@ const TEAM_STATUS_COLOR = {
 // ─── StatCard ────────────────────────────────────────────────────────────────
 function StatCard({ value, label, sub, subIcon, subColor }) {
     return (
-        <div className="glass-card p-lg rounded-xl flex flex-col gap-sm relative overflow-hidden group cursor-default hover:border-[rgba(182,255,51,0.25)] transition-all duration-300">
+        <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-[#424934] transition-all duration-300">
             <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                style={{ background: "radial-gradient(circle, rgba(182,255,51,0.1) 0%, transparent 70%)" }} />
-            <p className="text-4xl font-bold text-on-surface tracking-tight">{value}</p>
-            <p className="text-on-surface-variant font-body-sm">{label}</p>
+                style={{ background: "radial-gradient(circle, rgba(175,248,42,0.1) 0%, transparent 70%)" }} />
+            <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
+            <p className="text-[#8c947b] text-[13px] font-medium">{label}</p>
             {sub && (
-                <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mt-auto"
-                    style={{ color: subColor || "#9ddc5a" }}>
-                    {subIcon && <span className="material-symbols-outlined text-[12px]">{subIcon}</span>}
+                <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider mt-auto"
+                    style={{ color: subColor || "#aff82a" }}>
+                    {subIcon && <span className="material-symbols-outlined text-[13px]">{subIcon}</span>}
                     {sub}
                 </p>
             )}
@@ -47,35 +47,34 @@ function TeamCard({ team }) {
     const statusColor = TEAM_STATUS_COLOR[statusLabel] || TEAM_STATUS_COLOR["ON TRACK"]
 
     return (
-        <div className="glass-card rounded-xl p-md flex flex-col gap-sm min-w-[220px] flex-1 hover:border-[rgba(182,255,51,0.25)] transition-all duration-300">
+        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-[#424934] transition-all duration-300">
             <div className="flex items-start justify-between">
-                <div className="flex items-center gap-sm">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: "rgba(182,255,51,0.1)", border: "1px solid rgba(182,255,51,0.15)" }}>
-                        <span className="material-symbols-outlined text-[18px]" style={{ color: "#9ddc5a" }}>{icon}</span>
+                <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#252a33] border border-[#343b47]">
+                        <span className="material-symbols-outlined text-[20px] text-[#aff82a]">{icon}</span>
                     </div>
                     <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-wider text-on-surface-variant">Team</p>
-                        <p className="font-semibold text-on-surface text-sm">{team.name}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b]">Team</p>
+                        <p className="font-semibold text-white text-sm">{team.name}</p>
                     </div>
                 </div>
-                <span className="material-symbols-outlined text-on-surface-variant text-base cursor-pointer hover:text-on-surface transition-colors">more_horiz</span>
+                <span className="material-symbols-outlined text-[#8c947b] text-base cursor-pointer hover:text-white transition-colors">more_horiz</span>
             </div>
-            <div className="space-y-1 mt-1">
+            <div className="space-y-1.5 mt-1">
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-on-surface-variant text-xs">
+                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
                         <span className="material-symbols-outlined text-[14px]">person</span>Members
                     </span>
-                    <span className="font-semibold text-on-surface text-sm">{team.member_count ?? "—"}</span>
+                    <span className="font-semibold text-white text-sm">{team.member_count ?? "—"}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1 text-on-surface-variant text-xs">
+                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
                         <span className="material-symbols-outlined text-[14px]">grid_view</span>Projects
                     </span>
-                    <span className="font-semibold text-on-surface text-sm">{team.project_count ?? "—"}</span>
+                    <span className="font-semibold text-white text-sm">{team.project_count ?? "—"}</span>
                 </div>
             </div>
-            <div className="flex items-center gap-2 mt-auto pt-sm border-t border-outline-variant">
+            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-[#2D3139]">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
                 <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>Status</span>
                 <span className="ml-auto text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
@@ -105,19 +104,82 @@ function Home() {
     const [userTasks, setUserTasks] = useState([])
     const [tasksLoading, setTasksLoading] = useState(false)
 
+    const fetchOrgData = async (orgId) => {
+        try {
+            let teamQuery = supabase.from("team_spaces").select("id, name")
+            if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
+            const { data: teamSpaces, error } = await teamQuery
+            if (error) console.warn("team_spaces fetch error:", error)
+            const teamCount = teamSpaces?.length ?? 0
+            const teamIds = teamSpaces?.map(ts => ts.id) || []
+
+            let memberCount = 0
+            if (teamIds.length > 0) {
+                const { data: allMembers } = await supabase.from("memberships").select("id").in("team_space_id", teamIds)
+                memberCount = allMembers?.length ?? 0
+            }
+
+            let projectCount = 0
+            if (teamIds.length > 0) {
+                const { data: activeProjects } = await supabase.from("project_spaces").select("id").in("team_space_id", teamIds)
+                projectCount = activeProjects?.length ?? 0
+            }
+
+            setOrgStats({ members: memberCount, teams: teamCount, activeProjects: projectCount })
+
+            if (teamSpaces && teamSpaces.length > 0) {
+                const enriched = await Promise.all(
+                    teamSpaces.map(async (ts) => {
+                        const { data: mems } = await supabase
+                            .from("memberships").select("id").eq("team_space_id", ts.id)
+                        const { data: projs } = await supabase
+                            .from("project_spaces").select("id").eq("team_space_id", ts.id)
+                        return {
+                            ...ts,
+                            member_count: mems?.length ?? 0,
+                            project_count: projs?.length ?? 0,
+                            status: ts.status || "ON TRACK",
+                        }
+                    })
+                )
+                setTeams(enriched)
+            }
+        } catch (err) {
+            console.error("Org data fetch error:", err)
+        }
+    }
+
+    const fetchUserTasks = async (userId) => {
+        setTasksLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from("tasks")
+                .select("*")
+                .eq("assignee_id", userId)
+
+            if (error) {
+                console.warn("tasks fetch error:", error)
+            } else {
+                setUserTasks(data || [])
+            }
+        } catch (err) {
+            console.error("fetchUserTasks error:", err)
+        } finally {
+            setTasksLoading(false)
+        }
+    }
+
     useEffect(() => {
         const email = localStorage.getItem("userEmail")
         if (email) setUserEmail(email)
 
         const init = async () => {
             try {
-                // 1. Get authenticated user
                 const { data: authData } = await supabase.auth.getUser()
                 const userId = authData?.user?.id
 
                 if (!userId) { setRoleLoading(false); return }
 
-                // 2. Fetch user profile
                 const { data: profile } = await supabase
                     .from("users")
                     .select("*")
@@ -125,10 +187,9 @@ function Home() {
                     .maybeSingle()
                 if (profile) setUserData(profile)
 
-                // 3. Query memberships table for current user's role
                 const { data: membership, error: memError } = await supabase
                     .from("memberships")
-                    .select("role")
+                    .select("role, team_space_id")
                     .eq("user_id", userId)
                     .maybeSingle()
 
@@ -137,7 +198,6 @@ function Home() {
                 const role = membership?.role ?? null
                 setUserRole(role)
 
-                // 4. Branch on role: org data for superadmin, personal tasks for others
                 if (role === "super_admin" || role === "superadmin") {
                     let orgId = authData?.user?.user_metadata?.organization_id;
                     if (!orgId && membership?.team_space_id) {
@@ -162,122 +222,50 @@ function Home() {
         init()
     }, [])
 
-    const fetchOrgData = async (orgId) => {
-        try {
-            // Teams from team_spaces table
-            let teamQuery = supabase.from("team_spaces").select("id, name")
-            if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
-            const { data: teamSpaces, error } = await teamQuery
-            console.log("DEBUG: fetchOrgData orgId =", orgId, "teamSpaces =", teamSpaces, "error =", error)
-            const teamCount = teamSpaces?.length ?? 0
-
-            const teamIds = teamSpaces?.map(ts => ts.id) || []
-
-            // Total members based on fetched teams
-            let memberCount = 0
-            if (teamIds.length > 0) {
-                const { data: allMembers } = await supabase.from("memberships").select("id").in("team_space_id", teamIds)
-                memberCount = allMembers?.length ?? 0
-            }
-
-            // Active project spaces based on fetched teams
-            let projectCount = 0
-            if (teamIds.length > 0) {
-                const { data: activeProjects } = await supabase.from("project_spaces").select("id").in("team_space_id", teamIds)
-                projectCount = activeProjects?.length ?? 0
-            }
-
-            setOrgStats({ members: memberCount, teams: teamCount, activeProjects: projectCount })
-
-            // Per-team member & project counts
-            if (teamSpaces && teamSpaces.length > 0) {
-                const enriched = await Promise.all(
-                    teamSpaces.map(async (ts) => {
-                        const { data: mems } = await supabase
-                            .from("memberships").select("id").eq("team_space_id", ts.id)
-                        const { data: projs } = await supabase
-                            .from("project_spaces").select("id").eq("team_space_id", ts.id)
-                        return {
-                            ...ts,
-                            member_count: mems?.length ?? 0,
-                            project_count: projs?.length ?? 0,
-                            status: ts.status || "ON TRACK",
-                        }
-                    })
-                )
-                setTeams(enriched)
-            }
-        } catch (err) {
-            console.error("Org data fetch error:", err)
-        }
-    }
-
-    // ── Fetch tasks assigned to the current user only ────────────────────────
-    const fetchUserTasks = async (userId) => {
-        setTasksLoading(true)
-        try {
-            // SELECT * FROM tasks WHERE assignee_id = <userId>
-            const { data, error } = await supabase
-                .from("tasks")
-                .select("*")
-                .eq("assignee_id", userId)
-
-            if (error) {
-                console.warn("tasks fetch error:", error)
-            } else {
-                setUserTasks(data || [])
-            }
-        } catch (err) {
-            console.error("fetchUserTasks error:", err)
-        } finally {
-            setTasksLoading(false)
-        }
-    }
-
     const isSuperAdmin = userRole === "super_admin" || userRole === "superadmin"
-    const isAdmin = userRole === "admin"
     const totalTeamPages = Math.ceil(teams.length / TEAMS_PER_PAGE)
     const visibleTeams = teams.slice(teamPage * TEAMS_PER_PAGE, teamPage * TEAMS_PER_PAGE + TEAMS_PER_PAGE)
 
-    // Derived task buckets — only the current user's tasks, grouped by status
     const todoTasks = userTasks.filter(t => t.status === "todo")
     const inProgressTasks = userTasks.filter(t => t.status === "in_progress")
     const doneTasks = userTasks.filter(t => t.status === "done")
     const openCount = todoTasks.length + inProgressTasks.length
 
-    return (
-        <>
-            <Sidebar onCollapsedChange={setSidebarCollapsed} />
-            <Header />
-            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col min-h-screen transition-all duration-300 ease-out`}>
-                <div className="p-lg space-y-lg">
+    const displayName = userData?.full_name || userData?.name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
 
-                    {/* ── GREETING ──────────────────────────────────────── */}
+    return (
+        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
+            <Sidebar onCollapsedChange={setSidebarCollapsed} userData={userData} userEmail={userEmail} />
+            <Header />
+            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col pt-16 transition-all duration-300 ease-out`}>
+                <div className="p-8 space-y-8 max-w-[1400px]">
+
+                    {/* ── GREETING / HEADER BAR ──────────────────────────────── */}
                     <section className="flex items-start justify-between">
                         <div>
-                            <h1 className="text-headline-xl font-bold text-on-surface flex items-center gap-2">
-                                {isSuperAdmin ? `Hello, ${userData?.name || userEmail || "User"} 👋` : `Hello, ${userData?.name || userEmail || "User"} 👋`}
+                            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                                Hello, {displayName} 👋
                             </h1>
-                            <p className="text-on-surface-variant font-body-md mt-1">
+                            <p className="text-[#8c947b] text-sm mt-1">
                                 {isSuperAdmin
                                     ? "Organization's overview and activity."
                                     : "Here's what's on your plate in this workspace."}
                             </p>
                         </div>
-                        <div className="flex items-center gap-1 text-on-surface-variant text-xs mt-1">
-                            <span className="material-symbols-outlined text-sm">home</span>
+                        <div className="flex items-center gap-2 text-[#8c947b] text-xs">
+                            <span className="material-symbols-outlined text-[16px]">home</span>
                             <span>/</span>
-                            <span>Home</span>
+                            <span className="text-white font-medium">Home</span>
                         </div>
                     </section>
 
                     {/* ── LOADING SKELETON ──────────────────────────────── */}
                     {roleLoading && (
-                        <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
+                        <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             {[...Array(4)].map((_, i) => (
-                                <div key={i} className="glass-card p-lg rounded-xl flex flex-col gap-sm animate-pulse">
-                                    <div className="h-8 w-16 bg-surface-container-highest rounded" />
-                                    <div className="h-3 w-24 bg-surface-container-highest rounded mt-1" />
+                                <div key={i} className="bg-[#191c21] border border-[#2D3139] p-6 rounded-xl flex flex-col gap-2 animate-pulse">
+                                    <div className="h-8 w-16 bg-[#252a33] rounded" />
+                                    <div className="h-3 w-24 bg-[#252a33] rounded mt-2" />
                                 </div>
                             ))}
                         </section>
@@ -285,7 +273,7 @@ function Home() {
 
                     {/* ── SUPERADMIN: ORG SUMMARY CARDS ─────────────────── */}
                     {isSuperAdmin && !roleLoading && (
-                        <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
+                        <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <StatCard
                                 label="Members"
                                 value={orgStats.members ?? "—"}
@@ -303,7 +291,7 @@ function Home() {
                                 value={orgStats.activeProjects ?? "—"}
                                 sub="Currently in Progress"
                                 subIcon="fiber_manual_record"
-                                subColor="#9ddc5a"
+                                subColor="#aff82a"
                             />
                             <StatCard
                                 label="Requires Attention"
@@ -317,65 +305,63 @@ function Home() {
 
                     {/* ── NON-SUPERADMIN: PERSONAL TASK METRICS ─────────── */}
                     {!isSuperAdmin && !roleLoading && (
-                        <section className="grid grid-cols-1 md:grid-cols-4 gap-md">
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold">{tasksLoading ? "—" : todoTasks.length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">To do</p>
+                        <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <p className="text-3xl font-bold text-white">{tasksLoading ? "—" : todoTasks.length}</p>
+                                <p className="text-[#8c947b] text-xs font-medium mt-1">To do</p>
                             </div>
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold text-primary-fixed">{tasksLoading ? "—" : inProgressTasks.length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">In progress</p>
+                            <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <p className="text-3xl font-bold text-[#aff82a]">{tasksLoading ? "—" : inProgressTasks.length}</p>
+                                <p className="text-[#8c947b] text-xs font-medium mt-1">In progress</p>
                             </div>
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold text-primary-container">{tasksLoading ? "—" : doneTasks.length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">Done</p>
+                            <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <p className="text-3xl font-bold text-green-400">{tasksLoading ? "—" : doneTasks.length}</p>
+                                <p className="text-[#8c947b] text-xs font-medium mt-1">Done</p>
                             </div>
-                            <div className="glass-card p-lg rounded-xl flex flex-col">
-                                <p className="text-headline-xl font-bold text-error">{tasksLoading ? "—" : userTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done").length}</p>
-                                <p className="text-on-surface-variant font-body-sm mt-1">Overdue</p>
+                            <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <p className="text-3xl font-bold text-red-400">{tasksLoading ? "—" : userTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done").length}</p>
+                                <p className="text-[#8c947b] text-xs font-medium mt-1">Overdue</p>
                             </div>
                         </section>
                     )}
 
                     {/* ── SUPERADMIN: TEAM OVERVIEW + RECENT ACTIVITY ───── */}
                     {isSuperAdmin && !roleLoading && (
-                        <div className="grid grid-cols-12 gap-lg">
+                        <div className="grid grid-cols-12 gap-6">
                             {/* Team Overview */}
-                            <div className="col-span-12 lg:col-span-8">
-                                <div className="flex items-center justify-between mb-md">
-                                    <h2 className="font-headline-md font-semibold text-on-surface">Team Overview</h2>
+                            <div className="col-span-12 lg:col-span-8 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold text-white">Team Overview</h2>
                                     {totalTeamPages > 1 && (
-                                        <div className="flex items-center gap-sm text-on-surface-variant text-xs">
+                                        <div className="flex items-center gap-2 text-[#8c947b] text-xs">
                                             <button
-                                                id="team-prev-btn"
                                                 onClick={() => setTeamPage(p => Math.max(0, p - 1))}
                                                 disabled={teamPage === 0}
-                                                className="p-1 rounded hover:bg-surface-variant disabled:opacity-30 transition-colors"
+                                                className="p-1 rounded bg-[#191c21] border border-[#2D3139] hover:text-white disabled:opacity-30 transition-colors"
                                             >
-                                                <span className="material-symbols-outlined text-base">chevron_left</span>
+                                                <span className="material-symbols-outlined text-[16px]">chevron_left</span>
                                             </button>
                                             <span>
                                                 {teamPage * TEAMS_PER_PAGE + 1}–{Math.min((teamPage + 1) * TEAMS_PER_PAGE, teams.length)} out of {teams.length}
                                             </span>
                                             <button
-                                                id="team-next-btn"
                                                 onClick={() => setTeamPage(p => Math.min(totalTeamPages - 1, p + 1))}
                                                 disabled={teamPage >= totalTeamPages - 1}
-                                                className="p-1 rounded hover:bg-surface-variant disabled:opacity-30 transition-colors"
+                                                className="p-1 rounded bg-[#191c21] border border-[#2D3139] hover:text-white disabled:opacity-30 transition-colors"
                                             >
-                                                <span className="material-symbols-outlined text-base">chevron_right</span>
+                                                <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                                             </button>
                                         </div>
                                     )}
                                 </div>
 
                                 {teams.length === 0 ? (
-                                    <div className="glass-card rounded-xl p-xl flex flex-col items-center justify-center text-center min-h-[200px] gap-3">
-                                        <span className="material-symbols-outlined text-4xl text-on-surface-variant">groups</span>
-                                        <p className="text-on-surface-variant font-body-md">No teams found in the organization yet.</p>
+                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-8 flex flex-col items-center justify-center text-center min-h-[200px] gap-3">
+                                        <span className="material-symbols-outlined text-4xl text-[#8c947b]">groups</span>
+                                        <p className="text-[#8c947b] text-sm">No teams found in the organization yet.</p>
                                     </div>
                                 ) : (
-                                    <div className="flex gap-md flex-wrap">
+                                    <div className="flex gap-4 flex-wrap">
                                         {visibleTeams.map(team => (
                                             <TeamCard key={team.id} team={team} />
                                         ))}
@@ -384,19 +370,19 @@ function Home() {
                             </div>
 
                             {/* Recent Activity */}
-                            <div className="col-span-12 lg:col-span-4">
-                                <div className="flex items-center justify-between mb-md">
-                                    <h2 className="font-headline-md font-semibold text-on-surface">Recent Activity</h2>
-                                    <button id="see-recent-btn" className="text-xs text-on-surface-variant hover:text-on-surface transition-colors">
-                                        See recent activities
+                            <div className="col-span-12 lg:col-span-4 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
+                                    <button className="text-xs text-[#aff82a] hover:underline">
+                                        See all
                                     </button>
                                 </div>
-                                <div className="glass-card rounded-xl p-md space-y-md min-h-[200px]">
-                                    <div className="flex gap-md items-start">
-                                        <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0 font-bold text-[10px] text-on-surface-variant">SA</div>
+                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-4 min-h-[200px]">
+                                    <div className="flex gap-3 items-start">
+                                        <div className="w-8 h-8 rounded bg-[#252a33] border border-[#343b47] flex items-center justify-center shrink-0 font-bold text-[10px] text-[#aff82a]">SA</div>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-body-sm"><span className="font-bold text-on-surface">No Activity Yet</span></p>
-                                            <p className="text-[10px] text-on-surface-variant mt-0.5">—</p>
+                                            <p className="text-xs font-medium text-white">Organization space updated</p>
+                                            <p className="text-[11px] text-[#8c947b] mt-0.5">System activity log ready</p>
                                         </div>
                                     </div>
                                 </div>
@@ -406,53 +392,52 @@ function Home() {
 
                     {/* ── NON-SUPERADMIN: PERSONAL WORK BOARD ───────────── */}
                     {!isSuperAdmin && !roleLoading && (
-                        <div className="grid grid-cols-12 gap-lg">
+                        <div className="grid grid-cols-12 gap-6">
                             {/* Task Kanban — 3 columns */}
-                            <div className="col-span-12 lg:col-span-8">
-                                <div className="flex items-center justify-between mb-md">
-                                    <h3 className="font-headline-md font-semibold text-on-surface">My open work</h3>
-                                    <span className="text-label-sm text-on-surface-variant">
+                            <div className="col-span-12 lg:col-span-8 space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-white">My Open Work</h3>
+                                    <span className="text-xs text-[#8c947b]">
                                         {tasksLoading ? "Loading…" : `${openCount} open item${openCount !== 1 ? "s" : ""}`}
                                     </span>
                                 </div>
 
                                 {tasksLoading ? (
-                                    <div className="grid grid-cols-3 gap-md">
+                                    <div className="grid grid-cols-3 gap-4">
                                         {[...Array(3)].map((_, i) => (
-                                            <div key={i} className="glass-card rounded-xl p-md space-y-sm animate-pulse">
-                                                <div className="h-3 w-16 bg-surface-container-highest rounded" />
-                                                <div className="h-10 w-full bg-surface-container-highest rounded-lg" />
-                                                <div className="h-10 w-full bg-surface-container-highest rounded-lg" />
+                                            <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-2 animate-pulse">
+                                                <div className="h-3 w-16 bg-[#252a33] rounded" />
+                                                <div className="h-10 w-full bg-[#252a33] rounded-lg" />
                                             </div>
                                         ))}
                                     </div>
                                 ) : openCount === 0 && doneTasks.length === 0 ? (
-                                    <div className="glass-card rounded-xl flex flex-col items-center justify-center p-xl text-center min-h-[420px]">
+                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
                                         <div className="text-5xl mb-4">🎉</div>
-                                        <h4 className="font-headline-md text-on-surface font-semibold">You're all caught up</h4>
-                                        <p className="text-on-surface-variant font-body-md max-w-xs mt-2">Nothing assigned to you is open right now.</p>
+                                        <h4 className="text-lg font-semibold text-white">You're all caught up</h4>
+                                        <p className="text-[#8c947b] text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-md">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                                        {/* ── To-Do column ── */}
-                                        <div className="glass-card rounded-xl flex flex-col">
-                                            <div className="p-md border-b border-outline-variant flex items-center justify-between">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className="w-2 h-2 rounded-full bg-on-surface-variant" />
-                                                    <span className="font-semibold text-on-surface text-sm">To‑Do</span>
+                                        {/* To-Do column */}
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
+                                            <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-[#8c947b]" />
+                                                    <span className="font-semibold text-white text-xs uppercase tracking-wider">To‑Do</span>
                                                 </div>
-                                                <span className="text-xs text-on-surface-variant">{todoTasks.length}</span>
+                                                <span className="text-xs text-[#8c947b] font-bold">{todoTasks.length}</span>
                                             </div>
-                                            <div className="flex-1 overflow-y-auto p-sm space-y-sm max-h-[380px]">
+                                            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                 {todoTasks.length === 0 ? (
-                                                    <p className="text-xs text-on-surface-variant text-center py-lg">No tasks here</p>
+                                                    <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                 ) : todoTasks.map(task => (
-                                                    <div key={task.id} className="glass-card rounded-lg p-sm hover:border-[rgba(182,255,51,0.2)] transition-all cursor-default group">
-                                                        <p className="text-sm font-semibold text-on-surface truncate">{task.title || task.name || "Untitled"}</p>
-                                                        {task.description && <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">{task.description}</p>}
+                                                    <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#424934] transition-all cursor-default group">
+                                                        <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
+                                                        {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                         {task.due_date && (
-                                                            <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#9ddc5a" }}>
+                                                            <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
                                                                 <span className="material-symbols-outlined text-[12px]">calendar_today</span>
                                                                 {new Date(task.due_date).toLocaleDateString()}
                                                             </p>
@@ -462,24 +447,24 @@ function Home() {
                                             </div>
                                         </div>
 
-                                        {/* ── In Progress column ── */}
-                                        <div className="glass-card rounded-xl flex flex-col">
-                                            <div className="p-md border-b border-outline-variant flex items-center justify-between">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className="w-2 h-2 rounded-full" style={{ background: "#f59e0b" }} />
-                                                    <span className="font-semibold text-on-surface text-sm">In Progress</span>
+                                        {/* In Progress column */}
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
+                                            <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-[#aff82a]" />
+                                                    <span className="font-semibold text-white text-xs uppercase tracking-wider">In Progress</span>
                                                 </div>
-                                                <span className="text-xs text-on-surface-variant">{inProgressTasks.length}</span>
+                                                <span className="text-xs text-[#8c947b] font-bold">{inProgressTasks.length}</span>
                                             </div>
-                                            <div className="flex-1 overflow-y-auto p-sm space-y-sm max-h-[380px]">
+                                            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                 {inProgressTasks.length === 0 ? (
-                                                    <p className="text-xs text-on-surface-variant text-center py-lg">No tasks here</p>
+                                                    <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                 ) : inProgressTasks.map(task => (
-                                                    <div key={task.id} className="glass-card rounded-lg p-sm hover:border-[rgba(182,255,51,0.2)] transition-all cursor-default">
-                                                        <p className="text-sm font-semibold text-on-surface truncate">{task.title || task.name || "Untitled"}</p>
-                                                        {task.description && <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">{task.description}</p>}
+                                                    <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#424934] transition-all cursor-default">
+                                                        <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
+                                                        {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                         {task.due_date && (
-                                                            <p className="text-[10px] mt-1 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#f59e0b" }}>
+                                                            <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
                                                                 <span className="material-symbols-outlined text-[12px]">calendar_today</span>
                                                                 {new Date(task.due_date).toLocaleDateString()}
                                                             </p>
@@ -489,22 +474,22 @@ function Home() {
                                             </div>
                                         </div>
 
-                                        {/* ── Done column ── */}
-                                        <div className="glass-card rounded-xl flex flex-col">
-                                            <div className="p-md border-b border-outline-variant flex items-center justify-between">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className="w-2 h-2 rounded-full" style={{ background: "#9ddc5a" }} />
-                                                    <span className="font-semibold text-on-surface text-sm">Done</span>
+                                        {/* Done column */}
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
+                                            <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="w-2 h-2 rounded-full bg-green-400" />
+                                                    <span className="font-semibold text-white text-xs uppercase tracking-wider">Done</span>
                                                 </div>
-                                                <span className="text-xs text-on-surface-variant">{doneTasks.length}</span>
+                                                <span className="text-xs text-[#8c947b] font-bold">{doneTasks.length}</span>
                                             </div>
-                                            <div className="flex-1 overflow-y-auto p-sm space-y-sm max-h-[380px]">
+                                            <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                 {doneTasks.length === 0 ? (
-                                                    <p className="text-xs text-on-surface-variant text-center py-lg">No tasks here</p>
+                                                    <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                 ) : doneTasks.map(task => (
-                                                    <div key={task.id} className="glass-card rounded-lg p-sm opacity-70 hover:opacity-100 transition-all cursor-default">
-                                                        <p className="text-sm font-semibold text-on-surface truncate line-through decoration-on-surface-variant">{task.title || task.name || "Untitled"}</p>
-                                                        {task.description && <p className="text-[11px] text-on-surface-variant mt-0.5 line-clamp-2">{task.description}</p>}
+                                                    <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 opacity-70 hover:opacity-100 transition-all cursor-default">
+                                                        <p className="text-sm font-semibold text-white truncate line-through text-[#8c947b]">{task.title || task.name || "Untitled"}</p>
+                                                        {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                     </div>
                                                 ))}
                                             </div>
@@ -514,17 +499,18 @@ function Home() {
                                 )}
                             </div>
 
-                            {/* Recent Activity */}
-                            <div className="col-span-12 lg:col-span-4">
-                                <div className="glass-card rounded-xl flex flex-col min-h-[480px]">
-                                    <div className="p-md border-b border-outline-variant bg-surface-container-low/50 rounded-t-xl">
-                                        <h3 className="font-headline-md font-semibold text-on-surface">Recent activity</h3>
-                                    </div>
-                                    <div className="flex-1 overflow-y-auto p-md space-y-md">
-                                        <div className="flex gap-md items-start group">
-                                            <div className="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center shrink-0 font-bold text-[10px] text-on-surface-variant">SA</div>
+                            {/* Activity / Meetings panel */}
+                            <div className="col-span-12 lg:col-span-4 space-y-4">
+                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col min-h-[420px]">
+                                    <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-[#2D3139]">Recent Activity</h3>
+                                    <div className="space-y-4 overflow-y-auto flex-1">
+                                        <div className="flex gap-3 items-start">
+                                            <div className="w-8 h-8 rounded-full bg-[#5b644d]/20 text-[#aff82a] border border-[#5b644d]/40 flex items-center justify-center shrink-0 font-bold text-xs">
+                                                SP
+                                            </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-body-sm"><span className="font-bold text-on-surface">No Activity Yet</span></p>
+                                                <p className="text-xs text-white">System dashboard initialized</p>
+                                                <p className="text-[10px] text-[#8c947b] mt-1">Just now</p>
                                             </div>
                                         </div>
                                     </div>
@@ -535,11 +521,6 @@ function Home() {
 
                 </div>
             </main>
-
-            {/* Floating Action Button */}
-            <button className="fixed bottom-lg right-lg w-14 h-14 bg-primary-fixed text-on-primary-fixed rounded-full flex items-center justify-center shadow-xl shadow-primary-fixed/30 hover:scale-110 active:scale-95 transition-all z-50 group">
-                <span className="material-symbols-outlined text-2xl group-hover:rotate-90 transition-transform">add</span>
-            </button>
 
             {/* Project panel */}
             {selectedProject && (
@@ -557,7 +538,7 @@ function Home() {
                     onClose={() => setPreviewFile(null)}
                 />
             )}
-        </>
+        </div>
     )
 }
 

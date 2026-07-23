@@ -20,20 +20,20 @@ const CustomDropdown = ({ options, value, onChange, placeholder, direction = "do
     return (
         <div className="relative" ref={dropdownRef}>
             <div 
-                className={`w-full bg-surface-container-lowest border rounded-lg px-md py-sm font-body-md text-on-surface cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-primary-container ring-1 ring-primary-container' : 'border-outline-variant hover:border-outline-variant/80'}`}
+                className={`w-full bg-[#111318] border rounded-xl px-4 py-3 text-sm text-white cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-[#aff82a] ring-1 ring-[#aff82a]' : 'border-[#2D3139] hover:border-[#424934]'}`}
                 onClick={() => setIsOpen(!isOpen)}
             >
-                <span className={!selectedOption ? "text-on-surface-variant/60" : ""}>{selectedOption ? selectedOption.label : placeholder}</span>
-                <span className="material-symbols-outlined text-on-surface-variant text-[20px] transition-transform duration-200" style={{ transform: isOpen ? (direction === 'up' ? 'rotate(180deg)' : 'rotate(180deg)') : 'rotate(0deg)' }}>
+                <span className={!selectedOption ? "text-[#8c947b]" : ""}>{selectedOption ? selectedOption.label : placeholder}</span>
+                <span className="material-symbols-outlined text-[#8c947b] text-[20px] transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
                     expand_more
                 </span>
             </div>
             {isOpen && (
-                <div className={`absolute z-50 w-full bg-surface-container border border-outline-variant rounded-lg shadow-[0_4px_20px_rgba(0,0,0,0.5)] max-h-60 overflow-y-auto overflow-x-hidden ${direction === 'up' ? 'bottom-full mb-xs' : 'top-full mt-xs'}`}>
+                <div className={`absolute z-50 w-full bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl max-h-60 overflow-y-auto ${direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
                     {options.map((opt) => (
                         <div 
                             key={opt.value}
-                            className={`px-md py-[10px] cursor-pointer font-body-md transition-colors ${String(value) === String(opt.value) ? 'bg-primary-container/10 text-primary font-bold' : 'text-on-surface hover:bg-surface-container-high'}`}
+                            className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${String(value) === String(opt.value) ? 'bg-[#5b644d] text-white font-semibold' : 'text-white hover:bg-[#2D3139]'}`}
                             onClick={() => {
                                 onChange(opt.value);
                                 setIsOpen(false);
@@ -72,14 +72,19 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
     }, [projectId, organizationId]);
 
     useEffect(() => {
-        // Fetch users in this organization
-        if (!organizationId) return;
-        const fetchUsers = async () => {
-            const { data } = await supabase.from("users").select("id, name").eq("organization_id", organizationId);
-            if (data) setUsers(data);
+        if (!teamSpaceId) return;
+        const fetchTeamMembers = async () => {
+            const { data } = await supabase
+                .from("memberships")
+                .select("user:users(id, name)")
+                .eq("team_space_id", teamSpaceId);
+            if (data) {
+                const members = data.map(m => m.user).filter(Boolean);
+                setUsers(members);
+            }
         };
-        fetchUsers();
-    }, [organizationId]);
+        fetchTeamMembers();
+    }, [teamSpaceId]);
 
     const createTask = async () => {
         setError(null);
@@ -122,7 +127,6 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
             return;
         }
 
-        // Log the creation activity
         const logEntry = {
             entity_type: "task",
             entity_id: data.id,
@@ -138,135 +142,135 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
 
     const content = (
         <div
-            className={`bg-surface-container rounded-xl border border-outline-variant flex flex-col ${isInline ? 'w-full h-full border-none rounded-none' : 'w-full max-w-lg shadow-2xl overflow-visible'}`}
+            className={`bg-[#191c21] rounded-2xl border border-[#2D3139] flex flex-col text-white ${isInline ? 'w-full h-full border-none rounded-none' : 'w-full max-w-lg shadow-2xl overflow-visible'}`}
             onClick={(e) => !isInline && e.stopPropagation()}
         >
-            <div className={`p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-high shrink-0 ${isInline ? 'hidden' : ''}`}>
-                    <div>
-                        <h2 className="font-headline-lg text-headline-lg text-primary-container">Create New Task</h2>
-                        <p className="font-body-sm text-on-surface-variant">Add a new actionable item to your project backlog.</p>
-                    </div>
-                    <button className="text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer" onClick={onClose}>
-                        <span className="material-symbols-outlined">close</span>
-                    </button>
+            <div className={`p-6 border-b border-[#2D3139] flex justify-between items-center bg-[#181a20] rounded-t-2xl shrink-0 ${isInline ? 'hidden' : ''}`}>
+                <div>
+                    <h2 className="text-xl font-bold text-white">Create New Task</h2>
+                    <p className="text-[#8c947b] text-xs mt-0.5">Add a new actionable item to your project backlog.</p>
                 </div>
-
-                <div className="p-lg space-y-lg">
-                    {!projectId && (
-                        <div className="space-y-xs">
-                            <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider">
-                                Project
-                            </label>
-                            <CustomDropdown 
-                                options={projects.map(p => ({ value: p.id, label: p.title }))}
-                                value={selectedProjectId}
-                                onChange={setSelectedProjectId}
-                                placeholder="Select a project"
-                            />
-                        </div>
-                    )}
-
-                    <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider" htmlFor="task-title">
-                            Task Name
-                        </label>
-                        <input
-                            id="task-title"
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all placeholder:text-on-surface-variant/40"
-                            placeholder="e.g. Implement user authentication"
-                            type="text"
-                            value={title}
-                            onChange={(e) => setTitle(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider" htmlFor="task-description">
-                            Description
-                        </label>
-                        <textarea
-                            id="task-description"
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all placeholder:text-on-surface-variant/40 min-h-[80px] resize-y"
-                            placeholder="Add more details about this task..."
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider" htmlFor="task-deadline">
-                            Deadline
-                        </label>
-                        <input
-                            id="task-deadline"
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all [color-scheme:dark]"
-                            type="datetime-local"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex gap-md">
-                        <div className="space-y-xs flex-1">
-                            <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider">
-                                Assignee
-                            </label>
-                            <CustomDropdown 
-                                options={[
-                                    { value: "", label: "Unassigned" },
-                                    ...users.map(u => ({ value: u.id, label: u.name }))
-                                ]}
-                                value={assigneeId}
-                                onChange={setAssigneeId}
-                                placeholder="Select assignee"
-                                direction="up"
-                            />
-                        </div>
-                        
-                        <div className="space-y-xs flex-1">
-                            <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider">
-                                Priority
-                            </label>
-                            <CustomDropdown 
-                                options={[
-                                    { value: "low", label: "Low" },
-                                    { value: "medium", label: "Medium" },
-                                    { value: "high", label: "High" },
-                                    { value: "urgent", label: "Urgent" }
-                                ]}
-                                value={priority}
-                                onChange={setPriority}
-                                placeholder="Select priority"
-                                direction="up"
-                            />
-                        </div>
-                    </div>
-
-                    {error && <p className="font-body-sm text-red-400">{error}</p>}
-                </div>
-
-                <div className="p-lg pt-0 flex gap-md">
-                    <button
-                        className="flex-1 py-sm border border-outline-variant rounded-lg font-label-md text-label-md font-bold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all cursor-pointer"
-                        onClick={onClose}
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        className="flex-1 py-sm bg-primary-container text-on-primary-container rounded-lg font-label-md text-label-md font-bold hover:opacity-90 transition-all disabled:opacity-50 cursor-pointer"
-                        onClick={createTask}
-                        disabled={saving}
-                    >
-                        {saving ? "Creating…" : "Create Task"}
-                    </button>
-                </div>
+                <button className="text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
+                    <span className="material-symbols-outlined">close</span>
+                </button>
             </div>
+
+            <div className="p-6 space-y-5">
+                {!projectId && (
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider">
+                            Project
+                        </label>
+                        <CustomDropdown 
+                            options={projects.map(p => ({ value: p.id, label: p.title }))}
+                            value={selectedProjectId}
+                            onChange={setSelectedProjectId}
+                            placeholder="Select a project"
+                        />
+                    </div>
+                )}
+
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider" htmlFor="task-title">
+                        Task Name
+                    </label>
+                    <input
+                        id="task-title"
+                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b]"
+                        placeholder="e.g. Implement user authentication"
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider" htmlFor="task-description">
+                        Description
+                    </label>
+                    <textarea
+                        id="task-description"
+                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b] min-h-[80px] resize-y"
+                        placeholder="Add more details about this task..."
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                    />
+                </div>
+
+                <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider" htmlFor="task-deadline">
+                        Deadline
+                    </label>
+                    <input
+                        id="task-deadline"
+                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#aff82a] transition-all [color-scheme:dark]"
+                        type="datetime-local"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                    />
+                </div>
+
+                <div className="flex gap-4">
+                    <div className="space-y-1.5 flex-1">
+                        <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider">
+                            Assignee
+                        </label>
+                        <CustomDropdown 
+                            options={[
+                                { value: "", label: "Unassigned" },
+                                ...users.map(u => ({ value: u.id, label: u.name }))
+                            ]}
+                            value={assigneeId}
+                            onChange={setAssigneeId}
+                            placeholder="Select assignee"
+                            direction="up"
+                        />
+                    </div>
+                    
+                    <div className="space-y-1.5 flex-1">
+                        <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider">
+                            Priority
+                        </label>
+                        <CustomDropdown 
+                            options={[
+                                { value: "low", label: "Low" },
+                                { value: "medium", label: "Medium" },
+                                { value: "high", label: "High" },
+                                { value: "urgent", label: "Urgent" }
+                            ]}
+                            value={priority}
+                            onChange={setPriority}
+                            placeholder="Select priority"
+                            direction="up"
+                        />
+                    </div>
+                </div>
+
+                {error && <p className="text-xs text-red-400">{error}</p>}
+            </div>
+
+            <div className="p-6 pt-0 flex gap-3">
+                <button
+                    className="flex-1 py-3 border border-[#2D3139] bg-[#181a20] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white transition-all cursor-pointer"
+                    onClick={onClose}
+                >
+                    Cancel
+                </button>
+                <button
+                    className="flex-1 py-3 bg-[#5b644d] text-white rounded-xl text-xs font-semibold hover:bg-[#6c765c] transition-all disabled:opacity-50 cursor-pointer"
+                    onClick={createTask}
+                    disabled={saving}
+                >
+                    {saving ? "Creating…" : "Create Task"}
+                </button>
+            </div>
+        </div>
     );
 
     if (isInline) return content;
 
     return (
-        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-md bg-background/80 backdrop-blur-sm" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
             {content}
         </div>
     );

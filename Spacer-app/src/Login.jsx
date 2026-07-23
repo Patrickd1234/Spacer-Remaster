@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 
 function Login() {
-    const [coords, setCoords] = useState({ x: 0, y: 0 })
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
@@ -24,16 +23,6 @@ function Login() {
         window.location.reload()
     }
 
-    useEffect(() => {
-        const handleMouseMove = (e) => {
-            const x = (e.clientX / window.innerWidth - 0.5) * 40
-            const y = (e.clientY / window.innerHeight - 0.5) * 40
-            setCoords({ x, y })
-        }
-        window.addEventListener("mousemove", handleMouseMove)
-        return () => window.removeEventListener("mousemove", handleMouseMove)
-    }, [])
-
     const handleSubmit = async (e) => {
         e.preventDefault()
         setErrorMsg("")
@@ -48,158 +37,178 @@ function Login() {
             setErrorMsg(error.message)
         } else {
             console.log("Logged in user:", data)
-            // Persistently store the user ID and email in localStorage
             if (data && data.user) {
                 localStorage.setItem("userId", data.user.id)
                 localStorage.setItem("userEmail", data.user.email)
             }
-            // Redirect to home dashboard
             navigate("/")
         }
     }
 
     return (
-        <div className="bg-background text-on-background min-h-screen flex items-center justify-center p-md relative overflow-hidden">
-            {/* Demo Mode Toggle Badge */}
-            <div className="absolute top-md right-md z-50">
-                <div className="glass-panel px-md py-sm rounded-full flex items-center gap-sm text-body-sm bg-surface-container-low/60 border border-outline-variant/30 backdrop-blur-md">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isDemoMode ? "bg-primary-fixed animate-pulse shadow-[0_0_8px_#aff82a]" : "bg-outline"}`}></span>
-                    <span className="font-label-md text-on-surface uppercase tracking-wider text-[10px]">Demo Mode: {isDemoMode ? "ON" : "OFF"}</span>
+        <div className="flex min-h-screen bg-[#111318] text-white font-sans overflow-hidden relative">
+            {/* Demo Mode Badge */}
+            <div className="absolute top-4 right-4 z-50">
+                <div className="px-3 py-1.5 rounded-full flex items-center gap-2 text-xs bg-[#191c21] border border-[#2D3139]">
+                    <span className={`w-2 h-2 rounded-full ${isDemoMode ? "bg-[#aff82a] animate-pulse" : "bg-gray-500"}`}></span>
+                    <span className="text-[#8c947b] uppercase font-bold text-[10px]">Demo Mode: {isDemoMode ? "ON" : "OFF"}</span>
                     <button
                         type="button"
                         onClick={toggleDemoMode}
-                        className="px-sm py-[2px] bg-primary-fixed text-on-primary-fixed text-[10px] font-bold rounded hover:brightness-110 transition-all cursor-pointer uppercase tracking-wider"
+                        className="px-2 py-0.5 bg-[#5b644d] text-white text-[10px] font-bold rounded hover:bg-[#6c765c] transition-all cursor-pointer uppercase"
                     >
                         Toggle
                     </button>
                 </div>
             </div>
 
-            {/* Background Atmospheric Elements */}
-            <div className="fixed inset-0 pointer-events-none z-0">
-                <div
-                    className="absolute top-[-10%] right-[-5%] w-[500px] h-[500px] bg-primary-fixed/5 rounded-full blur-[120px] transition-transform duration-200 ease-out"
-                    style={{ transform: `translate(${coords.x}px, ${coords.y}px)` }}
-                />
-                <div className="absolute bottom-[-10%] left-[-5%] w-[400px] h-[400px] bg-secondary-container/10 rounded-full blur-[100px]" />
-            </div>
+            {/* Left Side: Product Showcase / Graphics */}
+            <div className="hidden lg:flex lg:w-[55%] relative flex-col justify-between p-12 overflow-hidden border-r border-[#2D3139] bg-[#0F1115]">
+                {/* Background ambient lighting */}
+                <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-[#4361EE]/10 rounded-full blur-[120px] pointer-events-none" />
+                <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[#aff82a]/10 rounded-full blur-[120px] pointer-events-none" />
 
-            {/* LOGIN PANEL */}
-            <main className="relative z-10 w-full max-w-[1100px] grid md:grid-cols-2 glass-panel overflow-hidden rounded-xl shadow-2xl">
-                {/* Left Side: Visual/Brand */}
-                <div className="hidden md:flex flex-col justify-between p-xl bg-surface-container-low border-r border-outline-variant relative overflow-hidden">
-                    {/* Branding */}
-                    <div className="flex items-center gap-sm">
-                        <div className="w-10 h-10 bg-primary-fixed rounded flex items-center justify-center shadow-[0_0_15px_rgba(182,255,51,0.4)]">
-                            <span className="material-symbols-outlined text-on-primary-fixed font-bold">circle</span>
-                        </div>
-                        <h1 className="font-headline-md text-headline-md font-bold tracking-tight text-primary-fixed">Spacers</h1>
+                {/* Top Logo */}
+                <div className="flex items-center gap-3 z-10">
+                    <div className="w-9 h-9 rounded-lg bg-[#5b644d] flex items-center justify-center text-white">
+                        <span className="material-symbols-outlined text-[20px]">widgets</span>
                     </div>
-                    {/* Decorative Centerpiece */}
-                    <div className="relative py-xl">
-                        <div className="space-y-md">
-                            <h2 className="font-headline-xl text-headline-xl text-on-surface leading-tight">
-                                Command the <br />
-                                <span className="text-primary-fixed">Mission Control</span>
-                            </h2>
-                            <p className="font-body-lg text-body-lg text-on-surface-variant max-w-[340px]">
-                                High-performance workspace for elite engineering teams. Secure your entry to the grid.
-                            </p>
+                    <span className="text-xl font-bold tracking-wide text-white">Circle Corp</span>
+                </div>
+
+                {/* Card Showcase Graphic */}
+                <div className="relative z-10 my-auto max-w-[480px]">
+                    <h2 className="text-4xl font-bold leading-tight mb-4 text-white">
+                        Manage projects with <br />
+                        <span className="text-[#aff82a]">clarity & speed.</span>
+                    </h2>
+                    <p className="text-[#8c947b] text-base mb-8">
+                        Streamline workspace workflows, track accountability, and supercharge your team execution.
+                    </p>
+
+                    <div className="bg-[#191c21] border border-[#2D3139] rounded-2xl p-6 shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
+                                    WR
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-semibold text-white">Website Redesign</h4>
+                                    <p className="text-xs text-[#8c947b]">Development • Active</p>
+                                </div>
+                            </div>
+                            <span className="bg-[#aff82a]/10 text-[#aff82a] border border-[#aff82a]/30 text-[11px] font-bold px-2.5 py-1 rounded-full">
+                                On Track
+                            </span>
                         </div>
-                        {/* Abstract Data Viz Decoration */}
-                        <div className="mt-xl flex gap-xs items-end h-16">
-                            <div className="w-1 bg-primary-fixed/20 h-4 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed/40 h-8 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed/60 h-12 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed h-16 rounded-full shadow-[0_0_8px_rgba(182,255,51,0.6)]"></div>
-                            <div className="w-1 bg-primary-fixed/80 h-10 rounded-full"></div>
-                            <div className="w-1 bg-primary-fixed/40 h-6 rounded-full"></div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-[#8c947b]">
+                                <span>Sprint Progress</span>
+                                <span className="text-white font-medium">78%</span>
+                            </div>
+                            <div className="w-full bg-[#252a33] h-2 rounded-full overflow-hidden">
+                                <div className="bg-[#aff82a] h-full rounded-full" style={{ width: "78%" }}></div>
+                            </div>
                         </div>
-                    </div>
-                    {/* Footer Quote */}
-                    <div className="border-l-2 border-primary-fixed pl-md">
-                        <p className="font-label-md text-label-md text-on-surface italic opacity-80">
-                            "Precision is not an option; it's the standard."
-                        </p>
-                    </div>
-                    {/* Background Image Integration */}
-                    <div className="absolute inset-0 -z-10 opacity-10">
-                        <div className="w-full h-full" data-alt="A dark, sophisticated architectural shot of a high-tech server room or data center with linear neon green lights recessed in the ceiling and floor. The perspective is symmetrical, leading the eye into a deep, vanishing point. The overall aesthetic is cinematic, midnight charcoal, and technically precise." style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCS5Ph6jhiO80EQWsIKNc7e8gmdkEXn5gRywJnQItEA1H1LKPKdlaJxodFYLZNL8wPJw01TDWW9tNLas5-mtIttY3DVR5v_BbuMvr9xEhSLf4Cdjz33q2Pbr7vbOa9dygB7Xj6iixNgjej7UkOVfwUms_Y4eUVbJG2cqaEDVDKXFNMTRCouoaN7ysfb0M8eUwNu_gEipvd8vdHAKdcCceEpG8O_usbej8TchhpNByDQHg0EiAFEIIT6KQ')" }}></div>
                     </div>
                 </div>
-                {/* Right Side: Sign In Form */}
-                <div className="flex flex-col justify-center p-xl lg:px-24 bg-surface-container">
-                    {/* Mobile Logo */}
-                    <div className="md:hidden flex items-center gap-sm mb-xl">
-                        <div className="w-8 h-8 bg-primary-fixed rounded flex items-center justify-center">
-                            <span className="material-symbols-outlined text-on-primary-fixed text-[20px] font-bold">circle</span>
-                        </div>
-                        <h1 className="font-headline-md text-headline-md font-bold text-primary-fixed">Spacers</h1>
+
+                {/* Bottom Quote */}
+                <div className="z-10 border-l-2 border-[#aff82a] pl-4">
+                    <p className="text-sm text-[#8c947b] italic">
+                        "Circle Corp helped us organize 4 teams into a single unified dashboard."
+                    </p>
+                </div>
+            </div>
+
+            {/* Right Side: Sign In Form */}
+            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-20 bg-[#181a20] relative z-10">
+                <div className="w-full max-w-[400px] mx-auto">
+                    {/* Abstract colorful icon */}
+                    <div className="w-10 h-10 mb-6 flex items-center justify-center">
+                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 5C11.716 5 5 11.716 5 20C5 28.284 11.716 35 20 35C28.284 35 35 28.284 35 20C35 11.716 28.284 5 20 5ZM26.5 15C27.88 15 29 16.12 29 17.5C29 18.88 27.88 20 26.5 20C25.12 20 24 18.88 24 17.5C24 16.12 25.12 15 26.5 15ZM13.5 15C14.88 15 16 16.12 16 17.5C16 18.88 14.88 20 13.5 20C12.12 20 11 18.88 11 17.5C11 16.12 12.12 15 13.5 15ZM20 30C15.58 30 11.83 27.14 10.23 23H29.77C28.17 27.14 24.42 30 20 30Z" fill="url(#paint0_linear)" />
+                            <defs>
+                                <linearGradient id="paint0_linear" x1="5" y1="5" x2="35" y2="35" gradientUnits="userSpaceOnUse">
+                                    <stop stopColor="#4361EE" />
+                                    <stop offset="0.5" stopColor="#F72585" />
+                                    <stop offset="1" stopColor="#aff82a" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
                     </div>
-                    <div className="mb-xl">
-                        <h3 className="font-headline-lg text-headline-lg text-on-surface mb-sm flex items-center gap-sm">
-                            <span>Sign In</span>
-                            {isDemoMode && (
-                                <span className="px-sm py-[2px] bg-primary-fixed/15 border border-primary-fixed/30 rounded text-primary-fixed text-[11px] font-bold uppercase tracking-wider">Demo Mode</span>
-                            )}
-                        </h3>
-                        <p className="font-body-md text-body-md text-on-surface-variant">
-                            {isDemoMode
-                                ? "Use any email/password to sign in to your local workspace."
-                                : "Enter your credentials to access the terminal."
-                            }
-                        </p>
-                    </div>
-                    <form action="#" className="space-y-lg" method="POST" onSubmit={handleSubmit}>
-                        {/* Error Message */}
+
+                    <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Welcome Back</h2>
+                    <p className="text-[#8c947b] text-sm mb-8 leading-relaxed">
+                        Sign in to access your Circle Corp workspace and start collaborating.
+                    </p>
+
+                    <form onSubmit={handleSubmit} className="space-y-4">
                         {errorMsg && (
-                            <div className="p-sm bg-error-container/20 border border-error text-error text-body-sm rounded-lg">
-                                {errorMsg}
+                            <div className="p-3 bg-red-500/10 border border-red-500/40 text-red-400 text-xs rounded-xl flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[16px]">error</span>
+                                <span>{errorMsg}</span>
                             </div>
                         )}
 
-                        {/* Email Field */}
-                        <div className="space-y-xs">
-                            <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" htmlFor="email">Email Address</label>
-                            <div className="relative group transition-all duration-200 focus-within:scale-[1.01]">
-                                <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">mail</span>
-                                <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-md text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="email" placeholder="name@company.com" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                            </div>
+                        {/* Email Input */}
+                        <div className="relative">
+                            <input
+                                type="email"
+                                id="email"
+                                placeholder="Email address"
+                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                required
+                            />
                         </div>
-                        {/* Password Field */}
-                        <div className="space-y-xs">
-                            <div className="flex justify-between items-center">
-                                <label className="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" htmlFor="password">Password</label>
-                            </div>
-                            <div className="relative group transition-all duration-200 focus-within:scale-[1.01]">
-                                <span className="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant group-focus-within:text-primary-fixed transition-colors">lock</span>
-                                <input className="w-full bg-surface-container-low border border-outline-variant rounded-lg py-md pl-12 pr-12 text-on-surface font-body-md placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary-fixed focus:ring-1 focus:ring-primary-fixed transition-all neon-glow" id="password" placeholder="••••••••" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-md top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-primary-fixed transition-colors"
-                                    tabIndex={-1}
-                                    aria-label={showPassword ? "Hide password" : "Show password"}
-                                >
-                                    <span className="material-symbols-outlined text-[20px]">{showPassword ? "visibility_off" : "visibility"}</span>
-                                </button>
-                            </div>
+
+                        {/* Password Input */}
+                        <div className="relative">
+                            <input
+                                type={showPassword ? "text" : "password"}
+                                id="password"
+                                placeholder="Password"
+                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                required
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-4 top-3.5 text-[#8c947b] hover:text-white transition-colors"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">
+                                    {showPassword ? "visibility_off" : "visibility"}
+                                </span>
+                            </button>
                         </div>
-                        {/* Action Button */}
-                        <button className="w-full bg-primary-fixed hover:bg-primary-container text-on-primary-fixed font-label-md text-label-md py-md rounded-lg flex items-center justify-center gap-sm transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(175,248,42,0.15)] hover:shadow-[0_4px_25px_rgba(175,248,42,0.3)]" type="submit">
-                            Sign In
-                            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+
+                        {/* Sign In Button */}
+                        <button
+                            type="submit"
+                            className="w-full bg-[#5b644d] hover:bg-[#6c765c] text-white font-medium text-sm py-3.5 rounded-xl border border-[#5b644d] transition-all mt-2"
+                        >
+                            Sign in
                         </button>
-                        {/* Footer Links */}
-                        <div className="pt-md text-center">
-                            <p className="font-body-sm text-on-surface-variant">
-                                Don't have an account?{" "}
-                                <Link className="text-primary-fixed font-semibold hover:underline" to="/signup">Sign up</Link>
+
+                        <div className="flex items-center gap-4 my-6">
+                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                            <span className="text-[#8c947b] text-xs">or</span>
+                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                        </div>
+
+                        {/* Create Account Link */}
+                        <div className="text-center mt-6">
+                            <p className="text-[#8c947b] text-sm">
+                                Don't have an account? <Link to="/signup" className="text-[#aff82a] hover:underline font-medium">Create Account</Link>
                             </p>
                         </div>
                     </form>
                 </div>
-            </main>
+            </div>
         </div>
     )
 }
