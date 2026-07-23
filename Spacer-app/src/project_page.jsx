@@ -27,6 +27,8 @@ function ProjectPage() {
     const [orgUsers, setOrgUsers] = useState([])
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [calendarMonth, setCalendarMonth] = useState(new Date())
+    const [pendingOverdueUpdate, setPendingOverdueUpdate] = useState(null)
+    const [newOverdueDate, setNewOverdueDate] = useState("")
 
     const updateTaskPriority = async (taskId, newPriority) => {
         const taskTitle = selectedTask?.title || ""
@@ -54,8 +56,19 @@ function ProjectPage() {
     }
 
     const updateTaskStatus = async (taskId, newStatus) => {
-        const taskTitle = selectedTask?.title || ""
-        setSelectedTask(prev => prev ? { ...prev, status: newStatus } : null)
+        const task = project_tasks.find(t => String(t.id) === String(taskId))
+        const isOverdue = task && task.due_date && new Date(task.due_date) < new Date()
+        
+        if (isOverdue && newStatus !== "overdue" && task.status !== "done") {
+            setPendingOverdueUpdate({ taskId, newStatus })
+            return
+        }
+
+        const taskTitle = task?.title || selectedTask?.title || ""
+        if (selectedTask && String(selectedTask.id) === String(taskId)) {
+            setSelectedTask(prev => prev ? { ...prev, status: newStatus } : null)
+        }
+        
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
                 String(t.id) === String(taskId) ? { ...t, status: newStatus } : t
@@ -90,19 +103,36 @@ function ProjectPage() {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task || task.status === newStatus) return
 
+        updateTaskStatus(taskId, newStatus)
+    }
+
+    const confirmOverdueUpdate = async () => {
+        if (!pendingOverdueUpdate || !newOverdueDate) return
+        
+        const { taskId, newStatus } = pendingOverdueUpdate
+        const task = project_tasks.find(t => String(t.id) === String(taskId))
+        if (!task) return
+        
+        if (selectedTask && String(selectedTask.id) === String(taskId)) {
+            setSelectedTask(prev => prev ? { ...prev, status: newStatus, due_date: newOverdueDate } : null)
+        }
+        
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
-                String(t.id) === String(taskId) ? { ...t, status: newStatus } : t
+                String(t.id) === String(taskId) ? { ...t, status: newStatus, due_date: newOverdueDate } : t
             )
         )
-
+        
+        setPendingOverdueUpdate(null)
+        setNewOverdueDate("")
+        
         const { error } = await supabase
-            .from("tasks")
-            .update({ status: newStatus })
-            .eq("id", taskId)
-
+            .from('tasks')
+            .update({ status: newStatus, due_date: newOverdueDate })
+            .eq('id', taskId)
+            
         if (error) {
-            console.error("Error updating task status:", error)
+            console.error("Error updating overdue task:", error)
         } else {
             const { data: userData } = await supabase.auth.getUser()
             const logEntry = {
@@ -110,7 +140,7 @@ function ProjectPage() {
                 entity_id: taskId,
                 actor_id: userData?.user?.id,
                 action: "status_changed",
-                new_state: { project_id: project_id, title: task.title, status: newStatus }
+                new_state: { project_id: project_id, title: task.title, status: newStatus, due_date: newOverdueDate }
             }
             const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
             if (newLog) setActivityLog(prev => [newLog, ...prev])
@@ -771,6 +801,49 @@ function ProjectPage() {
                                     <span className="font-semibold text-white">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : "—"}</span>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Overdue Task Update Modal */}
+            {pendingOverdueUpdate && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-[#191c21] border border-[#2D3139] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                        <div className="flex items-center gap-3 text-white mb-4">
+                            <span className="material-symbols-outlined text-red-400 text-3xl">warning</span>
+                            <h2 className="text-xl font-bold">Reschedule Overdue Task</h2>
+                        </div>
+                        <p className="text-[#8c947b] text-sm mb-6">
+                            You are moving a task out of the <span className="text-red-400 font-bold uppercase">Overdue</span> state. Please set a new due date to continue.
+                        </p>
+                        
+                        <div className="mb-6">
+                            <label className="block text-xs font-bold text-[#8c947b] uppercase mb-2">New Due Date</label>
+                            <input
+                                type="date"
+                                value={newOverdueDate}
+                                onChange={(e) => setNewOverdueDate(e.target.value)}
+                                className="w-full bg-[#111318] border border-[#2D3139] text-white rounded-lg px-4 py-3 focus:outline-none focus:border-[#aff82a] focus:ring-1 focus:ring-[#aff82a] transition-all"
+                            />
+                        </div>
+                        
+                        <div className="flex items-center justify-end gap-3">
+                            <button
+                                onClick={() => {
+                                    setPendingOverdueUpdate(null)
+                                    setNewOverdueDate("")
+                                }}
+                                className="px-4 py-2 rounded-lg font-bold text-sm text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmOverdueUpdate}
+                                disabled={!newOverdueDate}
+                                className="px-4 py-2 rounded-lg font-bold text-sm bg-[#aff82a] text-black hover:bg-[#c2f954] transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                                Update Task
+                            </button>
                         </div>
                     </div>
                 </div>
