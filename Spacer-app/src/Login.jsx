@@ -10,6 +10,7 @@ function Login() {
     const navigate = useNavigate()
 
     const [isDemoMode, setIsDemoMode] = useState(localStorage.getItem("use_mock_supabase") === "true")
+    const isFormFilled = email.trim() !== "" && password.trim() !== ""
 
     const toggleDemoMode = () => {
         const newValue = !isDemoMode
@@ -160,7 +161,11 @@ function Login() {
                         {/* Sign In Button */}
                         <button
                             type="submit"
-                            className="w-full bg-[#5b644d] hover:bg-[#6c765c] text-white font-medium text-sm py-3.5 rounded-xl border border-[#5b644d] transition-all mt-2"
+                            className={`w-full font-medium text-sm py-3.5 rounded-xl border transition-all mt-2 ${
+                                isFormFilled
+                                    ? 'bg-[#2f4f2f] text-white border-[#3b6b3b] shadow-[0_0_12px_rgba(47,79,47,0.35)] hover:bg-[#355d35]'
+                                    : 'bg-[#5b644d] hover:bg-[#6c765c] text-white border-[#5b644d]'
+                            }`}
                         >
                             Sign in
                         </button>
