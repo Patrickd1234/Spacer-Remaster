@@ -47,20 +47,6 @@ function Login() {
 
     return (
         <div className="flex min-h-screen bg-[#111318] text-white font-sans overflow-hidden relative">
-            {/* Demo Mode Badge */}
-            <div className="absolute top-4 right-4 z-50">
-                <div className="px-3 py-1.5 rounded-full flex items-center gap-2 text-xs bg-[#191c21] border border-[#2D3139]">
-                    <span className={`w-2 h-2 rounded-full ${isDemoMode ? "bg-[#aff82a] animate-pulse" : "bg-gray-500"}`}></span>
-                    <span className="text-[#8c947b] uppercase font-bold text-[10px]">Demo Mode: {isDemoMode ? "ON" : "OFF"}</span>
-                    <button
-                        type="button"
-                        onClick={toggleDemoMode}
-                        className="px-2 py-0.5 bg-[#5b644d] text-white text-[10px] font-bold rounded hover:bg-[#6c765c] transition-all cursor-pointer uppercase"
-                    >
-                        Toggle
-                    </button>
-                </div>
-            </div>
 
             {/* Left Side: Product Showcase / Graphics */}
             <div className="hidden lg:flex lg:w-[55%] relative flex-col justify-between p-12 overflow-hidden border-r border-[#2D3139] bg-[#0F1115]">
