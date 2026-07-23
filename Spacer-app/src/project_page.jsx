@@ -29,6 +29,7 @@ function ProjectPage() {
     const [calendarMonth, setCalendarMonth] = useState(new Date())
     const [pendingOverdueUpdate, setPendingOverdueUpdate] = useState(null)
     const [newOverdueDate, setNewOverdueDate] = useState("")
+    const [newOverdueTime, setNewOverdueTime] = useState("12:00")
 
     const updateTaskPriority = async (taskId, newPriority) => {
         const taskTitle = selectedTask?.title || ""
@@ -113,22 +114,25 @@ function ProjectPage() {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
         
+        const finalDateTime = new Date(`${newOverdueDate}T${newOverdueTime || "12:00"}`).toISOString()
+
         if (selectedTask && String(selectedTask.id) === String(taskId)) {
-            setSelectedTask(prev => prev ? { ...prev, status: newStatus, due_date: newOverdueDate } : null)
+            setSelectedTask(prev => prev ? { ...prev, status: newStatus, due_date: finalDateTime } : null)
         }
         
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
-                String(t.id) === String(taskId) ? { ...t, status: newStatus, due_date: newOverdueDate } : t
+                String(t.id) === String(taskId) ? { ...t, status: newStatus, due_date: finalDateTime } : t
             )
         )
         
         setPendingOverdueUpdate(null)
         setNewOverdueDate("")
+        setNewOverdueTime("12:00")
         
         const { error } = await supabase
             .from('tasks')
-            .update({ status: newStatus, due_date: newOverdueDate })
+            .update({ status: newStatus, due_date: finalDateTime })
             .eq('id', taskId)
             
         if (error) {
@@ -140,7 +144,7 @@ function ProjectPage() {
                 entity_id: taskId,
                 actor_id: userData?.user?.id,
                 action: "status_changed",
-                new_state: { project_id: project_id, title: task.title, status: newStatus, due_date: newOverdueDate }
+                new_state: { project_id: project_id, title: task.title, status: newStatus, due_date: finalDateTime }
             }
             const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
             if (newLog) setActivityLog(prev => [newLog, ...prev])
@@ -817,14 +821,25 @@ function ProjectPage() {
                             You are moving a task out of the <span className="text-red-400 font-bold uppercase">Overdue</span> state. Please set a new due date to continue.
                         </p>
                         
-                        <div className="mb-6">
-                            <label className="block text-xs font-bold text-[#8c947b] uppercase mb-2">New Due Date</label>
-                            <input
-                                type="date"
-                                value={newOverdueDate}
-                                onChange={(e) => setNewOverdueDate(e.target.value)}
-                                className="w-full bg-[#111318] border border-[#2D3139] text-white rounded-lg px-4 py-3 focus:outline-none focus:border-[#aff82a] focus:ring-1 focus:ring-[#aff82a] transition-all"
-                            />
+                        <div className="mb-6 flex gap-4">
+                            <div className="flex-1">
+                                <label className="block text-xs font-bold text-[#8c947b] uppercase mb-2">New Due Date</label>
+                                <input
+                                    type="date"
+                                    value={newOverdueDate}
+                                    onChange={(e) => setNewOverdueDate(e.target.value)}
+                                    className="w-full bg-[#111318] border border-[#2D3139] text-white rounded-lg px-4 py-3 focus:outline-none focus:border-[#aff82a] focus:ring-1 focus:ring-[#aff82a] transition-all"
+                                />
+                            </div>
+                            <div className="w-[120px]">
+                                <label className="block text-xs font-bold text-[#8c947b] uppercase mb-2">Time</label>
+                                <input
+                                    type="time"
+                                    value={newOverdueTime}
+                                    onChange={(e) => setNewOverdueTime(e.target.value)}
+                                    className="w-full bg-[#111318] border border-[#2D3139] text-white rounded-lg px-4 py-3 focus:outline-none focus:border-[#aff82a] focus:ring-1 focus:ring-[#aff82a] transition-all"
+                                />
+                            </div>
                         </div>
                         
                         <div className="flex items-center justify-end gap-3">
@@ -832,6 +847,7 @@ function ProjectPage() {
                                 onClick={() => {
                                     setPendingOverdueUpdate(null)
                                     setNewOverdueDate("")
+                                    setNewOverdueTime("12:00")
                                 }}
                                 className="px-4 py-2 rounded-lg font-bold text-sm text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
                             >
