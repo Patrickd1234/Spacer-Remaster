@@ -91,10 +91,8 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     <div className={`flex items-center ${expanded ? "justify-between mb-4" : "justify-center"}`}>
                         {expanded && (
                             <div className="flex items-center gap-2">
-                                <div className="w-7 h-7 rounded bg-[#5b644d] flex items-center justify-center text-white">
-                                    <span className="material-symbols-outlined text-[18px]">widgets</span>
-                                </div>
-                                <h1 className="font-bold text-[18px] text-white tracking-wide">Circle Corp</h1>
+                                <span className="material-symbols-outlined text-white font-bold text-[20px]">token</span>
+                                <h1 className="font-bold text-[16px] text-white tracking-widest uppercase">Spacer</h1>
                             </div>
                         )}
                         <button
@@ -110,10 +108,10 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     {expanded && (
                         <div className="flex items-center justify-between px-3 py-2 bg-[#1e2025] border border-[#2D3139] rounded-lg cursor-pointer hover:border-[#3d424d] transition-colors group">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-[10px]">
-                                    C
+                                <div className="w-5 h-5 rounded-full bg-[#aff82a]/20 text-[#aff82a] flex items-center justify-center font-bold text-[10px]">
+                                    S
                                 </div>
-                                <span className="text-[13px] font-medium text-white truncate max-w-[130px]">Circle Corp HQ</span>
+                                <span className="text-[13px] font-medium text-white truncate max-w-[130px]">Spacer HQ</span>
                             </div>
                             <span className="material-symbols-outlined text-[#8c947b] text-[18px] group-hover:text-white transition-colors">unfold_more</span>
                         </div>

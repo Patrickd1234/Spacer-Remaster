@@ -88,7 +88,7 @@ function Onboarding() {
                             <div className="w-8 h-8 bg-blue-600/30 border border-blue-500/40 rounded flex items-center justify-center text-blue-400 font-bold">
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
                             </div>
-                            <span className="font-semibold text-sm text-white">Circle Corp</span>
+                            <span className="font-semibold text-sm text-white">Spacer</span>
                         </div>
                         <span className="text-[10px] bg-white/5 text-zinc-400 px-2 py-0.5 rounded border border-white/5">Organization</span>
                     </div>

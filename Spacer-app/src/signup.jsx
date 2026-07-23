@@ -140,11 +140,9 @@ function Signup() {
                 <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-[#4361EE]/10 rounded-full blur-[120px] pointer-events-none" />
                 <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[#aff82a]/10 rounded-full blur-[120px] pointer-events-none" />
 
-                <div className="flex items-center gap-3 z-10">
-                    <div className="w-9 h-9 rounded-lg bg-[#5b644d] flex items-center justify-center text-white">
-                        <span className="material-symbols-outlined text-[20px]">widgets</span>
-                    </div>
-                    <span className="text-xl font-bold tracking-wide text-white">Circle Corp</span>
+                <div className="flex items-center gap-2 z-10">
+                    <span className="material-symbols-outlined text-white font-bold text-[24px]">token</span>
+                    <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
                 </div>
 
                 <div className="relative z-10 my-auto max-w-[480px]">
@@ -158,7 +156,7 @@ function Signup() {
 
                     <div className="bg-[#191c21] border border-[#2D3139] rounded-2xl p-6 shadow-2xl space-y-4">
                         <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-[#8c947b]">Circle Corp Workspace</span>
+                            <span className="text-xs font-semibold text-[#8c947b]">Spacer Workspace</span>
                             <span className="bg-[#aff82a]/10 text-[#aff82a] border border-[#aff82a]/30 text-[10px] font-bold px-2 py-0.5 rounded">
                                 Live
                             </span>
@@ -187,21 +185,12 @@ function Signup() {
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-20 bg-[#181a20] relative z-10 overflow-y-auto py-12">
                 <div className="w-full max-w-[400px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20 5C11.716 5 5 11.716 5 20C5 28.284 11.716 35 20 35C28.284 35 35 28.284 35 20C35 11.716 28.284 5 20 5ZM26.5 15C27.88 15 29 16.12 29 17.5C29 18.88 27.88 20 26.5 20C25.12 20 24 18.88 24 17.5C24 16.12 25.12 15 26.5 15ZM13.5 15C14.88 15 16 16.12 16 17.5C16 18.88 14.88 20 13.5 20C12.12 20 11 18.88 11 17.5C11 16.12 12.12 15 13.5 15ZM20 30C15.58 30 11.83 27.14 10.23 23H29.77C28.17 27.14 24.42 30 20 30Z" fill="url(#paint0_linear)" />
-                            <defs>
-                                <linearGradient id="paint0_linear" x1="5" y1="5" x2="35" y2="35" gradientUnits="userSpaceOnUse">
-                                    <stop stopColor="#4361EE" />
-                                    <stop offset="0.5" stopColor="#F72585" />
-                                    <stop offset="1" stopColor="#aff82a" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
+                        <span className="material-symbols-outlined text-[#aff82a] text-[32px]">token</span>
                     </div>
 
                     <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Create Account</h2>
                     <p className="text-[#8c947b] text-sm mb-8 leading-relaxed">
-                        Join your team and start collaborating on Circle Corp.
+                        Join your team and start collaborating on Spacer.
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-4">
