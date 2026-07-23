@@ -71,7 +71,7 @@ function Login() {
                 </div>
             )}
 
-            {/* Demo Mode Toggle (hidden in normal view, absolute positioned) */}
+            {/* Demo Mode Toggle */}
             <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
                 <button onClick={toggleDemoMode} className="text-xs bg-[#2D3139] text-white px-2 py-1 rounded">
                     Demo: {isDemoMode ? "ON" : "OFF"}
@@ -88,117 +88,58 @@ function Login() {
                 {/* Branding */}
                 <div className="relative z-10 mb-12">
                     <div className="flex items-center gap-2 mb-8">
-                        <span className="material-symbols-outlined text-white font-bold text-[24px]">token</span>
+                        <span className="material-symbols-outlined text-[#aff82a] font-bold text-[24px]">token</span>
                         <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
                     </div>
                     <p className="text-white text-[20px] leading-relaxed max-w-md">
-                        One workspace for every team. HR, Design, Dev and Marketing—each in their own space, all in one place
+                        One workspace for every team. HR, Design, Dev and Marketing—each in their own space, all in one place.
                     </p>
                 </div>
 
-                {/* Decorative Widget */}
-                <div className="relative z-10 w-full max-w-[420px] bg-[#1C1F26]/80 backdrop-blur-xl border border-[#2D3139] rounded-2xl p-6 shadow-2xl mt-4">
-                    <div className="flex items-center justify-between mb-6">
-                        <div className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-white text-[20px]">star</span>
-                            <span className="text-white font-bold text-[16px]">To-do</span>
-                            <span className="text-[#8c947b] text-[14px]">2</span>
+                {/* Decorative Showcase */}
+                <div className="relative z-10 w-full max-w-[420px] bg-[#1C1F26]/80 backdrop-blur-xl border border-[#2D3139] rounded-2xl p-6 shadow-2xl mt-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
+                                WR
+                            </div>
+                            <div>
+                                <h4 className="text-sm font-semibold text-white">Website Redesign</h4>
+                                <p className="text-xs text-[#8c947b]">Development • Active</p>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2 text-[#8c947b]">
-                            <span className="material-symbols-outlined text-[18px]">more_horiz</span>
-                            <span className="material-symbols-outlined text-[18px]">add</span>
+                        <span className="bg-[#aff82a]/10 text-[#aff82a] border border-[#aff82a]/30 text-[11px] font-bold px-2.5 py-1 rounded-full">
+                            On Track
+                        </span>
+                    </div>
+                    <div className="space-y-2">
+                        <div className="flex justify-between text-xs text-[#8c947b]">
+                            <span>Sprint Progress</span>
+                            <span className="text-white font-medium">78%</span>
+                        </div>
+                        <div className="w-full bg-[#252a33] h-2 rounded-full overflow-hidden">
+                            <div className="bg-[#aff82a] h-full rounded-full" style={{ width: "78%" }}></div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Task Card 1 */}
-                    <div className="border-b border-[#2D3139] pb-6 mb-6">
-                        <div className="flex gap-2 mb-4">
-                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[12px]">edit</span> To do
-                            </span>
-                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
-                                <span className="material-symbols-outlined text-red-500 text-[12px]">flag</span> High Priority
-                            </span>
-                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
-                                <span className="material-symbols-outlined text-blue-500 text-[12px]">web</span> Website
-                            </span>
-                        </div>
-                        <h3 className="text-white text-[15px] font-medium mb-1">Review Website Design 2.0</h3>
-                        <div className="flex items-center gap-2 text-[#8c947b] text-[13px] mb-4">
-                            <span className="material-symbols-outlined text-[16px]">subdirectory_arrow_right</span>
-                            <span>C - level review phase</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex -space-x-2">
-                                <img src="https://i.pravatar.cc/150?img=11" alt="avatar" className="w-7 h-7 rounded-full border-2 border-[#1C1F26]" />
-                                <img src="https://i.pravatar.cc/150?img=12" alt="avatar" className="w-7 h-7 rounded-full border-2 border-[#1C1F26]" />
-                                <div className="w-7 h-7 rounded-full border-2 border-[#1C1F26] bg-[#aff82a] flex items-center justify-center text-black text-[10px] font-bold">TJ</div>
-                            </div>
-                            <div className="flex items-center gap-4 text-[#8c947b] text-[13px]">
-                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">chat_bubble</span> 5</div>
-                                <div className="flex items-center gap-1 text-[#F25C05]"><span className="material-symbols-outlined text-[16px]">calendar_today</span> Tomorrow</div>
-                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">radio_button_unchecked</span> 20%</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Task Card 2 */}
-                    <div className="border-b border-[#2D3139] pb-6 mb-6">
-                        <div className="flex gap-2 mb-4">
-                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[12px]">edit</span> To do
-                            </span>
-                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
-                                <span className="material-symbols-outlined text-blue-400 text-[12px]">flag</span> Normal
-                            </span>
-                            <span className="bg-black text-white text-[11px] font-semibold px-2.5 py-1 rounded-md flex items-center gap-1">
-                                <span className="material-symbols-outlined text-pink-500 text-[12px]">dashboard</span> Dashboard
-                            </span>
-                        </div>
-                        <h3 className="text-white text-[15px] font-medium mb-1">Review React Components</h3>
-                        <div className="flex items-center gap-2 text-[#8c947b] text-[13px] mb-4">
-                            <span className="material-symbols-outlined text-[16px]">subdirectory_arrow_right</span>
-                            <span>New react components code review</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <div className="flex -space-x-2">
-                                <div className="w-7 h-7 rounded-full border-2 border-[#1C1F26] bg-[#A1C9F1] flex items-center justify-center text-black text-[10px] font-bold">MA</div>
-                                <div className="w-7 h-7 rounded-full border-2 border-[#1C1F26] bg-[#aff82a] flex items-center justify-center text-black text-[10px] font-bold">TJ</div>
-                            </div>
-                            <div className="flex items-center gap-4 text-[#8c947b] text-[13px]">
-                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">chat_bubble</span> 5</div>
-                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">calendar_today</span> 25 July</div>
-                                <div className="flex items-center gap-1"><span className="material-symbols-outlined text-[16px]">radio_button_unchecked</span> 0%</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-white font-semibold cursor-pointer">
-                        <span className="material-symbols-outlined text-[#8c947b]">add</span> Add Task
-                    </div>
+                <div className="relative z-10 mt-auto pt-8 border-l-2 border-[#aff82a] pl-4">
+                    <p className="text-sm text-[#8c947b] italic">
+                        "Spacer helped us organize all our department workspaces into a single unified dashboard."
+                    </p>
                 </div>
             </div>
 
             {/* Right Side: Sign In Form */}
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[#181a20] relative z-10">
                 <div className="w-full max-w-[420px] mx-auto">
-                    {/* Abstract colorful icon */}
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M20 5C11.716 5 5 11.716 5 20C5 28.284 11.716 35 20 35C28.284 35 35 28.284 35 20C35 11.716 28.284 5 20 5ZM26.5 15C27.88 15 29 16.12 29 17.5C29 18.88 27.88 20 26.5 20C25.12 20 24 18.88 24 17.5C24 16.12 25.12 15 26.5 15ZM13.5 15C14.88 15 16 16.12 16 17.5C16 18.88 14.88 20 13.5 20C12.12 20 11 18.88 11 17.5C11 16.12 12.12 15 13.5 15ZM20 30C15.58 30 11.83 27.14 10.23 23H29.77C28.17 27.14 24.42 30 20 30Z" fill="url(#paint0_linear)" />
-                            <defs>
-                                <linearGradient id="paint0_linear" x1="5" y1="5" x2="35" y2="35" gradientUnits="userSpaceOnUse">
-                                    <stop stopColor="#4361EE" />
-                                    <stop offset="0.5" stopColor="#F72585" />
-                                    <stop offset="1" stopColor="#aff82a" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
+                        <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
                     </div>
 
                     <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Welcome Back</h2>
-                    <p className="text-[#8c947b] text-[15px] mb-10 leading-relaxed">
-                        Welcome back! Let's collaborate with our team and unleash our potential!
+                    <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
+                        Welcome back! Sign in to access your Spacer workspace.
                     </p>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
@@ -208,7 +149,7 @@ function Login() {
                                 type="email"
                                 id="email"
                                 placeholder="Email address"
-                                className={`w-full bg-transparent border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#424934]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[#111318] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
@@ -226,7 +167,7 @@ function Login() {
                                 type={showPassword ? "text" : "password"}
                                 id="password"
                                 placeholder="Password"
-                                className={`w-full bg-transparent border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#424934]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[#111318] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
@@ -242,20 +183,20 @@ function Login() {
                             </button>
                             {isPasswordError && (
                                 <p className="text-red-500 text-[12px] mt-2 flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[14px]">error</span> Password is incorrect try again
+                                    <span className="material-symbols-outlined text-[14px]">error</span> Password is incorrect, try again
                                 </p>
                             )}
                         </div>
 
                         {/* Forgot Password */}
-                        <div className="flex justify-end mt-2 mb-6">
-                            <a href="#" className="text-[#aff82a] text-[13px] hover:underline">Forgot Password</a>
+                        <div className="flex justify-end mt-2 mb-2">
+                            <a href="#" className="text-[#aff82a] text-[13px] hover:underline">Forgot Password?</a>
                         </div>
 
                         {/* Sign In Button */}
                         <button
                             type="submit"
-                            className="w-full bg-[#1C1F26] hover:bg-[#2D3139] text-[#8c947b] hover:text-white font-medium text-[15px] py-3.5 rounded-xl border border-[#2D3139] transition-all"
+                            className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md cursor-pointer"
                         >
                             Sign in
                         </button>
@@ -267,20 +208,15 @@ function Login() {
                         </div>
 
                         {/* Social Login */}
-                        <button type="button" className="w-full bg-[#181a20] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all mb-3">
+                        <button type="button" className="w-full bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all cursor-pointer">
                             <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
                             Sign in with Google
                         </button>
 
-                        <button type="button" className="w-full bg-[#181a20] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all">
-                            <span className="material-symbols-outlined text-[20px]">apple</span>
-                            Sign in with Apple
-                        </button>
-
                         {/* Create Account Link */}
-                        <div className="text-center mt-8">
+                        <div className="text-center mt-6">
                             <p className="text-[#8c947b] text-[14px]">
-                                Don't have an account? <Link to="/signup" className="text-[#aff82a] hover:underline">Create Account</Link>
+                                Don't have an account? <Link to="/signup" className="text-[#aff82a] font-semibold hover:underline">Create Account</Link>
                             </p>
                         </div>
                     </form>

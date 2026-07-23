@@ -84,7 +84,7 @@ export default function LaunchOrganization() {
                             <div class="w-8 h-8 bg-blue-500/20 rounded flex items-center justify-center border border-blue-500/30">
                                 <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
                             </div>
-                            <span class="font-medium text-sm">Circle Corp</span>
+                            <span class="font-medium text-sm">Spacer</span>
                             <div class="ml-auto text-gray-500">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7"></path></svg>
                             </div>

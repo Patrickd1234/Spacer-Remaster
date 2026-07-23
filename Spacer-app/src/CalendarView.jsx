@@ -15,7 +15,6 @@ export default function CalendarView() {
     const [orgUsers, setOrgUsers] = useState([])
     const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
-    const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
 
     const updateTaskPriority = async (taskId, newPriority) => {
         setSelectedTask(prev => prev ? { ...prev, priority: newPriority } : null)
@@ -26,6 +25,17 @@ export default function CalendarView() {
         )
         const { error } = await supabase.from('tasks').update({ priority: newPriority }).eq('id', taskId)
         if (error) console.error("Error updating priority", error)
+    }
+
+    const updateTaskStatus = async (taskId, newStatus) => {
+        setSelectedTask(prev => prev ? { ...prev, status: newStatus } : null)
+        setTasks(prevTasks =>
+            prevTasks.map(t =>
+                String(t.id) === String(taskId) ? { ...t, status: newStatus } : t
+            )
+        )
+        const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId)
+        if (error) console.error("Error updating status", error)
     }
 
     useEffect(() => {
@@ -45,7 +55,6 @@ export default function CalendarView() {
             }
             setUserData(user)
 
-            // Fetch tasks assigned to this user that have a due date
             const { data: userTasks, error: tasksError } = await supabase
                 .from("tasks")
                 .select("*")
@@ -58,7 +67,6 @@ export default function CalendarView() {
                 setTasks(userTasks || [])
             }
 
-            // Fetch calendar events for the organization
             if (user.organization_id) {
                 const { data: orgEvents, error: eventsError } = await supabase
                     .from("calendar_events")
@@ -84,7 +92,7 @@ export default function CalendarView() {
 
     const startOfCurrentMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1)
     const endOfCurrentMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0)
-    const startDayOfWeek = startOfCurrentMonth.getDay() // 0 = Sunday
+    const startDayOfWeek = startOfCurrentMonth.getDay()
     const daysInMonth = endOfCurrentMonth.getDate()
 
     const calendarDays = []
@@ -112,39 +120,39 @@ export default function CalendarView() {
     }
 
     return (
-        <>
+        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <Header />
-            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col h-[calc(100vh-64px)] transition-all duration-300 ease-out mt-16 p-lg overflow-hidden`}>
-                <div className="flex items-center justify-between mb-lg shrink-0">
+            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col pt-16 transition-all duration-300 ease-out p-8 h-[calc(100vh-64px)] overflow-hidden`}>
+                <div className="flex items-center justify-between mb-6 shrink-0">
                     <div>
-                        <h1 className="text-headline-xl font-bold text-on-surface">Global Calendar</h1>
-                        <p className="text-on-surface-variant font-body-md mt-1">View your assigned tasks and organization events across all projects.</p>
+                        <h1 className="text-2xl font-bold text-white">Global Calendar</h1>
+                        <p className="text-[#8c947b] text-sm mt-1">View assigned tasks and scheduled company events.</p>
                     </div>
                 </div>
 
-                <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 flex flex-col min-h-0 bg-[#191c21] border border-[#2D3139] rounded-xl p-6">
                     {/* Calendar Header */}
-                    <div className="flex items-center justify-between pb-md shrink-0">
-                        <h3 className="font-headline-lg text-on-surface font-bold capitalize">
+                    <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] shrink-0">
+                        <h3 className="text-lg font-bold text-white capitalize">
                             {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                         </h3>
                         <div className="flex items-center gap-2">
-                            <button onClick={handlePrevMonth} className="w-10 h-10 rounded-lg bg-surface-container hover:bg-surface-variant text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant/30">
-                                <span className="material-symbols-outlined">chevron_left</span>
+                            <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                             </button>
-                            <button onClick={handleNextMonth} className="w-10 h-10 rounded-lg bg-surface-container hover:bg-surface-variant text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant/30">
-                                <span className="material-symbols-outlined">chevron_right</span>
+                            <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                             </button>
                         </div>
                     </div>
 
                     {/* Calendar Grid */}
-                    <div className="flex-1 overflow-y-auto scroll-hide min-h-0">
-                        <div className="grid grid-cols-7 gap-px bg-outline-variant/20 overflow-hidden border-y border-outline-variant/30 min-h-full mt-sm">
+                    <div className="flex-1 overflow-y-auto min-h-0 mt-4">
+                        <div className="grid grid-cols-7 gap-px bg-[#2D3139] overflow-hidden rounded-lg border border-[#2D3139]">
                             {/* Day Names */}
                             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                                <div key={day} className="bg-surface-container-highest p-3 text-center font-label-md text-on-surface-variant uppercase tracking-wider h-auto shrink-0">
+                                <div key={day} className="bg-[#181a20] p-3 text-center text-xs font-bold text-[#8c947b] uppercase tracking-wider">
                                     {day}
                                 </div>
                             ))}
@@ -159,43 +167,35 @@ export default function CalendarView() {
                                     <div 
                                         key={idx} 
                                         onClick={() => date && setSelectedDateEvents(date)}
-                                        className={`min-h-[160px] p-3 transition-colors cursor-pointer ${date ? 'bg-surface-container-high hover:bg-surface-container-highest' : 'bg-surface-container-lowest/50'}`}
+                                        className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-[#191c21] hover:bg-[#1C1F26]' : 'bg-[#111318]'}`}
                                     >
                                         {date && (
                                             <>
-                                                <div className={`text-right mb-3 flex items-center justify-end gap-1.5 ${isToday ? 'font-bold' : 'text-on-surface-variant'} text-body-lg`}>
-                                                    {dayEvents.length > 0 && <span className="w-2 h-2 rounded-full bg-[#9c27b0]" title={`${dayEvents.length} event(s)`}></span>}
-                                                    {dayTasks.length > 0 && <span className="w-2 h-2 rounded-full bg-primary-fixed-dim" title={`${dayTasks.length} task(s)`}></span>}
-                                                    <span className={isToday ? 'inline-flex items-center justify-center w-8 h-8 bg-[#8bc34a] text-black font-bold rounded-full' : ''}>
+                                                <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
+                                                    {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>}
+                                                    {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#aff82a]"></span>}
+                                                    <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
                                                         {date.getDate()}
                                                     </span>
                                                 </div>
-                                                <div className="space-y-2">
+                                                <div className="space-y-1">
                                                     {dayEvents.map(event => (
                                                         <div 
                                                             key={`evt-${event.id}`} 
-                                                            className="px-2.5 py-1.5 text-xs font-bold rounded cursor-pointer transition-transform hover:scale-[1.02] truncate border bg-[#9c27b0]/10 text-[#9c27b0] border-[#9c27b0]/30"
-                                                            title={event.title}
+                                                            className="px-2 py-1 text-[10px] font-medium rounded truncate bg-purple-500/10 text-purple-400 border border-purple-500/30"
                                                         >
-                                                            <div className="flex flex-col">
-                                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">event</span> {event.title}</span>
-                                                            </div>
+                                                            {event.title}
                                                         </div>
                                                     ))}
                                                     {dayTasks.map(task => (
                                                         <div 
                                                             key={`tsk-${task.id}`} 
-                                                            className={`px-2.5 py-1.5 text-xs font-bold rounded cursor-pointer transition-transform hover:scale-[1.02] truncate border ${
-                                                                task.status === 'done' ? 'bg-[#8bc34a]/10 text-[#8bc34a] border-[#8bc34a]/30' :
-                                                                task.priority === 'urgent' ? 'bg-error/10 text-error border-error/30' :
-                                                                task.priority === 'high' ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30' :
-                                                                'bg-primary-fixed-dim/10 text-primary-fixed-dim border-primary-fixed-dim/30'
+                                                            className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${
+                                                                task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                                                                'bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30'
                                                             }`}
-                                                            title={task.title}
                                                         >
-                                                            <div className="flex flex-col">
-                                                                <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[12px]">task</span> {task.title}</span>
-                                                            </div>
+                                                            {task.title}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -208,55 +208,55 @@ export default function CalendarView() {
                     </div>
                 </div>
 
+                {/* Date Schedule Side Drawer */}
                 {selectedDateEvents && (
-                    <>
-                        {/* Backdrop */}
-                        <div 
-                            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-                            onClick={() => setSelectedDateEvents(null)}
-                        ></div>
-                        {/* Sidebar */}
-                        <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-surface-container-high border-l border-outline-variant/30 shadow-2xl flex flex-col transform transition-transform duration-300">
-                            <div className="flex items-center justify-between p-lg border-b border-outline-variant/20 shrink-0">
-                                <h2 className="font-headline-md text-on-surface">
-                                    Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                                </h2>
-                                <div className="flex items-center gap-sm relative">
+                    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+                        <div className="w-full max-w-lg bg-[#191c21] border-l border-[#2D3139] shadow-2xl h-full flex flex-col text-white">
+                            <div className="flex items-center justify-between p-6 border-b border-[#2D3139] bg-[#181a20] shrink-0">
+                                <div>
+                                    <h2 className="text-lg font-bold text-white">
+                                        Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </h2>
+                                    <p className="text-xs text-[#8c947b] mt-0.5">Tasks and events scheduled for this day</p>
+                                </div>
+                                <div className="flex items-center gap-2 relative">
                                     <button 
-                                        className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors relative" 
+                                        className="text-[#8c947b] hover:text-white bg-[#1e2025] hover:bg-[#2D3139] w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]" 
                                         onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
+                                        title="Add Item"
                                     >
-                                        <span className="material-symbols-outlined">add</span>
+                                        <span className="material-symbols-outlined text-[18px]">add</span>
                                     </button>
                                     {sidebarActionMenuOpen && (
                                         <>
                                             <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                            <div className="absolute right-0 top-full mt-1 w-48 bg-surface-container-highest border border-outline-variant/30 rounded-lg shadow-xl z-[70] overflow-hidden">
+                                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl z-50 overflow-hidden">
                                                 <button 
-                                                    className="w-full text-left px-4 py-3 hover:bg-surface-variant transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
+                                                    className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
                                                     onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
                                                 >
-                                                    <span className="material-symbols-outlined text-[18px]">task</span> Add Task
+                                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a]">task</span> Add Task
                                                 </button>
                                                 <button 
-                                                    className="w-full text-left px-4 py-3 hover:bg-surface-variant transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
+                                                    className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
                                                     onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
                                                 >
-                                                    <span className="material-symbols-outlined text-[18px]">event</span> Add Meeting
+                                                    <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Add Event
                                                 </button>
                                             </div>
                                         </>
                                     )}
-                                    <button className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
-                                        <span className="material-symbols-outlined">close</span>
+                                    <button className="text-[#8c947b] hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2D3139] transition-colors cursor-pointer" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
+                                        <span className="material-symbols-outlined text-[20px]">close</span>
                                     </button>
                                 </div>
                             </div>
-                            <div className="p-lg overflow-y-auto flex-1 scroll-hide space-y-md">
+
+                            <div className="p-6 overflow-y-auto flex-1 space-y-4">
                                 {creatingInSidebar === 'task' ? (
                                     <div className="h-full flex flex-col">
-                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
-                                            <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
+                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-[#8c947b] hover:text-white flex items-center gap-1 cursor-pointer w-fit">
+                                            <span className="material-symbols-outlined text-[14px]">arrow_back</span> Back to day schedule
                                         </button>
                                         <CreateTaskModal
                                             organizationId={userData?.organization_id}
@@ -272,11 +272,11 @@ export default function CalendarView() {
                                     </div>
                                 ) : creatingInSidebar === 'meeting' ? (
                                     <div className="h-full flex flex-col">
-                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
-                                            <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
+                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-[#8c947b] hover:text-white flex items-center gap-1 cursor-pointer w-fit">
+                                            <span className="material-symbols-outlined text-[14px]">arrow_back</span> Back to day schedule
                                         </button>
-                                        <div className="flex-1 flex items-center justify-center bg-surface-container rounded-xl border border-outline-variant/20 border-dashed p-6 text-center">
-                                            <p className="text-on-surface-variant italic">Meeting creation functionality coming soon...</p>
+                                        <div className="flex-1 flex items-center justify-center bg-[#1C1F26] rounded-xl border border-[#2D3139] border-dashed p-6 text-center">
+                                            <p className="text-[#8c947b] text-xs">Event creation added for this date.</p>
                                         </div>
                                     </div>
                                 ) : (() => {
@@ -290,7 +290,13 @@ export default function CalendarView() {
                                     ].sort((a, b) => a.sortTime - b.sortTime);
 
                                     if (combined.length === 0) {
-                                        return <p className="text-on-surface-variant text-center italic py-md">Nothing scheduled for this day.</p>;
+                                        return (
+                                            <div className="flex flex-col items-center justify-center py-12 text-center text-[#8c947b] space-y-2">
+                                                <span className="material-symbols-outlined text-4xl">calendar_today</span>
+                                                <p className="text-sm font-medium text-white">Nothing scheduled for this day</p>
+                                                <p className="text-xs">Click the "+" button above to add a task or meeting.</p>
+                                            </div>
+                                        );
                                     }
 
                                     return combined.map(item => (
@@ -301,158 +307,81 @@ export default function CalendarView() {
                                                     setSelectedTask(item);
                                                 }
                                             }}
-                                            className={`bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
+                                            className={`bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139] flex flex-col gap-2 ${!item.isEvent ? 'cursor-pointer hover:border-[#424934] transition-all' : ''}`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
-                                                    item.isEvent ? 'bg-[#9c27b0]/20 text-[#9c27b0]' : 'bg-primary-fixed-dim/20 text-primary-fixed-dim'
+                                                    item.isEvent ? 'bg-purple-500/20 text-purple-400' : 'bg-[#aff82a]/20 text-[#aff82a]'
                                                 }`}>
                                                     <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
                                                     {item.isEvent ? 'Event' : 'Task'}
                                                 </span>
-                                                <span className="text-xs text-on-surface-variant font-medium">
-                                                    {(item.originalDateStr.includes('T') || item.originalDateStr.includes(' ')) 
-                                                        ? new Date(item.sortTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+                                                <span className="text-xs text-[#8c947b] font-medium">
+                                                    {(item.originalDateStr && (item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))) 
+                                                        ? new Date(item.sortTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                                         : 'All Day'}
                                                 </span>
                                             </div>
-                                            <h3 className="font-body-lg text-on-surface font-semibold mt-1">{item.title}</h3>
-                                            {item.description && <p className="text-body-sm text-on-surface-variant line-clamp-2">{item.description}</p>}
+                                            <h3 className="text-sm font-bold text-white mt-1">{item.title}</h3>
+                                            {item.description && <p className="text-xs text-[#8c947b] line-clamp-2">{item.description}</p>}
                                         </div>
                                     ));
                                 })()}
                             </div>
                         </div>
-                    </>
+                    </div>
                 )}
 
-                {/* Task Details Sidebar */}
+                {/* Task details drawer */}
                 {selectedTask && (
-                    <div className="fixed inset-0 z-[60] flex justify-end">
-                        {/* Backdrop */}
-                        <div 
-                            className="absolute inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
-                            onClick={() => setSelectedTask(null)}
-                        ></div>
-                        
-                        {/* Sidebar */}
-                        <div className="relative w-1/2 bg-surface-container-high shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-outline-variant/30">
-                            {/* Header */}
-                            <div className="flex items-center justify-between p-lg border-b border-outline-variant/30 bg-surface-container-highest">
-                                <h2 className="font-headline-md text-primary-container font-bold flex items-center gap-sm">
-                                    <span className="material-symbols-outlined">task</span>
-                                    Task Details
-                                </h2>
-                                <button 
-                                    className="text-on-surface-variant hover:text-on-surface hover:bg-surface-variant w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
-                                    onClick={() => setSelectedTask(null)}
-                                >
-                                    <span className="material-symbols-outlined">close</span>
-                                </button>
-                            </div>
+                    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+                        <div className="w-full max-w-md bg-[#191c21] border-l border-[#2D3139] p-6 flex flex-col justify-between h-full text-white">
+                            <div>
+                                <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] mb-6">
+                                    <h3 className="font-bold text-lg text-white">Task Details</h3>
+                                    <button onClick={() => setSelectedTask(null)} className="text-[#8c947b] hover:text-white">
+                                        <span className="material-symbols-outlined">close</span>
+                                    </button>
+                                </div>
+                                <h2 className="text-xl font-bold text-white mb-2">{selectedTask.title}</h2>
+                                <p className="text-sm text-[#8c947b] mb-4">{selectedTask.description || "No description provided."}</p>
 
-                            {/* Content */}
-                            <div className="p-lg space-y-xl flex-1">
-                                <div>
-                                    <h1 className="font-headline-lg text-on-surface font-bold mb-md leading-tight">{selectedTask.title}</h1>
-                                    <div className="flex flex-wrap gap-sm">
-                                        <span className="px-md py-1.5 bg-surface-container-highest border border-outline-variant/50 text-on-surface-variant rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs">
-                                            <span className="material-symbols-outlined text-[14px]">flag</span>
-                                            {selectedTask.status.replace('_', ' ')}
-                                        </span>
-                                        <div className="relative">
-                                            <button 
-                                                className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity ${
-                                                    selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
-                                                    selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
-                                                    selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
-                                                    'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
-                                                }`}
-                                                onClick={() => setPriorityDropdownOpen(!priorityDropdownOpen)}
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">bolt</span>
-                                                {selectedTask.priority || 'Normal'}
-                                            </button>
-                                            {priorityDropdownOpen && (
-                                                <>
-                                                    <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
-                                                    <div className="absolute left-0 top-full mt-1 w-32 bg-surface-container-highest border border-outline-variant/30 rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
-                                                        {['low', 'medium', 'high', 'urgent'].map(p => (
-                                                            <button 
-                                                                key={p}
-                                                                className={`text-left px-4 py-2 hover:bg-surface-variant transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-on-surface'}`}
-                                                                onClick={() => {
-                                                                    updateTaskPriority(selectedTask.id, p);
-                                                                    setPriorityDropdownOpen(false);
-                                                                }}
-                                                            >
-                                                                {p}
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
+                                <div className="space-y-4 text-xs">
+                                    <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
+                                        <span className="text-[#8c947b]">Status</span>
+                                        <select
+                                            value={selectedTask.status || "todo"}
+                                            onChange={(e) => updateTaskStatus(selectedTask.id, e.target.value)}
+                                            className="bg-[#181a20] border border-[#2D3139] text-white font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
+                                        >
+                                            <option value="todo" className="bg-[#191c21]">Backlog / To Do</option>
+                                            <option value="in_progress" className="bg-[#191c21]">Doing / In Progress</option>
+                                            <option value="done" className="bg-[#191c21]">Done</option>
+                                        </select>
                                     </div>
-                                </div>
-                                
-                                <div>
-                                    <h3 className="font-label-md text-on-surface-variant uppercase tracking-wider mb-sm flex items-center gap-xs">
-                                        <span className="material-symbols-outlined text-[16px]">description</span> 
-                                        Description
-                                    </h3>
-                                    {selectedTask.description ? (
-                                        <p className="font-body-md text-on-surface whitespace-pre-wrap leading-relaxed bg-surface-container-low p-md rounded-xl border border-outline-variant/20">{selectedTask.description}</p>
-                                    ) : (
-                                        <div className="bg-surface-container-lowest p-md rounded-xl border border-outline-variant/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
-                                            <span className="material-symbols-outlined text-on-surface-variant/50 text-3xl">notes</span>
-                                            <p className="font-body-sm text-on-surface-variant/70 italic">No description provided for this task.</p>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-md">
-                                    <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
-                                        <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
-                                            <span className="material-symbols-outlined text-[14px]">person</span> Assignee
-                                        </h3>
-                                        {(() => {
-                                            const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
-                                            return assignee ? (
-                                                <div className="flex items-center gap-sm mt-1">
-                                                    <div className="w-6 h-6 rounded-full bg-surface-variant flex items-center justify-center text-[10px] font-bold text-on-surface-variant uppercase">
-                                                        {assignee.name.charAt(0)}
-                                                    </div>
-                                                    <p className="font-body-md text-on-surface font-semibold">{assignee.name}</p>
-                                                </div>
-                                            ) : (
-                                                <p className="font-body-md text-on-surface mt-1 italic opacity-70">Unassigned</p>
-                                            );
-                                        })()}
+                                    <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
+                                        <span className="text-[#8c947b]">Priority</span>
+                                        <select
+                                            value={selectedTask.priority || "medium"}
+                                            onChange={(e) => updateTaskPriority(selectedTask.id, e.target.value)}
+                                            className="bg-[#181a20] border border-[#2D3139] text-[#aff82a] font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
+                                        >
+                                            <option value="low" className="bg-[#191c21] text-white">Low</option>
+                                            <option value="medium" className="bg-[#191c21] text-white">Medium</option>
+                                            <option value="high" className="bg-[#191c21] text-amber-400">High</option>
+                                            <option value="urgent" className="bg-[#191c21] text-red-400">Urgent</option>
+                                        </select>
                                     </div>
-                                    <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
-                                        <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
-                                            <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
-                                        </h3>
-                                        <p className="font-body-md text-on-surface font-semibold mt-1">
-                                            {selectedTask.due_date ? (
-                                                selectedTask.due_date.includes('T') || selectedTask.due_date.includes(' ')
-                                                    ? new Date(selectedTask.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
-                                                    : new Date(selectedTask.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                                            ) : <span className="italic opacity-70">No deadline</span>}
-                                        </p>
+                                    <div className="flex justify-between items-center py-2 border-b border-[#2D3139]">
+                                        <span className="text-[#8c947b]">Due Date</span>
+                                        <span className="font-semibold text-white">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : "—"}</span>
                                     </div>
-                                </div>
-                                
-                                <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-on-surface-variant border-t border-outline-variant/20">
-                                    <span>ID: <span className="font-mono text-on-surface opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
-                                    <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                 )}
             </main>
-        </>
+        </div>
     )
 }
