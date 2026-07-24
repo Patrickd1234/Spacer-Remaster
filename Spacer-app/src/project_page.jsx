@@ -1,9 +1,37 @@
-import { useState, useEffect } from "react"
-import { Link, useNavigate, useParams, useLocation } from "react-router-dom"
+import { useState, useEffect, useRef } from "react"
+import { useParams } from "react-router-dom"
 import { supabase } from "./supabase"
 import Sidebar from "./partials/sidebar"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
+import DocViewer from "./components/DocViewer"
+
+const ACCEPTED = [
+    "image/*", "application/pdf", "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/zip", "application/x-zip-compressed", "text/plain", "text/csv",
+].join(",")
+
+function getFileStyle(type = "") {
+    if (type.startsWith("image/"))  return { icon: "image",            color: "text-primary-fixed-dim", bg: "bg-primary-container/20" }
+    if (type === "application/pdf") return { icon: "picture_as_pdf",   color: "text-error",             bg: "bg-error-container/20"   }
+    if (type.includes("word") || type === "application/msword")
+                                    return { icon: "description",       color: "text-on-surface-variant",bg: "bg-secondary-container"  }
+    if (type.includes("sheet") || type === "application/vnd.ms-excel")
+                                    return { icon: "table",             color: "text-primary-fixed-dim", bg: "bg-primary-container/10" }
+    if (type.includes("zip"))       return { icon: "folder_zip",        color: "text-on-surface-variant",bg: "bg-secondary-container"  }
+    if (type.startsWith("text/"))   return { icon: "article",           color: "text-on-surface-variant",bg: "bg-surface-container"    }
+    return                                 { icon: "insert_drive_file", color: "text-on-surface-variant",bg: "bg-surface-container"    }
+}
+
+function formatBytes(bytes) {
+    if (!bytes) return ""
+    if (bytes < 1024)           return bytes + " B"
+    if (bytes < 1024 * 1024)    return (bytes / 1024).toFixed(1) + " KB"
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+}
 
 
 function ProjectPage() {
@@ -25,6 +53,22 @@ function ProjectPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [calendarMonth, setCalendarMonth] = useState(new Date())
     const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
+    const [selectedDateEvents, setSelectedDateEvents] = useState(null)
+    const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
+    const [creatingInSidebar, setCreatingInSidebar] = useState(null)
+    const [project_events, setProjectEvents] = useState([])
+
+    // ── File upload state
+    const [projectFiles, setProjectFiles]       = useState([])
+    const [showUploadZone, setShowUploadZone]   = useState(false)
+    const [uploading, setUploading]             = useState(false)
+    const [uploadError, setUploadError]         = useState("")
+    const [dragOver, setDragOver]               = useState(false)
+    const [pendingFile, setPendingFile]         = useState(null)
+    const [pendingUrl, setPendingUrl]           = useState(null)
+    const [reviewFile, setReviewFile]           = useState(null)
+    const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+    const fileInputRef = useRef()
 
     const updateTaskPriority = async (taskId, newPriority) => {
         setSelectedTask(prev => prev ? { ...prev, priority: newPriority } : null)
@@ -67,7 +111,7 @@ function ProjectPage() {
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "status_changed",
-                new_state: { project_id: project_id, title: task.title, status: newStatus, due_date: finalDateTime }
+                new_state: { project_id: project_id, title: task.title, status: newStatus }
             }
             const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
             if (newLog) setActivityLog(prev => [newLog, ...prev])
@@ -100,9 +144,9 @@ function ProjectPage() {
         }
     }
 
-    const handleDragOver = (e) => {
-        e.preventDefault()
-    }
+    //     const handleDragOver = (e) => {
+    //         e.preventDefault()
+    // }
 
     const handleDragOver = (e) => { e.preventDefault() }
 
@@ -123,10 +167,10 @@ function ProjectPage() {
                 if (data[0].due_date) setProjectDueDate(data[0].due_date)
                 if (data[0].team_spaces?.organization_id) {
                     setOrganizationId(data[0].team_spaces.organization_id)
+                    fetchOrgUsers(data[0].team_spaces.organization_id)
                 }
                 if (data[0].team_space_id) {
                     setTeamSpaceId(data[0].team_space_id)
-                    fetchTeamMembers(data[0].team_space_id)
                 }
             }
         }
@@ -167,6 +211,86 @@ function ProjectPage() {
     const assignedMemberIds = new Set(project_tasks.map(t => t.assignee_id).filter(Boolean))
     const assignedMembers = orgUsers.filter(u => assignedMemberIds.has(u.id))
 
+    // ── File handlers
+    const fetchFiles = async () => {
+        if (!project_id) return
+        const { data, error } = await supabase
+            .from("project_files").select("*").eq("project_id", project_id)
+            .order("created_at", { ascending: false })
+        if (!error) setProjectFiles(data || [])
+    }
+    const handleFilePick = (file) => {
+        if (!file) return
+        if (pendingUrl) URL.revokeObjectURL(pendingUrl)
+        setPendingFile(file)
+        setPendingUrl(URL.createObjectURL(file))
+        setUploadError("")
+    }
+    const cancelPending = () => {
+        if (pendingUrl) URL.revokeObjectURL(pendingUrl)
+        setPendingFile(null); setPendingUrl(null); setUploadError("")
+    }
+    const confirmUpload = async () => {
+        if (!pendingFile) return
+        setUploading(true); setUploadError("")
+        const path = `${project_id}/${Date.now()}-${pendingFile.name}`
+        const { error: storageError } = await supabase.storage
+            .from("project-files").upload(path, pendingFile, { contentType: pendingFile.type, upsert: false })
+        if (storageError) { setUploadError("Upload failed: " + storageError.message); setUploading(false); return }
+        const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
+        const { data: userData } = await supabase.auth.getUser()
+        const uploaderName = userData?.user?.email?.split("@")[0] || "You"
+        await supabase.from("project_files").insert({
+            project_id, name: pendingFile.name, type: pendingFile.type,
+            size: pendingFile.size, path, url: urlData?.publicUrl || "",
+            uploaded_by: uploaderName,
+        })
+        URL.revokeObjectURL(pendingUrl)
+        setPendingFile(null); setPendingUrl(null); setShowUploadZone(false); setUploading(false)
+        fetchFiles()
+    }
+    const deleteFile = async (f) => {
+        await supabase.storage.from("project-files").remove([f.path])
+        await supabase.from("project_files").delete().eq("id", f.id)
+        setConfirmDeleteId(null); fetchFiles()
+    }
+
+    const PreUploadPreview = () => {
+        const isImage = pendingFile?.type?.startsWith("image/")
+        const isPDF   = pendingFile?.type === "application/pdf"
+        const { icon, color, bg } = getFileStyle(pendingFile?.type)
+        return (
+            <div className="mt-lg border border-outline-variant/40 rounded-xl overflow-hidden">
+                <div className="bg-surface-container-highest flex items-center justify-center" style={{ minHeight: 220 }}>
+                    {isImage && <img src={pendingUrl} alt={pendingFile.name} className="max-w-full max-h-[220px] object-contain rounded" />}
+                    {isPDF && <iframe src={pendingUrl} title={pendingFile.name} className="w-full border-0" style={{ height: 220 }} />}
+                    {!isImage && !isPDF && (
+                        <div className="flex flex-col items-center gap-3 py-8">
+                            <div className={`w-16 h-16 ${bg} flex items-center justify-center rounded-2xl`}>
+                                <span className={`material-symbols-outlined text-4xl ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                            </div>
+                            <p className="text-on-surface-variant text-sm">No visual preview for this file type</p>
+                        </div>
+                    )}
+                </div>
+                <div className="bg-surface-container-high px-md py-sm flex items-center justify-between gap-md border-t border-outline-variant/30">
+                    <div className="min-w-0">
+                        <p className="font-body-md text-on-surface font-semibold truncate">{pendingFile?.name}</p>
+                        <p className="text-[11px] text-on-surface-variant">{formatBytes(pendingFile?.size)}</p>
+                    </div>
+                    <div className="flex items-center gap-sm shrink-0">
+                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
+                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[#8bc34a] text-black text-sm font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
+                            {uploading
+                                ? <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Uploading…</>
+                                : <><span className="material-symbols-outlined text-[16px]">cloud_upload</span> Confirm Upload</>}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
@@ -191,8 +315,8 @@ function ProjectPage() {
                                 type="button"
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-label-md transition-colors cursor-pointer ${activeTab === tab.id
-                                        ? "bg-[#8bc34a] text-white font-semibold"
-                                        : "text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50"
+                                    ? "bg-[#8bc34a] text-white font-semibold"
+                                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50"
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
@@ -289,8 +413,8 @@ function ProjectPage() {
                                         <div
                                             key={column.key}
                                             className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 ${dragOverColumn === column.key
-                                                    ? 'bg-surface-container-high ring-1 ring-primary-fixed-dim/40'
-                                                    : 'bg-surface-container/50'
+                                                ? 'bg-surface-container-high ring-1 ring-primary-fixed-dim/40'
+                                                : 'bg-surface-container/50'
                                                 }`}
                                             onDragOver={(e) => { if (column.key !== 'overdue') { e.preventDefault(); setDragOverColumn(column.key); } }}
                                             onDragLeave={() => setDragOverColumn(null)}
@@ -332,14 +456,14 @@ function ProjectPage() {
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
                                                             <span className={`inline-flex items-center gap-xs px-sm py-[2px] rounded text-[10px] font-bold uppercase ${task.priority === 'urgent' ? 'bg-error/15 text-error' :
-                                                                    task.priority === 'high' ? 'bg-[#f59e0b]/15 text-[#f59e0b]' :
-                                                                        task.priority === 'medium' ? 'bg-tertiary/15 text-tertiary' :
-                                                                            'bg-primary-fixed-dim/15 text-primary-fixed-dim'
+                                                                task.priority === 'high' ? 'bg-[#f59e0b]/15 text-[#f59e0b]' :
+                                                                    task.priority === 'medium' ? 'bg-tertiary/15 text-tertiary' :
+                                                                        'bg-primary-fixed-dim/15 text-primary-fixed-dim'
                                                                 }`}>
                                                                 <span className={`w-1.5 h-1.5 rounded-sm ${task.priority === 'urgent' ? 'bg-error' :
-                                                                        task.priority === 'high' ? 'bg-[#f59e0b]' :
-                                                                            task.priority === 'medium' ? 'bg-tertiary' :
-                                                                                'bg-primary-fixed-dim'
+                                                                    task.priority === 'high' ? 'bg-[#f59e0b]' :
+                                                                        task.priority === 'medium' ? 'bg-tertiary' :
+                                                                            'bg-primary-fixed-dim'
                                                                     }`}></span>
                                                                 {task.priority || 'Normal'}
                                                             </span>
@@ -546,79 +670,117 @@ function ProjectPage() {
                     {/* Public Files Tab */}
                     {activeTab === "files" && (
                         <div className="tab-pane block" id="section-files">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
-                                {/* Preview Files */}
-                                <div className="bg-surface-container-high p-lg rounded-xl glass-panel">
-                                    <div className="flex items-center justify-between mb-lg">
-                                        <div className="flex items-center gap-sm">
-                                            <span className="material-symbols-outlined text-primary-fixed-dim">visibility</span>
-                                            <h3 className="font-headline-md text-headline-md">Preview Files</h3>
-                                        </div>
-                                        <button type="button" className="text-label-sm text-primary-fixed-dim font-label-md uppercase tracking-wide hover:underline cursor-pointer">Upload</button>
+                            <div className="bg-surface-container-high p-lg rounded-xl glass-panel">
+                                {/* Header */}
+                                <div className="flex items-center justify-between mb-lg">
+                                    <div className="flex items-center gap-sm">
+                                        <span className="material-symbols-outlined text-primary-fixed-dim">move_to_inbox</span>
+                                        <h3 className="font-headline-md text-headline-md">Project Files</h3>
+                                        <span className="text-[11px] text-on-surface-variant">
+                                            {projectFiles.length} file{projectFiles.length !== 1 ? "s" : ""}
+                                        </span>
                                     </div>
-                                    <div className="space-y-sm">
-                                        <div className="flex items-center justify-between p-sm hover:bg-surface-container transition-colors rounded-lg group">
-                                            <div className="flex items-center gap-md">
-                                                <div className="w-10 h-10 bg-error-container/20 flex items-center justify-center rounded-lg">
-                                                    <span className="material-symbols-outlined text-error">picture_as_pdf</span>
-                                                </div>
-                                                <div>
-                                                    <p className="font-body-md text-body-md text-primary">Marketing_Landing_Mockup.pdf</p>
-                                                    <p className="text-on-surface-variant text-[11px]">Added by Grace • 14.2 MB</p>
-                                                </div>
-                                            </div>
-                                            <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-opacity opacity-0 group-hover:opacity-100">download</button>
-                                        </div>
-                                        <div className="flex items-center justify-between p-sm hover:bg-surface-container transition-colors rounded-lg group">
-                                            <div className="flex items-center gap-md">
-                                                <div className="w-10 h-10 bg-primary-container/10 flex items-center justify-center rounded-lg">
-                                                    <span className="material-symbols-outlined text-primary-fixed-dim">image</span>
-                                                </div>
-                                                <div>
-                                                    <p className="font-body-md text-body-md text-primary">Hero_Section_Animation.mp4</p>
-                                                    <p className="text-on-surface-variant text-[11px]">Added by Alan • 45.8 MB</p>
-                                                </div>
-                                            </div>
-                                            <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-opacity opacity-0 group-hover:opacity-100">download</button>
-                                        </div>
-                                    </div>
+                                    <button type="button"
+                                        onClick={() => { if (showUploadZone) { cancelPending(); setShowUploadZone(false) } else setShowUploadZone(true) }}
+                                        className="flex items-center gap-xs text-label-sm text-primary-fixed-dim font-label-md uppercase tracking-wide hover:underline cursor-pointer">
+                                        <span className="material-symbols-outlined text-[16px]">{showUploadZone ? "close" : "upload"}</span>
+                                        {showUploadZone ? "Close" : "Upload"}
+                                    </button>
                                 </div>
-                                {/* Input Files */}
-                                <div className="bg-surface-container-high p-lg rounded-xl glass-panel">
-                                    <div className="flex items-center justify-between mb-lg">
-                                        <div className="flex items-center gap-sm">
-                                            <span className="material-symbols-outlined text-primary-fixed-dim">move_to_inbox</span>
-                                            <h3 className="font-headline-md text-headline-md">Input Files</h3>
-                                        </div>
-                                        <button type="button" className="text-label-sm text-primary-fixed-dim font-label-md uppercase tracking-wide hover:underline cursor-pointer">Upload</button>
+
+                                {/* Upload zone */}
+                                {showUploadZone && (
+                                    <div className="mb-lg">
+                                        <input ref={fileInputRef} type="file" accept={ACCEPTED} className="hidden"
+                                            onChange={(e) => handleFilePick(e.target.files[0])} />
+                                        {!pendingFile && (
+                                            <div
+                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[#8bc34a] bg-[#8bc34a]/10" : "border-outline-variant hover:border-outline hover:bg-surface-container/50"}`}
+                                                onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                                                onDragLeave={() => setDragOver(false)}
+                                                onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFilePick(e.dataTransfer.files[0]) }}
+                                                onClick={() => fileInputRef.current?.click()}>
+                                                <span className="material-symbols-outlined text-on-surface-variant text-6xl">upload_file</span>
+                                                <p className="font-body-md text-on-surface font-semibold">Drop a file here or click to browse</p>
+                                                <p className="text-[12px] text-on-surface-variant text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
+                                            </div>
+                                        )}
+                                        {pendingFile && <PreUploadPreview />}
+                                        {uploadError && <p className="mt-2 text-xs text-error">{uploadError}</p>}
                                     </div>
+                                )}
+
+                                {/* File list */}
+                                {projectFiles.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+                                        <span className="material-symbols-outlined text-on-surface-variant text-5xl">folder_open</span>
+                                        <p className="text-on-surface-variant font-body-md">No files uploaded yet.</p>
+                                        <p className="text-[12px] text-on-surface-variant">Click <strong>Upload</strong> above to add the first file.</p>
+                                    </div>
+                                ) : (
                                     <div className="space-y-sm">
-                                        <div className="flex items-center justify-between p-sm hover:bg-surface-container transition-colors rounded-lg group">
-                                            <div className="flex items-center gap-md">
-                                                <div className="w-10 h-10 bg-secondary-container flex items-center justify-center rounded-lg">
-                                                    <span className="material-symbols-outlined text-on-surface-variant">description</span>
+                                        {projectFiles.map((f) => {
+                                            const { icon, color, bg } = getFileStyle(f.type)
+                                            const isConfirming = confirmDeleteId === f.id
+                                            return (
+                                                <div key={f.id} className="rounded-lg overflow-hidden">
+                                                    <div
+                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-surface-container"}`}
+                                                        onClick={() => { if (!isConfirming) setReviewFile(f) }}>
+                                                        <div className="flex items-center gap-md">
+                                                            {f.type?.startsWith("image/") ? (
+                                                                <img src={f.url} alt={f.name} className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                                            ) : (
+                                                                <div className={`w-10 h-10 ${bg} flex items-center justify-center rounded-lg shrink-0`}>
+                                                                    <span className={`material-symbols-outlined ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                                                                </div>
+                                                            )}
+                                                            <div>
+                                                                <p className={`font-body-md text-body-md ${isConfirming ? "text-error" : "text-primary"}`}>{f.name}</p>
+                                                                <p className="text-on-surface-variant text-[11px]">
+                                                                    {f.uploaded_by ? `Added by ${f.uploaded_by}` : "Uploaded"}
+                                                                    {f.size ? ` · ${formatBytes(f.size)}` : ""}
+                                                                    {f.created_at ? ` · ${new Date(f.created_at).toLocaleDateString()}` : ""}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        {!isConfirming && (
+                                                            <div className="flex items-center gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button type="button" title="Preview"
+                                                                    onClick={(e) => { e.stopPropagation(); setReviewFile(f) }}
+                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[18px]">visibility</button>
+                                                                <a href={f.url} download={f.name} target="_blank" rel="noreferrer"
+                                                                    title="Download" onClick={(e) => e.stopPropagation()}
+                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[18px]">download</a>
+                                                                <button type="button" title="Delete"
+                                                                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(f.id) }}
+                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-[18px]">delete</button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    {isConfirming && (
+                                                        <div className="flex items-center justify-between px-sm py-sm bg-error/10 border-t border-error/20">
+                                                            <div className="flex items-center gap-xs text-error text-[13px] font-semibold">
+                                                                <span className="material-symbols-outlined text-[16px]">warning</span>
+                                                                Are you sure you want to delete this file?
+                                                            </div>
+                                                            <div className="flex items-center gap-sm">
+                                                                <button type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
+                                                                    className="px-md py-[5px] rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
+                                                                <button type="button"
+                                                                    onClick={(e) => { e.stopPropagation(); deleteFile(f) }}
+                                                                    className="px-md py-[5px] rounded-lg bg-error text-white text-[12px] font-bold hover:opacity-90 cursor-pointer flex items-center gap-xs">
+                                                                    <span className="material-symbols-outlined text-[14px]">delete</span>Yes, delete
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <div>
-                                                    <p className="font-body-md text-body-md text-primary">Brand_Guidelines_2024.docx</p>
-                                                    <p className="text-on-surface-variant text-[11px]">Added by HR Team • 2.1 MB</p>
-                                                </div>
-                                            </div>
-                                            <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-opacity opacity-0 group-hover:opacity-100">download</button>
-                                        </div>
-                                        <div className="flex items-center justify-between p-sm hover:bg-surface-container transition-colors rounded-lg group">
-                                            <div className="flex items-center gap-md">
-                                                <div className="w-10 h-10 bg-secondary-container flex items-center justify-center rounded-lg">
-                                                    <span className="material-symbols-outlined text-on-surface-variant">folder_zip</span>
-                                                </div>
-                                                <div>
-                                                    <p className="font-body-md text-body-md text-primary">Raw_Asset_Pack_v2.zip</p>
-                                                    <p className="text-on-surface-variant text-[11px]">Added by Ada • 1.4 GB</p>
-                                                </div>
-                                            </div>
-                                            <button type="button" className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-opacity opacity-0 group-hover:opacity-100">download</button>
-                                        </div>
+                                            )
+                                        })}
                                     </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -774,9 +936,9 @@ function ProjectPage() {
                                                                         key={task.id}
                                                                         onClick={() => setSelectedTask(task)}
                                                                         className={`px-2 py-1 text-[11px] font-bold rounded cursor-pointer transition-transform hover:scale-[1.02] truncate border ${task.status === 'done' ? 'bg-[#8bc34a]/10 text-[#8bc34a] border-[#8bc34a]/30' :
-                                                                                task.priority === 'urgent' ? 'bg-error/10 text-error border-error/30' :
-                                                                                    task.priority === 'high' ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30' :
-                                                                                        'bg-primary-fixed-dim/10 text-primary-fixed-dim border-primary-fixed-dim/30'
+                                                                            task.priority === 'urgent' ? 'bg-error/10 text-error border-error/30' :
+                                                                                task.priority === 'high' ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30' :
+                                                                                    'bg-primary-fixed-dim/10 text-primary-fixed-dim border-primary-fixed-dim/30'
                                                                             }`}
                                                                         title={task.title}
                                                                     >
@@ -844,9 +1006,9 @@ function ProjectPage() {
                                     <div className="relative">
                                         <button
                                             className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity ${selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
-                                                    selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
-                                                        selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
-                                                            'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
+                                                selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
+                                                    selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
+                                                        'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
                                                 }`}
                                             onClick={() => setPriorityDropdownOpen(!priorityDropdownOpen)}
                                         >
@@ -933,7 +1095,11 @@ function ProjectPage() {
                 </div>
             )}
 
-        </>
+            {/* Post-upload file review modal */}
+            {reviewFile && (
+                <DocViewer file={reviewFile} onClose={() => setReviewFile(null)} />
+            )}
+        </div>
     )
 }
 
