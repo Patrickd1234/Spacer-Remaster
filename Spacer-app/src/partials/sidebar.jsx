@@ -9,6 +9,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const [collapsed, setCollapsed] = useState(false);
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [dbUser, setDbUser] = useState(null);
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -85,10 +86,19 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
             }
         };
         fetchProjects();
+
+        const fetchDbUser = async () => {
+            const { data: authData } = await supabase.auth.getUser();
+            if (authData?.user) {
+                const { data } = await supabase.from("users").select("name, email").eq("id", authData.user.id).single();
+                if (data) setDbUser(data);
+            }
+        };
+        fetchDbUser();
     }, []);
 
-    const displayName = userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
-    const displayEmail = userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
+    const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
+    const displayEmail = dbUser?.email || userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
 
     return (
         <>

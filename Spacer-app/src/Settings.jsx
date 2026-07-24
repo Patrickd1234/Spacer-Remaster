@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import Sidebar from "./partials/sidebar"
 import Header from "./partials/header"
 import { supabase } from "./supabase"
+import { usePreferences } from "./PreferencesContext"
 
 export default function Settings() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -10,14 +11,31 @@ export default function Settings() {
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState(null)
+    const { preferences, updatePreferences } = usePreferences()
+    
+    const notifications = preferences?.notifications || {}
+    const appearance = preferences?.appearance || {}
+    const security = preferences?.security || {}
+    const integrations = preferences?.integrations || {}
+
+    // Password form state
+    const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" })
+    const [passwordMsg, setPasswordMsg] = useState(null)
+
+    // Personal Access Tokens State
+    const [apiTokens, setApiTokens] = useState([
+        { id: "tok_1", name: "CI/CD Deployment Pipeline", created: "2026-05-12", lastUsed: "2 hours ago" },
+        { id: "tok_2", name: "Figma Spacers Plugin", created: "2026-06-01", lastUsed: "Yesterday" }
+    ])
+    const [newTokenName, setNewTokenName] = useState("")
+    const [showTokenModal, setShowTokenModal] = useState(false)
 
     // User & Org details from Supabase / localStorage
     const [user, setUser] = useState({
         id: "",
         name: "",
         email: "",
-        role: "Member",
-        department: "Engineering & Design"
+        role: "Member"
     })
 
     // Workspace Settings State
@@ -32,53 +50,7 @@ export default function Settings() {
         allowedDomain: "acme.com"
     })
 
-    // Notification Settings State
-    const [notifications, setNotifications] = useState({
-        emailAlerts: true,
-        taskAssigned: true,
-        projectUpdates: true,
-        weeklyDigest: false,
-        soundEffects: true,
-        desktopPush: true,
-        frequency: "realtime"
-    })
-
-    // Appearance & Experience State
-    const [appearance, setAppearance] = useState({
-        theme: "dark",
-        accentColor: "lime", // lime, cyan, purple, gold
-        compactUi: false,
-        autoCollapseSidebar: false,
-        animations: "smooth"
-    })
-
-    // Security & Privacy State
-    const [security, setSecurity] = useState({
-        twoFactor: false,
-        shareStatus: true,
-        analyticsOptIn: false,
-        sessionTimeout: "30_mins"
-    })
-
-    // Password form state
-    const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" })
-    const [passwordMsg, setPasswordMsg] = useState(null)
-
-    // Personal Access Tokens State
-    const [apiTokens, setApiTokens] = useState([
-        { id: "tok_1", name: "CI/CD Deployment Pipeline", created: "2026-05-12", lastUsed: "2 hours ago" },
-        { id: "tok_2", name: "Figma Spacers Plugin", created: "2026-06-01", lastUsed: "Yesterday" }
-    ])
-    const [newTokenName, setNewTokenName] = useState("")
-    const [showTokenModal, setShowTokenModal] = useState(false)
-
-    // Integrations State
-    const [integrations, setIntegrations] = useState({
-        github: { connected: true, repo: "acme/spacers-web" },
-        slack: { connected: true, channel: "#proj-spacers" },
-        gcal: { connected: false },
-        figma: { connected: true }
-    })
+    // Integrations State (now from context)
 
     const showToast = (message, type = "success") => {
         setToast({ message, type })
@@ -103,23 +75,13 @@ export default function Settings() {
                         id: authUser.id,
                         name: userProfile?.name || authUser.user_metadata?.full_name || "Workspace User",
                         email: authUser.email || "",
-                        role: userProfile?.role || "Administrator",
-                        department: userProfile?.department || "Product Engineering"
+                        role: "Member" // Role is actually in memberships table, defaulting for now
                     })
                 }
 
-                // Restore local preferences if available
-                const savedNotifs = localStorage.getItem("spacers_settings_notifications")
-                if (savedNotifs) setNotifications(JSON.parse(savedNotifs))
-
-                const savedAppearance = localStorage.getItem("spacers_settings_appearance")
-                if (savedAppearance) setAppearance(JSON.parse(savedAppearance))
-
+                // Restore local workspace settings if available
                 const savedWorkspace = localStorage.getItem("spacers_settings_workspace")
                 if (savedWorkspace) setWorkspace(JSON.parse(savedWorkspace))
-
-                const savedSecurity = localStorage.getItem("spacers_settings_security")
-                if (savedSecurity) setSecurity(JSON.parse(savedSecurity))
             } catch (err) {
                 console.error("Error initializing settings:", err)
             } finally {
@@ -139,22 +101,18 @@ export default function Settings() {
         }, 500)
     }
 
-    const handleSaveNotifications = () => {
-        localStorage.setItem("spacers_settings_notifications", JSON.stringify(notifications))
+    const handleSaveNotifications = async (updated) => {
+        await updatePreferences("notifications", updated)
         showToast("Notification preferences updated!")
     }
 
-    const handleSaveAppearance = (updatedAppearance) => {
-        const next = updatedAppearance || appearance
-        setAppearance(next)
-        localStorage.setItem("spacers_settings_appearance", JSON.stringify(next))
+    const handleSaveAppearance = async (updatedAppearance) => {
+        await updatePreferences("appearance", updatedAppearance)
         showToast("Appearance preferences saved!")
     }
 
-    const handleSaveSecurity = (updatedSecurity) => {
-        const next = updatedSecurity || security
-        setSecurity(next)
-        localStorage.setItem("spacers_settings_security", JSON.stringify(next))
+    const handleSaveSecurity = async (updatedSecurity) => {
+        await updatePreferences("security", updatedSecurity)
         showToast("Security settings updated!")
     }
 
@@ -201,12 +159,12 @@ export default function Settings() {
         showToast("API token revoked.", "info")
     }
 
-    const handleToggleIntegration = (key) => {
+    const handleToggleIntegration = async (key) => {
         const updated = {
             ...integrations,
             [key]: { ...integrations[key], connected: !integrations[key].connected }
         }
-        setIntegrations(updated)
+        await updatePreferences("integrations", updated)
         showToast(`${key.toUpperCase()} integration ${updated[key].connected ? "connected" : "disconnected"}.`)
     }
 
@@ -430,8 +388,6 @@ export default function Settings() {
                                                 <span className="px-2 py-0.5 rounded bg-surface-container-highest text-primary-fixed border border-primary-fixed/20 font-semibold">
                                                     {user.role}
                                                 </span>
-                                                <span>•</span>
-                                                <span>{user.department}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -481,8 +437,7 @@ export default function Settings() {
                                                     aria-checked={notifications[item.key]}
                                                     onClick={() => {
                                                         const next = { ...notifications, [item.key]: !notifications[item.key] }
-                                                        setNotifications(next)
-                                                        handleSaveNotifications()
+                                                        handleSaveNotifications(next)
                                                     }}
                                                     className={`w-12 h-6 rounded-full p-1 flex items-center transition-all duration-300 ${
                                                         notifications[item.key] ? "bg-primary-container justify-end" : "bg-surface-container-highest justify-start"
@@ -501,8 +456,7 @@ export default function Settings() {
                                             value={notifications.frequency}
                                             onChange={(e) => {
                                                 const next = { ...notifications, frequency: e.target.value }
-                                                setNotifications(next)
-                                                handleSaveNotifications()
+                                                handleSaveNotifications(next)
                                             }}
                                         >
                                             <option value="realtime">Real-time (Immediate)</option>

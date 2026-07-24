@@ -22,13 +22,7 @@ function Profile() {
     // Saved profile state
     const [profile, setProfile] = useState({
         name: "",
-        email: "",
-        phone: "",
-        job_title: "",
-        department: "Engineering & Design",
-        location: "San Francisco, CA",
-        bio: "Passionate about building intuitive workspace products and user-centered design systems.",
-        website: "https://openspace.finance/"
+        email: ""
     })
 
     // Draft values during editing
@@ -85,13 +79,7 @@ function Profile() {
 
             const next = {
                 name: data?.name || authUser.user_metadata?.full_name || "",
-                email: data?.email || authUser.email || "",
-                phone: data?.phone || "",
-                job_title: data?.job_title || "Product Designer",
-                department: data?.department || "Engineering & Design",
-                location: data?.location || "San Francisco, CA",
-                bio: data?.bio || "Passionate about building intuitive workspace products and user-centered design systems.",
-                website: data?.website || "https://openspace.finance/"
+                email: data?.email || authUser.email || ""
             }
             setProfile(next)
             setDraft(next)
@@ -128,16 +116,25 @@ function Profile() {
         const { error } = await supabase
             .from("users")
             .update({
-                name: draft.name,
-                phone: draft.phone,
-                job_title: draft.job_title,
+                name: draft.name
             })
             .eq("id", userId)
+
+        // Also update Auth email if changed
+        if (draft.email !== profile.email) {
+            const { error: authError } = await supabase.auth.updateUser({ email: draft.email })
+            if (authError) {
+                console.log("Error updating auth email:", authError)
+                showToast("Could not update email: " + authError.message, "error")
+            }
+        }
 
         setSaving(false)
 
         if (error) {
-            console.log("DB Update warning (some custom fields handled in local state):", error)
+            console.log("DB Update error:", error)
+            showToast("Failed to update profile", "error")
+            return
         }
 
         setProfile(draft)
@@ -191,7 +188,6 @@ function Profile() {
     const stats = [
         { label: "Active Projects", value: "4", icon: "folder_open", color: "text-blue-400" },
         { label: "Tasks Completed", value: "32", icon: "task_alt", color: "text-emerald-400" },
-        { label: "Department", value: profile.department.split("&")[0].trim(), icon: "group", color: "text-purple-400" },
         { label: "Member Since", value: "Jan 2024", icon: "calendar_today", color: "text-amber-400" }
     ]
 
@@ -250,23 +246,14 @@ function Profile() {
                                                 {profile.name || "Unnamed User"}
                                             </h1>
                                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-lime-400/10 text-lime-400 border border-lime-400/20">
-                                                Pro Member
+                                                Member
                                             </span>
                                         </div>
-
-                                        <p className="text-sm font-medium text-neutral-300 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-base text-neutral-400">badge</span>
-                                            {profile.job_title || "Member"} • <span className="text-lime-300/80">{profile.department}</span>
-                                        </p>
 
                                         <div className="flex items-center gap-4 text-xs text-neutral-400 pt-1 flex-wrap">
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">mail</span>
                                                 {profile.email}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm">location_on</span>
-                                                {profile.location}
                                             </span>
                                         </div>
                                     </div>
@@ -339,35 +326,8 @@ function Profile() {
                                                 About
                                             </h3>
                                             <p className="text-sm text-neutral-300 leading-relaxed">
-                                                {profile.bio}
+                                                No bio provided.
                                             </p>
-                                            <div className="pt-2 border-t border-white/5 space-y-2 text-xs text-neutral-400">
-                                                <div className="flex items-center justify-between">
-                                                    <span>Phone:</span>
-                                                    <span className="text-neutral-200">{profile.phone || "Not set"}</span>
-                                                </div>
-                                                <div className="flex items-center justify-between">
-                                                    <span>Portfolio:</span>
-                                                    <a href={profile.website} target="_blank" rel="noreferrer" className="text-lime-400 hover:underline">
-                                                        openspace.finance
-                                                    </a>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Skills & Focus */}
-                                        <div className="p-6 rounded-2xl bg-[#1C1F26] border border-white/10 space-y-3">
-                                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                                                <span className="material-symbols-outlined text-blue-400">verified</span>
-                                                Skills & Expertise
-                                            </h3>
-                                            <div className="flex flex-wrap gap-2 pt-1">
-                                                {["React 19", "UI/UX Architecture", "Supabase", "Design Systems", "Product Strategy", "Tailwind CSS"].map((skill, i) => (
-                                                    <span key={i} className="px-3 py-1 rounded-lg text-xs font-medium bg-white/5 text-neutral-300 border border-white/10 hover:border-lime-400/40 transition-colors">
-                                                        {skill}
-                                                    </span>
-                                                ))}
-                                            </div>
                                         </div>
                                     </div>
 
@@ -442,7 +402,7 @@ function Profile() {
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                                    <div>
+                                    <div className="sm:col-span-2">
                                         <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
                                             Full Name
                                         </label>
@@ -460,103 +420,20 @@ function Profile() {
                                         )}
                                     </div>
 
-                                    <div>
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Email Address <span className="text-lime-400 text-[10px] font-normal lowercase">(verified)</span>
-                                        </label>
-                                        <div className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 text-neutral-400 text-sm flex items-center justify-between">
-                                            <span>{profile.email || "—"}</span>
-                                            <span className="material-symbols-outlined text-base text-emerald-400">check_circle</span>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Phone Number
-                                        </label>
-                                        {isEditing ? (
-                                            <input
-                                                type="text"
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors"
-                                                value={draft.phone}
-                                                placeholder="+1 (555) 000-0000"
-                                                onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-                                            />
-                                        ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
-                                                {profile.phone || "Not provided"}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Job Title
-                                        </label>
-                                        {isEditing ? (
-                                            <input
-                                                type="text"
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors"
-                                                value={draft.job_title}
-                                                onChange={(e) => setDraft({ ...draft, job_title: e.target.value })}
-                                            />
-                                        ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
-                                                {profile.job_title || "Member"}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Department
-                                        </label>
-                                        {isEditing ? (
-                                            <input
-                                                type="text"
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors"
-                                                value={draft.department}
-                                                onChange={(e) => setDraft({ ...draft, department: e.target.value })}
-                                            />
-                                        ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
-                                                {profile.department}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Location
-                                        </label>
-                                        {isEditing ? (
-                                            <input
-                                                type="text"
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors"
-                                                value={draft.location}
-                                                onChange={(e) => setDraft({ ...draft, location: e.target.value })}
-                                            />
-                                        ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
-                                                {profile.location}
-                                            </div>
-                                        )}
-                                    </div>
-
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Bio & Summary
+                                            Email Address <span className="text-lime-400 text-[10px] font-normal lowercase">(auth login)</span>
                                         </label>
                                         {isEditing ? (
-                                            <textarea
-                                                rows={3}
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors resize-none"
-                                                value={draft.bio}
-                                                onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
+                                            <input
+                                                type="email"
+                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors"
+                                                value={draft.email}
+                                                onChange={(e) => setDraft({ ...draft, email: e.target.value })}
                                             />
                                         ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm leading-relaxed">
-                                                {profile.bio}
+                                            <div className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 text-neutral-400 text-sm flex items-center justify-between">
+                                                <span>{profile.email || "—"}</span>
                                             </div>
                                         )}
                                     </div>
