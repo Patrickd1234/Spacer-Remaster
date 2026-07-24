@@ -22,7 +22,13 @@ function Profile() {
     // Saved profile state
     const [profile, setProfile] = useState({
         name: "",
-        email: ""
+        email: "",
+        phone: "",
+        job_title: "",
+        department: "Engineering & Design",
+        location: "San Francisco, CA",
+        bio: "Passionate about building intuitive workspace products and user-centered design systems.",
+        website: "https://openspace.finance/"
     })
 
     // Draft values during editing
@@ -79,7 +85,13 @@ function Profile() {
 
             const next = {
                 name: data?.name || authUser.user_metadata?.full_name || "",
-                email: data?.email || authUser.email || ""
+                email: data?.email || authUser.email || "",
+                phone: data?.phone || "",
+                job_title: data?.job_title || "Product Designer",
+                department: data?.department || "Engineering & Design",
+                location: data?.location || "San Francisco, CA",
+                bio: data?.bio || "Passionate about building intuitive workspace products and user-centered design systems.",
+                website: data?.website || "https://openspace.finance/"
             }
             setProfile(next)
             setDraft(next)
