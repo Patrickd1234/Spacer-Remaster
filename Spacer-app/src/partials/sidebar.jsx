@@ -81,7 +81,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     return (
         <>
             <aside
-                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-[#2D3139] bg-[#111318] flex flex-col py-6 z-50 transition-all duration-300 ease-out overflow-hidden`}
+                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-[#2D3139] bg-[#1C1F26] flex flex-col py-6 z-50 transition-all duration-300 ease-out overflow-hidden`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleSidebarClick}
@@ -91,14 +91,14 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     <div className={`flex items-center ${expanded ? "justify-between mb-4" : "justify-center"}`}>
                         {expanded && (
                             <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-white font-bold text-[20px]">token</span>
+                                <span className="material-symbols-outlined text-[#aff82a] font-bold text-[20px]">token</span>
                                 <h1 className="font-bold text-[16px] text-white tracking-widest uppercase">Spacer</h1>
                             </div>
                         )}
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1e2025] text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors"
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2D3139] text-[#8c947b] hover:text-white transition-colors"
                             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                         >
                             <span className="material-symbols-outlined text-[18px]">{collapsed ? "chevron_right" : "chevron_left"}</span>
@@ -106,7 +106,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     </div>
 
                     {expanded && (
-                        <div className="flex items-center justify-between px-3 py-2 bg-[#1e2025] border border-[#2D3139] rounded-lg cursor-pointer hover:border-[#3d424d] transition-colors group">
+                        <div className="flex items-center justify-between px-3 py-2 bg-[#0F1115] border border-[#2D3139] rounded-lg cursor-pointer hover:border-[#3d424d] transition-colors group">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-5 h-5 rounded-full bg-[#aff82a]/20 text-[#aff82a] flex items-center justify-center font-bold text-[10px]">
                                     S
@@ -120,9 +120,9 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
 
                 {/* NEW PROJECT BUTTON */}
                 <div className="px-4 mb-6">
-                    <button 
-                        className={`w-full py-2.5 px-3 bg-[#5b644d] text-white font-medium text-[14px] rounded-lg flex items-center justify-center gap-2 hover:bg-[#6c765c] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
-                        onClick={() => setShowCreateModal(true)} 
+                    <button
+                        className={`w-full py-2.5 px-3 bg-[#aff82a] text-[#1C1F26] font-bold text-[14px] rounded-lg flex items-center justify-center gap-2 hover:bg-[#9de022] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
+                        onClick={() => setShowCreateModal(true)}
                         title="New Project"
                     >
                         <span className="material-symbols-outlined text-[20px]">add</span>
@@ -134,19 +134,10 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                 <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
                     <div className="space-y-1">
                         {matchesSearch("Home") && (
-                            <Link to="/" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <Link to="/" className={`text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${window.location.pathname === '/' ? 'bg-[#aff82a]/10 text-[#aff82a] font-semibold' : ''}`}>
                                 <span className="material-symbols-outlined text-[20px]">home</span>
                                 {expanded && <span className="font-medium text-[14px]">Home</span>}
                             </Link>
-                        )}
-                        {matchesSearch("Messages") && (
-                            <div className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center justify-between px-3 py-2 cursor-pointer transition-colors group">
-                                <div className="flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-[20px]">chat</span>
-                                    {expanded && <span className="font-medium text-[14px]">Messages</span>}
-                                </div>
-                                {expanded && <span className="bg-[#5b644d] text-white text-[11px] font-bold px-2 py-0.5 rounded-full">12</span>}
-                            </div>
                         )}
                         {matchesSearch("Department") && (
                             <Link to="/department" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
@@ -158,6 +149,18 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                             <Link to="/calendar" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">calendar_today</span>
                                 {expanded && <span className="font-medium text-[14px]">Calendar</span>}
+                            </Link>
+                        )}
+                        {matchesSearch("My Tasks") && (
+                            <Link to="/tasks" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">task</span>
+                                {expanded && <span className="font-medium text-[14px]">My Tasks</span>}
+                            </Link>
+                        )}
+                        {matchesSearch("Reports") && (
+                            <Link to="/reports" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">bar_chart</span>
+                                {expanded && <span className="font-medium text-[14px]">Reports</span>}
                             </Link>
                         )}
                     </div>
@@ -197,22 +200,20 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                             )}
                         </div>
                     </div>
-
-                    <div className="space-y-1 mb-4">
-                        <div className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">school</span>
-                            {expanded && <span className="font-medium text-[14px] whitespace-nowrap">Knowledge Base</span>}
-                        </div>
-                        <div className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">bar_chart</span>
-                            {expanded && <Link to="/reports" className="font-medium text-[14px] whitespace-nowrap w-full">Reports</Link>}
-                        </div>
-                    </div>
                 </nav>
 
                 {/* USER PROFILE & LOGOUT FOOTER */}
                 <div className="mt-auto px-4 border-t border-[#2D3139] pt-4 pb-2">
+                    <Link
+                        to="/settings"
+                        className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors mb-1"
+                        title="Settings"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">settings</span>
+                        {expanded && <span className="font-medium text-[14px]">Settings</span>}
+                    </Link>
                     <button
+                        type="button"
                         onClick={handleLogout}
                         className="w-full text-[#8c947b] hover:text-red-400 hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors mb-3"
                         title="Log out"
@@ -220,7 +221,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         <span className="material-symbols-outlined text-[20px]">logout</span>
                         {expanded && <span className="font-medium text-[14px] whitespace-nowrap">Log out</span>}
                     </button>
-                    
+
                     {expanded ? (
                         <div className="flex items-center justify-between px-3 cursor-pointer group">
                             <div className="flex items-center gap-3 min-w-0">

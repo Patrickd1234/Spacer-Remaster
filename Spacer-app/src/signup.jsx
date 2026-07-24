@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 
 function Signup() {
-    const [status, setStatus] = useState("idle") // "idle" | "submitting" | "success"
+    const [status, setStatus] = useState("idle")
     const [fullName, setFullName] = useState("")
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
@@ -104,7 +104,7 @@ function Signup() {
                         <button
                             type="button"
                             onClick={enableDemoMode}
-                            className="underline text-[#aff82a] font-bold ml-1 cursor-pointer"
+                            className="underline text-[#aff82a] hover:brightness-110 font-bold ml-1 cursor-pointer"
                         >
                             Click here to activate Demo/Mock Mode
                         </button>{" "}
@@ -118,49 +118,52 @@ function Signup() {
         }
     }
 
+    const isEmailError = typeof errorMsg === "string" && errorMsg.toLowerCase().includes("email")
+    const isPasswordError = typeof errorMsg === "string" && errorMsg.toLowerCase().includes("password")
+
     return (
-        <div className="flex min-h-screen bg-[#111318] text-white font-sans overflow-hidden relative">
-
-            {/* Left Side: Product Showcase / Graphics */}
-            <div className="hidden lg:flex lg:w-[55%] relative flex-col justify-between p-12 overflow-hidden border-r border-[#2D3139] bg-[#0F1115]">
-                <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] bg-[#4361EE]/10 rounded-full blur-[120px] pointer-events-none" />
-                <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] bg-[#aff82a]/10 rounded-full blur-[120px] pointer-events-none" />
-
-                <div className="flex items-center gap-2 z-10">
-                    <span className="material-symbols-outlined text-white font-bold text-[24px]">token</span>
-                    <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
+        <div className="min-h-screen bg-[#181a20] flex overflow-hidden">
+            {/* Top Error Toast */}
+            {errorMsg && (
+                <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
+                    <div className="w-8 h-8 rounded border border-white/20 flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-white text-[18px]">error</span>
+                    </div>
+                    <div className="text-white text-[14px] leading-tight">
+                        {errorMsg}
+                    </div>
                 </div>
+            )}
 
-                <div className="relative z-10 my-auto max-w-[480px]">
+            {/* Demo Mode Toggle */}
+            <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
+                <button onClick={toggleDemoMode} className="text-xs bg-[#2D3139] text-white px-2 py-1 rounded">
+                    Demo: {isDemoMode ? "ON" : "OFF"}
+                </button>
+            </div>
+
+            {/* Left Side: Visual/Brand (Hidden on mobile) */}
+            <div className="hidden lg:flex w-[55%] relative flex-col px-16 py-12 border-r border-[#2D3139]/30">
+                {/* Abstract Glowing Backgrounds */}
+                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#2A3A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
+                <div className="absolute bottom-[-10%] right-[10%] w-[400px] h-[400px] bg-[#3B2A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
+
+                {/* Branding */}
+                <div className="relative z-10 mb-12">
+                    <div className="flex items-center gap-2 mb-8">
+                        <span className="material-symbols-outlined text-[#aff82a] font-bold text-[24px]">token</span>
+                        <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
+                    </div>
                     <h2 className="text-4xl font-bold leading-tight mb-4 text-white">
                         One workspace for <br />
                         <span className="text-[#aff82a]">every team.</span>
                     </h2>
-                    <p className="text-[#8c947b] text-base mb-8">
+                    <p className="text-[#8c947b] text-base mb-8 max-w-md">
                         HR, Design, Development, and Marketing — bring all company operations into one unified platform.
                     </p>
-
-                    <div className="bg-[#191c21] border border-[#2D3139] rounded-2xl p-6 shadow-2xl space-y-4">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-[#8c947b]">Spacer Workspace</span>
-                            <span className="bg-[#aff82a]/10 text-[#aff82a] border border-[#aff82a]/30 text-[10px] font-bold px-2 py-0.5 rounded">
-                                Live
-                            </span>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3 bg-[#1C1F26] p-2.5 rounded-lg border border-[#2D3139]">
-                                <span className="material-symbols-outlined text-[#aff82a] text-[18px]">code</span>
-                                <span className="text-xs text-white font-medium">Development Space</span>
-                            </div>
-                            <div className="flex items-center gap-3 bg-[#1C1F26] p-2.5 rounded-lg border border-[#2D3139]">
-                                <span className="material-symbols-outlined text-pink-400 text-[18px]">campaign</span>
-                                <span className="text-xs text-white font-medium">Marketing Campaign</span>
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
-                <div className="z-10 border-l-2 border-[#aff82a] pl-4">
+                <div className="relative z-10 mt-auto border-l-2 border-[#aff82a] pl-4">
                     <p className="text-sm text-[#8c947b] italic">
                         "Set up your organization in minutes and invite team leads seamlessly."
                     </p>
@@ -168,65 +171,59 @@ function Signup() {
             </div>
 
             {/* Right Side: Sign Up Form */}
-            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-20 bg-[#181a20] relative z-10 overflow-y-auto py-12">
-                <div className="w-full max-w-[400px] mx-auto">
+            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[#181a20] relative z-10 overflow-y-auto py-12">
+                <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[#aff82a] text-[32px]">token</span>
+                        <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
                     </div>
 
-                    <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">Create Account</h2>
-                    <p className="text-[#8c947b] text-sm mb-8 leading-relaxed">
+                    <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Create Account</h2>
+                    <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
                         Join your team and start collaborating on Spacer.
                     </p>
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        {errorMsg && (
-                            <div className="p-3 bg-red-500/10 border border-red-500/40 text-red-400 text-xs rounded-xl">
-                                {errorMsg}
-                            </div>
-                        )}
-
-                        {/* Full Name */}
-                        <div>
-                            <input
-                                type="text"
-                                id="fullname"
-                                placeholder="Full Name"
-                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
-                                value={fullName}
-                                onChange={(e) => setFullName(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        {/* Email Address */}
-                        <div>
-                            <input
-                                type="email"
-                                id="email"
-                                placeholder="Email address"
-                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        {/* Password */}
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {/* Full Name Input */}
                         <div className="relative">
-                            <input
-                                type={showPassword ? "text" : "password"}
+                            <input 
+                                type="text" 
+                                id="fullname"
+                                placeholder="Full Name" 
+                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                value={fullName} 
+                                onChange={(e) => setFullName(e.target.value)} 
+                                required 
+                            />
+                        </div>
+
+                        {/* Email Input */}
+                        <div className="relative">
+                            <input 
+                                type="email" 
+                                id="email"
+                                placeholder="Email address" 
+                                className={`w-full bg-[#111318] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                value={email} 
+                                onChange={(e) => setEmail(e.target.value)} 
+                                required 
+                            />
+                        </div>
+
+                        {/* Password Input */}
+                        <div className="relative">
+                            <input 
+                                type={showPassword ? "text" : "password"} 
                                 id="password"
-                                placeholder="Password"
-                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
+                                placeholder="Password" 
+                                className={`w-full bg-[#111318] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                value={password} 
+                                onChange={(e) => setPassword(e.target.value)} 
+                                required 
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-3.5 text-[#8c947b] hover:text-white transition-colors"
+                                className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[20px]">
                                     {showPassword ? "visibility_off" : "visibility"}
@@ -237,16 +234,16 @@ function Signup() {
                         {/* Terms Checkbox */}
                         <div className="flex items-start gap-3 pt-2">
                             <input id="terms" name="terms" required type="checkbox" className="mt-0.5 rounded border-[#2D3139] bg-[#111318] text-[#aff82a] focus:ring-[#aff82a]" />
-                            <label htmlFor="terms" className="text-[#8c947b] text-xs leading-normal">
+                            <label htmlFor="terms" className="text-[#8c947b] text-[13px] leading-normal">
                                 I agree to the <a href="#" className="text-[#aff82a] hover:underline">Terms &amp; Conditions</a> and Privacy Policy
                             </label>
                         </div>
 
                         {/* Sign Up Button */}
-                        <button
-                            type="submit"
+                        <button 
+                            type="submit" 
                             disabled={status === "submitting"}
-                            className="w-full bg-[#5b644d] hover:bg-[#6c765c] text-white font-medium text-sm py-3.5 rounded-xl border border-[#5b644d] transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+                            className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                         >
                             {status === "submitting" ? (
                                 <>
@@ -259,8 +256,8 @@ function Signup() {
                         </button>
 
                         <div className="text-center mt-6">
-                            <p className="text-[#8c947b] text-sm">
-                                Already have an account? <Link to="/login" className="text-[#aff82a] hover:underline font-medium">Sign In</Link>
+                            <p className="text-[#8c947b] text-[14px]">
+                                Already have an account? <Link to="/login" className="text-[#aff82a] font-semibold hover:underline">Sign In</Link>
                             </p>
                         </div>
                     </form>
