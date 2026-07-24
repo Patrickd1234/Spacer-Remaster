@@ -102,10 +102,7 @@ function ProjectPage() {
         if (!taskId) return
 
         const task = project_tasks.find(t => String(t.id) === String(taskId))
-        if (!task) return
-        
-        const isOverdue = task.due_date && new Date(task.due_date) < new Date()
-        if (task.status === newStatus && !isOverdue) return
+        if (!task || task.status === newStatus) return
 
         updateTaskStatus(taskId, newStatus)
     }
