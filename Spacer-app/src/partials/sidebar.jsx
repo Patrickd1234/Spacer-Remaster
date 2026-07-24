@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "../supabase";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
 
 export default function Sidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
@@ -8,7 +8,19 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const [projects, setProjects] = useState([]);
     const [collapsed, setCollapsed] = useState(false);
     const [hovered, setHovered] = useState(false);
+    const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setProfileDropdownOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const handleToggle = () => {
         const next = !collapsed;
@@ -211,33 +223,45 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                 </nav>
 
                 {/* USER PROFILE & LOGOUT FOOTER */}
-                <div className="mt-auto px-4 border-t border-[#2D3139] pt-4 pb-2">
-                    <button
-                        onClick={handleLogout}
-                        className="w-full text-[#8c947b] hover:text-red-400 hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors mb-3"
-                        title="Log out"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">logout</span>
-                        {expanded && <span className="font-medium text-[14px] whitespace-nowrap">Log out</span>}
-                    </button>
-                    
-                    {expanded ? (
-                        <div className="flex items-center justify-between px-3 cursor-pointer group">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139] shrink-0">
+                <div className="mt-auto px-4 border-t border-[#2D3139] pt-4 pb-2 relative" ref={dropdownRef}>
+                    <div onClick={() => setProfileDropdownOpen(!profileDropdownOpen)} className="block w-full">
+                        {expanded ? (
+                            <div className="flex items-center justify-between px-3 py-1 cursor-pointer group rounded-lg hover:bg-[#2D3139] transition-colors">
+                                <div className="flex items-center gap-3 min-w-0">
+                                    <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139] shrink-0">
+                                        {displayName.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="flex flex-col min-w-0">
+                                        <span className="text-white text-[14px] font-medium leading-tight truncate">{displayName}</span>
+                                        <span className="text-[#8c947b] text-[12px] truncate">{displayEmail}</span>
+                                    </div>
+                                </div>
+                                <span className={`material-symbols-outlined text-[#8c947b] group-hover:text-white transition-all duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                            </div>
+                        ) : (
+                            <div className="flex justify-center px-3 py-1 cursor-pointer rounded-lg hover:bg-[#2D3139] transition-colors" title={displayName}>
+                                <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139]">
                                     {displayName.charAt(0).toUpperCase()}
                                 </div>
-                                <div className="flex flex-col min-w-0">
-                                    <span className="text-white text-[14px] font-medium leading-tight truncate">{displayName}</span>
-                                    <span className="text-[#8c947b] text-[12px] truncate">{displayEmail}</span>
-                                </div>
                             </div>
-                        </div>
-                    ) : (
-                        <div className="flex justify-center px-3 cursor-pointer" title={displayName}>
-                            <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139]">
-                                {displayName.charAt(0).toUpperCase()}
-                            </div>
+                        )}
+                    </div>
+
+                    {profileDropdownOpen && (
+                        <div className={`absolute ${collapsed && !hovered ? 'left-16 w-48' : 'left-4 right-4'} bottom-full mb-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+                            <Link to="/profile" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">person</span>
+                                <span className="text-sm font-medium">Your Profile</span>
+                            </Link>
+                            <Link to="/settings" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">settings</span>
+                                <span className="text-sm font-medium">Settings</span>
+                            </Link>
+                            <div className="h-[1px] bg-[#2D3139] mx-2"></div>
+                            <button onClick={() => { setProfileDropdownOpen(false); handleLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-950/20 transition-colors">
+                                <span className="material-symbols-outlined text-[20px]">logout</span>
+                                <span className="text-sm font-medium">Log out</span>
+                            </button>
                         </div>
                     )}
                 </div>
