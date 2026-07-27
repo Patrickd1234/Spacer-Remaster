@@ -161,7 +161,35 @@ function Home() {
             if (error) {
                 console.warn("tasks fetch error:", error)
             } else {
-                setUserTasks(data || [])
+                const corrected = (data || []).map(t => {
+                    let subtasksList = [];
+                    if (t.sub_tasks) {
+                        try {
+                            subtasksList = JSON.parse(t.sub_tasks);
+                            if (!Array.isArray(subtasksList)) subtasksList = [];
+                        } catch (e) {}
+                    }
+                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
+                    const anyDone = subtasksList.some(st => st.done);
+
+                    let expectedStatus = t.status;
+                    if (allDone) {
+                        expectedStatus = 'done';
+                    } else if (subtasksList.length === 0 || !anyDone) {
+                        expectedStatus = 'todo';
+                    } else {
+                        expectedStatus = 'in_progress';
+                    }
+
+                    if (t.status !== expectedStatus) {
+                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
+                            if (error) console.error("Error auto-correcting task status", error);
+                        });
+                        return { ...t, status: expectedStatus };
+                    }
+                    return t;
+                });
+                setUserTasks(corrected)
             }
         } catch (err) {
             console.error("fetchUserTasks error:", err)
