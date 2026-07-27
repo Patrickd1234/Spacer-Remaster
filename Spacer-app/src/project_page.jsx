@@ -578,13 +578,7 @@ function ProjectPage() {
                                     return (
                                         <div
                                             key={column.key}
-                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 ${dragOverColumn === column.key
-                                                ? 'bg-[#1C1F26] border border-[#aff82a]/30'
-                                                : 'bg-[#191c21]/50 border border-[#2D3139]/30'
-                                                }`}
-                                            onDragOver={(e) => { if (column.key !== 'overdue') { e.preventDefault(); setDragOverColumn(column.key); } }}
-                                            onDragLeave={() => setDragOverColumn(null)}
-                                            onDrop={(e) => { if (column.key !== 'overdue') { handleDrop(e, column.key); } setDragOverColumn(null); }}
+                                            className="flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border border-[#2D3139]/30"
                                         >
                                             {/* Column Header */}
                                             <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
@@ -614,10 +608,8 @@ function ProjectPage() {
                                                 {columnTasks.map(task => (
                                                     <div
                                                         key={task.id}
-                                                        draggable
-                                                        onDragStart={(e) => handleDragStart(e, task.id)}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer active:cursor-grabbing hover:border-[#aff82a]/50 transition-all group"
+                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[#aff82a]/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
