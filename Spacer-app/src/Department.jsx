@@ -2,16 +2,17 @@ import Sidebar from "./partials/sidebar";
 import Header from "./partials/header";
 import { supabase } from "./supabase";
 import { useEffect, useState } from 'react';
+import { useRole } from "./RoleContext";
 
 function Department() {
     const [userId, setUserId] = useState(null)
-    const [userRole, setUserRole] = useState(null)
     const [userTeamId, setUserTeamId] = useState(null)
     const [allTeams, setAllTeams] = useState([])
     const [activeTeam, setActiveTeam] = useState(null)
     const [mem_info, setMem_info] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
+    const { isSuperAdmin, isAdmin, roleLoading, membershipData } = useRole()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
     useEffect(() => {
@@ -22,34 +23,20 @@ function Department() {
                 if (!uid) { setLoading(false); return }
                 setUserId(uid)
 
-                const { data: membership, error: memErr } = await supabase
-                    .from("memberships")
-                    .select("role, team_space_id")
-                    .eq("user_id", uid)
-                    .maybeSingle()
-
-                if (memErr) console.warn("membership fetch error:", memErr)
-
-                const role = membership?.role ?? "member"
-                const teamId = membership?.team_space_id ?? null
-
-                setUserRole(role)
-                setUserTeamId(teamId)
-
-                let orgId = authData?.user?.user_metadata?.organization_id;
-                if (!orgId && membership?.team_space_id) {
-                    const { data: tsData } = await supabase
-                        .from("team_spaces")
-                        .select("organization_id")
-                        .eq("id", membership.team_space_id)
-                        .maybeSingle();
-                    orgId = tsData?.organization_id;
-                }
-
-                if (role === "super_admin" || role === "superadmin") {
+                if (isSuperAdmin) {
+                    let orgId = authData?.user?.user_metadata?.organization_id;
+                    if (!orgId && membershipData?.team_space_id) {
+                        const { data: tsData } = await supabase
+                            .from("team_spaces")
+                            .select("organization_id")
+                            .eq("id", membershipData.team_space_id)
+                            .maybeSingle();
+                        orgId = tsData?.organization_id;
+                    }
                     await fetchAllTeams(orgId)
                 } else {
-                    await fetchTeamMembers(teamId)
+                    setUserTeamId(membershipData?.team_space_id)
+                    await fetchTeamMembers(membershipData?.team_space_id)
                 }
             } catch (err) {
                 console.error("Department init error:", err)
@@ -57,8 +44,11 @@ function Department() {
                 setLoading(false)
             }
         }
-        init()
-    }, [])
+
+        if (!roleLoading) {
+            init()
+        }
+    }, [isSuperAdmin, roleLoading, membershipData])
 
     const fetchAllTeams = async (orgId) => {
         let teamQuery = supabase.from("team_spaces").select("id, name")
@@ -111,8 +101,6 @@ function Department() {
         setLoading(false)
     }
 
-    const isSuperAdmin = userRole === "super_admin" || userRole === "superadmin"
-    const isAdmin = userRole === "admin"
     const canManage = isSuperAdmin || isAdmin
 
     const filteredMembers = mem_info.filter(m =>

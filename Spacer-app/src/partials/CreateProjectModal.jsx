@@ -11,12 +11,35 @@ export default function CreateProjectModal({ onClose, onCreated }) {
 
     useEffect(() => {
         const fetchTeams = async () => {
-            const { data, error } = await supabase.from("team_spaces").select("*").order("name");
-            if (error) {
-                console.log(error);
+            const userId = localStorage.getItem("userId");
+            if (!userId) return;
+
+            const { data: memberData, error: memberError } = await supabase
+                .from("memberships")
+                .select("team_space_id, role")
+                .eq("user_id", userId);
+
+            const isSuperAdmin = memberData?.some(m => m.role === 'superadmin' || m.role === 'super_admin');
+
+            if (isSuperAdmin) {
+                const { data, error } = await supabase.from("team_spaces").select("*").order("name");
+                if (!error) {
+                    setTeamSpaces(data || []);
+                    if (data && data.length > 0) setTeamSpaceId(data[0].id);
+                }
+            } else if (!memberError && memberData && memberData.length > 0) {
+                const teamIds = memberData.map(m => m.team_space_id);
+                const { data, error } = await supabase
+                    .from("team_spaces")
+                    .select("*")
+                    .in("id", teamIds)
+                    .order("name");
+                if (!error) {
+                    setTeamSpaces(data || []);
+                    if (data && data.length > 0) setTeamSpaceId(data[0].id);
+                }
             } else {
-                setTeamSpaces(data || []);
-                if (data && data.length > 0) setTeamSpaceId(data[0].id);
+                setTeamSpaces([]);
             }
         };
         fetchTeams();
@@ -35,9 +58,14 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         }
 
         setSaving(true);
+        const insertPayload = { team_space_id: teamSpaceId, name: name.trim() };
+        if (deadline) {
+            insertPayload.deadline = deadline;
+        }
+
         const { data, error } = await supabase
             .from("project_spaces")
-            .insert({ team_space_id: teamSpaceId, name: name.trim() })
+            .insert(insertPayload)
             .select()
             .single();
         setSaving(false);
@@ -112,7 +140,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                             onChange={(e) => setDeadline(e.target.value)}
                         />
                         <p className="text-[11px] text-on-surface-variant/60">
-                            Not saved yet — there's no deadline column on projects. Let me know if you want one added.
+                            Please ensure the "deadline" column exists in your "project_spaces" database table to save this field.
                         </p>
                     </div>
 
