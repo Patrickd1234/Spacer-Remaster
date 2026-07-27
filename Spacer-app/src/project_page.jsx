@@ -315,6 +315,15 @@ function ProjectPage() {
                     return t;
                 });
                 setProjectTasks(corrected);
+                const urlParams = new URLSearchParams(window.location.search);
+                const taskIdParam = urlParams.get("task_id");
+                if (taskIdParam) {
+                    const taskToOpen = corrected.find(t => String(t.id) === String(taskIdParam));
+                    if (taskToOpen) {
+                        setSelectedTask(taskToOpen);
+                        setActiveTab("tasks");
+                    }
+                }
             }
         }
 

@@ -4,7 +4,7 @@ import ProjectPanel from "./components/ProjectPanel"
 import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
 const TEAM_ICONS = {
@@ -85,6 +85,7 @@ function TeamCard({ team }) {
 }
 
 function Home() {
+    const navigate = useNavigate()
     const [userEmail, setUserEmail] = useState("")
     const [userData, setUserData] = useState(null)
     const [selectedProject, setSelectedProject] = useState(null)
@@ -460,7 +461,11 @@ function Home() {
                                                     {todoTasks.length === 0 ? (
                                                         <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                     ) : todoTasks.map(task => (
-                                                        <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#424934] transition-all cursor-default group">
+                                                        <div
+                                                            key={task.id}
+                                                            onClick={() => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)}
+                                                            className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#aff82a]/50 transition-all cursor-pointer group"
+                                                        >
                                                             <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
                                                             {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                             {task.due_date && (
@@ -487,7 +492,11 @@ function Home() {
                                                     {inProgressTasks.length === 0 ? (
                                                         <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                     ) : inProgressTasks.map(task => (
-                                                        <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#424934] transition-all cursor-default">
+                                                        <div
+                                                            key={task.id}
+                                                            onClick={() => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)}
+                                                            className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#aff82a]/50 transition-all cursor-pointer"
+                                                        >
                                                             <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
                                                             {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                             {task.due_date && (
@@ -514,7 +523,11 @@ function Home() {
                                                     {doneTasks.length === 0 ? (
                                                         <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                     ) : doneTasks.map(task => (
-                                                        <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 opacity-70 hover:opacity-100 transition-all cursor-default">
+                                                        <div
+                                                            key={task.id}
+                                                            onClick={() => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)}
+                                                            className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 opacity-70 hover:opacity-100 hover:border-[#aff82a]/50 transition-all cursor-pointer"
+                                                        >
                                                             <p className="text-sm font-semibold text-white truncate line-through text-[#8c947b]">{task.title || task.name || "Untitled"}</p>
                                                             {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                         </div>
