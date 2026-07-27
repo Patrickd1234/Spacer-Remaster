@@ -140,17 +140,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     )}
                 </div>
 
-                {/* NEW PROJECT BUTTON */}
-                <div className="px-4 mb-6">
-                    <button
-                        className={`w-full py-2.5 px-3 bg-[#aff82a] text-[#1C1F26] font-bold text-[14px] rounded-lg flex items-center justify-center gap-2 hover:bg-[#9de022] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
-                        onClick={() => setShowCreateModal(true)}
-                        title="New Project"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                        {expanded && <span>New Project</span>}
-                    </button>
-                </div>
+
 
                 {/* NAVIGATION ITEMS */}
                 <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
