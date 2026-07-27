@@ -587,20 +587,6 @@ function ProjectPage() {
                                                     <span className="font-label-md text-label-md text-white font-bold">{column.label}</span>
                                                     <span className="text-[10px] text-[#8c947b] bg-[#1C1F26] border border-[#2D3139]/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
                                                 </div>
-                                                <div className="flex items-center gap-[2px]">
-                                                    {column.key !== 'overdue' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
-                                                            className="w-6 h-6 flex items-center justify-center rounded text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors cursor-pointer"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[16px]">add</span>
-                                                        </button>
-                                                    )}
-                                                    <button type="button" className="w-6 h-6 flex items-center justify-center rounded text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-[16px]">more_horiz</span>
-                                                    </button>
-                                                </div>
                                             </div>
 
                                             {/* Task Cards */}
