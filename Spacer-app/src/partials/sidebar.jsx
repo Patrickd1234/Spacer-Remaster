@@ -268,3 +268,4 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         </>
     )
 }
+
