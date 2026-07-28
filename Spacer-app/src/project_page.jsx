@@ -70,6 +70,9 @@ function ProjectPage() {
     const [reviewFile, setReviewFile] = useState(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState(null)
     const fileInputRef = useRef()
+    const [taskUploading, setTaskUploading] = useState(false)
+    const [taskUploadError, setTaskUploadError] = useState("")
+    const taskFileInputRef = useRef()
 
     const updateTaskPriority = async (taskId, newPriority) => {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
@@ -410,6 +413,55 @@ function ProjectPage() {
             if (newLog) setActivityLog(prev => [newLog, ...prev])
         }
         setConfirmDeleteId(null); fetchFiles()
+    }
+
+    const uploadTaskFile = async (file, taskId) => {
+        if (!file || !taskId) return
+        setTaskUploading(true)
+        setTaskUploadError("")
+        const path = `${project_id}/task-${taskId}/${Date.now()}-${file.name}`
+        try {
+            const { error: storageError } = await supabase.storage
+                .from("project-files").upload(path, file, { contentType: file.type, upsert: false })
+            if (storageError) {
+                setTaskUploadError("Upload failed: " + storageError.message)
+                setTaskUploading(false)
+                return
+            }
+            const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
+            const { data: userData } = await supabase.auth.getUser()
+            const uploaderName = userData?.user?.email?.split("@")[0] || "You"
+            const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
+                project_id,
+                task_id: taskId,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                path,
+                url: urlData?.publicUrl || "",
+                uploaded_by: uploaderName,
+            }).select().single()
+
+            if (dbError) {
+                setTaskUploadError("Database save failed: " + dbError.message)
+            } else if (fileData) {
+                const logEntry = {
+                    entity_type: "file",
+                    entity_id: fileData.id,
+                    actor_id: userData?.user?.id,
+                    action: "file_added",
+                    new_state: { project_id: project_id, name: file.name, task_id: taskId }
+                }
+                const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
+                if (newLog) setActivityLog(prev => [newLog, ...prev])
+            }
+        } catch (err) {
+            console.error("Task upload error:", err)
+            setTaskUploadError("An unexpected error occurred.")
+        } finally {
+            setTaskUploading(false)
+        }
+        fetchFiles()
     }
 
     const PreUploadPreview = () => {
@@ -1309,6 +1361,111 @@ function ProjectPage() {
                                                     <span className="material-symbols-outlined text-[14px]">add</span> Add
                                                 </button>
                                             </form>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            <div>
+                                <div className="flex items-center justify-between mb-sm">
+                                    <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                        <span className="material-symbols-outlined text-[16px]">attach_file</span>
+                                        Attachments
+                                    </h3>
+                                    <div>
+                                        <input
+                                            ref={taskFileInputRef}
+                                            type="file"
+                                            accept={ACCEPTED}
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                if (e.target.files?.[0]) {
+                                                    uploadTaskFile(e.target.files[0], selectedTask.id);
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            disabled={taskUploading}
+                                            onClick={() => taskFileInputRef.current?.click()}
+                                            className="flex items-center gap-xs text-xs text-primary font-bold hover:underline cursor-pointer disabled:opacity-50"
+                                        >
+                                            {taskUploading ? (
+                                                <>
+                                                    <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                                                    Uploading…
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="material-symbols-outlined text-[14px]">add</span>
+                                                    Attach File
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                                {taskUploadError && (
+                                    <p className="text-xs text-error mb-xs">{taskUploadError}</p>
+                                )}
+                                {(() => {
+                                    const taskFiles = projectFiles.filter(f => String(f.task_id) === String(selectedTask.id));
+                                    return (
+                                        <div className="space-y-xs bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">
+                                            {taskFiles.length > 0 ? (
+                                                <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
+                                                    {taskFiles.map(f => {
+                                                        const { icon, color, bg } = getFileStyle(f.type);
+                                                        return (
+                                                            <div key={f.id} className="flex items-center justify-between gap-sm group/file p-1 hover:bg-[#2D3139]/30 rounded transition-colors">
+                                                                <div
+                                                                    onClick={() => setReviewFile(f)}
+                                                                    className="flex items-center gap-sm cursor-pointer min-w-0 flex-1"
+                                                                >
+                                                                    <div className={`w-8 h-8 ${bg} flex items-center justify-center rounded shrink-0`}>
+                                                                        <span className={`material-symbols-outlined text-[18px] ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                                                                    </div>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-sm font-semibold text-white truncate" title={f.name}>{f.name}</p>
+                                                                        <p className="text-[10px] text-[#8c947b]">
+                                                                            {f.size ? formatBytes(f.size) : ""} {f.uploaded_by ? `· by ${f.uploaded_by}` : ""}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex items-center gap-xs opacity-0 group-hover/file:opacity-100 transition-opacity shrink-0">
+                                                                    <button
+                                                                        type="button"
+                                                                        title="Preview"
+                                                                        onClick={() => setReviewFile(f)}
+                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[16px] cursor-pointer"
+                                                                    >
+                                                                        visibility
+                                                                    </button>
+                                                                    <a
+                                                                        href={f.url}
+                                                                        download={f.name}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                        title="Download"
+                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[16px] cursor-pointer"
+                                                                    >
+                                                                        download
+                                                                    </a>
+                                                                    <button
+                                                                        type="button"
+                                                                        title="Delete"
+                                                                        onClick={() => deleteFile(f)}
+                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-error transition-colors text-[16px] cursor-pointer"
+                                                                    >
+                                                                        delete
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-[#8c947b]/60 italic">No attachments yet.</p>
+                                            )}
                                         </div>
                                     );
                                 })()}
