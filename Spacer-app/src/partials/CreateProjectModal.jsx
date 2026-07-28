@@ -11,7 +11,25 @@ export default function CreateProjectModal({ onClose, onCreated }) {
 
     useEffect(() => {
         const fetchTeams = async () => {
-            const { data, error } = await supabase.from("team_spaces").select("*").order("name");
+            const { data: authData } = await supabase.auth.getUser();
+            const userId = authData?.user?.id;
+            if (!userId) return;
+
+            const { data: userProfile } = await supabase
+                .from("users")
+                .select("organization_id")
+                .eq("id", userId)
+                .single();
+
+            const orgId = userProfile?.organization_id;
+            if (!orgId) return;
+
+            const { data, error } = await supabase
+                .from("team_spaces")
+                .select("*")
+                .eq("organization_id", orgId)
+                .order("name");
+
             if (error) {
                 console.log(error);
             } else {

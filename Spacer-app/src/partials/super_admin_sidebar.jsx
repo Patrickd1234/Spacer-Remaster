@@ -69,7 +69,27 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
     // Fetch team spaces
     useEffect(() => {
         const fetchTeamSpaces = async () => {
-            const { data, error } = await supabase.from("team_spaces").select("id, name").order("name");
+            const userId = localStorage.getItem("userId");
+            if (!userId) return;
+
+            let orgId = dbUser?.organization_id;
+            if (!orgId) {
+                const { data: userData } = await supabase
+                    .from("users")
+                    .select("organization_id")
+                    .eq("id", userId)
+                    .maybeSingle();
+                orgId = userData?.organization_id;
+            }
+
+            if (!orgId) return;
+
+            const { data, error } = await supabase
+                .from("team_spaces")
+                .select("id, name")
+                .eq("organization_id", orgId)
+                .order("name");
+
             if (!error && data) {
                 setTeamSpaces(data);
                 // Auto-select the first team space if none selected
@@ -79,7 +99,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
             }
         };
         fetchTeamSpaces();
-    }, []);
+    }, [dbUser?.organization_id]);
 
     // Fetch projects filtered by selected team space
     useEffect(() => {
@@ -102,7 +122,11 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
         const fetchDbUser = async () => {
             const { data: authData } = await supabase.auth.getUser();
             if (authData?.user) {
-                const { data } = await supabase.from("users").select("name, email").eq("id", authData.user.id).single();
+                const { data } = await supabase
+                    .from("users")
+                    .select("name, email, organization_id")
+                    .eq("id", authData.user.id)
+                    .single();
                 if (data) setDbUser(data);
             }
         };
