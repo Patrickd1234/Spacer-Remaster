@@ -1,4 +1,4 @@
-import Sidebar from "./partials/sidebar"
+import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import ProjectPanel from "./components/ProjectPanel"
 import DocViewer from "./components/DocViewer"

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { supabase } from "./supabase"
-import Sidebar from "./partials/sidebar"
+import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"

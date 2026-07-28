@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import Sidebar from "./partials/sidebar"
+import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import { supabase } from "./supabase"
