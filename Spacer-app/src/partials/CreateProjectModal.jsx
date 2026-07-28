@@ -52,28 +52,28 @@ export default function CreateProjectModal({ onClose, onCreated }) {
     };
 
     return (
-        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-md" onClick={onClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-md bg-black/60 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="bg-surface-container rounded-xl border border-outline-variant w-full max-w-lg shadow-2xl overflow-hidden"
+                className="bg-[#191c21] rounded-xl border border-[#2D3139] w-full max-w-lg shadow-2xl overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-high">
+                <div className="p-lg border-b border-[#2D3139]/30 flex justify-between items-center bg-[#1C1F26]">
                     <div>
-                        <h2 className="font-headline-lg text-headline-lg text-primary-container">Create New Project</h2>
-                        <p className="font-body-sm text-on-surface-variant">Define the parameters for your new mission.</p>
+                        <h2 className="font-headline-lg text-headline-lg text-[#aff82a] font-bold">Create New Project</h2>
+                        <p className="font-body-sm text-[#8c947b]">Define the parameters for your new mission.</p>
                     </div>
-                    <button className="text-on-surface-variant hover:text-on-surface transition-colors" onClick={onClose}>
+                    <button className="text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
 
                 <div className="p-lg space-y-lg">
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider">
+                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
                             Team Space
                         </label>
                         <select
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all"
+                            className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
                             value={teamSpaceId}
                             onChange={(e) => setTeamSpaceId(e.target.value)}
                         >
@@ -85,13 +85,13 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                     </div>
 
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider" htmlFor="proj-name">
+                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider" htmlFor="proj-name">
                             Project Name
                         </label>
                         <div className="relative group">
                             <input
                                 id="proj-name"
-                                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all placeholder:text-on-surface-variant/40"
+                                className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all placeholder:text-[#8c947b]/40"
                                 placeholder="e.g. Operation Nightfall"
                                 type="text"
                                 value={name}
@@ -101,17 +101,17 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                     </div>
 
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-on-surface uppercase tracking-wider" htmlFor="deadline">
+                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider" htmlFor="deadline">
                             Deadline
                         </label>
                         <input
                             id="deadline"
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-on-surface focus:ring-1 focus:ring-primary-container focus:border-primary-container transition-all [color-scheme:dark]"
+                            className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all [color-scheme:dark]"
                             type="date"
                             value={deadline}
                             onChange={(e) => setDeadline(e.target.value)}
                         />
-                        <p className="text-[11px] text-on-surface-variant/60">
+                        <p className="text-[11px] text-[#8c947b]/60">
                             Not saved yet — there's no deadline column on projects. Let me know if you want one added.
                         </p>
                     </div>
@@ -121,13 +121,13 @@ export default function CreateProjectModal({ onClose, onCreated }) {
 
                 <div className="p-lg pt-0 flex gap-md">
                     <button
-                        className="flex-1 py-sm border border-outline-variant rounded-lg font-label-md text-label-md font-bold text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all"
+                        className="flex-1 py-sm border border-[#2D3139] rounded-lg font-label-md text-label-md font-bold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
                         onClick={onClose}
                     >
                         Cancel
                     </button>
                     <button
-                        className="flex-1 py-sm bg-primary-container text-on-primary-container rounded-lg font-label-md text-label-md font-bold hover:opacity-90 transition-all disabled:opacity-50"
+                        className="flex-1 py-sm bg-[#aff82a] text-[#1C1F26] rounded-lg font-label-md text-label-md font-bold hover:bg-[#9de022] transition-all disabled:opacity-50 cursor-pointer"
                         onClick={createProject}
                         disabled={saving}
                     >

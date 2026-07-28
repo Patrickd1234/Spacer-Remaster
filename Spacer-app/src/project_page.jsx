@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useParams } from "react-router-dom"
 import { supabase } from "./supabase"
-import Sidebar from "./partials/sidebar"
+import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
@@ -15,21 +15,21 @@ const ACCEPTED = [
 ].join(",")
 
 function getFileStyle(type = "") {
-    if (type.startsWith("image/"))  return { icon: "image",            color: "text-primary-fixed-dim", bg: "bg-primary-container/20" }
-    if (type === "application/pdf") return { icon: "picture_as_pdf",   color: "text-error",             bg: "bg-error-container/20"   }
+    if (type.startsWith("image/")) return { icon: "image", color: "text-primary-fixed-dim", bg: "bg-primary-container/20" }
+    if (type === "application/pdf") return { icon: "picture_as_pdf", color: "text-error", bg: "bg-error-container/20" }
     if (type.includes("word") || type === "application/msword")
-                                    return { icon: "description",       color: "text-on-surface-variant",bg: "bg-secondary-container"  }
+        return { icon: "description", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
     if (type.includes("sheet") || type === "application/vnd.ms-excel")
-                                    return { icon: "table",             color: "text-primary-fixed-dim", bg: "bg-primary-container/10" }
-    if (type.includes("zip"))       return { icon: "folder_zip",        color: "text-on-surface-variant",bg: "bg-secondary-container"  }
-    if (type.startsWith("text/"))   return { icon: "article",           color: "text-on-surface-variant",bg: "bg-surface-container"    }
-    return                                 { icon: "insert_drive_file", color: "text-on-surface-variant",bg: "bg-surface-container"    }
+        return { icon: "table", color: "text-[#aff82a]", bg: "bg-[#aff82a]/10" }
+    if (type.includes("zip")) return { icon: "folder_zip", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
+    if (type.startsWith("text/")) return { icon: "article", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
+    return { icon: "insert_drive_file", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
 }
 
 function formatBytes(bytes) {
     if (!bytes) return ""
-    if (bytes < 1024)           return bytes + " B"
-    if (bytes < 1024 * 1024)    return (bytes / 1024).toFixed(1) + " KB"
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
     return (bytes / (1024 * 1024)).toFixed(1) + " MB"
 }
 
@@ -53,24 +53,26 @@ function ProjectPage() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [calendarMonth, setCalendarMonth] = useState(new Date())
     const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
+    const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
     const [selectedDateEvents, setSelectedDateEvents] = useState(null)
     const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [project_events, setProjectEvents] = useState([])
 
     // ── File upload state
-    const [projectFiles, setProjectFiles]       = useState([])
-    const [showUploadZone, setShowUploadZone]   = useState(false)
-    const [uploading, setUploading]             = useState(false)
-    const [uploadError, setUploadError]         = useState("")
-    const [dragOver, setDragOver]               = useState(false)
-    const [pendingFile, setPendingFile]         = useState(null)
-    const [pendingUrl, setPendingUrl]           = useState(null)
-    const [reviewFile, setReviewFile]           = useState(null)
+    const [projectFiles, setProjectFiles] = useState([])
+    const [showUploadZone, setShowUploadZone] = useState(false)
+    const [uploading, setUploading] = useState(false)
+    const [uploadError, setUploadError] = useState("")
+    const [dragOver, setDragOver] = useState(false)
+    const [pendingFile, setPendingFile] = useState(null)
+    const [pendingUrl, setPendingUrl] = useState(null)
+    const [reviewFile, setReviewFile] = useState(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState(null)
     const fileInputRef = useRef()
 
     const updateTaskPriority = async (taskId, newPriority) => {
+        const task = project_tasks.find(t => String(t.id) === String(taskId))
         setSelectedTask(prev => prev ? { ...prev, priority: newPriority } : null)
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
@@ -78,7 +80,75 @@ function ProjectPage() {
             )
         )
         const { error } = await supabase.from('tasks').update({ priority: newPriority }).eq('id', taskId)
-        if (error) console.error("Error updating priority", error)
+        if (error) {
+            console.error("Error updating priority", error)
+        } else if (task) {
+            const { data: userData } = await supabase.auth.getUser()
+            const logEntry = {
+                entity_type: "task",
+                entity_id: taskId,
+                actor_id: userData?.user?.id,
+                action: "priority_changed",
+                new_state: { project_id: project_id, title: task.title, priority: newPriority }
+            }
+            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
+            if (newLog) setActivityLog(prev => [newLog, ...prev])
+        }
+    }
+
+    const updateTaskSubtasks = async (taskId, newSubtasks) => {
+        const allDone = newSubtasks.length > 0 && newSubtasks.every(st => st.done)
+        const anyDone = newSubtasks.some(st => st.done)
+        const task = project_tasks.find(t => String(t.id) === String(taskId))
+        if (!task) return
+
+        let newStatus = task.status
+        let statusChanged = false
+
+        if (allDone) {
+            if (task.status !== 'done') {
+                newStatus = 'done'
+                statusChanged = true
+            }
+        } else if (newSubtasks.length === 0 || !anyDone) {
+            if (task.status !== 'todo') {
+                newStatus = 'todo'
+                statusChanged = true
+            }
+        } else {
+            if (task.status !== 'in_progress') {
+                newStatus = 'in_progress'
+                statusChanged = true
+            }
+        }
+
+        const serialized = JSON.stringify(newSubtasks)
+
+        setSelectedTask(prev => prev && String(prev.id) === String(taskId) ? { ...prev, sub_tasks: serialized, status: newStatus } : prev)
+        setProjectTasks(prevTasks =>
+            prevTasks.map(t =>
+                String(t.id) === String(taskId) ? { ...t, sub_tasks: serialized, status: newStatus } : t
+            )
+        )
+
+        const updatePayload = { sub_tasks: serialized }
+        if (statusChanged) {
+            updatePayload.status = newStatus
+        }
+
+        const { error } = await supabase.from('tasks').update(updatePayload).eq('id', taskId)
+        if (error) {
+            console.error("Error updating subtasks", error)
+        } else if (statusChanged) {
+            const { data: userData } = await supabase.auth.getUser()
+            const logEntry = {
+                entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
+                action: "status_changed",
+                new_state: { project_id: project_id, title: task.title, status: newStatus }
+            }
+            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
+            if (newLog) setActivityLog(prev => [newLog, ...prev])
+        }
     }
 
     // ─── Task handlers (UNCHANGED) ────────────────────────────────────────────
@@ -91,7 +161,30 @@ function ProjectPage() {
         const taskId = e.dataTransfer.getData("taskId")
         if (!taskId) return
         const task = project_tasks.find(t => String(t.id) === String(taskId))
-        if (!task || task.status === newStatus) return
+        if (!task) return
+
+        let subtasksList = [];
+        if (task.sub_tasks) {
+            try {
+                subtasksList = JSON.parse(task.sub_tasks);
+                if (!Array.isArray(subtasksList)) subtasksList = [];
+            } catch (err) { }
+        }
+
+        const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
+        const anyDone = subtasksList.some(st => st.done);
+
+        let allowedStatus = task.status;
+        if (allDone) {
+            allowedStatus = 'done';
+        } else if (subtasksList.length === 0 || !anyDone) {
+            allowedStatus = 'todo';
+        } else {
+            allowedStatus = 'in_progress';
+        }
+
+        if (newStatus !== allowedStatus) return;
+        if (task.status === newStatus) return
 
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
@@ -192,7 +285,46 @@ function ProjectPage() {
             if (!project_id) return
             const { data, error } = await supabase.from("tasks").select("*").eq("project_id", project_id).order("created_at", { ascending: false })
             if (error) { console.error("Error fetching tasks:", error) }
-            else { setProjectTasks(data || []) }
+            else {
+                const corrected = data.map(t => {
+                    let subtasksList = [];
+                    if (t.sub_tasks) {
+                        try {
+                            subtasksList = JSON.parse(t.sub_tasks);
+                            if (!Array.isArray(subtasksList)) subtasksList = [];
+                        } catch (e) { }
+                    }
+                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
+                    const anyDone = subtasksList.some(st => st.done);
+
+                    let expectedStatus = t.status;
+                    if (allDone) {
+                        expectedStatus = 'done';
+                    } else if (subtasksList.length === 0 || !anyDone) {
+                        expectedStatus = 'todo';
+                    } else {
+                        expectedStatus = 'in_progress';
+                    }
+
+                    if (t.status !== expectedStatus) {
+                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
+                            if (error) console.error("Error auto-correcting task status", error);
+                        });
+                        return { ...t, status: expectedStatus };
+                    }
+                    return t;
+                });
+                setProjectTasks(corrected);
+                const urlParams = new URLSearchParams(window.location.search);
+                const taskIdParam = urlParams.get("task_id");
+                if (taskIdParam) {
+                    const taskToOpen = corrected.find(t => String(t.id) === String(taskIdParam));
+                    if (taskToOpen) {
+                        setSelectedTask(taskToOpen);
+                        setActiveTab("tasks");
+                    }
+                }
+            }
         }
 
         const fetchActivity = async () => {
@@ -240,28 +372,53 @@ function ProjectPage() {
         const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
         const { data: userData } = await supabase.auth.getUser()
         const uploaderName = userData?.user?.email?.split("@")[0] || "You"
-        await supabase.from("project_files").insert({
+        const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
             project_id, name: pendingFile.name, type: pendingFile.type,
             size: pendingFile.size, path, url: urlData?.publicUrl || "",
             uploaded_by: uploaderName,
-        })
+        }).select().single()
+
+        if (!dbError && fileData) {
+            const logEntry = {
+                entity_type: "file",
+                entity_id: fileData.id,
+                actor_id: userData?.user?.id,
+                action: "file_added",
+                new_state: { project_id: project_id, name: pendingFile.name }
+            }
+            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
+            if (newLog) setActivityLog(prev => [newLog, ...prev])
+        }
+
         URL.revokeObjectURL(pendingUrl)
         setPendingFile(null); setPendingUrl(null); setShowUploadZone(false); setUploading(false)
         fetchFiles()
     }
     const deleteFile = async (f) => {
         await supabase.storage.from("project-files").remove([f.path])
-        await supabase.from("project_files").delete().eq("id", f.id)
+        const { error } = await supabase.from("project_files").delete().eq("id", f.id)
+        if (!error) {
+            const { data: userData } = await supabase.auth.getUser()
+            const logEntry = {
+                entity_type: "file",
+                entity_id: f.id,
+                actor_id: userData?.user?.id,
+                action: "file_removed",
+                new_state: { project_id: project_id, name: f.name }
+            }
+            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
+            if (newLog) setActivityLog(prev => [newLog, ...prev])
+        }
         setConfirmDeleteId(null); fetchFiles()
     }
 
     const PreUploadPreview = () => {
         const isImage = pendingFile?.type?.startsWith("image/")
-        const isPDF   = pendingFile?.type === "application/pdf"
+        const isPDF = pendingFile?.type === "application/pdf"
         const { icon, color, bg } = getFileStyle(pendingFile?.type)
         return (
-            <div className="mt-lg border border-outline-variant/40 rounded-xl overflow-hidden">
-                <div className="bg-surface-container-highest flex items-center justify-center" style={{ minHeight: 220 }}>
+            <div className="mt-lg border border-[#2D3139]/40 rounded-xl overflow-hidden">
+                <div className="bg-[#1C1F26] flex items-center justify-center" style={{ minHeight: 220 }}>
                     {isImage && <img src={pendingUrl} alt={pendingFile.name} className="max-w-full max-h-[220px] object-contain rounded" />}
                     {isPDF && <iframe src={pendingUrl} title={pendingFile.name} className="w-full border-0" style={{ height: 220 }} />}
                     {!isImage && !isPDF && (
@@ -269,18 +426,18 @@ function ProjectPage() {
                             <div className={`w-16 h-16 ${bg} flex items-center justify-center rounded-2xl`}>
                                 <span className={`material-symbols-outlined text-4xl ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
                             </div>
-                            <p className="text-on-surface-variant text-sm">No visual preview for this file type</p>
+                            <p className="text-[#8c947b] text-sm">No visual preview for this file type</p>
                         </div>
                     )}
                 </div>
-                <div className="bg-surface-container-high px-md py-sm flex items-center justify-between gap-md border-t border-outline-variant/30">
+                <div className="bg-[#191c21] px-md py-sm flex items-center justify-between gap-md border-t border-[#2D3139]/30">
                     <div className="min-w-0">
-                        <p className="font-body-md text-on-surface font-semibold truncate">{pendingFile?.name}</p>
-                        <p className="text-[11px] text-on-surface-variant">{formatBytes(pendingFile?.size)}</p>
+                        <p className="font-body-md text-white font-semibold truncate">{pendingFile?.name}</p>
+                        <p className="text-[11px] text-[#8c947b]">{formatBytes(pendingFile?.size)}</p>
                     </div>
                     <div className="flex items-center gap-sm shrink-0">
-                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
-                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[#8bc34a] text-black text-sm font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
+                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
+                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[#aff82a] text-[#1C1F26] font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
                             {uploading
                                 ? <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Uploading…</>
                                 : <><span className="material-symbols-outlined text-[16px]">cloud_upload</span> Confirm Upload</>}
@@ -316,7 +473,7 @@ function ProjectPage() {
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-label-md transition-colors cursor-pointer ${activeTab === tab.id
                                     ? "bg-[#8bc34a] text-white font-semibold"
-                                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-variant/50"
+                                    : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]/50"
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
@@ -332,13 +489,13 @@ function ProjectPage() {
                         <div className="tab-pane block" id="section-summary">
                             <div className="bento-grid">
                                 {/* Task Status Overview */}
-                                <div className="col-span-12 bg-surface-container-high p-xl rounded-xl glass-panel mb-lg">
-                                    <h3 className="font-headline-lg text-headline-lg mb-xl text-on-surface">Task Overview</h3>
+                                <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-xl rounded-xl mb-lg">
+                                    <h3 className="font-headline-lg text-headline-lg mb-xl text-white">Task Overview</h3>
                                     <div className="space-y-lg max-w-3xl">
                                         {[
-                                            { label: 'Backlog', count: project_tasks.filter(t => t.status === 'todo').length, color: 'text-on-surface', barColor: 'bg-on-surface-variant' },
-                                            { label: 'Doing', count: project_tasks.filter(t => t.status === 'in_progress').length, color: 'text-on-surface', barColor: 'bg-on-surface-variant' },
-                                            { label: 'Done', count: project_tasks.filter(t => t.status === 'done').length, color: 'text-[#8bc34a]', barColor: 'bg-[#8bc34a]' },
+                                            { label: 'Backlog', count: project_tasks.filter(t => t.status === 'todo').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
+                                            { label: 'Doing', count: project_tasks.filter(t => t.status === 'in_progress').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
+                                            { label: 'Done', count: project_tasks.filter(t => t.status === 'done').length, color: 'text-[#aff82a]', barColor: 'bg-[#aff82a]' },
                                             { label: 'Overdue', count: project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length, color: 'text-error', barColor: 'bg-error' },
                                         ].map(stat => {
                                             const total = Math.max(1, project_tasks.length);
@@ -346,10 +503,10 @@ function ProjectPage() {
                                             return (
                                                 <div key={stat.label} className="flex items-center gap-6">
                                                     <span className={`w-28 text-right font-headline-sm tracking-wide ${stat.color}`}>{stat.label}</span>
-                                                    <div className="flex-1 h-3.5 bg-surface-variant rounded-full overflow-hidden">
+                                                    <div className="flex-1 h-3.5 bg-[#2D3139] rounded-full overflow-hidden">
                                                         <div className={`h-full ${stat.barColor} rounded-full transition-all duration-1000`} style={{ width: `${percent}%` }}></div>
                                                     </div>
-                                                    <span className="w-12 font-headline-sm text-on-surface">{stat.count}</span>
+                                                    <span className="w-12 font-headline-sm text-white">{stat.count}</span>
                                                 </div>
                                             );
                                         })}
@@ -357,15 +514,15 @@ function ProjectPage() {
                                 </div>
 
                                 {/* Recent Activity Feed (Full Width) */}
-                                <div className="col-span-12 bg-surface-container-high p-lg rounded-xl glass-panel">
-                                    <h3 className="font-headline-md text-headline-md mb-lg">Recent Activity</h3>
+                                <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-lg rounded-xl">
+                                    <h3 className="font-headline-md text-headline-md mb-lg text-white">Recent Activity</h3>
                                     <div className="space-y-lg overflow-y-auto max-h-[600px] scroll-hide">
                                         {activityLog.length === 0 ? (
-                                            <p className="text-on-surface-variant font-body-md">No recent activity found.</p>
+                                            <p className="text-[#8c947b] font-body-md">No recent activity found.</p>
                                         ) : (
                                             activityLog.map(activity => (
                                                 <div key={activity.id} className="flex gap-sm">
-                                                    <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-surface-variant flex items-center justify-center font-bold text-xs text-on-surface-variant uppercase">
+                                                    <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-[#2D3139] flex items-center justify-center font-bold text-xs text-[#8c947b] uppercase">
                                                         {activity.actor?.name?.charAt(0) || '?'}
                                                     </div>
                                                     <div className="flex-1">
@@ -379,10 +536,19 @@ function ProjectPage() {
                                                                 <>deleted task <span className="text-error font-bold">{activity.new_state?.title}</span></>
                                                             )}
                                                             {activity.action === "status_changed" && (
-                                                                <>moved task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-on-surface capitalize border border-outline-variant rounded px-1">{activity.new_state?.status?.replace("_", " ")}</span></>
+                                                                <>moved task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-[#2D3139] rounded px-1">{activity.new_state?.status?.replace("_", " ")}</span></>
+                                                            )}
+                                                            {activity.action === "priority_changed" && (
+                                                                <>changed priority of task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-[#2D3139] rounded px-1">{activity.new_state?.priority}</span></>
+                                                            )}
+                                                            {activity.action === "file_added" && (
+                                                                <>uploaded file <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span></>
+                                                            )}
+                                                            {activity.action === "file_removed" && (
+                                                                <>deleted file <span className="text-error font-bold">{activity.new_state?.name}</span></>
                                                             )}
                                                         </p>
-                                                        <p className="text-on-surface-variant text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
+                                                        <p className="text-[#8c947b] text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
                                                     </div>
                                                 </div>
                                             ))
@@ -398,7 +564,7 @@ function ProjectPage() {
                         <div className="tab-pane block" id="section-tasks">
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[
-                                    { key: "todo", label: "Backlog", dotColor: "bg-outline-variant" },
+                                    { key: "todo", label: "Backlog", dotColor: "bg-[#2D3139]" },
                                     { key: "in_progress", label: "Doing", dotColor: "bg-[#3b82f6]" },
                                     { key: "done", label: "Done", dotColor: "bg-primary-fixed-dim" },
                                     { key: "overdue", label: "Overdue", dotColor: "bg-error" },
@@ -412,34 +578,14 @@ function ProjectPage() {
                                     return (
                                         <div
                                             key={column.key}
-                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 ${dragOverColumn === column.key
-                                                ? 'bg-surface-container-high ring-1 ring-primary-fixed-dim/40'
-                                                : 'bg-surface-container/50'
-                                                }`}
-                                            onDragOver={(e) => { if (column.key !== 'overdue') { e.preventDefault(); setDragOverColumn(column.key); } }}
-                                            onDragLeave={() => setDragOverColumn(null)}
-                                            onDrop={(e) => { if (column.key !== 'overdue') { handleDrop(e, column.key); } setDragOverColumn(null); }}
+                                            className="flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border border-[#2D3139]/30"
                                         >
                                             {/* Column Header */}
                                             <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
                                                 <div className="flex items-center gap-sm">
                                                     <span className={`w-2.5 h-2.5 rounded-full ${column.dotColor}`}></span>
-                                                    <span className="font-label-md text-label-md text-on-surface font-bold">{column.label}</span>
-                                                    <span className="text-[10px] text-on-surface-variant bg-surface-container-highest rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
-                                                </div>
-                                                <div className="flex items-center gap-[2px]">
-                                                    {column.key !== 'overdue' && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
-                                                            className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors cursor-pointer"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[16px]">add</span>
-                                                        </button>
-                                                    )}
-                                                    <button type="button" className="w-6 h-6 flex items-center justify-center rounded text-on-surface-variant hover:text-on-surface hover:bg-surface-variant transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-[16px]">more_horiz</span>
-                                                    </button>
+                                                    <span className="font-label-md text-label-md text-white font-bold">{column.label}</span>
+                                                    <span className="text-[10px] text-[#8c947b] bg-[#1C1F26] border border-[#2D3139]/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
                                                 </div>
                                             </div>
 
@@ -448,10 +594,8 @@ function ProjectPage() {
                                                 {columnTasks.map(task => (
                                                     <div
                                                         key={task.id}
-                                                        draggable
-                                                        onDragStart={(e) => handleDragStart(e, task.id)}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-surface-container-high border border-outline-variant/30 rounded-lg p-md cursor-pointer active:cursor-grabbing hover:border-outline-variant/60 transition-all group"
+                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[#aff82a]/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
@@ -470,31 +614,65 @@ function ProjectPage() {
                                                         </div>
 
                                                         {/* Project Name */}
-                                                        <p className="text-[11px] text-on-surface-variant mb-[2px]">{project_name}</p>
+                                                        <p className="text-[11px] text-[#8c947b] mb-[2px]">{project_name}</p>
 
                                                         {/* Task Title */}
-                                                        <h4 className="font-body-md text-on-surface font-bold leading-snug mb-xs">{task.title}</h4>
+                                                        <h4 className="font-body-md text-white font-bold leading-snug mb-xs">{task.title}</h4>
 
                                                         {/* Description */}
                                                         {task.description && (
-                                                            <p className="text-[11px] text-on-surface-variant/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
+                                                            <p className="text-[11px] text-[#8c947b]/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
                                                         )}
 
+                                                        {/* Sub-tasks Progress Bar */}
+                                                        {(() => {
+                                                            let subtasksList = [];
+                                                            if (task.sub_tasks) {
+                                                                try {
+                                                                    subtasksList = JSON.parse(task.sub_tasks);
+                                                                    if (!Array.isArray(subtasksList)) subtasksList = [];
+                                                                } catch (e) { }
+                                                            }
+                                                            if (subtasksList.length === 0) return null;
+
+                                                            const completedCount = subtasksList.filter(st => st.done).length;
+                                                            const totalCount = subtasksList.length;
+                                                            const percent = (completedCount / totalCount) * 100;
+
+                                                            return (
+                                                                <div className="mb-md">
+                                                                    <div className="flex items-center justify-between text-[10px] text-[#8c947b] mb-1 font-medium">
+                                                                        <span className="flex items-center gap-xs">
+                                                                            <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
+                                                                            Sub-tasks
+                                                                        </span>
+                                                                        <span>{completedCount}/{totalCount}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-[#1e222b] rounded-full h-1 overflow-hidden">
+                                                                        <div
+                                                                            className="bg-[#aff82a] h-full transition-all duration-300"
+                                                                            style={{ width: `${percent}%` }}
+                                                                        ></div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })()}
+
                                                         {/* Footer */}
-                                                        <div className="flex items-center justify-between mt-auto pt-sm border-t border-outline-variant/20">
-                                                            <div className="flex items-center gap-sm text-on-surface-variant">
+                                                        <div className="flex items-center justify-between mt-auto pt-sm border-t border-[#2D3139]/20">
+                                                            <div className="flex items-center gap-sm text-[#8c947b]">
                                                                 {(() => {
                                                                     const assignee = orgUsers.find(u => u.id === task.assignee_id);
                                                                     return task.assignee_id ? (
-                                                                        <div className="w-5 h-5 rounded-full bg-surface-variant flex items-center justify-center" title={assignee?.name || 'Assigned'}>
-                                                                            <span className="text-[9px] font-bold text-on-surface-variant uppercase">
+                                                                        <div className="w-5 h-5 rounded-full bg-[#1C1F26] border border-[#2D3139] flex items-center justify-center" title={assignee?.name || 'Assigned'}>
+                                                                            <span className="text-[9px] font-bold text-[#8c947b] uppercase">
                                                                                 {assignee?.name?.charAt(0) || '?'}
                                                                             </span>
                                                                         </div>
                                                                     ) : null;
                                                                 })()}
                                                             </div>
-                                                            <div className="flex items-center gap-sm text-on-surface-variant">
+                                                            <div className="flex items-center gap-sm text-[#8c947b]">
                                                                 {task.due_date && (
                                                                     <span className="flex items-center gap-[3px] text-[10px]">
                                                                         <span className="material-symbols-outlined text-[13px]">calendar_today</span>
@@ -506,7 +684,7 @@ function ProjectPage() {
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id, task.title); }}
-                                                                    className="text-on-surface-variant hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                                                                    className="text-[#8c947b] hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
                                                                     title="Delete Task"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">delete</span>
@@ -517,23 +695,11 @@ function ProjectPage() {
                                                 ))}
                                                 {columnTasks.length === 0 && (
                                                     <div className="flex flex-col items-center justify-center py-xl text-center opacity-40">
-                                                        <span className="material-symbols-outlined text-[32px] text-on-surface-variant mb-xs">drag_indicator</span>
-                                                        <p className="text-[11px] text-on-surface-variant">Drag tasks here</p>
+                                                        <span className="material-symbols-outlined text-[32px] text-[#8c947b] mb-xs">drag_indicator</span>
+                                                        <p className="text-[11px] text-[#8c947b]">Drag tasks here</p>
                                                     </div>
                                                 )}
                                             </div>
-
-                                            {/* Add Task Footer */}
-                                            {column.key !== 'overdue' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { setCreateTaskInitialStatus(column.key); setIsCreateTaskModalOpen(true); }}
-                                                    className="flex items-center gap-xs px-md py-sm text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high/80 transition-colors cursor-pointer rounded-b-xl text-[12px] font-label-md border-t border-outline-variant/10"
-                                                >
-                                                    <span className="material-symbols-outlined text-[15px]">add</span>
-                                                    Add Task
-                                                </button>
-                                            )}
                                         </div>
                                     )
                                 })}
@@ -549,14 +715,14 @@ function ProjectPage() {
                                 onClick={() => setSelectedDateEvents(null)}
                             ></div>
                             {/* Sidebar */}
-                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-surface-container-high border-l border-outline-variant/30 shadow-2xl flex flex-col transform transition-transform duration-300">
-                                <div className="flex items-center justify-between p-lg border-b border-outline-variant/20 shrink-0">
-                                    <h2 className="font-headline-md text-on-surface">
+                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-[#191c21] border-l border-[#2D3139] shadow-2xl flex flex-col transform transition-transform duration-300">
+                                <div className="flex items-center justify-between p-lg border-b border-[#2D3139]/20 shrink-0">
+                                    <h2 className="font-headline-md text-white">
                                         Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                     </h2>
                                     <div className="flex items-center gap-sm relative">
                                         <button
-                                            className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors relative"
+                                            className="text-[#8c947b] hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#2D3139] transition-colors relative"
                                             onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
                                         >
                                             <span className="material-symbols-outlined">add</span>
@@ -564,15 +730,15 @@ function ProjectPage() {
                                         {sidebarActionMenuOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                                <div className="absolute right-0 top-full mt-1 w-48 bg-surface-container-highest border border-outline-variant/30 rounded-lg shadow-xl z-[70] overflow-hidden">
+                                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden">
                                                     <button
-                                                        className="w-full text-left px-4 py-3 hover:bg-surface-variant transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
+                                                        className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
                                                         onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]">task</span> Add Task
                                                     </button>
                                                     <button
-                                                        className="w-full text-left px-4 py-3 hover:bg-surface-variant transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
+                                                        className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
                                                         onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]">event</span> Add Meeting
@@ -580,7 +746,7 @@ function ProjectPage() {
                                                 </div>
                                             </>
                                         )}
-                                        <button className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
+                                        <button className="text-[#8c947b] hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#2D3139] transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
                                             <span className="material-symbols-outlined">close</span>
                                         </button>
                                     </div>
@@ -588,7 +754,7 @@ function ProjectPage() {
                                 <div className="p-lg overflow-y-auto flex-1 scroll-hide space-y-md">
                                     {creatingInSidebar === 'task' ? (
                                         <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-[#8c947b] flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
                                             <CreateTaskModal
@@ -607,11 +773,11 @@ function ProjectPage() {
                                         </div>
                                     ) : creatingInSidebar === 'meeting' ? (
                                         <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-[#8c947b] flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
-                                            <div className="flex-1 flex items-center justify-center bg-surface-container rounded-xl border border-outline-variant/20 border-dashed p-6 text-center">
-                                                <p className="text-on-surface-variant italic">Meeting creation functionality coming soon...</p>
+                                            <div className="flex-1 flex items-center justify-center bg-[#191c21] rounded-xl border border-[#2D3139]/20 border-dashed p-6 text-center">
+                                                <p className="text-[#8c947b] italic">Meeting creation functionality coming soon...</p>
                                             </div>
                                         </div>
                                     ) : (() => {
@@ -632,7 +798,7 @@ function ProjectPage() {
                                         ].sort((a, b) => a.sortTime - b.sortTime);
 
                                         if (combined.length === 0) {
-                                            return <p className="text-on-surface-variant text-center italic py-md">Nothing scheduled for this day.</p>;
+                                            return <p className="text-[#8c947b] text-center italic py-md">Nothing scheduled for this day.</p>;
                                         }
 
                                         return combined.map(item => (
@@ -643,7 +809,7 @@ function ProjectPage() {
                                                         setSelectedTask(item);
                                                     }
                                                 }}
-                                                className={`bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
+                                                className={`bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${item.isEvent ? 'bg-[#9c27b0]/20 text-[#9c27b0]' : 'bg-primary-fixed-dim/20 text-primary-fixed-dim'
@@ -651,14 +817,14 @@ function ProjectPage() {
                                                         <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
                                                         {item.isEvent ? 'Event' : 'Task'}
                                                     </span>
-                                                    <span className="text-xs text-on-surface-variant font-medium">
+                                                    <span className="text-xs text-[#8c947b] font-medium">
                                                         {(item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))
                                                             ? new Date(item.sortTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                                                             : 'All Day'}
                                                     </span>
                                                 </div>
-                                                <h3 className="font-body-lg text-on-surface font-semibold mt-1">{item.title}</h3>
-                                                {item.description && <p className="text-body-sm text-on-surface-variant line-clamp-2">{item.description}</p>}
+                                                <h3 className="font-body-lg text-white font-semibold mt-1">{item.title}</h3>
+                                                {item.description && <p className="text-body-sm text-[#8c947b] line-clamp-2">{item.description}</p>}
                                             </div>
                                         ));
                                     })()}
@@ -670,13 +836,13 @@ function ProjectPage() {
                     {/* Public Files Tab */}
                     {activeTab === "files" && (
                         <div className="tab-pane block" id="section-files">
-                            <div className="bg-surface-container-high p-lg rounded-xl glass-panel">
+                            <div className="bg-[#191c21] p-lg rounded-xl glass-panel">
                                 {/* Header */}
                                 <div className="flex items-center justify-between mb-lg">
                                     <div className="flex items-center gap-sm">
                                         <span className="material-symbols-outlined text-primary-fixed-dim">move_to_inbox</span>
                                         <h3 className="font-headline-md text-headline-md">Project Files</h3>
-                                        <span className="text-[11px] text-on-surface-variant">
+                                        <span className="text-[11px] text-[#8c947b]">
                                             {projectFiles.length} file{projectFiles.length !== 1 ? "s" : ""}
                                         </span>
                                     </div>
@@ -695,14 +861,14 @@ function ProjectPage() {
                                             onChange={(e) => handleFilePick(e.target.files[0])} />
                                         {!pendingFile && (
                                             <div
-                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[#8bc34a] bg-[#8bc34a]/10" : "border-outline-variant hover:border-outline hover:bg-surface-container/50"}`}
+                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[#8bc34a] bg-[#8bc34a]/10" : "border-[#2D3139] hover:border-outline hover:bg-[#2D3139]/50"}`}
                                                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                                                 onDragLeave={() => setDragOver(false)}
                                                 onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFilePick(e.dataTransfer.files[0]) }}
                                                 onClick={() => fileInputRef.current?.click()}>
-                                                <span className="material-symbols-outlined text-on-surface-variant text-6xl">upload_file</span>
-                                                <p className="font-body-md text-on-surface font-semibold">Drop a file here or click to browse</p>
-                                                <p className="text-[12px] text-on-surface-variant text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
+                                                <span className="material-symbols-outlined text-[#8c947b] text-6xl">upload_file</span>
+                                                <p className="font-body-md text-white font-semibold">Drop a file here or click to browse</p>
+                                                <p className="text-[12px] text-[#8c947b] text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
                                             </div>
                                         )}
                                         {pendingFile && <PreUploadPreview />}
@@ -713,9 +879,9 @@ function ProjectPage() {
                                 {/* File list */}
                                 {projectFiles.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                                        <span className="material-symbols-outlined text-on-surface-variant text-5xl">folder_open</span>
-                                        <p className="text-on-surface-variant font-body-md">No files uploaded yet.</p>
-                                        <p className="text-[12px] text-on-surface-variant">Click <strong>Upload</strong> above to add the first file.</p>
+                                        <span className="material-symbols-outlined text-[#8c947b] text-5xl">folder_open</span>
+                                        <p className="text-[#8c947b] font-body-md">No files uploaded yet.</p>
+                                        <p className="text-[12px] text-[#8c947b]">Click <strong>Upload</strong> above to add the first file.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-sm">
@@ -725,7 +891,7 @@ function ProjectPage() {
                                             return (
                                                 <div key={f.id} className="rounded-lg overflow-hidden">
                                                     <div
-                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-surface-container"}`}
+                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-[#2D3139]"}`}
                                                         onClick={() => { if (!isConfirming) setReviewFile(f) }}>
                                                         <div className="flex items-center gap-md">
                                                             {f.type?.startsWith("image/") ? (
@@ -737,7 +903,7 @@ function ProjectPage() {
                                                             )}
                                                             <div>
                                                                 <p className={`font-body-md text-body-md ${isConfirming ? "text-error" : "text-primary"}`}>{f.name}</p>
-                                                                <p className="text-on-surface-variant text-[11px]">
+                                                                <p className="text-[#8c947b] text-[11px]">
                                                                     {f.uploaded_by ? `Added by ${f.uploaded_by}` : "Uploaded"}
                                                                     {f.size ? ` · ${formatBytes(f.size)}` : ""}
                                                                     {f.created_at ? ` · ${new Date(f.created_at).toLocaleDateString()}` : ""}
@@ -748,13 +914,13 @@ function ProjectPage() {
                                                             <div className="flex items-center gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button type="button" title="Preview"
                                                                     onClick={(e) => { e.stopPropagation(); setReviewFile(f) }}
-                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[18px]">visibility</button>
+                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[18px]">visibility</button>
                                                                 <a href={f.url} download={f.name} target="_blank" rel="noreferrer"
                                                                     title="Download" onClick={(e) => e.stopPropagation()}
-                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[18px]">download</a>
+                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[18px]">download</a>
                                                                 <button type="button" title="Delete"
                                                                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(f.id) }}
-                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-[18px]">delete</button>
+                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-error transition-colors text-[18px]">delete</button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -767,7 +933,7 @@ function ProjectPage() {
                                                             <div className="flex items-center gap-sm">
                                                                 <button type="button"
                                                                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
-                                                                    className="px-md py-[5px] rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
+                                                                    className="px-md py-[5px] rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
                                                                 <button type="button"
                                                                     onClick={(e) => { e.stopPropagation(); deleteFile(f) }}
                                                                     className="px-md py-[5px] rounded-lg bg-error text-white text-[12px] font-bold hover:opacity-90 cursor-pointer flex items-center gap-xs">
@@ -789,48 +955,48 @@ function ProjectPage() {
                     {activeTab === "members" && (
                         <div className="tab-pane block" id="section-members">
                             {assignedMembers.length === 0 ? (
-                                <div className="bg-surface-container-high rounded-xl p-xl flex flex-col items-center justify-center text-center border border-outline-variant/30">
-                                    <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-md opacity-50">group_off</span>
-                                    <p className="font-headline-sm text-on-surface mb-xs">No Members Assigned</p>
-                                    <p className="font-body-md text-on-surface-variant max-w-md">There are currently no team members assigned to any tasks in this project.</p>
+                                <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
+                                    <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
+                                    <p className="font-headline-sm text-white mb-xs">No Members Assigned</p>
+                                    <p className="font-body-md text-[#8c947b] max-w-md">There are currently no team members assigned to any tasks in this project.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
                                     {assignedMembers.map((member) => (
                                         <div
                                             key={member.id}
-                                            className="bg-surface-container-high border border-outline-variant/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-outline-variant/60"
+                                            className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
                                         >
                                             <div className="flex items-start justify-between mb-sm">
                                                 <div className="relative">
-                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-outline-variant bg-surface-variant flex items-center justify-center text-on-surface-variant font-bold text-lg uppercase">
+                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
                                                         {member.name?.charAt(0) || "?"}
                                                     </div>
-                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-surface-container-high rounded-full"></div>
+                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
                                                 </div>
                                                 <div className="flex gap-1">
                                                     <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
                                                         MEMBER
                                                     </span>
-                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-surface-variant text-on-surface-variant transition-colors cursor-pointer">
+                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
                                                         <span className="material-symbols-outlined text-xs">more_vert</span>
                                                     </button>
                                                 </div>
                                             </div>
                                             <div className="mb-md">
-                                                <h4 className="font-headline-md text-body-lg text-on-surface font-bold">
+                                                <h4 className="font-headline-md text-body-lg text-white font-bold">
                                                     {member.name}
                                                 </h4>
-                                                <p className="font-body-sm text-[11px] text-on-surface-variant">
+                                                <p className="font-body-sm text-[11px] text-[#8c947b]">
                                                     member
                                                 </p>
                                             </div>
                                             <div className="mt-auto flex items-center gap-2">
-                                                <button className="flex-1 bg-surface-variant text-on-surface font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-outline-variant transition-all text-body-sm cursor-pointer">
+                                                <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
                                                     <span className="material-symbols-outlined text-sm">chat_bubble</span>
                                                     Message
                                                 </button>
-                                                <button className="w-8 h-8 bg-surface-variant text-on-surface rounded-lg flex items-center justify-center hover:bg-outline-variant transition-all cursor-pointer">
+                                                <button className="w-8 h-8 bg-[#1C1F26] text-white rounded-lg flex items-center justify-center hover:bg-[#2D3139] transition-all cursor-pointer">
                                                     <span className="material-symbols-outlined text-sm">trending_flat</span>
                                                 </button>
                                             </div>
@@ -877,25 +1043,25 @@ function ProjectPage() {
                         return (
                             <div className="tab-pane block h-full min-h-[600px] flex flex-col" id="section-calendar">
                                 {/* Calendar Header */}
-                                <div className="flex items-center justify-between pb-md">
-                                    <h3 className="font-headline-md text-on-surface font-bold capitalize">
+                                <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] shrink-0">
+                                    <h3 className="text-lg font-bold text-white capitalize">
                                         {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                                     </h3>
                                     <div className="flex items-center gap-2">
-                                        <button onClick={handlePrevMonth} className="w-8 h-8 rounded bg-surface-container hover:bg-surface-variant text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant/30">
-                                            <span className="material-symbols-outlined">chevron_left</span>
+                                        <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                                            <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                                         </button>
-                                        <button onClick={handleNextMonth} className="w-8 h-8 rounded bg-surface-container hover:bg-surface-variant text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant/30">
-                                            <span className="material-symbols-outlined">chevron_right</span>
+                                        <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                                            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                                         </button>
                                     </div>
                                 </div>
                                 {/* Calendar Grid */}
-                                <div className="flex-1 overflow-y-auto scroll-hide">
-                                    <div className="grid grid-cols-7 gap-px bg-outline-variant/20 overflow-hidden border-y border-outline-variant/30 mt-sm">
+                                <div className="flex-1 overflow-y-auto min-h-0 mt-4">
+                                    <div className="grid grid-cols-7 gap-px bg-[#2D3139] overflow-hidden rounded-lg border border-[#2D3139]">
                                         {/* Day Names */}
                                         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                                            <div key={day} className="bg-surface-container-highest p-2 text-center font-label-sm text-on-surface-variant uppercase tracking-wider">
+                                            <div key={day} className="bg-[#181a20] p-3 text-center text-xs font-bold text-[#8c947b] uppercase tracking-wider">
                                                 {day}
                                             </div>
                                         ))}
@@ -910,35 +1076,33 @@ function ProjectPage() {
                                                 <div
                                                     key={idx}
                                                     onClick={() => date && setSelectedDateEvents(date)}
-                                                    className={`min-h-[140px] p-2 transition-colors cursor-pointer ${date ? 'bg-surface-container-high hover:bg-surface-container-highest' : 'bg-surface-container-lowest/50'}`}
+                                                    className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-[#191c21] hover:bg-[#1C1F26]' : 'bg-[#111318]'}`}
                                                 >
                                                     {date && (
                                                         <>
-                                                            <div className={`text-right mb-2 flex items-center justify-end gap-1.5 ${isToday ? 'font-bold' : 'text-on-surface-variant'} text-body-md`}>
-                                                                {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#9c27b0]" title={`${dayEvents.length} event(s)`}></span>}
-                                                                {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed-dim" title={`${dayTasks.length} task(s)`}></span>}
-                                                                <span className={isToday ? 'inline-block w-7 h-7 leading-7 text-center bg-[#8bc34a] text-black font-bold rounded-full' : ''}>
+                                                            <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
+                                                                {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" title={`${dayEvents.length} event(s)`}></span>}
+                                                                {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#aff82a]" title={`${dayTasks.length} task(s)`}></span>}
+                                                                <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
                                                                     {date.getDate()}
                                                                 </span>
                                                             </div>
-                                                            <div className="space-y-1.5">
+                                                            <div className="space-y-1">
                                                                 {dayEvents.map(event => (
                                                                     <div
                                                                         key={`evt-${event.id}`}
-                                                                        className="px-2 py-1 text-[11px] font-bold rounded cursor-pointer transition-transform hover:scale-[1.02] truncate border bg-[#9c27b0]/10 text-[#9c27b0] border-[#9c27b0]/30"
+                                                                        className="px-2 py-1 text-[10px] font-medium rounded truncate bg-purple-500/10 text-purple-400 border border-purple-500/30"
                                                                         title={event.title}
                                                                     >
-                                                                        <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">event</span> {event.title}</span>
+                                                                        {event.title}
                                                                     </div>
                                                                 ))}
                                                                 {dayTasks.map(task => (
                                                                     <div
                                                                         key={task.id}
-                                                                        onClick={() => setSelectedTask(task)}
-                                                                        className={`px-2 py-1 text-[11px] font-bold rounded cursor-pointer transition-transform hover:scale-[1.02] truncate border ${task.status === 'done' ? 'bg-[#8bc34a]/10 text-[#8bc34a] border-[#8bc34a]/30' :
-                                                                            task.priority === 'urgent' ? 'bg-error/10 text-error border-error/30' :
-                                                                                task.priority === 'high' ? 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30' :
-                                                                                    'bg-primary-fixed-dim/10 text-primary-fixed-dim border-primary-fixed-dim/30'
+                                                                        onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                                                                        className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                                                                            'bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30'
                                                                             }`}
                                                                         title={task.title}
                                                                     >
@@ -961,7 +1125,7 @@ function ProjectPage() {
             {/* FAB for Tasks */}
             <button type="button" onClick={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true); }} className="fixed bottom-lg right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer">
                 <span className="material-symbols-outlined text-[28px] font-bold">add</span>
-                <span className="absolute right-full mr-md px-md py-sm bg-surface-container text-on-surface font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-outline-variant">Quick Add Task</span>
+                <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">Quick Add Task</span>
             </button>
             {isCreateTaskModalOpen && (
                 <CreateTaskModal projectId={project_id} organizationId={organizationId} teamSpaceId={teamSpaceId}
@@ -979,15 +1143,15 @@ function ProjectPage() {
                     ></div>
 
                     {/* Sidebar */}
-                    <div className="relative w-1/2 bg-surface-container-high shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-outline-variant/30">
+                    <div className="relative w-1/2 bg-[#191c21] shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-[#2D3139]">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-lg border-b border-outline-variant/30 bg-surface-container-highest">
-                            <h2 className="font-headline-md text-primary-container font-bold flex items-center gap-sm">
+                        <div className="flex items-center justify-between p-lg border-b border-[#2D3139]/30 bg-[#1C1F26]">
+                            <h2 className="font-headline-md text-white font-bold flex items-center gap-sm">
                                 <span className="material-symbols-outlined">task</span>
                                 Task Details
                             </h2>
                             <button
-                                className="text-on-surface-variant hover:text-on-surface hover:bg-surface-variant w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
+                                className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
                                 onClick={() => setSelectedTask(null)}
                             >
                                 <span className="material-symbols-outlined">close</span>
@@ -997,12 +1161,19 @@ function ProjectPage() {
                         {/* Content */}
                         <div className="p-lg space-y-xl flex-1">
                             <div>
-                                <h1 className="font-headline-lg text-on-surface font-bold mb-md leading-tight">{selectedTask.title}</h1>
+                                <h1 className="font-headline-lg text-white font-bold mb-md leading-tight">{selectedTask.title}</h1>
                                 <div className="flex flex-wrap gap-sm">
-                                    <span className="px-md py-1.5 bg-surface-container-highest border border-outline-variant/50 text-on-surface-variant rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs">
-                                        <span className="material-symbols-outlined text-[14px]">flag</span>
-                                        {selectedTask.status.replace('_', ' ')}
-                                    </span>
+                                    {(() => {
+                                        const isOverdue = selectedTask.status !== 'done' && selectedTask.due_date && new Date(selectedTask.due_date) < new Date();
+                                        const displayStatus = isOverdue ? 'overdue' : selectedTask.status;
+                                        return (
+                                            <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-[#1C1F26] border border-[#2D3139]/50 text-[#8c947b]'
+                                                }`}>
+                                                <span className="material-symbols-outlined text-[14px]">{isOverdue ? 'error' : 'flag'}</span>
+                                                {displayStatus.replace('_', ' ')}
+                                            </span>
+                                        );
+                                    })()}
                                     <div className="relative">
                                         <button
                                             className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity ${selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
@@ -1018,11 +1189,11 @@ function ProjectPage() {
                                         {priorityDropdownOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
-                                                <div className="absolute left-0 top-full mt-1 w-32 bg-surface-container-highest border border-outline-variant/30 rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
+                                                <div className="absolute left-0 top-full mt-1 w-32 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
                                                     {['low', 'medium', 'high', 'urgent'].map(p => (
                                                         <button
                                                             key={p}
-                                                            className={`text-left px-4 py-2 hover:bg-surface-variant transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-on-surface'}`}
+                                                            className={`text-left px-4 py-2 hover:bg-[#2D3139] transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-white'}`}
                                                             onClick={() => {
                                                                 updateTaskPriority(selectedTask.id, p);
                                                                 setPriorityDropdownOpen(false);
@@ -1039,44 +1210,134 @@ function ProjectPage() {
                             </div>
 
                             <div>
-                                <h3 className="font-label-md text-on-surface-variant uppercase tracking-wider mb-sm flex items-center gap-xs">
+                                <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider mb-sm flex items-center gap-xs">
                                     <span className="material-symbols-outlined text-[16px]">description</span>
                                     Description
                                 </h3>
                                 {selectedTask.description ? (
-                                    <p className="font-body-md text-on-surface whitespace-pre-wrap leading-relaxed bg-surface-container-low p-md rounded-xl border border-outline-variant/20">{selectedTask.description}</p>
+                                    <p className="font-body-md text-white whitespace-pre-wrap leading-relaxed bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">{selectedTask.description}</p>
                                 ) : (
-                                    <div className="bg-surface-container-lowest p-md rounded-xl border border-outline-variant/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
-                                        <span className="material-symbols-outlined text-on-surface-variant/50 text-3xl">notes</span>
-                                        <p className="font-body-sm text-on-surface-variant/70 italic">No description provided for this task.</p>
+                                    <div className="bg-[#0F1115] p-md rounded-xl border border-[#2D3139]/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
+                                        <span className="material-symbols-outlined text-[#8c947b]/50 text-3xl">notes</span>
+                                        <p className="font-body-sm text-[#8c947b]/70 italic">No description provided for this task.</p>
                                     </div>
                                 )}
                             </div>
 
+                            <div>
+                                <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider mb-sm flex items-center gap-xs">
+                                    <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
+                                    Sub-tasks
+                                </h3>
+                                {(() => {
+                                    let subtasksList = [];
+                                    if (selectedTask.sub_tasks) {
+                                        try {
+                                            subtasksList = JSON.parse(selectedTask.sub_tasks);
+                                            if (!Array.isArray(subtasksList)) subtasksList = [];
+                                        } catch (e) {
+                                            console.error("Failed to parse sub_tasks:", e);
+                                        }
+                                    }
+
+                                    const handleToggleSubtask = (stId) => {
+                                        const updated = subtasksList.map(st =>
+                                            st.id === stId ? { ...st, done: !st.done } : st
+                                        );
+                                        updateTaskSubtasks(selectedTask.id, updated);
+                                    };
+
+                                    const handleDeleteSubtask = (stId) => {
+                                        const updated = subtasksList.filter(st => st.id !== stId);
+                                        updateTaskSubtasks(selectedTask.id, updated);
+                                    };
+
+                                    const handleAddSubtask = (e) => {
+                                        e.preventDefault();
+                                        if (!newSubtaskTitle.trim()) return;
+                                        const newSub = {
+                                            id: Math.random().toString(36).substring(2, 9),
+                                            title: newSubtaskTitle.trim(),
+                                            done: false
+                                        };
+                                        updateTaskSubtasks(selectedTask.id, [...subtasksList, newSub]);
+                                        setNewSubtaskTitle("");
+                                    };
+
+                                    return (
+                                        <div className="space-y-sm bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">
+                                            {subtasksList.length > 0 ? (
+                                                <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
+                                                    {subtasksList.map(st => (
+                                                        <div key={st.id} className="flex items-center justify-between gap-sm group/sub">
+                                                            <label className="flex items-center gap-sm cursor-pointer flex-1 py-0.5">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={st.done}
+                                                                    onChange={() => handleToggleSubtask(st.id)}
+                                                                    className="w-4 h-4 rounded border-[#2D3139] text-primary focus:ring-primary cursor-pointer"
+                                                                />
+                                                                <span className={`text-sm text-white leading-tight transition-all ${st.done ? 'line-through text-[#8c947b]/50' : ''}`}>
+                                                                    {st.title}
+                                                                </span>
+                                                            </label>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleDeleteSubtask(st.id)}
+                                                                className="text-[#8c947b] hover:text-white opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer flex items-center justify-center p-0.5 rounded hover:bg-[#2D3139]"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-[#8c947b]/60 italic pb-xs">No sub-tasks yet.</p>
+                                            )}
+                                            <form onSubmit={handleAddSubtask} className="flex items-center gap-xs pt-xs border-t border-[#2D3139]/10">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Add a sub-task..."
+                                                    value={newSubtaskTitle}
+                                                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                                                    className="flex-1 bg-[#0F1115] border border-[#2D3139]/20 rounded px-sm py-[5px] text-sm text-white placeholder-[#8c947b]/40 focus:outline-none focus:border-primary/50"
+                                                />
+                                                <button
+                                                    type="submit"
+                                                    className="bg-primary text-on-primary hover:bg-primary/90 text-xs font-bold px-sm py-[7px] rounded flex items-center gap-xs cursor-pointer transition-colors"
+                                                >
+                                                    <span className="material-symbols-outlined text-[14px]">add</span> Add
+                                                </button>
+                                            </form>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
                             <div className="grid grid-cols-2 gap-md">
-                                <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
+                                <div className="bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs">
+                                    <h3 className="font-label-sm text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">person</span> Assignee
                                     </h3>
                                     {(() => {
                                         const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
                                         return assignee ? (
                                             <div className="flex items-center gap-sm mt-1">
-                                                <div className="w-6 h-6 rounded-full bg-surface-variant flex items-center justify-center text-[10px] font-bold text-on-surface-variant uppercase">
+                                                <div className="w-6 h-6 rounded-full bg-[#1C1F26] border border-[#2D3139]/50 flex items-center justify-center text-[10px] font-bold text-[#8c947b] uppercase">
                                                     {assignee.name.charAt(0)}
                                                 </div>
-                                                <p className="font-body-md text-on-surface font-semibold">{assignee.name}</p>
+                                                <p className="font-body-md text-white font-semibold">{assignee.name}</p>
                                             </div>
                                         ) : (
-                                            <p className="font-body-md text-on-surface mt-1 italic opacity-70">Unassigned</p>
+                                            <p className="font-body-md text-white mt-1 italic opacity-70">Unassigned</p>
                                         );
                                     })()}
                                 </div>
-                                <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
+                                <div className="bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs">
+                                    <h3 className="font-label-sm text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
                                     </h3>
-                                    <p className="font-body-md text-on-surface font-semibold mt-1">
+                                    <p className="font-body-md text-white font-semibold mt-1">
                                         {selectedTask.due_date ? (
                                             selectedTask.due_date.includes('T') || selectedTask.due_date.includes(' ')
                                                 ? new Date(selectedTask.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
@@ -1086,8 +1347,8 @@ function ProjectPage() {
                                 </div>
                             </div>
 
-                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-on-surface-variant border-t border-outline-variant/20">
-                                <span>ID: <span className="font-mono text-on-surface opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
+                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-[#8c947b] border-t border-[#2D3139]/20">
+                                <span>ID: <span className="font-mono text-white opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
                                 <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>

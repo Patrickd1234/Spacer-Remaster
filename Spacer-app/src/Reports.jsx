@@ -1,4 +1,4 @@
-import Sidebar from "./partials/sidebar"
+import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import PieChart from "./components/PieChart"
 import { useState, useEffect } from "react"

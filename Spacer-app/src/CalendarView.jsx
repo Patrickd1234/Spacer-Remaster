@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import Sidebar from "./partials/sidebar"
+import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import { supabase } from "./supabase"
@@ -15,8 +15,54 @@ export default function CalendarView() {
     const [orgUsers, setOrgUsers] = useState([])
     const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
+    const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
+
+    const updateTaskSubtasks = async (taskId, newSubtasks) => {
+        const allDone = newSubtasks.length > 0 && newSubtasks.every(st => st.done)
+        const anyDone = newSubtasks.some(st => st.done)
+        const task = tasks.find(t => String(t.id) === String(taskId))
+        if (!task) return
+
+        let newStatus = task.status
+        let statusChanged = false
+
+        if (allDone) {
+            if (task.status !== 'done') {
+                newStatus = 'done'
+                statusChanged = true
+            }
+        } else if (newSubtasks.length === 0 || !anyDone) {
+            if (task.status !== 'todo') {
+                newStatus = 'todo'
+                statusChanged = true
+            }
+        } else {
+            if (task.status !== 'in_progress') {
+                newStatus = 'in_progress'
+                statusChanged = true
+            }
+        }
+
+        const serialized = JSON.stringify(newSubtasks)
+
+        setSelectedTask(prev => prev && String(prev.id) === String(taskId) ? { ...prev, sub_tasks: serialized, status: newStatus } : prev)
+        setTasks(prevTasks =>
+            prevTasks.map(t =>
+                String(t.id) === String(taskId) ? { ...t, sub_tasks: serialized, status: newStatus } : t
+            )
+        )
+
+        const updatePayload = { sub_tasks: serialized }
+        if (statusChanged) {
+            updatePayload.status = newStatus
+        }
+
+        const { error } = await supabase.from('tasks').update(updatePayload).eq('id', taskId)
+        if (error) console.error("Error updating subtasks", error)
+    }
 
     const updateTaskPriority = async (taskId, newPriority) => {
+        const task = tasks.find(t => String(t.id) === String(taskId))
         setSelectedTask(prev => prev ? { ...prev, priority: newPriority } : null)
         setTasks(prevTasks =>
             prevTasks.map(t =>
@@ -24,10 +70,48 @@ export default function CalendarView() {
             )
         )
         const { error } = await supabase.from('tasks').update({ priority: newPriority }).eq('id', taskId)
-        if (error) console.error("Error updating priority", error)
+        if (error) {
+            console.error("Error updating priority", error)
+        } else if (task) {
+            const { data: userData } = await supabase.auth.getUser()
+            const logEntry = {
+                entity_type: "task",
+                entity_id: taskId,
+                actor_id: userData?.user?.id,
+                action: "priority_changed",
+                new_state: { project_id: task.project_id, title: task.title, priority: newPriority }
+            }
+            await supabase.from("activity_log").insert(logEntry)
+        }
     }
 
     const updateTaskStatus = async (taskId, newStatus) => {
+        const task = tasks.find(t => String(t.id) === String(taskId))
+        if (!task) return
+
+        let subtasksList = [];
+        if (task.sub_tasks) {
+            try {
+                subtasksList = JSON.parse(task.sub_tasks);
+                if (!Array.isArray(subtasksList)) subtasksList = [];
+            } catch (err) {}
+        }
+        
+        const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
+        const anyDone = subtasksList.some(st => st.done);
+
+        let allowedStatus = task.status;
+        if (allDone) {
+            allowedStatus = 'done';
+        } else if (subtasksList.length === 0 || !anyDone) {
+            allowedStatus = 'todo';
+        } else {
+            allowedStatus = 'in_progress';
+        }
+
+        if (newStatus !== allowedStatus) return;
+        if (task.status === newStatus) return
+
         setSelectedTask(prev => prev ? { ...prev, status: newStatus } : null)
         setTasks(prevTasks =>
             prevTasks.map(t =>
@@ -35,7 +119,19 @@ export default function CalendarView() {
             )
         )
         const { error } = await supabase.from('tasks').update({ status: newStatus }).eq('id', taskId)
-        if (error) console.error("Error updating status", error)
+        if (error) {
+            console.error("Error updating status", error)
+        } else {
+            const { data: userData } = await supabase.auth.getUser()
+            const logEntry = {
+                entity_type: "task",
+                entity_id: taskId,
+                actor_id: userData?.user?.id,
+                action: "status_changed",
+                new_state: { project_id: task.project_id, title: task.title, status: newStatus }
+            }
+            await supabase.from("activity_log").insert(logEntry)
+        }
     }
 
     useEffect(() => {
@@ -64,7 +160,35 @@ export default function CalendarView() {
             if (tasksError) {
                 console.error("Error fetching tasks", tasksError)
             } else {
-                setTasks(userTasks || [])
+                const corrected = (userTasks || []).map(t => {
+                    let subtasksList = [];
+                    if (t.sub_tasks) {
+                        try {
+                            subtasksList = JSON.parse(t.sub_tasks);
+                            if (!Array.isArray(subtasksList)) subtasksList = [];
+                        } catch (e) {}
+                    }
+                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
+                    const anyDone = subtasksList.some(st => st.done);
+
+                    let expectedStatus = t.status;
+                    if (allDone) {
+                        expectedStatus = 'done';
+                    } else if (subtasksList.length === 0 || !anyDone) {
+                        expectedStatus = 'todo';
+                    } else {
+                        expectedStatus = 'in_progress';
+                    }
+
+                    if (t.status !== expectedStatus) {
+                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
+                            if (error) console.error("Error auto-correcting task status", error);
+                        });
+                        return { ...t, status: expectedStatus };
+                    }
+                    return t;
+                });
+                setTasks(corrected)
             }
 
             if (user.organization_id) {
@@ -324,6 +448,38 @@ export default function CalendarView() {
                                             </div>
                                             <h3 className="text-sm font-bold text-white mt-1">{item.title}</h3>
                                             {item.description && <p className="text-xs text-[#8c947b] line-clamp-2">{item.description}</p>}
+                                            {item.isTask && (() => {
+                                                let subtasksList = [];
+                                                if (item.sub_tasks) {
+                                                    try {
+                                                        subtasksList = JSON.parse(item.sub_tasks);
+                                                        if (!Array.isArray(subtasksList)) subtasksList = [];
+                                                    } catch (e) {}
+                                                }
+                                                if (subtasksList.length === 0) return null;
+
+                                                const completedCount = subtasksList.filter(st => st.done).length;
+                                                const totalCount = subtasksList.length;
+                                                const percent = (completedCount / totalCount) * 100;
+
+                                                return (
+                                                    <div className="mt-2">
+                                                        <div className="flex items-center justify-between text-[10px] text-[#8c947b] mb-1 font-medium">
+                                                            <span className="flex items-center gap-1">
+                                                                <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
+                                                                Sub-tasks
+                                                            </span>
+                                                            <span>{completedCount}/{totalCount}</span>
+                                                        </div>
+                                                        <div className="w-full bg-[#16181e] rounded-full h-1 overflow-hidden">
+                                                            <div 
+                                                                className="bg-[#aff82a] h-full transition-all duration-300"
+                                                                style={{ width: `${percent}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     ));
                                 })()}
@@ -345,6 +501,100 @@ export default function CalendarView() {
                                 </div>
                                 <h2 className="text-xl font-bold text-white mb-2">{selectedTask.title}</h2>
                                 <p className="text-sm text-[#8c947b] mb-4">{selectedTask.description || "No description provided."}</p>
+
+                                <div className="mb-6 space-y-3">
+                                    <h4 className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[14px]">format_list_bulleted</span>
+                                        Sub-tasks
+                                    </h4>
+                                    
+                                    <div className="bg-[#181a20] p-4 rounded-xl border border-[#2D3139] space-y-2">
+                                        {(() => {
+                                            let subtasksList = [];
+                                            if (selectedTask.sub_tasks) {
+                                                try {
+                                                    subtasksList = JSON.parse(selectedTask.sub_tasks);
+                                                    if (!Array.isArray(subtasksList)) subtasksList = [];
+                                                } catch (e) {
+                                                    console.error("Failed to parse sub_tasks:", e);
+                                                }
+                                            }
+
+                                            const handleToggleSubtask = (stId) => {
+                                                const updated = subtasksList.map(st => 
+                                                    st.id === stId ? { ...st, done: !st.done } : st
+                                                );
+                                                updateTaskSubtasks(selectedTask.id, updated);
+                                            };
+
+                                            const handleDeleteSubtask = (stId) => {
+                                                const updated = subtasksList.filter(st => st.id !== stId);
+                                                updateTaskSubtasks(selectedTask.id, updated);
+                                            };
+
+                                            const handleAddSubtask = (e) => {
+                                                e.preventDefault();
+                                                if (!newSubtaskTitle.trim()) return;
+                                                const newSub = {
+                                                    id: Math.random().toString(36).substring(2, 9),
+                                                    title: newSubtaskTitle.trim(),
+                                                    done: false
+                                                };
+                                                updateTaskSubtasks(selectedTask.id, [...subtasksList, newSub]);
+                                                setNewSubtaskTitle("");
+                                            };
+
+                                            return (
+                                                <>
+                                                    {subtasksList.length === 0 ? (
+                                                        <p className="text-[11px] text-[#8c947b] italic">No sub-tasks added yet.</p>
+                                                    ) : (
+                                                        <div className="space-y-1">
+                                                            {subtasksList.map(st => (
+                                                                <div key={st.id} className="flex items-center justify-between group py-0.5">
+                                                                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-white flex-1">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={st.done}
+                                                                            onChange={() => handleToggleSubtask(st.id)}
+                                                                            className="w-3.5 h-3.5 accent-[#aff82a] rounded border-[#2D3139] bg-[#111318] focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                                                                        />
+                                                                        <span className={st.done ? 'line-through text-[#8c947b]' : ''}>
+                                                                            {st.title}
+                                                                        </span>
+                                                                    </label>
+                                                                    <button
+                                                                        onClick={() => handleDeleteSubtask(st.id)}
+                                                                        className="opacity-0 group-hover:opacity-100 text-[#8c947b] hover:text-red-400 w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer"
+                                                                    >
+                                                                        <span className="material-symbols-outlined text-[14px]">delete</span>
+                                                                    </button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <form onSubmit={handleAddSubtask} className="flex gap-2 pt-2 border-t border-[#2D3139] mt-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Add sub-task..."
+                                                            value={newSubtaskTitle}
+                                                            onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                                                            className="flex-1 bg-[#111318] border border-[#2D3139] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b]"
+                                                        />
+                                                        <button
+                                                            type="submit"
+                                                            className="px-3 bg-[#5b644d] text-white rounded-lg text-[11px] font-semibold hover:bg-[#6c765c] transition-all cursor-pointer flex items-center justify-center gap-1"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[14px]">add</span>
+                                                            Add
+                                                        </button>
+                                                    </form>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
 
                                 <div className="space-y-4 text-xs">
                                     <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">

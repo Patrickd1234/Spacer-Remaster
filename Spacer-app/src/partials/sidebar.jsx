@@ -127,30 +127,9 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         </button>
                     </div>
 
-                    {expanded && (
-                        <div className="flex items-center justify-between px-3 py-2 bg-[#0F1115] border border-[#2D3139] rounded-lg cursor-pointer hover:border-[#3d424d] transition-colors group">
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-5 h-5 rounded-full bg-[#aff82a]/20 text-[#aff82a] flex items-center justify-center font-bold text-[10px]">
-                                    S
-                                </div>
-                                <span className="text-[13px] font-medium text-white truncate max-w-[130px]">Spacer HQ</span>
-                            </div>
-                            <span className="material-symbols-outlined text-[#8c947b] text-[18px] group-hover:text-white transition-colors">unfold_more</span>
-                        </div>
-                    )}
                 </div>
 
-                {/* NEW PROJECT BUTTON */}
-                <div className="px-4 mb-6">
-                    <button
-                        className={`w-full py-2.5 px-3 bg-[#aff82a] text-[#1C1F26] font-bold text-[14px] rounded-lg flex items-center justify-center gap-2 hover:bg-[#9de022] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
-                        onClick={() => setShowCreateModal(true)}
-                        title="New Project"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                        {expanded && <span>New Project</span>}
-                    </button>
-                </div>
+
 
                 {/* NAVIGATION ITEMS */}
                 <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
@@ -192,7 +171,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         {expanded && (
                             <div className="flex items-center justify-between px-3 mb-2">
                                 <span className="text-[11px] font-bold tracking-wider text-[#8c947b] uppercase">Projects</span>
-                                <span className="material-symbols-outlined text-[#8c947b] text-[16px] cursor-pointer hover:text-white" onClick={() => setShowCreateModal(true)}>add</span>
                             </div>
                         )}
                         <div className="space-y-1">
@@ -278,3 +256,4 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         </>
     )
 }
+
