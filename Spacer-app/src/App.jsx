@@ -7,9 +7,13 @@ import LaunchOrganization from './Launch_Organization'
 import ProjectPage from './project_page'
 import Onboarding from './onboarding'
 import Reports from './Reports'
+import Profile from './Profile'
 import Department from './Department'
 import CalendarView from './CalendarView'
+import Profile from './Profile'
+import Settings from './Settings'
 import { supabase } from './supabase'
+import { PreferencesProvider } from './PreferencesContext'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -51,19 +55,23 @@ function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
-        <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
-        <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
-        <Route path="/launch" element={session ? <LaunchOrganization /> : <Navigate to="/login" replace />} />
-        <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
-        <Route path="/reports" element={session ? <Reports /> : <Navigate to="/login" replace />} />
-        <Route path="/department" element={session ? <Department /> : <Navigate to="/login" replace />} />
-        <Route path="/calendar" element={session ? <CalendarView /> : <Navigate to="/login" replace />} />
-        <Route path="/project_page/:project_id" element={session ? <ProjectPage /> : <Navigate to="/login" replace />} />
-      </Routes>
-    </Router>
+    <PreferencesProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
+          <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
+          <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
+          <Route path="/launch" element={session ? <LaunchOrganization /> : <Navigate to="/login" replace />} />
+          <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
+          <Route path="/reports" element={session ? <Reports /> : <Navigate to="/login" replace />} />
+          <Route path="/department" element={session ? <Department /> : <Navigate to="/login" replace />} />
+          <Route path="/calendar" element={session ? <CalendarView /> : <Navigate to="/login" replace />} />
+          <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" replace />} />
+          <Route path="/settings" element={session ? <Settings /> : <Navigate to="/login" replace />} />
+          <Route path="/project_page/:project_id" element={session ? <ProjectPage /> : <Navigate to="/login" replace />} />
+        </Routes>
+      </Router>
+    </PreferencesProvider>
   )
 }
 
