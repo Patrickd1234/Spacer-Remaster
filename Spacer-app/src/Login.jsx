@@ -7,10 +7,12 @@ function Login() {
     const [password, setPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [errorMsg, setErrorMsg] = useState("")
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const navigate = useNavigate()
 
     const [isDemoMode, setIsDemoMode] = useState(localStorage.getItem("use_mock_supabase") === "true")
     const isFormFilled = email.trim() !== "" && password.trim() !== ""
+    const googleAuthReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
     const toggleDemoMode = () => {
         const newValue = !isDemoMode
@@ -51,6 +53,30 @@ function Login() {
             }
             navigate("/")
         }
+    }
+
+    const handleGoogleSignIn = async () => {
+        if (!googleAuthReady) {
+            setErrorMsg('Google sign-in is currently unavailable until Supabase Google auth is configured.')
+            return
+        }
+
+        setErrorMsg("")
+        setIsGoogleLoading(true)
+
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: `${window.location.origin}/`
+            }
+        })
+
+        if (error) {
+            console.error(error)
+            setErrorMsg(error.message)
+        }
+
+        setIsGoogleLoading(false)
     }
 
     const isEmailError = errorMsg.toLowerCase().includes("email") || errorMsg.toLowerCase().includes("user not found")
@@ -212,11 +238,21 @@ function Login() {
                             <div className="h-px bg-[#2D3139] flex-1"></div>
                         </div>
 
-                        {/* Social Login */}
-                        <button type="button" className="w-full bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-[14px] py-3 rounded-xl flex items-center justify-center gap-3 border border-[#2D3139] transition-all cursor-pointer">
-                            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="w-5 h-5" />
-                            Sign in with Google
+                        <button
+                            type="button"
+                            onClick={handleGoogleSignIn}
+                            disabled={isGoogleLoading || !googleAuthReady}
+                            className="w-full flex items-center justify-center gap-2 border border-[#2D3139] bg-[#111318] hover:bg-[#171b22] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-60"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">login</span>
+                            {isGoogleLoading ? 'Connecting to Google...' : googleAuthReady ? 'Continue with Google' : 'Google sign-in pending setup'}
                         </button>
+
+                        {!googleAuthReady && (
+                            <p className="text-center text-xs text-[#8c947b] mt-3">
+                                Google sign-in is currently unavailable until Supabase Google auth is configured.
+                            </p>
+                        )}
 
                         {/* Create Account Link */}
                         <div className="text-center mt-6">

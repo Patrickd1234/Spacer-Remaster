@@ -15,32 +15,55 @@ import Settings from './Settings'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 
+const syncUserProfile = async (user) => {
+  if (!user?.id || !user?.email) return
+
+  const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0] || 'User'
+
+  try {
+    const { error } = await supabase.from('users').insert({
+      id: user.id,
+      email: user.email,
+      name: fallbackName
+    })
+
+    if (error) {
+      const message = error.message?.toLowerCase() || ''
+      const isDuplicate = message.includes('duplicate') || message.includes('already exists')
+      if (!isDuplicate) {
+        console.error('Error inserting user profile:', error)
+      }
+    }
+  } catch (error) {
+    console.error('Error syncing user profile:', error)
+  }
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      if (session && session.user) {
-        localStorage.setItem("userId", session.user.id)
-        localStorage.setItem("userEmail", session.user.email)
+    const handleSession = async (activeSession) => {
+      setSession(activeSession)
+
+      if (activeSession?.user) {
+        localStorage.setItem('userId', activeSession.user.id)
+        localStorage.setItem('userEmail', activeSession.user.email)
+        await syncUserProfile(activeSession.user)
       } else {
-        localStorage.removeItem("userId")
-        localStorage.removeItem("userEmail")
+        localStorage.removeItem('userId')
+        localStorage.removeItem('userEmail')
       }
+    }
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      await handleSession(session)
       setLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      if (session && session.user) {
-        localStorage.setItem("userId", session.user.id)
-        localStorage.setItem("userEmail", session.user.email)
-      } else {
-        localStorage.removeItem("userId")
-        localStorage.removeItem("userEmail")
-      }
+      handleSession(session)
     })
 
     return () => subscription.unsubscribe()
