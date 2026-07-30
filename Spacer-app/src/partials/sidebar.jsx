@@ -10,8 +10,21 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
+
+    // ── Right-click context menu state
+    const [contextMenu, setContextMenu] = useState(null); // { x, y, project }
+    const [deleteConfirm, setDeleteConfirm] = useState(null); // project to confirm delete
+    const [deleting, setDeleting] = useState(false);
+
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
+
+    // Close context menu on any click outside
+    useEffect(() => {
+        const close = () => setContextMenu(null);
+        window.addEventListener("click", close);
+        return () => window.removeEventListener("click", close);
+    }, []);
 
     useEffect(() => {
         const handleClickOutside = (event) => {
@@ -30,14 +43,8 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         onCollapsedChange?.(next);
     };
 
-    const handleMouseEnter = () => {
-        if (collapsed) setHovered(true);
-    };
-
-    const handleMouseLeave = () => {
-        setHovered(false);
-    };
-
+    const handleMouseEnter = () => { if (collapsed) setHovered(true); };
+    const handleMouseLeave = () => { setHovered(false); };
     const handleSidebarClick = () => {
         if (collapsed && hovered) {
             setCollapsed(false);
@@ -45,6 +52,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
             onCollapsedChange?.(false);
         }
     };
+
     const navigate = useNavigate();
 
     const handleLogout = async () => {
@@ -53,40 +61,33 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         localStorage.removeItem("userEmail");
         navigate("/login");
     };
+
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
 
+    // ── Fetch projects
+    const fetchProjects = async () => {
+        const userId = localStorage.getItem("userId");
+        if (!userId) {
+            const { data, error } = await supabase.from("project_spaces").select("*");
+            if (!error && data) setProjects(data);
+            return;
+        }
+        const { data: memberData, error: memberError } = await supabase
+            .from("memberships").select("team_space_id").eq("user_id", userId);
+        if (memberError || !memberData || memberData.length === 0) {
+            const { data, error } = await supabase.from("project_spaces").select("*");
+            if (!error) setProjects(data || []);
+        } else {
+            const teamIds = memberData.map((m) => m.team_space_id);
+            const { data, error } = await supabase.from("project_spaces").select("*").in("team_space_id", teamIds);
+            if (!error) setProjects(data || []);
+        }
+    };
+
     useEffect(() => {
-        const fetchProjects = async () => {
-            const userId = localStorage.getItem("userId");
-            if (!userId) {
-                const { data, error } = await supabase.from("project_spaces").select("*");
-                if (!error && data) setProjects(data);
-                return;
-            }
-
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id")
-                .eq("user_id", userId);
-
-            if (memberError || !memberData || memberData.length === 0) {
-                const { data, error } = await supabase.from("project_spaces").select("*");
-                if (error) console.log(error);
-                else setProjects(data || []);
-            } else {
-                const teamIds = memberData.map((m) => m.team_space_id);
-                const { data, error } = await supabase
-                    .from("project_spaces")
-                    .select("*")
-                    .in("team_space_id", teamIds);
-                if (error) console.log(error);
-                else setProjects(data || []);
-            }
-        };
         fetchProjects();
-
         const fetchDbUser = async () => {
             const { data: authData } = await supabase.auth.getUser();
             if (authData?.user) {
@@ -99,6 +100,31 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
 
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
     const displayEmail = dbUser?.email || userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
+
+    // ── Right-click handler
+    const handleProjectContextMenu = (e, project) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({ x: e.clientX, y: e.clientY, project });
+    };
+
+    // ── Delete project
+    const handleDeleteProject = async () => {
+        if (!deleteConfirm) return;
+        setDeleting(true);
+        const { error } = await supabase.from("project_spaces").delete().eq("id", deleteConfirm.id);
+        if (!error) {
+            setProjects(prev => prev.filter(p => p.id !== deleteConfirm.id));
+            // Navigate away if we're currently on this project's page
+            if (window.location.pathname.includes(deleteConfirm.id)) {
+                navigate("/");
+            }
+        } else {
+            console.error("Error deleting project:", error);
+        }
+        setDeleting(false);
+        setDeleteConfirm(null);
+    };
 
     return (
         <>
@@ -126,16 +152,13 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                             <span className="material-symbols-outlined text-[18px]">{collapsed ? "chevron_right" : "chevron_left"}</span>
                         </button>
                     </div>
-
                 </div>
-
-
 
                 {/* NAVIGATION ITEMS */}
                 <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
                     <div className="space-y-1">
                         {matchesSearch("Home") && (
-                            <Link to="/" className={`text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${window.location.pathname === '/' ? 'bg-[#aff82a]/10 text-[#aff82a] font-semibold' : ''}`}>
+                            <Link to="/" className={`text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${window.location.pathname === "/" ? "bg-[#aff82a]/10 text-[#aff82a] font-semibold" : ""}`}>
                                 <span className="material-symbols-outlined text-[20px]">home</span>
                                 {expanded && <span className="font-medium text-[14px]">Home</span>}
                             </Link>
@@ -182,6 +205,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                         <div
                                             key={project.id}
                                             className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center px-3 py-2 cursor-pointer transition-colors group"
+                                            onContextMenu={(e) => handleProjectContextMenu(e, project)}
                                         >
                                             {expanded && (
                                                 <Link to={`/project_page/${project.id}`} className="flex items-center gap-3 w-full min-w-0">
@@ -216,7 +240,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                         <span className="text-[#8c947b] text-[12px] truncate">{displayEmail}</span>
                                     </div>
                                 </div>
-                                <span className={`material-symbols-outlined text-[#8c947b] group-hover:text-white transition-all duration-200 ${profileDropdownOpen ? 'rotate-180' : ''}`}>expand_more</span>
+                                <span className={`material-symbols-outlined text-[#8c947b] group-hover:text-white transition-all duration-200 ${profileDropdownOpen ? "rotate-180" : ""}`}>expand_more</span>
                             </div>
                         ) : (
                             <div className="flex justify-center px-3 py-1 cursor-pointer rounded-lg hover:bg-[#2D3139] transition-colors" title={displayName}>
@@ -228,7 +252,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     </div>
 
                     {profileDropdownOpen && (
-                        <div className={`absolute ${collapsed && !hovered ? 'left-16 w-48' : 'left-4 right-4'} bottom-full mb-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+                        <div className={`absolute ${collapsed && !hovered ? "left-16 w-48" : "left-4 right-4"} bottom-full mb-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50`}>
                             <Link to="/profile" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">person</span>
                                 <span className="text-sm font-medium">Your Profile</span>
@@ -247,13 +271,92 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                 </div>
             </aside>
 
+            {/* Create project modal */}
             {showCreateModal && (
                 <CreateProjectModal
                     onClose={() => setShowCreateModal(false)}
                     onProjectCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
                 />
             )}
+
+            {/* ── Right-click context menu ── */}
+            {contextMenu && (
+                <div
+                    className="fixed z-[200] bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-2xl overflow-hidden w-52"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="px-4 py-2 border-b border-[#2D3139]">
+                        <p className="text-white text-[13px] font-semibold truncate">{contextMenu.project.name}</p>
+                        <p className="text-[#8c947b] text-[11px]">Project options</p>
+                    </div>
+                    <button
+                        className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-950/30 transition-colors text-[13px] font-medium cursor-pointer"
+                        onClick={() => {
+                            setDeleteConfirm(contextMenu.project);
+                            setContextMenu(null);
+                        }}
+                    >
+                        <span className="material-symbols-outlined text-[18px]">delete_forever</span>
+                        Delete project
+                    </button>
+                </div>
+            )}
+
+            {/* ── Delete confirmation modal ── */}
+            {deleteConfirm && (
+                <div
+                    className="fixed inset-0 z-[210] flex items-center justify-center p-4"
+                    style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
+                    onClick={() => !deleting && setDeleteConfirm(null)}
+                >
+                    <div
+                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Icon */}
+                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
+                            <span className="material-symbols-outlined text-red-400 text-[28px]">delete_forever</span>
+                        </div>
+
+                        {/* Text */}
+                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Delete project?</h2>
+                        <p className="text-[#8c947b] text-[13px] text-center mb-1">
+                            You're about to permanently delete
+                        </p>
+                        <p className="text-white font-semibold text-[14px] text-center mb-4">
+                            "{deleteConfirm.name}"
+                        </p>
+                        <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                            All tasks, files and activity linked to this project will also be removed. This cannot be undone.
+                        </p>
+
+                        {/* Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setDeleteConfirm(null)}
+                                disabled={deleting}
+                                className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                No, keep it
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteProject}
+                                disabled={deleting}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                            >
+                                {deleting ? (
+                                    <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Deleting…</>
+                                ) : (
+                                    <><span className="material-symbols-outlined text-[16px]">delete</span>Yes, delete</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     )
 }
-

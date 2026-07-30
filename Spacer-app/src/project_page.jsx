@@ -59,6 +59,10 @@ function ProjectPage() {
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [project_events, setProjectEvents] = useState([])
 
+    // ── Members
+    const [projectMembers, setProjectMembers] = useState([])
+    const [showAddMemberModal, setShowAddMemberModal] = useState(false)
+
     // ── File upload state
     const [projectFiles, setProjectFiles] = useState([])
     const [showUploadZone, setShowUploadZone] = useState(false)
@@ -338,7 +342,17 @@ function ProjectPage() {
         fetchTasks()
         fetchActivity()
         fetchFiles()
+        fetchProjectMembers()
     }, [project_id])
+
+    const fetchProjectMembers = async () => {
+        if (!project_id) return
+        const { data, error } = await supabase
+            .from("project_members")
+            .select("*, user:users(*)")
+            .eq("project_id", project_id)
+        if (!error) setProjectMembers(data || [])
+    }
 
     const assignedMemberIds = new Set(project_tasks.map(t => t.assignee_id).filter(Boolean))
     const assignedMembers = orgUsers.filter(u => assignedMemberIds.has(u.id))
@@ -952,17 +966,27 @@ function ProjectPage() {
                     )}
 
                     {/* Members Tab */}
-                    {activeTab === "members" && (
+                    {activeTab === "members" && (() => {
+                        // Merge explicitly added project_members with task-assigned members, no duplicates
+                        const explicitIds = new Set(projectMembers.map(pm => pm.user_id))
+                        const explicitUsers = projectMembers.map(pm => pm.user).filter(Boolean)
+                        const taskOnlyMembers = assignedMembers.filter(u => !explicitIds.has(u.id))
+                        const allMembers = [...explicitUsers, ...taskOnlyMembers]
+                        const removeMember = async (userId) => {
+                            await supabase.from("project_members").delete().eq("project_id", project_id).eq("user_id", userId)
+                            fetchProjectMembers()
+                        }
+                        return (
                         <div className="tab-pane block" id="section-members">
-                            {assignedMembers.length === 0 ? (
+                            {allMembers.length === 0 ? (
                                 <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
                                     <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
-                                    <p className="font-headline-sm text-white mb-xs">No Members Assigned</p>
-                                    <p className="font-body-md text-[#8c947b] max-w-md">There are currently no team members assigned to any tasks in this project.</p>
+                                    <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
+                                    <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
-                                    {assignedMembers.map((member) => (
+                                    {allMembers.map((member) => (
                                         <div
                                             key={member.id}
                                             className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
@@ -996,16 +1020,23 @@ function ProjectPage() {
                                                     <span className="material-symbols-outlined text-sm">chat_bubble</span>
                                                     Message
                                                 </button>
-                                                <button className="w-8 h-8 bg-[#1C1F26] text-white rounded-lg flex items-center justify-center hover:bg-[#2D3139] transition-all cursor-pointer">
-                                                    <span className="material-symbols-outlined text-sm">trending_flat</span>
-                                                </button>
+                                                {explicitIds.has(member.id) && (
+                                                    <button
+                                                        title="Remove from project"
+                                                        onClick={() => removeMember(member.id)}
+                                                        className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">person_remove</span>
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </div>
-                    )}
+                        )
+                    })()}
 
                     {/* Calendar Tab */}
                     {activeTab === "calendar" && (() => {
@@ -1122,11 +1153,26 @@ function ProjectPage() {
                     })()}
                 </div>
             </main>
-            {/* FAB for Tasks */}
-            <button type="button" onClick={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true); }} className="fixed bottom-lg right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer">
-                <span className="material-symbols-outlined text-[28px] font-bold">add</span>
-                <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">Quick Add Task</span>
-            </button>
+            {/* ── Context-aware FAB ── */}
+            {(() => {
+                const fabConfig = {
+                    files:   { icon: "upload",      label: "Upload File",    action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
+                    members: { icon: "person_add",  label: "Add Member",     action: () => setShowAddMemberModal(true) },
+                }
+                const cfg = fabConfig[activeTab] || { icon: "add", label: "Quick Add Task", action: () => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) } }
+                return (
+                    <button
+                        type="button"
+                        onClick={cfg.action}
+                        className="fixed bottom-lg right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
+                    >
+                        <span className="material-symbols-outlined text-[28px] font-bold">{cfg.icon}</span>
+                        <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
+                            {cfg.label}
+                        </span>
+                    </button>
+                )
+            })()}
             {isCreateTaskModalOpen && (
                 <CreateTaskModal projectId={project_id} organizationId={organizationId} teamSpaceId={teamSpaceId}
                     initialStatus={createTaskInitialStatus} onClose={() => setIsCreateTaskModalOpen(false)}
@@ -1360,6 +1406,92 @@ function ProjectPage() {
             {reviewFile && (
                 <DocViewer file={reviewFile} onClose={() => setReviewFile(null)} />
             )}
+
+            {/* ── Add Member modal ── */}
+            {showAddMemberModal && (() => {
+                const alreadyIn = new Set([
+                    ...projectMembers.map(pm => pm.user_id),
+                    ...assignedMembers.map(u => u.id),
+                ])
+                const available = orgUsers.filter(u => !alreadyIn.has(u.id))
+
+                const addMember = async (user) => {
+                    const { error } = await supabase.from("project_members").insert({
+                        project_id,
+                        user_id: user.id,
+                    })
+                    if (!error) {
+                        fetchProjectMembers()
+                        const { data: userData } = await supabase.auth.getUser()
+                        await supabase.from("activity_log").insert({
+                            entity_type: "member", entity_id: user.id,
+                            actor_id: userData?.user?.id, action: "member_added",
+                            new_state: { project_id, name: user.name }
+                        })
+                    }
+                }
+
+                return (
+                    <div
+                        className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+                        style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
+                        onClick={() => setShowAddMemberModal(false)}
+                    >
+                        <div
+                            className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2D3139]">
+                                <div>
+                                    <h2 className="text-white font-bold text-[16px]">Add Members</h2>
+                                    <p className="text-[#8c947b] text-[12px]">Pick team members to add to this project</p>
+                                </div>
+                                <button onClick={() => setShowAddMemberModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors cursor-pointer">
+                                    <span className="material-symbols-outlined text-[20px]">close</span>
+                                </button>
+                            </div>
+
+                            {/* List */}
+                            <div className="max-h-80 overflow-y-auto p-4 space-y-2">
+                                {available.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <span className="material-symbols-outlined text-[#8c947b] text-4xl mb-2 block">group</span>
+                                        <p className="text-[#8c947b] text-[13px]">All team space members are already in this project.</p>
+                                    </div>
+                                ) : (
+                                    available.map(user => (
+                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-[#191c21] border border-[#2D3139]/50 hover:border-[#aff82a]/30 transition-colors group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-9 h-9 rounded-full bg-[#2D3139] flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
+                                                    {user.name?.charAt(0) || "?"}
+                                                </div>
+                                                <div>
+                                                    <p className="text-white text-[13px] font-semibold">{user.name}</p>
+                                                    <p className="text-[#8c947b] text-[11px]">{user.email}</p>
+                                                </div>
+                                            </div>
+                                            <button
+                                                onClick={() => addMember(user)}
+                                                className="px-3 py-1.5 rounded-lg bg-[#aff82a]/10 border border-[#aff82a]/30 text-[#aff82a] text-[12px] font-bold hover:bg-[#aff82a]/20 transition-colors cursor-pointer flex items-center gap-1"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">add</span>
+                                                Add
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            <div className="px-6 py-4 border-t border-[#2D3139]">
+                                <button onClick={() => setShowAddMemberModal(false)} className="w-full py-2.5 rounded-xl bg-[#2D3139] text-white text-[13px] font-semibold hover:bg-[#3a3f4a] transition-colors cursor-pointer">
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
         </div>
     )
 }
