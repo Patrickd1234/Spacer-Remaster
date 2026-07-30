@@ -977,64 +977,64 @@ function ProjectPage() {
                             fetchProjectMembers()
                         }
                         return (
-                        <div className="tab-pane block" id="section-members">
-                            {allMembers.length === 0 ? (
-                                <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
-                                    <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
-                                    <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
-                                    <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
-                                    {allMembers.map((member) => (
-                                        <div
-                                            key={member.id}
-                                            className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
-                                        >
-                                            <div className="flex items-start justify-between mb-sm">
-                                                <div className="relative">
-                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
-                                                        {member.name?.charAt(0) || "?"}
+                            <div className="tab-pane block" id="section-members">
+                                {allMembers.length === 0 ? (
+                                    <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
+                                        <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
+                                        <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
+                                        <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
+                                        {allMembers.map((member) => (
+                                            <div
+                                                key={member.id}
+                                                className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
+                                            >
+                                                <div className="flex items-start justify-between mb-sm">
+                                                    <div className="relative">
+                                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
+                                                            {member.name?.charAt(0) || "?"}
+                                                        </div>
+                                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
                                                     </div>
-                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
+                                                    <div className="flex gap-1">
+                                                        <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
+                                                            MEMBER
+                                                        </span>
+                                                        <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
+                                                            <span className="material-symbols-outlined text-xs">more_vert</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                                <div className="flex gap-1">
-                                                    <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
-                                                        MEMBER
-                                                    </span>
-                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-xs">more_vert</span>
+                                                <div className="mb-md">
+                                                    <h4 className="font-headline-md text-body-lg text-white font-bold">
+                                                        {member.name}
+                                                    </h4>
+                                                    <p className="font-body-sm text-[11px] text-[#8c947b]">
+                                                        member
+                                                    </p>
+                                                </div>
+                                                <div className="mt-auto flex items-center gap-2">
+                                                    <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
+                                                        <span className="material-symbols-outlined text-sm">chat_bubble</span>
+                                                        Message
                                                     </button>
+                                                    {explicitIds.has(member.id) && (
+                                                        <button
+                                                            title="Remove from project"
+                                                            onClick={() => removeMember(member.id)}
+                                                            className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
+                                                        >
+                                                            <span className="material-symbols-outlined text-sm">person_remove</span>
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <div className="mb-md">
-                                                <h4 className="font-headline-md text-body-lg text-white font-bold">
-                                                    {member.name}
-                                                </h4>
-                                                <p className="font-body-sm text-[11px] text-[#8c947b]">
-                                                    member
-                                                </p>
-                                            </div>
-                                            <div className="mt-auto flex items-center gap-2">
-                                                <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
-                                                    <span className="material-symbols-outlined text-sm">chat_bubble</span>
-                                                    Message
-                                                </button>
-                                                {explicitIds.has(member.id) && (
-                                                    <button
-                                                        title="Remove from project"
-                                                        onClick={() => removeMember(member.id)}
-                                                        className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">person_remove</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )
                     })()}
 
@@ -1156,8 +1156,8 @@ function ProjectPage() {
             {/* ── Context-aware FAB ── */}
             {(() => {
                 const fabConfig = {
-                    files:   { icon: "upload",      label: "Upload File",    action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
-                    members: { icon: "person_add",  label: "Add Member",     action: () => setShowAddMemberModal(true) },
+                    files: { icon: "upload", label: "Upload File", action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
+                    members: { icon: "person_add", label: "Add Member", action: () => setShowAddMemberModal(true) },
                 }
                 const cfg = fabConfig[activeTab] || { icon: "add", label: "Quick Add Task", action: () => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) } }
                 return (
