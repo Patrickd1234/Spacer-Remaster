@@ -12,13 +12,18 @@ export default function Tasks() {
     const [userId, setUserId] = useState(null)
     const [displayName, setDisplayName] = useState("User")
 
-    const fetchUserTasks = async (uid) => {
+    const fetchUserTasks = async (uid, superAdmin, orgId) => {
         setTasksLoading(true)
         try {
-            const { data, error } = await supabase
-                .from("tasks")
-                .select("*")
-                .eq("assignee_id", uid)
+            let query = supabase.from("tasks").select("*")
+            
+            if (superAdmin && orgId) {
+                query = query.eq("organization_id", orgId)
+            } else {
+                query = query.eq("assignee_id", uid)
+            }
+
+            const { data, error } = await query
 
             if (error) {
                 console.warn("tasks fetch error:", error)
@@ -52,7 +57,7 @@ export default function Tasks() {
                 const name = profile?.name || authData.user.user_metadata?.full_name || authData.user.email?.split("@")[0] || "User"
                 setDisplayName(name)
 
-                await fetchUserTasks(uid)
+                await fetchUserTasks(uid, isSuperAdmin, profile?.organization_id)
             } catch (err) {
                 console.error("Tasks init error:", err)
                 setTasksLoading(false)
@@ -85,7 +90,7 @@ export default function Tasks() {
                                 </h1>
                                 <p className="text-outline text-sm mt-1">
                                     {isSuperAdmin
-                                        ? "Even as a superadmin, these are your direct assignments."
+                                        ? "As a superadmin, you can view all tasks across the organization."
                                         : "Manage your assigned work across all projects."}
                                 </p>
                             </div>
