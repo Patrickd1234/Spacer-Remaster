@@ -1,10 +1,21 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { usePreferences } from "../PreferencesContext";
 
 function Header({ onSearch = () => {} }) {
-    const [showNotifications, setShowNotifications] = useState(false);
+    const navigate = useNavigate();
+    const [showNotifications, setShowNotifications] = useState(() => {
+        if (typeof window === "undefined") return false;
+        const autoOpen = localStorage.getItem("autoOpenNotificationsAfterLogin");
+        if (autoOpen === "true") {
+            localStorage.removeItem("autoOpenNotificationsAfterLogin");
+            return true;
+        }
+        return false;
+    });
     const [searchQuery, setSearchQuery] = useState("");
+    const [searchIndex, setSearchIndex] = useState(-1);
     const [notifications, setNotifications] = useState([]);
     const [notificationsLoading, setNotificationsLoading] = useState(false);
     
@@ -15,7 +26,67 @@ function Header({ onSearch = () => {} }) {
     const searchRef = useRef(null);
     const notificationRef = useRef(null);
     const { preferences } = usePreferences();
-    const [shouldAutoOpenNotifications, setShouldAutoOpenNotifications] = useState(false);
+
+    const searchItems = [
+        ...searchResults.projects.map((project) => ({
+            type: "project",
+            id: `project-${project.id}`,
+            label: project.name,
+            path: `/project_page/${project.id}`,
+        })),
+        ...searchResults.tasks.map((task) => ({
+            type: "task",
+            id: `task-${task.id}`,
+            label: task.title,
+            path: "/tasks",
+        })),
+        ...searchResults.users.map((user) => ({
+            type: "user",
+            id: `user-${user.id}`,
+            label: user.name,
+            path: null,
+        })),
+    ];
+
+    const handleSearchResultSelect = (item) => {
+        if (!item) return;
+
+        setSearchQuery(item.label);
+        setShowDropdown(false);
+        setSearchIndex(-1);
+
+        if (item.path) {
+            navigate(item.path);
+        }
+    };
+
+    const handleSearchInputKeyDown = (event) => {
+        if (!showDropdown || searchItems.length === 0) return;
+
+        if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setSearchIndex((prevIndex) => Math.min(prevIndex + 1, searchItems.length - 1));
+            return;
+        }
+
+        if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setSearchIndex((prevIndex) => Math.max(prevIndex - 1, 0));
+            return;
+        }
+
+        if (event.key === "Enter") {
+            event.preventDefault();
+            const selectedItem = searchItems[searchIndex >= 0 ? searchIndex : 0];
+            handleSearchResultSelect(selectedItem);
+            return;
+        }
+
+        if (event.key === "Escape") {
+            event.preventDefault();
+            setShowDropdown(false);
+        }
+    };
 
     const formatTime = (value) => {
         if (!value) return "Just now";
@@ -46,6 +117,7 @@ function Header({ onSearch = () => {} }) {
             if (!searchQuery.trim()) {
                 setSearchResults({ tasks: [], projects: [], users: [] });
                 setIsSearching(false);
+                setSearchIndex(-1);
                 return;
             }
 
@@ -99,7 +171,6 @@ function Header({ onSearch = () => {} }) {
     useEffect(() => {
         const inAppEnabled = preferences?.notifications?.inApp !== false;
         if (!inAppEnabled) {
-            setNotifications([]);
             return;
         }
 
@@ -181,14 +252,6 @@ function Header({ onSearch = () => {} }) {
         }
     }, [showNotifications]);
 
-    useEffect(() => {
-        const autoOpen = localStorage.getItem("autoOpenNotificationsAfterLogin");
-        if (autoOpen === "true") {
-            localStorage.removeItem("autoOpenNotificationsAfterLogin");
-            setShowNotifications(true);
-        }
-    }, []);
-
     const hasResults = searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0;
     const unreadCount = notifications.filter((notification) => notification.unread).length;
 
@@ -209,8 +272,10 @@ function Header({ onSearch = () => {} }) {
                             onFocus={() => { if (searchQuery) setShowDropdown(true); }}
                             onChange={(e) => {
                                 setSearchQuery(e.target.value);
+                                setSearchIndex(-1);
                                 onSearch(e.target.value); // Keep passing up if Home needs it
                             }}
+                            onKeyDown={handleSearchInputKeyDown}
                         />
 
                         {/* SEARCH DROPDOWN */}
@@ -230,38 +295,62 @@ function Header({ onSearch = () => {} }) {
                                         {searchResults.projects.length > 0 && (
                                             <div className="py-2">
                                                 <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">Projects</div>
-                                                {searchResults.projects.map(p => (
-                                                    <div key={p.id} className="px-4 py-2 hover:bg-[#2D3139] cursor-pointer flex items-center gap-2 text-white text-sm transition-colors">
-                                                        <span className="material-symbols-outlined text-[16px] text-pink-400">book</span>
-                                                        <span className="truncate">{p.name}</span>
-                                                    </div>
-                                                ))}
+                                                {searchResults.projects.map((p) => {
+                                                    const itemIndex = searchItems.findIndex((item) => item.id === `project-${p.id}`);
+                                                    return (
+                                                        <div
+                                                            key={p.id}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            onMouseEnter={() => setSearchIndex(itemIndex)}
+                                                            onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px] text-pink-400">book</span>
+                                                            <span className="truncate">{p.name}</span>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         )}
                                         {searchResults.tasks.length > 0 && (
                                             <div className="py-2 border-t border-[#2D3139]/50">
                                                 <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">Tasks</div>
-                                                {searchResults.tasks.map(t => (
-                                                    <div key={t.id} className="px-4 py-2 hover:bg-[#2D3139] cursor-pointer flex items-center gap-2 text-white text-sm transition-colors">
-                                                        <span className="material-symbols-outlined text-[16px] text-lime-400">task_alt</span>
-                                                        <span className="truncate">{t.title}</span>
-                                                    </div>
-                                                ))}
+                                                {searchResults.tasks.map((t) => {
+                                                    const itemIndex = searchItems.findIndex((item) => item.id === `task-${t.id}`);
+                                                    return (
+                                                        <div
+                                                            key={t.id}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            onMouseEnter={() => setSearchIndex(itemIndex)}
+                                                            onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
+                                                        >
+                                                            <span className="material-symbols-outlined text-[16px] text-lime-400">task_alt</span>
+                                                            <span className="truncate">{t.title}</span>
+                                                        </div>
+                                                    )
+                                                })}
                                             </div>
                                         )}
                                         {searchResults.users.length > 0 && (
                                             <div className="py-2 border-t border-[#2D3139]/50">
                                                 <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">People</div>
-                                                {searchResults.users.map(u => (
-                                                    <div key={u.id} className="px-4 py-2 hover:bg-[#2D3139] cursor-pointer flex items-center gap-2 text-white text-sm transition-colors">
-                                                        <div className="w-5 h-5 rounded-full bg-[#3d424d] flex items-center justify-center text-[10px] font-bold">
-                                                            {u.name.charAt(0).toUpperCase()}
+                                                {searchResults.users.map((u) => {
+                                                    const itemIndex = searchItems.findIndex((item) => item.id === `user-${u.id}`);
+                                                    return (
+                                                        <div
+                                                            key={u.id}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            onMouseEnter={() => setSearchIndex(itemIndex)}
+                                                            onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
+                                                        >
+                                                            <div className="w-5 h-5 rounded-full bg-[#3d424d] flex items-center justify-center text-[10px] font-bold">
+                                                                {u.name.charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div className="flex flex-col truncate">
+                                                                <span>{u.name}</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex flex-col truncate">
-                                                            <span>{u.name}</span>
-                                                        </div>
-                                                    </div>
-                                                ))}
+                                                    )
+                                                })}
                                             </div>
                                         )}
                                     </div>
