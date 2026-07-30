@@ -40,6 +40,20 @@ const syncUserProfile = async (user) => {
   }
 }
 
+const logLoginActivity = async (user) => {
+  try {
+    await supabase.from('activity_log').insert({
+      entity_type: 'user',
+      entity_id: user.id,
+      actor_id: user.id,
+      action: 'login',
+      new_state: { email: user.email }
+    })
+  } catch (error) {
+    console.error('Error logging login activity:', error)
+  }
+}
+
 function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)

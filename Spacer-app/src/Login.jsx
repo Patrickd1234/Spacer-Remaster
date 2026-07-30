@@ -50,6 +50,18 @@ function Login() {
             if (data && data.user) {
                 localStorage.setItem("userId", data.user.id)
                 localStorage.setItem("userEmail", data.user.email)
+                localStorage.setItem("autoOpenNotificationsAfterLogin", "true")
+                try {
+                    await supabase.from('activity_log').insert({
+                        entity_type: 'user',
+                        entity_id: data.user.id,
+                        actor_id: data.user.id,
+                        action: 'login',
+                        new_state: { email: data.user.email, method: 'password' }
+                    })
+                } catch (logError) {
+                    console.error('Error logging user login:', logError)
+                }
             }
             navigate("/")
         }

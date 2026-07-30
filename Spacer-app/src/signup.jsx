@@ -98,6 +98,18 @@ function Signup() {
                 if (insertError) {
                     console.error("Error inserting user profile:", insertError)
                 }
+
+                try {
+                    await supabase.from('activity_log').insert({
+                        entity_type: 'user',
+                        entity_id: data.user.id,
+                        actor_id: data.user.id,
+                        action: 'signup',
+                        new_state: { email, full_name: fullName }
+                    })
+                } catch (logError) {
+                    console.error('Error logging signup activity:', logError)
+                }
             }
 
             setStatus("success")

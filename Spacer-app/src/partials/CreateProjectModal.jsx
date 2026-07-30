@@ -75,6 +75,19 @@ export default function CreateProjectModal({ onClose, onCreated }) {
             return;
         }
 
+        try {
+            const { data: userData } = await supabase.auth.getUser();
+            await supabase.from('activity_log').insert({
+                entity_type: 'project',
+                entity_id: data.id,
+                actor_id: userData?.user?.id || null,
+                action: 'created',
+                new_state: { project_name: data.name, team_space_id: data.team_space_id }
+            });
+        } catch (logError) {
+            console.error('Error logging project creation:', logError);
+        }
+
         onCreated?.(data);
         onClose();
     };
