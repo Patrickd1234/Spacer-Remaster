@@ -29,6 +29,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 .select("*")
                 .eq("organization_id", orgId)
                 .order("name");
+
             if (error) {
                 console.log(error);
             } else {
@@ -52,9 +53,14 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         }
 
         setSaving(true);
+        const insertPayload = { team_space_id: teamSpaceId, name: name.trim() };
+        if (deadline) {
+            insertPayload.deadline = deadline;
+        }
+
         const { data, error } = await supabase
             .from("project_spaces")
-            .insert({ team_space_id: teamSpaceId, name: name.trim() })
+            .insert(insertPayload)
             .select()
             .single();
         setSaving(false);

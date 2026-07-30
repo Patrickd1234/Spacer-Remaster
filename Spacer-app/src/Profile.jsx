@@ -2,6 +2,7 @@ import Sidebar from "./partials/sidebar"
 import Header from "./partials/header"
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
+import { useRole } from "./RoleContext"
 
 function initials(name, email) {
     const source = (name || email || "").trim()
@@ -18,6 +19,7 @@ function Profile() {
 
     // Toast notification
     const [toast, setToast] = useState(null)
+    const { isSuperAdmin, isAdmin, membershipData } = useRole()
 
     // Saved profile state
     const [profile, setProfile] = useState({
@@ -197,13 +199,31 @@ function Profile() {
     }
 
     // Stats calculation for Overview
-    const stats = [
-        { label: "Active Projects", value: "4", icon: "folder_open", color: "text-blue-400" },
+    const stats = isSuperAdmin ? [
+        { label: "Organizations Managed", value: "3", icon: "domain", color: "text-primary-fixed" },
+        { label: "Active Users", value: "245", icon: "group", color: "text-emerald-400" },
+        { label: "System Health", value: "99.9%", icon: "monitor_heart", color: "text-amber-400" }
+    ] : isAdmin ? [
+        { label: "Department Members", value: "12", icon: "groups", color: "text-secondary-fixed" },
+        { label: "Team Projects", value: "8", icon: "folder", color: "text-emerald-400" },
+        { label: "Pending Approvals", value: "3", icon: "pending_actions", color: "text-amber-400" }
+    ] : [
+        { label: "Active Projects", value: "4", icon: "folder_open", color: "text-secondary-fixed" },
         { label: "Tasks Completed", value: "32", icon: "task_alt", color: "text-emerald-400" },
         { label: "Member Since", value: "Jan 2024", icon: "calendar_today", color: "text-amber-400" }
     ]
 
-    const activityFeed = [
+    const activityFeed = isSuperAdmin ? [
+        { title: "System update deployed to production", time: "1 hour ago", icon: "system_update_alt", badge: "System" },
+        { title: "New department 'Marketing EMEA' created", time: "3 hours ago", icon: "domain_add", badge: "Organization" },
+        { title: "Reviewed security compliance report", time: "Yesterday at 2:00 PM", icon: "verified", badge: "Security" },
+        { title: "Granted admin rights to new manager", time: "2 days ago", icon: "manage_accounts", badge: "Access" }
+    ] : isAdmin ? [
+        { title: "Approved design system budget", time: "4 hours ago", icon: "fact_check", badge: "Approvals" },
+        { title: "Added 2 new members to Frontend Team", time: "Yesterday at 11:30 AM", icon: "person_add", badge: "Team" },
+        { title: "Updated Q3 project milestones", time: "3 days ago", icon: "flag", badge: "Projects" },
+        { title: "Generated monthly department report", time: "Last week", icon: "assessment", badge: "Reports" }
+    ] : [
         { title: "Updated project milestones", time: "2 hours ago", icon: "flag", badge: "Project Space" },
         { title: "Completed task: 'Review wireframes'", time: "Yesterday at 4:15 PM", icon: "check_circle", badge: "Tasks" },
         { title: "Changed security preferences", time: "3 days ago", icon: "shield", badge: "Security" },
@@ -214,7 +234,7 @@ function Profile() {
         <>
             <Sidebar />
             <Header />
-            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-[#0F1115] text-[#e0e5d0]">
+            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-[#e0e5d0]">
                 {/* Toast Notification */}
                 {toast && (
                     <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-bounce ${toast.type === "error" ? "bg-red-950/80 border-red-500/50 text-red-200" : "bg-emerald-950/80 border-emerald-500/50 text-emerald-200"}`}>
@@ -225,7 +245,7 @@ function Profile() {
 
                 {loading ? (
                     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-                        <span className="material-symbols-outlined animate-spin text-5xl text-lime-400">
+                        <span className="material-symbols-outlined animate-spin text-5xl text-primary-fixed">
                             progress_activity
                         </span>
                         <p className="text-sm text-neutral-400">Loading your profile...</p>
@@ -257,8 +277,8 @@ function Profile() {
                                             <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
                                                 {profile.name || "Unnamed User"}
                                             </h1>
-                                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-lime-400/10 text-lime-400 border border-lime-400/20">
-                                                Member
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-lime-400/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-blue-400/20' : 'bg-neutral-400/10 text-neutral-400 border border-neutral-400/20'}`}>
+                                                {isSuperAdmin ? 'Superadmin' : isAdmin ? 'Admin' : membershipData?.role || 'Member'}
                                             </span>
                                         </div>
 
@@ -317,7 +337,7 @@ function Profile() {
                                 {/* Metrics Cards Grid */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     {stats.map((stat, idx) => (
-                                        <div key={idx} className="p-5 rounded-2xl bg-[#1C1F26] border border-white/10 flex items-center justify-between hover:border-white/20 transition-all">
+                                        <div key={idx} className="p-5 rounded-2xl bg-surface-container border border-white/10 flex items-center justify-between hover:border-white/20 transition-all">
                                             <div>
                                                 <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">{stat.label}</p>
                                                 <p className="text-2xl font-bold text-white mt-1">{stat.value}</p>
@@ -332,9 +352,9 @@ function Profile() {
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                     {/* Left Column: About & Skills */}
                                     <div className="lg:col-span-1 space-y-6">
-                                        <div className="p-6 rounded-2xl bg-[#1C1F26] border border-white/10 space-y-4">
+                                        <div className="p-6 rounded-2xl bg-surface-container border border-white/10 space-y-4">
                                             <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                                                <span className="material-symbols-outlined text-lime-400">info</span>
+                                                <span className="material-symbols-outlined text-primary-fixed">info</span>
                                                 About
                                             </h3>
                                             <p className="text-sm text-neutral-300 leading-relaxed">
@@ -344,7 +364,7 @@ function Profile() {
                                     </div>
 
                                     {/* Right Column: Activity Stream */}
-                                    <div className="lg:col-span-2 p-6 rounded-2xl bg-[#1C1F26] border border-white/10 space-y-5">
+                                    <div className="lg:col-span-2 p-6 rounded-2xl bg-surface-container border border-white/10 space-y-5">
                                         <div className="flex items-center justify-between">
                                             <h3 className="text-base font-semibold text-white flex items-center gap-2">
                                                 <span className="material-symbols-outlined text-emerald-400">history</span>
@@ -356,7 +376,7 @@ function Profile() {
                                         <div className="space-y-4">
                                             {activityFeed.map((item, idx) => (
                                                 <div key={idx} className="flex items-start gap-4 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors">
-                                                    <div className="p-2 rounded-lg bg-lime-400/10 text-lime-400 shrink-0">
+                                                    <div className="p-2 rounded-lg bg-primary-fixed/10 text-primary-fixed shrink-0">
                                                         <span className="material-symbols-outlined text-lg">{item.icon}</span>
                                                     </div>
                                                     <div className="flex-1 min-w-0">
@@ -378,7 +398,7 @@ function Profile() {
 
                         {/* 2. PERSONAL INFORMATION TAB */}
                         {activeTab === "personal" && (
-                            <div className="p-6 sm:p-8 rounded-2xl bg-[#1C1F26] border border-white/10 space-y-6 animate-fadeIn">
+                            <div className="p-6 sm:p-8 rounded-2xl bg-surface-container border border-white/10 space-y-6 animate-fadeIn">
                                 <div className="flex items-center justify-between pb-4 border-b border-white/10">
                                     <div>
                                         <h2 className="text-lg font-semibold text-white">Personal Information</h2>
@@ -434,7 +454,7 @@ function Profile() {
 
                                     <div className="sm:col-span-2">
                                         <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
-                                            Email Address <span className="text-lime-400 text-[10px] font-normal lowercase">(auth login)</span>
+                                            Email Address <span className="text-primary-fixed text-[10px] font-normal lowercase">(auth login)</span>
                                         </label>
                                         {isEditing ? (
                                             <input
@@ -456,7 +476,7 @@ function Profile() {
                         {/* 3. SECURITY & ACCESS TAB */}
                         {activeTab === "security" && (
                             <div className="space-y-6 animate-fadeIn">
-                                <div className="p-6 sm:p-8 rounded-2xl bg-[#1C1F26] border border-white/10 space-y-6">
+                                <div className="p-6 sm:p-8 rounded-2xl bg-surface-container border border-white/10 space-y-6">
                                     <div>
                                         <h2 className="text-lg font-semibold text-white">Security & Authentication</h2>
                                         <p className="text-xs text-neutral-400">Keep your account secure with regular password updates and two-factor authentication.</p>
@@ -467,7 +487,7 @@ function Profile() {
                                         <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-3 rounded-xl bg-blue-500/10 text-blue-400">
+                                                    <div className="p-3 rounded-xl bg-blue-500/10 text-secondary-fixed">
                                                         <span className="material-symbols-outlined text-xl">key</span>
                                                     </div>
                                                     <div>
@@ -555,7 +575,7 @@ function Profile() {
                                         <div className="p-5 rounded-xl bg-white/[0.02] border border-white/5 space-y-4">
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400">
+                                                    <div className="p-3 rounded-xl bg-purple-500/10 text-tertiary">
                                                         <span className="material-symbols-outlined text-xl">devices</span>
                                                     </div>
                                                     <div>
@@ -575,7 +595,7 @@ function Profile() {
                                             <div className="space-y-2 pt-2 border-t border-white/5">
                                                 <div className="flex items-center justify-between p-3 rounded-lg bg-neutral-900/60 text-xs">
                                                     <div className="flex items-center gap-3">
-                                                        <span className="material-symbols-outlined text-lime-400">desktop_windows</span>
+                                                        <span className="material-symbols-outlined text-primary-fixed">desktop_windows</span>
                                                         <div>
                                                             <p className="text-white font-medium">Windows Chrome (Current Session)</p>
                                                             <p className="text-neutral-400">IP: 192.168.1.1 • Active Now</p>
@@ -592,7 +612,7 @@ function Profile() {
 
                         {/* 4. PREFERENCES TAB */}
                         {activeTab === "preferences" && (
-                            <div className="p-6 sm:p-8 rounded-2xl bg-[#1C1F26] border border-white/10 space-y-6 animate-fadeIn">
+                            <div className="p-6 sm:p-8 rounded-2xl bg-surface-container border border-white/10 space-y-6 animate-fadeIn">
                                 <div>
                                     <h2 className="text-lg font-semibold text-white">App Preferences & Notifications</h2>
                                     <p className="text-xs text-neutral-400">Tailor your workspace experience and notification settings.</p>
