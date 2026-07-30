@@ -10,10 +10,11 @@ import Reports from './Reports'
 import Profile from './Profile'
 import Department from './Department'
 import CalendarView from './CalendarView'
-import Profile from './Profile'
 import Settings from './Settings'
+import Tasks from './Tasks'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
+import { RoleProvider } from './RoleContext'
 
 const syncUserProfile = async (user) => {
   if (!user?.id || !user?.email) return
@@ -79,21 +80,24 @@ function App() {
 
   return (
     <PreferencesProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
-          <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
-          <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
-          <Route path="/launch" element={session ? <LaunchOrganization /> : <Navigate to="/login" replace />} />
-          <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
-          <Route path="/reports" element={session ? <Reports /> : <Navigate to="/login" replace />} />
-          <Route path="/department" element={session ? <Department /> : <Navigate to="/login" replace />} />
-          <Route path="/calendar" element={session ? <CalendarView /> : <Navigate to="/login" replace />} />
-          <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" replace />} />
-          <Route path="/settings" element={session ? <Settings /> : <Navigate to="/login" replace />} />
-          <Route path="/project_page/:project_id" element={session ? <ProjectPage /> : <Navigate to="/login" replace />} />
-        </Routes>
-      </Router>
+      <RoleProvider>
+        <Router>
+          <Routes>
+            <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
+            <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
+            <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
+            <Route path="/launch" element={session ? <LaunchOrganization /> : <Navigate to="/login" replace />} />
+            <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
+            <Route path="/reports" element={session ? <Reports /> : <Navigate to="/login" replace />} />
+            <Route path="/department" element={session ? <Department /> : <Navigate to="/login" replace />} />
+            <Route path="/calendar" element={session ? <CalendarView /> : <Navigate to="/login" replace />} />
+            <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" replace />} />
+            <Route path="/settings" element={session ? <Settings /> : <Navigate to="/login" replace />} />
+            <Route path="/tasks" element={session ? <Tasks /> : <Navigate to="/login" replace />} />
+            <Route path="/project_page/:project_id" element={session ? <ProjectPage /> : <Navigate to="/login" replace />} />
+          </Routes>
+        </Router>
+      </RoleProvider>
     </PreferencesProvider>
   )
 }

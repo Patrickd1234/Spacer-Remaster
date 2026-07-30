@@ -4,6 +4,7 @@ import Sidebar from "./partials/sidebar"
 import Header from "./partials/header"
 import { supabase } from "./supabase"
 import { usePreferences } from "./PreferencesContext"
+import { useRole } from "./RoleContext"
 
 export default function Settings() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -12,6 +13,7 @@ export default function Settings() {
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState(null)
     const { preferences, updatePreferences } = usePreferences()
+    const { isSuperAdmin, isAdmin, membershipData } = useRole()
     
     const notifications = preferences?.notifications || {}
     const appearance = preferences?.appearance || {}
@@ -75,7 +77,7 @@ export default function Settings() {
                         id: authUser.id,
                         name: userProfile?.name || authUser.user_metadata?.full_name || "Workspace User",
                         email: authUser.email || "",
-                        role: "Member" // Role is actually in memberships table, defaulting for now
+                        role: isSuperAdmin ? "Superadmin" : isAdmin ? "Admin" : membershipData?.role || "Member"
                     })
                 }
 

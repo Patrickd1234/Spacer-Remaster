@@ -5,6 +5,7 @@ import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
 import { Link } from "react-router-dom"
+import { useRole } from "./RoleContext"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
 const TEAM_ICONS = {
@@ -25,11 +26,11 @@ const TEAM_STATUS_COLOR = {
 // ─── StatCard ────────────────────────────────────────────────────────────────
 function StatCard({ value, label, sub, subIcon, subColor }) {
     return (
-        <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-[#424934] transition-all duration-300">
+        <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-outline transition-all duration-300">
             <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                style={{ background: "radial-gradient(circle, rgba(175,248,42,0.1) 0%, transparent 70%)" }} />
+                style={{ background: "radial-gradient(circle, rgba(var(--primary-color-rgb), 0.1) 0%, transparent 70%)" }} />
             <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
-            <p className="text-[#8c947b] text-[13px] font-medium">{label}</p>
+            <p className="text-outline text-[13px] font-medium">{label}</p>
             {sub && (
                 <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider mt-auto"
                     style={{ color: subColor || "#aff82a" }}>
@@ -48,34 +49,34 @@ function TeamCard({ team }) {
     const statusColor = TEAM_STATUS_COLOR[statusLabel] || TEAM_STATUS_COLOR["ON TRACK"]
 
     return (
-        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-[#424934] transition-all duration-300">
+        <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-outline transition-all duration-300">
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#252a33] border border-[#343b47]">
-                        <span className="material-symbols-outlined text-[20px] text-[#aff82a]">{icon}</span>
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-surface-container-highest border border-outline-variant">
+                        <span className="material-symbols-outlined text-[20px] text-primary-fixed">{icon}</span>
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b]">Team</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Team</p>
                         <p className="font-semibold text-white text-sm">{team.name}</p>
                     </div>
                 </div>
-                <span className="material-symbols-outlined text-[#8c947b] text-base cursor-pointer hover:text-white transition-colors">more_horiz</span>
+                <span className="material-symbols-outlined text-outline text-base cursor-pointer hover:text-white transition-colors">more_horiz</span>
             </div>
             <div className="space-y-1.5 mt-1">
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
+                    <span className="flex items-center gap-1.5 text-outline text-xs">
                         <span className="material-symbols-outlined text-[14px]">person</span>Members
                     </span>
                     <span className="font-semibold text-white text-sm">{team.member_count ?? "—"}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
+                    <span className="flex items-center gap-1.5 text-outline text-xs">
                         <span className="material-symbols-outlined text-[14px]">grid_view</span>Projects
                     </span>
                     <span className="font-semibold text-white text-sm">{team.project_count ?? "—"}</span>
                 </div>
             </div>
-            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-[#2D3139]">
+            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-outline-variant">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
                 <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>Status</span>
                 <span className="ml-auto text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
@@ -90,10 +91,10 @@ function Home() {
     const [selectedProject, setSelectedProject] = useState(null)
     const [previewFile, setPreviewFile] = useState(null)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const [showAllActivity, setShowAllActivity] = useState(false)
 
-    // Superadmin role state
-    const [userRole, setUserRole] = useState(null)
-    const [roleLoading, setRoleLoading] = useState(true)
+    // Context roles
+    const { isSuperAdmin, roleLoading, membershipData } = useRole()
 
     // Org stats (superadmin only)
     const [orgStats, setOrgStats] = useState({ members: null, teams: null, activeProjects: null })
@@ -179,7 +180,7 @@ function Home() {
                 const { data: authData } = await supabase.auth.getUser()
                 const userId = authData?.user?.id
 
-                if (!userId) { setRoleLoading(false); return }
+                if (!userId) return
 
                 const { data: profile } = await supabase
                     .from("users")
@@ -188,24 +189,13 @@ function Home() {
                     .maybeSingle()
                 if (profile) setUserData(profile)
 
-                const { data: membership, error: memError } = await supabase
-                    .from("memberships")
-                    .select("role, team_space_id")
-                    .eq("user_id", userId)
-                    .maybeSingle()
-
-                if (memError) console.warn("membership fetch error:", memError)
-
-                const role = membership?.role ?? null
-                setUserRole(role)
-
-                if (role === "super_admin" || role === "superadmin") {
+                if (isSuperAdmin) {
                     let orgId = authData?.user?.user_metadata?.organization_id;
-                    if (!orgId && membership?.team_space_id) {
+                    if (!orgId && membershipData?.team_space_id) {
                         const { data: tsData } = await supabase
                             .from("team_spaces")
                             .select("organization_id")
-                            .eq("id", membership.team_space_id)
+                            .eq("id", membershipData.team_space_id)
                             .maybeSingle();
                         orgId = tsData?.organization_id;
                     }
@@ -215,15 +205,13 @@ function Home() {
                 }
             } catch (err) {
                 console.error("Home init error:", err)
-            } finally {
-                setRoleLoading(false)
             }
         }
 
-        init()
-    }, [])
-
-    const isSuperAdmin = userRole === "super_admin" || userRole === "superadmin"
+        if (!roleLoading) {
+            init()
+        }
+    }, [isSuperAdmin, roleLoading, membershipData])
     const totalTeamPages = Math.ceil(teams.length / TEAMS_PER_PAGE)
     const visibleTeams = teams.slice(teamPage * TEAMS_PER_PAGE, teamPage * TEAMS_PER_PAGE + TEAMS_PER_PAGE)
 
@@ -232,10 +220,20 @@ function Home() {
     const doneTasks = userTasks.filter(t => t.status === "done")
     const openCount = todoTasks.length + inProgressTasks.length
 
+    
+    const mockActivities = [
+        { id: 1, initials: "SA", title: "Organization space updated", sub: "System activity log ready" },
+        { id: 2, initials: "JS", title: "John Smith joined the organization", sub: "Added to Frontend Team" },
+        { id: 3, initials: "PR", title: "Project 'Q3 Redesign' created", sub: "Assigned to Design Team" },
+        { id: 4, initials: "TK", title: "Task completed: Review mocks", sub: "Completed by Jane Doe" },
+        { id: 5, initials: "SY", title: "System security scan completed", sub: "No vulnerabilities found" },
+    ];
+    const visibleActivities = showAllActivity ? mockActivities : mockActivities.slice(0, 1);
+
     const displayName = userData?.full_name || userData?.name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
 
     return (
-        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex">
+        <div className="bg-background min-h-screen text-white font-sans antialiased flex">
             <Sidebar onCollapsedChange={setSidebarCollapsed} userData={userData} userEmail={userEmail} />
             <div className="flex-1 flex flex-col min-w-0">
                 <Header />
@@ -248,13 +246,13 @@ function Home() {
                                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                                     Hello, {displayName} 👋
                                 </h1>
-                                <p className="text-[#8c947b] text-sm mt-1">
+                                <p className="text-outline text-sm mt-1">
                                     {isSuperAdmin
                                         ? "Organization's overview and activity."
                                         : "Here's what's on your plate in this workspace."}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2 text-[#8c947b] text-xs">
+                            <div className="flex items-center gap-2 text-outline text-xs">
                                 <span className="material-symbols-outlined text-[16px]">home</span>
                                 <span>/</span>
                                 <span className="text-white font-medium">Home</span>
@@ -265,9 +263,9 @@ function Home() {
                         {roleLoading && (
                             <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 {[...Array(4)].map((_, i) => (
-                                    <div key={i} className="bg-[#191c21] border border-[#2D3139] p-6 rounded-xl flex flex-col gap-2 animate-pulse">
-                                        <div className="h-8 w-16 bg-[#252a33] rounded" />
-                                        <div className="h-3 w-24 bg-[#252a33] rounded mt-2" />
+                                    <div key={i} className="bg-surface-container border border-outline-variant p-6 rounded-xl flex flex-col gap-2 animate-pulse">
+                                        <div className="h-8 w-16 bg-surface-container-highest rounded" />
+                                        <div className="h-3 w-24 bg-surface-container-highest rounded mt-2" />
                                     </div>
                                 ))}
                             </section>
@@ -308,21 +306,21 @@ function Home() {
                         {/* ── NON-SUPERADMIN: PERSONAL TASK METRICS ─────────── */}
                         {!isSuperAdmin && !roleLoading && (
                             <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
                                     <p className="text-3xl font-bold text-white">{tasksLoading ? "—" : todoTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">To do</p>
+                                    <p className="text-outline text-xs font-medium mt-1">To do</p>
                                 </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
-                                    <p className="text-3xl font-bold text-[#aff82a]">{tasksLoading ? "—" : inProgressTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">In progress</p>
+                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
+                                    <p className="text-3xl font-bold text-primary-fixed">{tasksLoading ? "—" : inProgressTasks.length}</p>
+                                    <p className="text-outline text-xs font-medium mt-1">In progress</p>
                                 </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
                                     <p className="text-3xl font-bold text-green-400">{tasksLoading ? "—" : doneTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Done</p>
+                                    <p className="text-outline text-xs font-medium mt-1">Done</p>
                                 </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col">
+                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
                                     <p className="text-3xl font-bold text-red-400">{tasksLoading ? "—" : userTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done").length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Overdue</p>
+                                    <p className="text-outline text-xs font-medium mt-1">Overdue</p>
                                 </div>
                             </section>
                         )}
@@ -335,11 +333,11 @@ function Home() {
                                     <div className="flex items-center justify-between">
                                         <h2 className="text-lg font-semibold text-white">Team Overview</h2>
                                         {totalTeamPages > 1 && (
-                                            <div className="flex items-center gap-2 text-[#8c947b] text-xs">
+                                            <div className="flex items-center gap-2 text-outline text-xs">
                                                 <button
                                                     onClick={() => setTeamPage(p => Math.max(0, p - 1))}
                                                     disabled={teamPage === 0}
-                                                    className="p-1 rounded bg-[#191c21] border border-[#2D3139] hover:text-white disabled:opacity-30 transition-colors"
+                                                    className="p-1 rounded bg-surface-container border border-outline-variant hover:text-white disabled:opacity-30 transition-colors"
                                                 >
                                                     <span className="material-symbols-outlined text-[16px]">chevron_left</span>
                                                 </button>
@@ -349,7 +347,7 @@ function Home() {
                                                 <button
                                                     onClick={() => setTeamPage(p => Math.min(totalTeamPages - 1, p + 1))}
                                                     disabled={teamPage >= totalTeamPages - 1}
-                                                    className="p-1 rounded bg-[#191c21] border border-[#2D3139] hover:text-white disabled:opacity-30 transition-colors"
+                                                    className="p-1 rounded bg-surface-container border border-outline-variant hover:text-white disabled:opacity-30 transition-colors"
                                                 >
                                                     <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                                                 </button>
@@ -358,9 +356,9 @@ function Home() {
                                     </div>
 
                                     {teams.length === 0 ? (
-                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-8 flex flex-col items-center justify-center text-center min-h-[200px] gap-3">
-                                            <span className="material-symbols-outlined text-4xl text-[#8c947b]">groups</span>
-                                            <p className="text-[#8c947b] text-sm">No teams found in the organization yet.</p>
+                                        <div className="bg-surface-container border border-outline-variant rounded-xl p-8 flex flex-col items-center justify-center text-center min-h-[200px] gap-3">
+                                            <span className="material-symbols-outlined text-4xl text-outline">groups</span>
+                                            <p className="text-outline text-sm">No teams found in the organization yet.</p>
                                         </div>
                                     ) : (
                                         <div className="flex gap-4 flex-wrap">
@@ -375,16 +373,18 @@ function Home() {
                                 <div className="col-span-12 lg:col-span-4 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-                                        <button className="text-xs text-[#aff82a] hover:underline">See all</button>
+                                        <button onClick={() => setShowAllActivity(!showAllActivity)} className="text-xs text-primary-fixed hover:underline">{showAllActivity ? 'Show less' : 'See all'}</button>
                                     </div>
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-4 min-h-[200px]">
-                                        <div className="flex gap-3 items-start">
-                                            <div className="w-8 h-8 rounded bg-[#252a33] border border-[#343b47] flex items-center justify-center shrink-0 font-bold text-[10px] text-[#aff82a]">SA</div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-medium text-white">Organization space updated</p>
-                                                <p className="text-[11px] text-[#8c947b] mt-0.5">System activity log ready</p>
+                                    <div className="bg-surface-container border border-outline-variant rounded-xl p-4 space-y-4 min-h-[200px]">
+                                        {visibleActivities.map(act => (
+                                            <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
+                                                <div className="w-8 h-8 rounded bg-surface-container-highest border border-outline-variant flex items-center justify-center shrink-0 font-bold text-[10px] text-primary-fixed">{act.initials}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-medium text-white">{act.title}</p>
+                                                    <p className="text-[11px] text-outline mt-0.5">{act.sub}</p>
+                                                </div>
                                             </div>
-                                        </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>
@@ -397,7 +397,7 @@ function Home() {
                                 <div className="col-span-12 lg:col-span-8 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <h3 className="text-lg font-semibold text-white">My Open Work</h3>
-                                        <span className="text-xs text-[#8c947b]">
+                                        <span className="text-xs text-outline">
                                             {tasksLoading ? "Loading…" : `${openCount} open item${openCount !== 1 ? "s" : ""}`}
                                         </span>
                                     </div>
@@ -405,36 +405,36 @@ function Home() {
                                     {tasksLoading ? (
                                         <div className="grid grid-cols-3 gap-4">
                                             {[...Array(3)].map((_, i) => (
-                                                <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-2 animate-pulse">
-                                                    <div className="h-3 w-16 bg-[#252a33] rounded" />
-                                                    <div className="h-10 w-full bg-[#252a33] rounded-lg" />
+                                                <div key={i} className="bg-surface-container border border-outline-variant rounded-xl p-4 space-y-2 animate-pulse">
+                                                    <div className="h-3 w-16 bg-surface-container-highest rounded" />
+                                                    <div className="h-10 w-full bg-surface-container-highest rounded-lg" />
                                                 </div>
                                             ))}
                                         </div>
                                     ) : openCount === 0 && doneTasks.length === 0 ? (
-                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
+                                        <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
                                             <div className="text-5xl mb-4">🎉</div>
                                             <h4 className="text-lg font-semibold text-white">You're all caught up</h4>
-                                            <p className="text-[#8c947b] text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
+                                            <p className="text-outline text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             {/* To-Do column */}
-                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
+                                            <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col">
+                                                <div className="p-4 border-b border-outline-variant flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-[#8c947b]" />
                                                         <span className="font-semibold text-white text-xs uppercase tracking-wider">To‑Do</span>
                                                     </div>
-                                                    <span className="text-xs text-[#8c947b] font-bold">{todoTasks.length}</span>
+                                                    <span className="text-xs text-outline font-bold">{todoTasks.length}</span>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                     {todoTasks.length === 0 ? (
-                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
+                                                        <p className="text-xs text-outline text-center py-6">No tasks here</p>
                                                     ) : todoTasks.map(task => (
-                                                        <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#424934] transition-all cursor-default group">
+                                                        <div key={task.id} className="bg-[#1C1F26] border border-outline-variant rounded-lg p-3 hover:border-outline transition-all cursor-default group">
                                                             <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
+                                                            {task.description && <p className="text-[11px] text-outline mt-1 line-clamp-2">{task.description}</p>}
                                                             {task.due_date && (
                                                                 <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
                                                                     <span className="material-symbols-outlined text-[12px]">calendar_today</span>
@@ -447,21 +447,21 @@ function Home() {
                                             </div>
 
                                             {/* In Progress column */}
-                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
+                                            <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col">
+                                                <div className="p-4 border-b border-outline-variant flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-[#aff82a]" />
+                                                        <span className="w-2 h-2 rounded-full bg-primary-fixed" />
                                                         <span className="font-semibold text-white text-xs uppercase tracking-wider">In Progress</span>
                                                     </div>
-                                                    <span className="text-xs text-[#8c947b] font-bold">{inProgressTasks.length}</span>
+                                                    <span className="text-xs text-outline font-bold">{inProgressTasks.length}</span>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                     {inProgressTasks.length === 0 ? (
-                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
+                                                        <p className="text-xs text-outline text-center py-6">No tasks here</p>
                                                     ) : inProgressTasks.map(task => (
-                                                        <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#424934] transition-all cursor-default">
+                                                        <div key={task.id} className="bg-[#1C1F26] border border-outline-variant rounded-lg p-3 hover:border-outline transition-all cursor-default">
                                                             <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
+                                                            {task.description && <p className="text-[11px] text-outline mt-1 line-clamp-2">{task.description}</p>}
                                                             {task.due_date && (
                                                                 <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
                                                                     <span className="material-symbols-outlined text-[12px]">calendar_today</span>
@@ -474,21 +474,21 @@ function Home() {
                                             </div>
 
                                             {/* Done column */}
-                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
+                                            <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col">
+                                                <div className="p-4 border-b border-outline-variant flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-green-400" />
                                                         <span className="font-semibold text-white text-xs uppercase tracking-wider">Done</span>
                                                     </div>
-                                                    <span className="text-xs text-[#8c947b] font-bold">{doneTasks.length}</span>
+                                                    <span className="text-xs text-outline font-bold">{doneTasks.length}</span>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                     {doneTasks.length === 0 ? (
-                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
+                                                        <p className="text-xs text-outline text-center py-6">No tasks here</p>
                                                     ) : doneTasks.map(task => (
-                                                        <div key={task.id} className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 opacity-70 hover:opacity-100 transition-all cursor-default">
-                                                            <p className="text-sm font-semibold text-white truncate line-through text-[#8c947b]">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
+                                                        <div key={task.id} className="bg-[#1C1F26] border border-outline-variant rounded-lg p-3 opacity-70 hover:opacity-100 transition-all cursor-default">
+                                                            <p className="text-sm font-semibold text-white truncate line-through text-outline">{task.title || task.name || "Untitled"}</p>
+                                                            {task.description && <p className="text-[11px] text-outline mt-1 line-clamp-2">{task.description}</p>}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -499,16 +499,16 @@ function Home() {
 
                                 {/* Activity / Meetings panel */}
                                 <div className="col-span-12 lg:col-span-4 space-y-4">
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col min-h-[420px]">
-                                        <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-[#2D3139]">Recent Activity</h3>
+                                    <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col min-h-[420px]">
+                                        <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-outline-variant">Recent Activity</h3>
                                         <div className="space-y-4 overflow-y-auto flex-1">
                                             <div className="flex gap-3 items-start">
-                                                <div className="w-8 h-8 rounded-full bg-[#5b644d]/20 text-[#aff82a] border border-[#5b644d]/40 flex items-center justify-center shrink-0 font-bold text-xs">
+                                                <div className="w-8 h-8 rounded-full bg-[#5b644d]/20 text-primary-fixed border border-[#5b644d]/40 flex items-center justify-center shrink-0 font-bold text-xs">
                                                     SP
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs text-white">System dashboard initialized</p>
-                                                    <p className="text-[10px] text-[#8c947b] mt-1">Just now</p>
+                                                    <p className="text-[10px] text-outline mt-1">Just now</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -518,15 +518,15 @@ function Home() {
                         )}
 
                         {/* MEETINGS SECTION */}
-                        <div className="space-y-4 pt-4 border-t border-[#2D3139]">
+                        <div className="space-y-4 pt-4 border-t border-outline-variant">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-semibold text-white">Upcoming Meetings</h3>
-                                <Link to="/calendar" className="text-[#aff82a] text-xs hover:underline">View all calendar</Link>
+                                <Link to="/calendar" className="text-primary-fixed text-xs hover:underline">View all calendar</Link>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 hover:border-[#424934] transition-colors">
+                                <div className="bg-surface-container border border-outline-variant rounded-xl p-5 hover:border-outline transition-colors">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3 text-xs text-[#8c947b]">
+                                        <div className="flex items-center gap-3 text-xs text-outline">
                                             <span className="font-semibold text-white">9:00 - 9:30 AM</span>
                                             <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
                                             <span>30 mins</span>
@@ -534,10 +534,10 @@ function Home() {
                                     </div>
                                     <div className="mb-4">
                                         <h4 className="text-base font-semibold text-white mb-1">Daily Standup — Dev Team</h4>
-                                        <p className="text-[#aff82a] text-xs">Spacer Core Development</p>
+                                        <p className="text-primary-fixed text-xs">Spacer Core Development</p>
                                     </div>
                                     <div className="flex gap-3">
-                                        <button className="flex-1 flex items-center justify-center gap-2 bg-[#0F1115] border border-[#2D3139] hover:bg-[#2D3139] text-white py-2 rounded-lg text-xs font-medium transition-colors">
+                                        <button className="flex-1 flex items-center justify-center gap-2 bg-background border border-outline-variant hover:bg-surface-container-highest text-white py-2 rounded-lg text-xs font-medium transition-colors">
                                             <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
                                         </button>
                                     </div>
