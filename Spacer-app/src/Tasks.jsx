@@ -17,7 +17,7 @@ export default function Tasks() {
         try {
             let query = supabase.from("tasks").select("*")
             
-            if (superAdmin && orgId) {
+            if (orgId) {
                 query = query.eq("organization_id", orgId)
             } else {
                 query = query.eq("assignee_id", uid)
@@ -86,18 +86,16 @@ export default function Tasks() {
                         <section className="flex items-start justify-between shrink-0">
                             <div>
                                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                                    My Tasks
+                                    All Tasks
                                 </h1>
                                 <p className="text-outline text-sm mt-1">
-                                    {isSuperAdmin
-                                        ? "As a superadmin, you can view all tasks across the organization."
-                                        : "Manage your assigned work across all projects."}
+                                    View all tasks across the organization.
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 text-outline text-xs">
                                 <span className="material-symbols-outlined text-[16px]">task</span>
                                 <span>/</span>
-                                <span className="text-white font-medium">My Tasks</span>
+                                <span className="text-white font-medium">All Tasks</span>
                             </div>
                         </section>
 
@@ -143,8 +141,8 @@ export default function Tasks() {
                             ) : openCount === 0 && doneTasks.length === 0 ? (
                                 <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col items-center justify-center p-8 text-center flex-1">
                                     <div className="text-5xl mb-4">🎉</div>
-                                    <h4 className="text-lg font-semibold text-white">You're all caught up</h4>
-                                    <p className="text-outline text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
+                                    <h4 className="text-lg font-semibold text-white">All caught up</h4>
+                                    <p className="text-outline text-sm max-w-xs mt-2">There are no open tasks in the organization right now.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 min-h-0 pb-8">

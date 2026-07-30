@@ -130,7 +130,8 @@ function Profile() {
         const { error } = await supabase
             .from("users")
             .update({
-                name: draft.name
+                name: draft.name,
+                bio: draft.bio
             })
             .eq("id", userId)
 
@@ -147,7 +148,7 @@ function Profile() {
 
         if (error) {
             console.log("DB Update error:", error)
-            showToast("Failed to update profile", "error")
+            showToast(error.message || "Failed to update profile", "error")
             return
         }
 
@@ -358,7 +359,7 @@ function Profile() {
                                                 About
                                             </h3>
                                             <p className="text-sm text-neutral-300 leading-relaxed">
-                                                No bio provided.
+                                                {profile.bio || "No bio provided."}
                                             </p>
                                         </div>
                                     </div>
@@ -466,6 +467,24 @@ function Profile() {
                                         ) : (
                                             <div className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 text-neutral-400 text-sm flex items-center justify-between">
                                                 <span>{profile.email || "—"}</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="sm:col-span-2">
+                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                                            Bio
+                                        </label>
+                                        {isEditing ? (
+                                            <textarea
+                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-lime-400 transition-colors"
+                                                rows="3"
+                                                value={draft.bio}
+                                                onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
+                                            />
+                                        ) : (
+                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
+                                                {profile.bio || "—"}
                                             </div>
                                         )}
                                     </div>

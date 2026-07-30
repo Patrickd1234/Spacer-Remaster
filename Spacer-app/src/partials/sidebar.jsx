@@ -187,10 +187,10 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                 {expanded && <span className="font-medium text-[14px]">Calendar</span>}
                             </Link>
                         )}
-                        {matchesSearch("My Tasks") && (
+                        {matchesSearch("All Tasks") && (
                             <Link to="/tasks" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">task</span>
-                                {expanded && <span className="font-medium text-[14px]">My Tasks</span>}
+                                {expanded && <span className="font-medium text-[14px]">All Tasks</span>}
                             </Link>
                         )}
                         {matchesSearch("Reports") && (
