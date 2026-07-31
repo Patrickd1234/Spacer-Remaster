@@ -11,10 +11,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
 
-    // ── Right-click context menu state
-    const [contextMenu, setContextMenu] = useState(null); // { x, y, project }
-    const [deleteConfirm, setDeleteConfirm] = useState(null); // project to confirm delete
-    const [deleting, setDeleting] = useState(false);
+
 
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
@@ -101,30 +98,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
     const displayEmail = dbUser?.email || userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
 
-    // ── Right-click handler
-    const handleProjectContextMenu = (e, project) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setContextMenu({ x: e.clientX, y: e.clientY, project });
-    };
 
-    // ── Delete project
-    const handleDeleteProject = async () => {
-        if (!deleteConfirm) return;
-        setDeleting(true);
-        const { error } = await supabase.from("project_spaces").delete().eq("id", deleteConfirm.id);
-        if (!error) {
-            setProjects(prev => prev.filter(p => p.id !== deleteConfirm.id));
-            // Navigate away if we're currently on this project's page
-            if (window.location.pathname.includes(deleteConfirm.id)) {
-                navigate("/");
-            }
-        } else {
-            console.error("Error deleting project:", error);
-        }
-        setDeleting(false);
-        setDeleteConfirm(null);
-    };
 
     return (
         <>
@@ -205,7 +179,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                         <div
                                             key={project.id}
                                             className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center px-3 py-2 cursor-pointer transition-colors group"
-                                            onContextMenu={(e) => handleProjectContextMenu(e, project)}
                                         >
                                             {expanded && (
                                                 <Link to={`/project_page/${project.id}`} className="flex items-center gap-3 w-full min-w-0">
@@ -279,84 +252,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                 />
             )}
 
-            {/* ── Right-click context menu ── */}
-            {contextMenu && (
-                <div
-                    className="fixed z-[200] bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-2xl overflow-hidden w-52"
-                    style={{ top: contextMenu.y, left: contextMenu.x }}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <div className="px-4 py-2 border-b border-[#2D3139]">
-                        <p className="text-white text-[13px] font-semibold truncate">{contextMenu.project.name}</p>
-                        <p className="text-[#8c947b] text-[11px]">Project options</p>
-                    </div>
-                    <button
-                        className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-950/30 transition-colors text-[13px] font-medium cursor-pointer"
-                        onClick={() => {
-                            setDeleteConfirm(contextMenu.project);
-                            setContextMenu(null);
-                        }}
-                    >
-                        <span className="material-symbols-outlined text-[18px]">delete_forever</span>
-                        Delete project
-                    </button>
-                </div>
-            )}
-
-            {/* ── Delete confirmation modal ── */}
-            {deleteConfirm && (
-                <div
-                    className="fixed inset-0 z-[210] flex items-center justify-center p-4"
-                    style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
-                    onClick={() => !deleting && setDeleteConfirm(null)}
-                >
-                    <div
-                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Icon */}
-                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
-                            <span className="material-symbols-outlined text-red-400 text-[28px]">delete_forever</span>
-                        </div>
-
-                        {/* Text */}
-                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Delete project?</h2>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-1">
-                            You're about to permanently delete
-                        </p>
-                        <p className="text-white font-semibold text-[14px] text-center mb-4">
-                            "{deleteConfirm.name}"
-                        </p>
-                        <p className="text-[#8c947b] text-[12px] text-center mb-6">
-                            All tasks, files and activity linked to this project will also be removed. This cannot be undone.
-                        </p>
-
-                        {/* Buttons */}
-                        <div className="flex gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setDeleteConfirm(null)}
-                                disabled={deleting}
-                                className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
-                            >
-                                No, keep it
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleDeleteProject}
-                                disabled={deleting}
-                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
-                            >
-                                {deleting ? (
-                                    <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Deleting…</>
-                                ) : (
-                                    <><span className="material-symbols-outlined text-[16px]">delete</span>Yes, delete</>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     )
 }

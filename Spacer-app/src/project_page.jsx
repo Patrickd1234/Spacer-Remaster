@@ -59,6 +59,12 @@ function ProjectPage() {
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [project_events, setProjectEvents] = useState([])
 
+    // ── Delete project
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+    const [deletingProject, setDeletingProject] = useState(false)
+    const [userRole, setUserRole] = useState(null)
+    const [showActionBlocked, setShowActionBlocked] = useState(false)
+
     // ── Members
     const [projectMembers, setProjectMembers] = useState([])
     const [showAddMemberModal, setShowAddMemberModal] = useState(false)
@@ -268,6 +274,17 @@ function ProjectPage() {
                 }
                 if (data[0].team_space_id) {
                     setTeamSpaceId(data[0].team_space_id)
+                    // Fetch current user's role for this team space
+                    const userId = localStorage.getItem("userId")
+                    if (userId) {
+                        const { data: membershipData } = await supabase
+                            .from("memberships")
+                            .select("role")
+                            .eq("user_id", userId)
+                            .eq("team_space_id", data[0].team_space_id)
+                            .maybeSingle()
+                        setUserRole(membershipData?.role ?? "member")
+                    }
                 }
             }
         }
@@ -352,6 +369,19 @@ function ProjectPage() {
             .select("*, user:users(*)")
             .eq("project_id", project_id)
         if (!error) setProjectMembers(data || [])
+    }
+
+    // ── Delete this project
+    const handleDeleteProject = async () => {
+        setDeletingProject(true)
+        const { error } = await supabase.from("project_spaces").delete().eq("id", project_id)
+        if (error) {
+            console.error("Error deleting project:", error)
+            setDeletingProject(false)
+            return
+        }
+        // Navigate home after deletion
+        window.location.href = "/"
     }
 
     const assignedMemberIds = new Set(project_tasks.map(t => t.assignee_id).filter(Boolean))
@@ -494,6 +524,21 @@ function ProjectPage() {
                                 {tab.label}
                             </button>
                         ))}
+
+                        {/* Trash — delete current project */}
+                        <button
+                            type="button"
+                            title="Delete this project"
+                            onClick={() => {
+                                const canDelete = userRole === "admin" || userRole === "super_admin" || userRole === "superadmin"
+                                if (canDelete) setShowDeleteConfirm(true)
+                                else setShowActionBlocked(true)
+                            }}
+                            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
+                        >
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                            Delete project
+                        </button>
                     </div>
                 </div>
                 {/* Tab Contents */}
@@ -977,64 +1022,64 @@ function ProjectPage() {
                             fetchProjectMembers()
                         }
                         return (
-                            <div className="tab-pane block" id="section-members">
-                                {allMembers.length === 0 ? (
-                                    <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
-                                        <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
-                                        <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
-                                        <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
-                                        {allMembers.map((member) => (
-                                            <div
-                                                key={member.id}
-                                                className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
-                                            >
-                                                <div className="flex items-start justify-between mb-sm">
-                                                    <div className="relative">
-                                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
-                                                            {member.name?.charAt(0) || "?"}
-                                                        </div>
-                                                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
+                        <div className="tab-pane block" id="section-members">
+                            {allMembers.length === 0 ? (
+                                <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
+                                    <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
+                                    <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
+                                    <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
+                                    {allMembers.map((member) => (
+                                        <div
+                                            key={member.id}
+                                            className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
+                                        >
+                                            <div className="flex items-start justify-between mb-sm">
+                                                <div className="relative">
+                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
+                                                        {member.name?.charAt(0) || "?"}
                                                     </div>
-                                                    <div className="flex gap-1">
-                                                        <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
-                                                            MEMBER
-                                                        </span>
-                                                        <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
-                                                            <span className="material-symbols-outlined text-xs">more_vert</span>
-                                                        </button>
-                                                    </div>
+                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
                                                 </div>
-                                                <div className="mb-md">
-                                                    <h4 className="font-headline-md text-body-lg text-white font-bold">
-                                                        {member.name}
-                                                    </h4>
-                                                    <p className="font-body-sm text-[11px] text-[#8c947b]">
-                                                        member
-                                                    </p>
-                                                </div>
-                                                <div className="mt-auto flex items-center gap-2">
-                                                    <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
-                                                        <span className="material-symbols-outlined text-sm">chat_bubble</span>
-                                                        Message
+                                                <div className="flex gap-1">
+                                                    <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
+                                                        MEMBER
+                                                    </span>
+                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
+                                                        <span className="material-symbols-outlined text-xs">more_vert</span>
                                                     </button>
-                                                    {explicitIds.has(member.id) && (
-                                                        <button
-                                                            title="Remove from project"
-                                                            onClick={() => removeMember(member.id)}
-                                                            className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
-                                                        >
-                                                            <span className="material-symbols-outlined text-sm">person_remove</span>
-                                                        </button>
-                                                    )}
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                                            <div className="mb-md">
+                                                <h4 className="font-headline-md text-body-lg text-white font-bold">
+                                                    {member.name}
+                                                </h4>
+                                                <p className="font-body-sm text-[11px] text-[#8c947b]">
+                                                    member
+                                                </p>
+                                            </div>
+                                            <div className="mt-auto flex items-center gap-2">
+                                                <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
+                                                    <span className="material-symbols-outlined text-sm">chat_bubble</span>
+                                                    Message
+                                                </button>
+                                                {explicitIds.has(member.id) && (
+                                                    <button
+                                                        title="Remove from project"
+                                                        onClick={() => removeMember(member.id)}
+                                                        className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">person_remove</span>
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                         )
                     })()}
 
@@ -1156,8 +1201,8 @@ function ProjectPage() {
             {/* ── Context-aware FAB ── */}
             {(() => {
                 const fabConfig = {
-                    files: { icon: "upload", label: "Upload File", action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
-                    members: { icon: "person_add", label: "Add Member", action: () => setShowAddMemberModal(true) },
+                    files:   { icon: "upload",      label: "Upload File",    action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
+                    members: { icon: "person_add",  label: "Add Member",     action: () => setShowAddMemberModal(true) },
                 }
                 const cfg = fabConfig[activeTab] || { icon: "add", label: "Quick Add Task", action: () => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) } }
                 return (
@@ -1405,6 +1450,93 @@ function ProjectPage() {
             {/* Post-upload file review modal */}
             {reviewFile && (
                 <DocViewer file={reviewFile} onClose={() => setReviewFile(null)} />
+            )}
+
+            {/* ── Action Blocked modal (non-admin clicked delete) ── */}
+            {showActionBlocked && (
+                <div
+                    className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+                    style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+                    onClick={() => setShowActionBlocked(false)}
+                >
+                    <div
+                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Icon */}
+                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto mb-4">
+                            <span className="material-symbols-outlined text-amber-400 text-[32px]">lock</span>
+                        </div>
+
+                        {/* Text */}
+                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Action Blocked</h2>
+                        <p className="text-[#8c947b] text-[13px] text-center mb-1">
+                            You don't have permission to delete this project.
+                        </p>
+                        <p className="text-[#8c947b] text-[13px] text-center mb-6">
+                            Only <span className="text-amber-400 font-semibold">Admins</span> and <span className="text-amber-400 font-semibold">Super Admins</span> can perform this action. Contact your workspace admin if you need this project removed.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={() => setShowActionBlocked(false)}
+                            className="w-full py-2.5 rounded-xl bg-[#2D3139] hover:bg-[#3a3f4a] text-white text-[13px] font-semibold transition-colors cursor-pointer"
+                        >
+                            Got it
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* ── Delete project confirmation modal ── */}
+            {showDeleteConfirm && (
+                <div
+                    className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+                    style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+                    onClick={() => !deletingProject && setShowDeleteConfirm(false)}
+                >
+                    <div
+                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Icon */}
+                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
+                            <span className="material-symbols-outlined text-red-400 text-[32px]">delete_forever</span>
+                        </div>
+
+                        {/* Text */}
+                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Delete this project?</h2>
+                        <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
+                        <p className="text-white font-bold text-[15px] text-center mb-3">"{project_name}"</p>
+                        <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                            All tasks, files, and activity linked to this project will also be removed. This cannot be undone.
+                        </p>
+
+                        {/* Buttons */}
+                        <div className="flex gap-3">
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(false)}
+                                disabled={deletingProject}
+                                className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                            >
+                                No, keep it
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDeleteProject}
+                                disabled={deletingProject}
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                            >
+                                {deletingProject ? (
+                                    <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Deleting…</>
+                                ) : (
+                                    <><span className="material-symbols-outlined text-[16px]">delete</span>Yes, delete</>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* ── Add Member modal ── */}
