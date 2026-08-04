@@ -16,13 +16,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
-    // Close context menu on any click outside
-    useEffect(() => {
-        const close = () => setContextMenu(null);
-        window.addEventListener("click", close);
-        return () => window.removeEventListener("click", close);
-    }, []);
-
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
