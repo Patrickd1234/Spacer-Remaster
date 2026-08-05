@@ -4,6 +4,8 @@ import { supabase } from "../supabase";
 export default function CreateProjectModal({ onClose, onCreated }) {
     const [teamSpaces, setTeamSpaces] = useState([]);
     const [teamSpaceId, setTeamSpaceId] = useState("");
+    const [teamLeads, setTeamLeads] = useState([]);
+    const [teamLeadId, setTeamLeadId] = useState("");
     const [name, setName] = useState("");
     const [deadline, setDeadline] = useState("");
     const [error, setError] = useState(null);
@@ -30,11 +32,32 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 .eq("organization_id", orgId)
                 .order("name");
 
+            let currentTeamSpaceId = null;
             if (error) {
                 console.log(error);
             } else {
                 setTeamSpaces(data || []);
-                if (data && data.length > 0) setTeamSpaceId(data[0].id);
+                if (data && data.length > 0) {
+                    setTeamSpaceId(data[0].id);
+                    currentTeamSpaceId = data[0].id;
+                }
+            }
+
+            if (currentTeamSpaceId) {
+                const { data: membersData, error: membersError } = await supabase
+                    .from("memberships")
+                    .select("users(id, name)")
+                    .eq("team_space_id", currentTeamSpaceId);
+                
+                if (!membersError && membersData) {
+                    const usersList = membersData
+                        .map(m => m.users)
+                        .filter(Boolean)
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    setTeamLeads(usersList);
+                    setTeamLeadId(userId);
+                }
             }
         };
         fetchTeams();
@@ -55,7 +78,11 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         setSaving(true);
         const { data, error } = await supabase
             .from("project_spaces")
-            .insert({ team_space_id: teamSpaceId, name: name.trim() })
+            .insert({ 
+                team_space_id: teamSpaceId, 
+                name: name.trim(),
+                team_lead: teamLeadId || null
+            })
             .select()
             .single();
         setSaving(false);
@@ -88,16 +115,16 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 <div className="p-lg space-y-lg">
                     <div className="space-y-xs">
                         <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
-                            Team Space
+                            Team Lead
                         </label>
                         <select
                             className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
-                            value={teamSpaceId}
-                            onChange={(e) => setTeamSpaceId(e.target.value)}
+                            value={teamLeadId}
+                            onChange={(e) => setTeamLeadId(e.target.value)}
                         >
-                            {teamSpaces.length === 0 && <option value="">No Team Spaces available</option>}
-                            {teamSpaces.map((ts) => (
-                                <option key={ts.id} value={ts.id}>{ts.name}</option>
+                            {teamLeads.length === 0 && <option value="">No Team Leads available</option>}
+                            {teamLeads.map((user) => (
+                                <option key={user.id} value={user.id}>{user.name}</option>
                             ))}
                         </select>
                     </div>
