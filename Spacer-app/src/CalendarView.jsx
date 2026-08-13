@@ -553,12 +553,16 @@ export default function CalendarView() {
                                                             {subtasksList.map(st => (
                                                                 <div key={st.id} className="flex items-center justify-between group py-0.5">
                                                                     <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-white flex-1">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            checked={st.done}
-                                                                            onChange={() => handleToggleSubtask(st.id)}
-                                                                            className="w-3.5 h-3.5 accent-[#aff82a] rounded border-[#2D3139] bg-[#111318] focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => handleToggleSubtask(st.id)}
+                                                                            className={`check-btn ${!st.done ? '!bg-[#111318] !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} !p-0 !w-3.5 !h-3.5 !rounded flex items-center justify-center shrink-0`}
+                                                                            title={st.done ? "Mark as incomplete" : "Mark as done"}
+                                                                        >
+                                                                            <svg className={`check-icon transition-opacity ${!st.done ? 'opacity-0' : 'opacity-100'} !w-2.5 !h-2.5`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                                                                            </svg>
+                                                                        </button>
                                                                         <span className={st.done ? 'line-through text-[#8c947b]' : ''}>
                                                                             {st.title}
                                                                         </span>

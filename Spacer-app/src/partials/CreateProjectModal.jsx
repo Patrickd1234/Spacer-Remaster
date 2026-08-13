@@ -4,6 +4,8 @@ import { supabase } from "../supabase";
 export default function CreateProjectModal({ onClose, onCreated }) {
     const [teamSpaces, setTeamSpaces] = useState([]);
     const [teamSpaceId, setTeamSpaceId] = useState("");
+    const [teamLeads, setTeamLeads] = useState([]);
+    const [teamLeadId, setTeamLeadId] = useState("");
     const [name, setName] = useState("");
     const [deadline, setDeadline] = useState("");
     const [error, setError] = useState(null);
@@ -11,12 +13,51 @@ export default function CreateProjectModal({ onClose, onCreated }) {
 
     useEffect(() => {
         const fetchTeams = async () => {
-            const { data, error } = await supabase.from("team_spaces").select("*").order("name");
+            const { data: authData } = await supabase.auth.getUser();
+            const userId = authData?.user?.id;
+            if (!userId) return;
+
+            const { data: userProfile } = await supabase
+                .from("users")
+                .select("organization_id")
+                .eq("id", userId)
+                .single();
+
+            const orgId = userProfile?.organization_id;
+            if (!orgId) return;
+
+            const { data, error } = await supabase
+                .from("team_spaces")
+                .select("*")
+                .eq("organization_id", orgId)
+                .order("name");
+
+            let currentTeamSpaceId = null;
             if (error) {
                 console.log(error);
             } else {
                 setTeamSpaces(data || []);
-                if (data && data.length > 0) setTeamSpaceId(data[0].id);
+                if (data && data.length > 0) {
+                    setTeamSpaceId(data[0].id);
+                    currentTeamSpaceId = data[0].id;
+                }
+            }
+
+            if (currentTeamSpaceId) {
+                const { data: membersData, error: membersError } = await supabase
+                    .from("memberships")
+                    .select("users(id, name)")
+                    .eq("team_space_id", currentTeamSpaceId);
+                
+                if (!membersError && membersData) {
+                    const usersList = membersData
+                        .map(m => m.users)
+                        .filter(Boolean)
+                        .sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    setTeamLeads(usersList);
+                    setTeamLeadId(userId);
+                }
             }
         };
         fetchTeams();
@@ -35,9 +76,18 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         }
 
         setSaving(true);
+        const insertPayload = { team_space_id: teamSpaceId, name: name.trim() };
+        if (deadline) {
+            insertPayload.deadline = deadline;
+        }
+
         const { data, error } = await supabase
             .from("project_spaces")
-            .insert({ team_space_id: teamSpaceId, name: name.trim() })
+            .insert({ 
+                team_space_id: teamSpaceId, 
+                name: name.trim(),
+                team_lead: teamLeadId || null
+            })
             .select()
             .single();
         setSaving(false);
@@ -45,6 +95,19 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         if (error) {
             setError(error.message);
             return;
+        }
+
+        try {
+            const { data: userData } = await supabase.auth.getUser();
+            await supabase.from('activity_log').insert({
+                entity_type: 'project',
+                entity_id: data.id,
+                actor_id: userData?.user?.id || null,
+                action: 'created',
+                new_state: { project_name: data.name, team_space_id: data.team_space_id }
+            });
+        } catch (logError) {
+            console.error('Error logging project creation:', logError);
         }
 
         onCreated?.(data);
@@ -70,16 +133,16 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 <div className="p-lg space-y-lg">
                     <div className="space-y-xs">
                         <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
-                            Team Space
+                            Team Lead
                         </label>
                         <select
                             className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
-                            value={teamSpaceId}
-                            onChange={(e) => setTeamSpaceId(e.target.value)}
+                            value={teamLeadId}
+                            onChange={(e) => setTeamLeadId(e.target.value)}
                         >
-                            {teamSpaces.length === 0 && <option value="">No Team Spaces available</option>}
-                            {teamSpaces.map((ts) => (
-                                <option key={ts.id} value={ts.id}>{ts.name}</option>
+                            {teamLeads.length === 0 && <option value="">No Team Leads available</option>}
+                            {teamLeads.map((user) => (
+                                <option key={user.id} value={user.id}>{user.name}</option>
                             ))}
                         </select>
                     </div>
