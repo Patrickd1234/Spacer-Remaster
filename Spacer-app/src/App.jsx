@@ -11,6 +11,7 @@ import Profile from './Profile'
 import Department from './Department'
 import CalendarView from './CalendarView'
 import Settings from './Settings'
+import Tasks from './Tasks'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 
@@ -67,6 +68,7 @@ function App() {
           <Route path="/calendar" element={session ? <CalendarView /> : <Navigate to="/login" replace />} />
           <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" replace />} />
           <Route path="/settings" element={session ? <Settings /> : <Navigate to="/login" replace />} />
+          <Route path="/tasks" element={session ? <Tasks /> : <Navigate to="/login" replace />} />
           <Route path="/project_page/:project_id" element={session ? <ProjectPage /> : <Navigate to="/login" replace />} />
         </Routes>
       </Router>
