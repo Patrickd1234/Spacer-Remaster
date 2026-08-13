@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
@@ -12,6 +12,20 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
     const [dbUser, setDbUser] = useState(null);
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
+
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const navClass = (path, exact = true) => {
+        const active = exact
+            ? location.pathname === path
+            : location.pathname.startsWith(path);
+        return `rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
+            active
+                ? "bg-[#aff82a]/10 text-[#aff82a] font-semibold"
+                : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+        }`;
+    };
 
     // Team space selector state
     const [teamSpaces, setTeamSpaces] = useState([]);
@@ -54,7 +68,6 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
             onCollapsedChange?.(false);
         }
     };
-    const navigate = useNavigate();
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -230,31 +243,31 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                 <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
                     <div className="space-y-1">
                         {matchesSearch("Home") && (
-                            <Link to="/" className={`text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${window.location.pathname === '/' ? 'bg-[#aff82a]/10 text-[#aff82a] font-semibold' : ''}`}>
+                            <Link to="/" className={navClass("/")}>
                                 <span className="material-symbols-outlined text-[20px]">home</span>
                                 {expanded && <span className="font-medium text-[14px]">Home</span>}
                             </Link>
                         )}
                         {matchesSearch("Department") && (
-                            <Link to="/department" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <Link to="/department" className={navClass("/department")}>
                                 <span className="material-symbols-outlined text-[20px]">groups</span>
                                 {expanded && <span className="font-medium text-[14px]">Department</span>}
                             </Link>
                         )}
                         {matchesSearch("Calendar") && (
-                            <Link to="/calendar" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <Link to="/calendar" className={navClass("/calendar")}>
                                 <span className="material-symbols-outlined text-[20px]">calendar_today</span>
                                 {expanded && <span className="font-medium text-[14px]">Calendar</span>}
                             </Link>
                         )}
                         {matchesSearch("My Tasks") && (
-                            <Link to="/tasks" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <Link to="/tasks" className={navClass("/tasks")}>
                                 <span className="material-symbols-outlined text-[20px]">task</span>
                                 {expanded && <span className="font-medium text-[14px]">My Tasks</span>}
                             </Link>
                         )}
                         {matchesSearch("Reports") && (
-                            <Link to="/reports" className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors">
+                            <Link to="/reports" className={navClass("/reports")}>
                                 <span className="material-symbols-outlined text-[20px]">bar_chart</span>
                                 {expanded && <span className="font-medium text-[14px]">Reports</span>}
                             </Link>
@@ -274,19 +287,25 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                                 visibleProjects.map((project, idx) => {
                                     const colors = ["text-green-500", "text-pink-500", "text-red-500", "text-blue-500", "text-amber-500"];
                                     const iconColor = colors[idx % colors.length];
+                                    const projectActive = location.pathname === `/project_page/${project.id}`;
                                     return (
-                                        <div
+                                        <Link
                                             key={project.id}
-                                            className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-lg flex items-center px-3 py-2 cursor-pointer transition-colors group"
+                                            to={`/project_page/${project.id}`}
+                                            className={`rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors group ${
+                                                projectActive
+                                                    ? "bg-[#aff82a]/10 text-[#aff82a] font-semibold"
+                                                    : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+                                            }`}
                                         >
                                             {expanded && (
-                                                <Link to={`/project_page/${project.id}`} className="flex items-center gap-3 w-full min-w-0">
-                                                    <span className={`material-symbols-outlined text-[20px] ${iconColor}`}>book</span>
-                                                    <span className="font-medium text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">{project.name}</span>
-                                                </Link>
+                                                <>
+                                                    <span className={`material-symbols-outlined text-[20px] ${projectActive ? "text-[#aff82a]" : iconColor}`}>book</span>
+                                                    <span className="font-medium text-[14px] whitespace-nowrap overflow-hidden text-ellipsis flex-1">{project.name}</span>
+                                                    <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
+                                                </>
                                             )}
-                                            {expanded && <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>}
-                                        </div>
+                                        </Link>
                                     );
                                 })
                             ) : (

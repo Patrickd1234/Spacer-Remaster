@@ -5,7 +5,6 @@ import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
 import { Link, useNavigate } from "react-router-dom"
-import { Link } from "react-router-dom"
 import { useRole } from "./RoleContext"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
