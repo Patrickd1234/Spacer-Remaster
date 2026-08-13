@@ -96,17 +96,27 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
     const publicUrl = urlData?.publicUrl || "";
 
     // Save metadata to project_files table
-    const { error: dbError } = await supabase.from("project_files").insert({
+    const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
       project_id: project.id,
       name: file.name,
       type: file.type,
       size: file.size,
       path,
       url: publicUrl,
-    });
+    }).select().single();
 
     if (dbError) {
       setUploadError("Could not save file record: " + dbError.message);
+    } else if (fileData) {
+      const { data: userData } = await supabase.auth.getUser();
+      const logEntry = {
+        entity_type: "file",
+        entity_id: fileData.id,
+        actor_id: userData?.user?.id,
+        action: "file_added",
+        new_state: { project_id: project.id, name: file.name }
+      };
+      await supabase.from("activity_log").insert(logEntry);
     }
 
     setUploading(false);
@@ -116,7 +126,18 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
   async function deleteFile(f) {
     if (!window.confirm(`Delete "${f.name}"?`)) return;
     await supabase.storage.from("project-files").remove([f.path]);
-    await supabase.from("project_files").delete().eq("id", f.id);
+    const { error } = await supabase.from("project_files").delete().eq("id", f.id);
+    if (!error) {
+      const { data: userData } = await supabase.auth.getUser();
+      const logEntry = {
+        entity_type: "file",
+        entity_id: f.id,
+        actor_id: userData?.user?.id,
+        action: "file_removed",
+        new_state: { project_id: project.id, name: f.name }
+      };
+      await supabase.from("activity_log").insert(logEntry);
+    }
     fetchFiles();
   }
 

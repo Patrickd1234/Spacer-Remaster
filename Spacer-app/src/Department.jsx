@@ -1,4 +1,4 @@
-import Sidebar from "./partials/sidebar";
+import Sidebar from "./partials/SidebarRouter";
 import Header from "./partials/header";
 import { supabase } from "./supabase";
 import { useEffect, useState } from 'react';

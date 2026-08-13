@@ -95,3 +95,113 @@ body {
   pointer-events: none;
   z-index: -1;
 }
+
+.check-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background-color: #22c55e; /* Vibrant green */
+  color: #ffffff;
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.2);
+  transition: all 0.2s ease;
+}
+
+/* Checkmark icon sizing */
+.check-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Hover state: brightens background and adds lift */
+.check-btn:hover {
+  background-color: #16a34a;
+  box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Active/Click state: presses down */
+.check-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(34, 197, 94, 0.2);
+}
+
+/* Focus state for accessibility */
+.check-btn:focus-visible {
+  outline: 2px solid #22c55e;
+  outline-offset: 2px;
+  outline-offset: 2px;
+}
+
+/* --- Sprint Timer Custom Styling --- */
+.timer-wrapper {
+  --card-bg: #1e293b;
+  --text-color: #38bdf8;
+  --label-color: #94a3b8;
+  --border-color: #334155;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Courier New', Courier, monospace;
+}
+
+.timer-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 32px;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.time-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  min-width: 90px;
+  padding: 16px 12px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.timer-number {
+  font-size: 3rem;
+  font-weight: bold;
+  color: var(--text-color);
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+}
+
+.timer-label {
+  font-size: 0.75rem;
+  color: var(--label-color);
+  margin-top: 6px;
+  font-family: system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.timer-separator {
+  font-size: 2.5rem;
+  font-weight: bold;
+  color: var(--text-color);
+  margin-bottom: 20px; /* Align visually with numbers */
+  animation: blink 1s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
+}

@@ -115,7 +115,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 priority: priority,
                 assignee_id: assigneeId || null,
                 created_by: userData?.user?.id || null,
-                status: initialStatus
+                status: 'todo'
             })
             .select()
             .single();
