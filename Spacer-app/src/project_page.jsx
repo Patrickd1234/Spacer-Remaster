@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams } from "react-router-dom"
 import { supabase } from "./supabase"
 import Sidebar from "./partials/SidebarRouter"
@@ -429,6 +429,15 @@ function ProjectPage() {
 
     const handleDragOver = (e) => { e.preventDefault() }
 
+    // ── File handlers
+    const fetchFiles = useCallback(async () => {
+        if (!project_id) return
+        const { data, error } = await supabase
+            .from("project_files").select("*").eq("project_id", project_id)
+            .order("created_at", { ascending: false })
+        if (!error) setProjectFiles(data || [])
+    }, [project_id])
+
     // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
     useEffect(() => {
         const fetchProject = async () => {
@@ -544,14 +553,6 @@ function ProjectPage() {
     const assignedMemberIds = new Set(project_tasks.map(t => t.assignee_id).filter(Boolean))
     const assignedMembers = orgUsers.filter(u => assignedMemberIds.has(u.id))
 
-    // ── File handlers
-    const fetchFiles = async () => {
-        if (!project_id) return
-        const { data, error } = await supabase
-            .from("project_files").select("*").eq("project_id", project_id)
-            .order("created_at", { ascending: false })
-        if (!error) setProjectFiles(data || [])
-    }
     const handleFilePick = (file) => {
         if (!file) return
         if (pendingUrl) URL.revokeObjectURL(pendingUrl)
@@ -1446,7 +1447,7 @@ function ProjectPage() {
                                                 <p className="text-[12px] text-[#8c947b] text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
                                             </div>
                                         )}
-                                        {pendingFile && <PreUploadPreview />}
+                                        {pendingFile && renderPreUploadPreview()}
                                         {uploadError && <p className="mt-2 text-xs text-error">{uploadError}</p>}
                                     </div>
                                 )}

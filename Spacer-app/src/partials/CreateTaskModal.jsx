@@ -127,14 +127,23 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
             return;
         }
 
-        const logEntry = {
-            entity_type: "task",
-            entity_id: data.id,
-            actor_id: userData?.user?.id || null,
-            action: "created",
-            new_state: { project_id: finalProjectId, title: data.title }
-        };
-        await supabase.from("activity_log").insert(logEntry);
+        try {
+            await supabase.from("activity_log").insert({
+                entity_type: "task",
+                entity_id: data.id,
+                actor_id: userData?.user?.id || null,
+                action: "created",
+                new_state: {
+                    project_id: finalProjectId,
+                    title: data.title,
+                    assignee_id: assigneeId || null,
+                    priority,
+                    status: initialStatus
+                }
+            });
+        } catch (logError) {
+            console.error("Error logging task creation:", logError);
+        }
 
         onCreated?.(data);
         onClose();
