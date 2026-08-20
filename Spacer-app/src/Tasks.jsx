@@ -48,6 +48,7 @@ export default function Tasks() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const { roleLoading } = useRole()
 
+
     useEffect(() => {
         const fetchTasks = async () => {
             setLoading(true)
@@ -56,11 +57,25 @@ export default function Tasks() {
                 const userId = authData?.user?.id
                 if (!userId) return
 
-                const { data, error } = await supabase
+                const { data: profile } = await supabase
+                    .from("users")
+                    .select("organization_id")
+                    .eq("id", userId)
+                    .maybeSingle()
+
+                const orgId = profile?.organization_id
+
+                let query = supabase
                     .from("tasks")
                     .select("*, project:project_spaces(name)")
-                    .eq("assignee_id", userId)
-                    .order("created_at", { ascending: false })
+
+                if (orgId) {
+                    query = query.eq("organization_id", orgId)
+                } else {
+                    query = query.eq("assignee_id", userId)
+                }
+
+                const { data, error } = await query.order("created_at", { ascending: false })
 
                 if (error) {
                     console.error("Error fetching tasks:", error)
@@ -88,6 +103,8 @@ export default function Tasks() {
                     }
                 })
                 setTasks(corrected)
+            } catch (err) {
+                console.error("Error fetching tasks:", err)
             } finally {
                 setLoading(false)
             }
@@ -116,16 +133,16 @@ export default function Tasks() {
                         <section className="flex items-start justify-between">
                             <div>
                                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                                    My Tasks
+                                    All Tasks
                                 </h1>
                                 <p className="text-[#8c947b] text-sm mt-1">
-                                    Manage your assigned work across all projects.
+                                    View all tasks across the organization.
                                 </p>
                             </div>
                             <div className="flex items-center gap-2 text-[#8c947b] text-xs">
                                 <span className="material-symbols-outlined text-[16px]">task</span>
                                 <span>/</span>
-                                <span className="text-white font-medium">My Tasks</span>
+                                <span className="text-white font-medium">All Tasks</span>
                             </div>
                         </section>
 
@@ -168,6 +185,12 @@ export default function Tasks() {
                                             <div className="h-24 w-full bg-[#252a33] rounded-xl" />
                                         </div>
                                     ))}
+                                </div>
+                            ) : openCount === 0 && doneTasks.length === 0 ? (
+                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center flex-1">
+                                    <div className="text-5xl mb-4">🎉</div>
+                                    <h4 className="text-lg font-semibold text-white">All caught up</h4>
+                                    <p className="text-[#8c947b] text-sm max-w-xs mt-2">There are no open tasks in the organization right now.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">

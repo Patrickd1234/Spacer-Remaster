@@ -69,29 +69,44 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
 
     useEffect(() => {
         const fetchProjects = async () => {
-            const userId = localStorage.getItem("userId");
+            const { data: authData } = await supabase.auth.getUser();
+            const userId = authData?.user?.id || localStorage.getItem("userId");
             if (!userId) {
                 const { data, error } = await supabase.from("project_spaces").select("*");
                 if (!error && data) setProjects(data);
                 return;
             }
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id")
-                .eq("user_id", userId);
-            if (memberError || !memberData || memberData.length === 0) {
-                const { data, error } = await supabase.from("project_spaces").select("*");
-                if (error) console.log(error);
-                else setProjects(data || []);
-            } else {
-                const teamIds = memberData.map((m) => m.team_space_id);
-                const { data, error } = await supabase
-                    .from("project_spaces")
-                    .select("*")
-                    .in("team_space_id", teamIds);
-                if (error) console.log(error);
-                else setProjects(data || []);
+            const { data: userProfile } = await supabase
+                .from("users")
+                .select("organization_id")
+                .eq("id", userId)
+                .single();
+
+            const orgId = userProfile?.organization_id;
+            
+            if (orgId) {
+                const { data: teamSpaces } = await supabase
+                    .from("team_spaces")
+                    .select("id")
+                    .eq("organization_id", orgId);
+                    
+                if (teamSpaces && teamSpaces.length > 0) {
+                    const teamIds = teamSpaces.map(ts => ts.id);
+                    const { data, error } = await supabase
+                        .from("project_spaces")
+                        .select("*")
+                        .in("team_space_id", teamIds);
+                    
+                    if (error) console.log(error);
+                    else setProjects(data || []);
+                    return;
+                }
             }
+
+            // Fallback if no orgId or no team spaces
+            const { data, error } = await supabase.from("project_spaces").select("*");
+            if (error) console.log(error);
+            else setProjects(data || []);
         };
         fetchProjects();
 
@@ -157,10 +172,10 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                 {expanded && <span className="font-medium text-[14px]">Calendar</span>}
                             </Link>
                         )}
-                        {matchesSearch("My Tasks") && (
+                        {matchesSearch("All Tasks") && (
                             <Link to="/tasks" className={navClass("/tasks")}>
                                 <span className="material-symbols-outlined text-[20px]">task</span>
-                                {expanded && <span className="font-medium text-[14px]">My Tasks</span>}
+                                {expanded && <span className="font-medium text-[14px]">All Tasks</span>}
                             </Link>
                         )}
                         {matchesSearch("Reports") && (
@@ -261,7 +276,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
             {showCreateModal && (
                 <CreateProjectModal
                     onClose={() => setShowCreateModal(false)}
-                    onProjectCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
+                    onCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
                 />
             )}
         </>

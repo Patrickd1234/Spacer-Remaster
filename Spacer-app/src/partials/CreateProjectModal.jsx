@@ -32,36 +32,51 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 .eq("organization_id", orgId)
                 .order("name");
 
-            let currentTeamSpaceId = null;
             if (error) {
                 console.log(error);
             } else {
                 setTeamSpaces(data || []);
                 if (data && data.length > 0) {
                     setTeamSpaceId(data[0].id);
-                    currentTeamSpaceId = data[0].id;
-                }
-            }
-
-            if (currentTeamSpaceId) {
-                const { data: membersData, error: membersError } = await supabase
-                    .from("memberships")
-                    .select("users(id, name)")
-                    .eq("team_space_id", currentTeamSpaceId);
-                
-                if (!membersError && membersData) {
-                    const usersList = membersData
-                        .map(m => m.users)
-                        .filter(Boolean)
-                        .sort((a, b) => a.name.localeCompare(b.name));
-                    
-                    setTeamLeads(usersList);
-                    setTeamLeadId(userId);
                 }
             }
         };
         fetchTeams();
     }, []);
+
+    useEffect(() => {
+        const fetchMembers = async () => {
+            if (!teamSpaceId) {
+                setTeamLeads([]);
+                setTeamLeadId("");
+                return;
+            }
+            const { data: authData } = await supabase.auth.getUser();
+            const userId = authData?.user?.id;
+
+            const { data: membersData, error: membersError } = await supabase
+                .from("memberships")
+                .select("users(id, name)")
+                .eq("team_space_id", teamSpaceId);
+            
+            if (!membersError && membersData) {
+                const usersList = membersData
+                    .map(m => m.users)
+                    .filter(Boolean)
+                    .sort((a, b) => a.name.localeCompare(b.name));
+                
+                setTeamLeads(usersList);
+                if (userId && usersList.some(u => u.id === userId)) {
+                    setTeamLeadId(userId);
+                } else if (usersList.length > 0) {
+                    setTeamLeadId(usersList[0].id);
+                } else {
+                    setTeamLeadId("");
+                }
+            }
+        };
+        fetchMembers();
+    }, [teamSpaceId]);
 
     const createProject = async () => {
         setError(null);
@@ -131,6 +146,23 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 </div>
 
                 <div className="p-lg space-y-lg">
+                    <div className="space-y-xs">
+                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
+                            Team Space
+                        </label>
+                        <select
+                            className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
+                            value={teamSpaceId}
+                            onChange={(e) => setTeamSpaceId(e.target.value)}
+                        >
+                            {teamSpaces.map((team) => (
+                                <option key={team.id} value={team.id}>
+                                    {team.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="space-y-xs">
                         <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
                             Team Lead
