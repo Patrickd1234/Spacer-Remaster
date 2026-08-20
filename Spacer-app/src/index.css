@@ -205,3 +205,43 @@ body {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.2; }
 }
+
+/* Custom Preference Classes */
+.nav-item-active {
+  background-color: rgba(var(--primary-color-rgb), 0.1) !important;
+  color: var(--primary-color) !important;
+  font-weight: 600;
+}
+
+.text-primary-accent {
+  color: var(--primary-color) !important;
+}
+
+.bg-primary-accent-dim {
+  background-color: rgba(var(--primary-color-rgb), 0.2) !important;
+}
+
+.btn-primary-accent {
+  background-color: var(--primary-color) !important;
+  color: #0F1115 !important;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.btn-primary-accent:hover {
+  background-color: var(--primary-color-dim) !important;
+  opacity: 0.95;
+}
+
+.border-primary-accent {
+  border-color: var(--primary-color) !important;
+}
+
+.focus-border-primary-accent:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 0 1px var(--primary-color) !important;
+}
+
+.bg-primary-accent {
+  background-color: var(--primary-color) !important;
+}

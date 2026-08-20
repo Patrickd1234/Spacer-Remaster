@@ -66,6 +66,7 @@ export default function Settings() {
                 const { data: authData } = await supabase.auth.getUser()
                 const authUser = authData?.user
 
+                let dbName = "";
                 if (authUser) {
                     const { data: userProfile } = await supabase
                         .from("users")
@@ -79,11 +80,35 @@ export default function Settings() {
                         email: authUser.email || "",
                         role: isSuperAdmin ? "Superadmin" : isAdmin ? "Admin" : membershipData?.role || "Member"
                     })
+
+                    const orgId = userProfile?.organization_id
+                    if (orgId) {
+                        const { data: orgData } = await supabase
+                            .from("organizations")
+                            .select("name")
+                            .eq("id", orgId)
+                            .maybeSingle()
+
+                        if (orgData?.name) {
+                            dbName = orgData.name.toLowerCase().includes("redtech") ? "Spacer" : orgData.name;
+                            setWorkspace(prev => ({
+                                ...prev,
+                                name: dbName
+                            }))
+                        }
+                    }
                 }
 
                 // Restore local workspace settings if available
                 const savedWorkspace = localStorage.getItem("spacers_settings_workspace")
-                if (savedWorkspace) setWorkspace(JSON.parse(savedWorkspace))
+                if (savedWorkspace) {
+                    const parsed = JSON.parse(savedWorkspace);
+                    setWorkspace(prev => ({
+                        ...prev,
+                        ...parsed,
+                        name: dbName || (parsed.name && parsed.name.toLowerCase().includes("redtech") ? "Spacer" : parsed.name) || prev.name
+                    }))
+                }
             } catch (err) {
                 console.error("Error initializing settings:", err)
             } finally {
@@ -91,16 +116,47 @@ export default function Settings() {
             }
         }
         fetchUserData()
-    }, [])
+    }, [isSuperAdmin, isAdmin, membershipData])
 
     // Handlers
-    const handleSaveWorkspace = () => {
+    const handleSaveWorkspace = async () => {
         setSaving(true)
-        setTimeout(() => {
+        try {
+            const { data: authData } = await supabase.auth.getUser()
+            const authUser = authData?.user
+            if (authUser) {
+                const { data: userProfile } = await supabase
+                    .from("users")
+                    .select("organization_id")
+                    .eq("id", authUser.id)
+                    .maybeSingle()
+
+                const orgId = userProfile?.organization_id
+                if (orgId) {
+                    const { error } = await supabase
+                        .from("organizations")
+                        .update({ name: workspace.name })
+                        .eq("id", orgId)
+
+                    if (error) {
+                        alert("Error saving organization settings: " + error.message)
+                        setSaving(false)
+                        return
+                    }
+                }
+            }
             localStorage.setItem("spacers_settings_workspace", JSON.stringify(workspace))
-            setSaving(false)
             showToast("Workspace settings saved successfully!")
-        }, 500)
+            
+            // Reload page to reflect name changes globally
+            setTimeout(() => {
+                window.location.reload()
+            }, 1000)
+        } catch (err) {
+            console.error("Save workspace error:", err)
+        } finally {
+            setSaving(false)
+        }
     }
 
     const handleSaveNotifications = async (updated) => {
@@ -162,12 +218,20 @@ export default function Settings() {
     }
 
     const handleToggleIntegration = async (key) => {
+        const isConnecting = !integrations[key].connected;
         const updated = {
             ...integrations,
-            [key]: { ...integrations[key], connected: !integrations[key].connected }
+            [key]: { ...integrations[key], connected: isConnecting }
         }
         await updatePreferences("integrations", updated)
-        showToast(`${key.toUpperCase()} integration ${updated[key].connected ? "connected" : "disconnected"}.`)
+        showToast(`${key.toUpperCase()} integration ${isConnecting ? "connected" : "disconnected"}.`)
+        if (isConnecting) {
+            if (key === "github") {
+                window.open("https://github.com", "_blank");
+            } else if (key === "slack") {
+                window.open("https://slack.com", "_blank");
+            }
+        }
     }
 
     const tabs = [

@@ -2,8 +2,10 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../supabase";
 import { usePreferences } from "../PreferencesContext";
+import { useRole } from "../RoleContext";
 
 function Header({ onSearch = () => {} }) {
+    const { isSuperAdmin } = useRole();
     const navigate = useNavigate();
     const [showNotifications, setShowNotifications] = useState(() => {
         if (typeof window === "undefined") return false;
@@ -198,8 +200,11 @@ function Header({ onSearch = () => {} }) {
                 return;
             }
 
-            const nextNotifications = (data || []).length
-                ? data.map((activity) => ({
+            const rawActivities = data || [];
+            const filteredActivities = isSuperAdmin ? rawActivities : rawActivities.filter(a => a.action !== "login");
+
+            const nextNotifications = filteredActivities.length
+                ? filteredActivities.map((activity) => ({
                     id: activity.id,
                     title: formatActivityTitle(activity),
                     message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
@@ -223,7 +228,7 @@ function Header({ onSearch = () => {} }) {
         };
 
         loadNotifications();
-    }, [preferences?.notifications?.inApp]);
+    }, [preferences?.notifications?.inApp, isSuperAdmin]);
 
     useEffect(() => {
         if (showNotifications) {
@@ -236,7 +241,10 @@ function Header({ onSearch = () => {} }) {
                     .limit(10);
 
                 if (!error && data) {
-                    setNotifications(data.map((activity) => ({
+                    const rawActivities = data || [];
+                    const filteredActivities = isSuperAdmin ? rawActivities : rawActivities.filter(a => a.action !== "login");
+
+                    setNotifications(filteredActivities.map((activity) => ({
                         id: activity.id,
                         title: formatActivityTitle(activity),
                         message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
@@ -250,7 +258,7 @@ function Header({ onSearch = () => {} }) {
 
             loadNotifications();
         }
-    }, [showNotifications]);
+    }, [showNotifications, isSuperAdmin]);
 
     const hasResults = searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0;
     const unreadCount = notifications.filter((notification) => notification.unread).length;
@@ -265,7 +273,7 @@ function Header({ onSearch = () => {} }) {
                     <div className="relative w-full max-w-[220px] sm:max-w-[260px]" ref={searchRef}>
                         <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8c947b]">search</span>
                         <input
-                            className="w-full bg-[#191c21] border border-[#2D3139] rounded-lg pl-10 pr-4 py-2 text-white font-body-sm focus:ring-1 focus:ring-[#aff82a] focus:outline-none transition-colors"
+                            className="w-full bg-[#191c21] border border-[#2D3139] rounded-lg pl-10 pr-4 py-2 text-white font-body-sm focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none transition-colors"
                             placeholder="Search workspace..."
                             type="text"
                             value={searchQuery}
@@ -323,7 +331,7 @@ function Header({ onSearch = () => {} }) {
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
-                                                            <span className="material-symbols-outlined text-[16px] text-lime-400">task_alt</span>
+                                                            <span className="material-symbols-outlined text-[16px] text-primary-accent">task_alt</span>
                                                             <span className="truncate">{t.title}</span>
                                                         </div>
                                                     )
@@ -382,7 +390,7 @@ function Header({ onSearch = () => {} }) {
                                     <div className="flex items-center gap-2">
                                         {unreadCount > 0 && (
                                             <button
-                                                className="text-xs text-[#aff82a] hover:underline"
+                                                className="text-xs text-[var(--primary-color)] hover:underline"
                                                 onClick={() => setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })))}
                                             >
                                                 Mark all read
@@ -404,13 +412,13 @@ function Header({ onSearch = () => {} }) {
                                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                                         {notifications.map((notification) => (
                                             <div key={notification.id} className="rounded-lg bg-[#252a33] p-3 border border-[#2D3139] flex gap-2">
-                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[#aff82a]" : "text-[#8c947b]"}`}>
+                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : "text-[#8c947b]"}`}>
                                                     {notification.type === "success" ? "check_circle" : "notifications_active"}
                                                 </span>
                                                 <div className="flex-1">
                                                     <div className="flex items-start justify-between gap-2">
                                                         <p className="text-sm text-white">{notification.title}</p>
-                                                        {notification.unread && <span className="w-2 h-2 rounded-full bg-[#aff82a] mt-1.5 flex-shrink-0" />}
+                                                        {notification.unread && <span className="w-2 h-2 rounded-full bg-[var(--primary-color)] mt-1.5 flex-shrink-0" />}
                                                     </div>
                                                     <p className="text-xs text-[#8c947b] mt-1">{notification.message}</p>
                                                     <p className="text-[11px] text-[#6b7280] mt-2">{notification.time}</p>

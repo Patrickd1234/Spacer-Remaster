@@ -10,6 +10,7 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
+    const [orgName, setOrgName] = useState("Spacer");
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -22,7 +23,7 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
             : location.pathname.startsWith(path);
         return `rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
             active
-                ? "bg-[#aff82a]/10 text-[#aff82a] font-semibold"
+                ? "nav-item-active"
                 : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
         }`;
     };
@@ -108,6 +109,31 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
             }
         };
         fetchDbUser();
+
+        const fetchOrg = async () => {
+            const { data: authData } = await supabase.auth.getUser();
+            const userId = authData?.user?.id;
+            if (userId) {
+                const { data: userProfile } = await supabase
+                    .from("users")
+                    .select("organization_id")
+                    .eq("id", userId)
+                    .maybeSingle();
+                const orgId = userProfile?.organization_id;
+                if (orgId) {
+                    const { data: org } = await supabase
+                        .from("organizations")
+                        .select("name")
+                        .eq("id", orgId)
+                        .maybeSingle();
+                    if (org?.name) {
+                        const resolvedName = org.name.toLowerCase().includes("redtech") ? "Spacer" : org.name;
+                        setOrgName(resolvedName);
+                    }
+                }
+            }
+        };
+        fetchOrg();
     }, []);
 
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
@@ -126,8 +152,8 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                     <div className={`flex items-center ${expanded ? "justify-between mb-4" : "justify-center"}`}>
                         {expanded && (
                             <div className="flex items-center gap-2">
-                                <span className="material-symbols-outlined text-[#aff82a] font-bold text-[20px]">token</span>
-                                <h1 className="font-bold text-[16px] text-white tracking-widest uppercase">Spacer</h1>
+                                <span className="material-symbols-outlined text-primary-accent font-bold text-[20px]">token</span>
+                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
                             </div>
                         )}
                         <button
@@ -197,13 +223,13 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                                             to={`/project_page/${project.id}`}
                                             className={`rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors group ${
                                                 projectActive
-                                                    ? "bg-[#aff82a]/10 text-[#aff82a] font-semibold"
+                                                    ? "nav-item-active"
                                                     : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
                                             }`}
                                         >
                                             {expanded && (
                                                 <>
-                                                    <span className={`material-symbols-outlined text-[20px] ${projectActive ? "text-[#aff82a]" : iconColor}`}>book</span>
+                                                    <span className={`material-symbols-outlined text-[20px] ${projectActive ? "text-primary-accent" : iconColor}`}>book</span>
                                                     <span className="font-medium text-[14px] whitespace-nowrap overflow-hidden text-ellipsis flex-1">{project.name}</span>
                                                     <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
                                                 </>

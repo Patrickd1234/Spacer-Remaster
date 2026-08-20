@@ -126,12 +126,21 @@ export function PreferencesProvider({ children }) {
       purple: "#9333ea",
       gold: "#f59e0b"
     };
+
+    const accentColorsRgb = {
+      lime: "175, 248, 42",
+      cyan: "45, 212, 191",
+      purple: "168, 85, 247",
+      gold: "251, 191, 36"
+    };
     
     const selectedColor = accentColors[preferences.appearance.accentColor] || accentColors.lime;
     const selectedColorDim = accentColorsDim[preferences.appearance.accentColor] || accentColorsDim.lime;
+    const selectedColorRgb = accentColorsRgb[preferences.appearance.accentColor] || accentColorsRgb.lime;
     
     root.style.setProperty('--primary-color', selectedColor);
     root.style.setProperty('--primary-color-dim', selectedColorDim);
+    root.style.setProperty('--primary-color-rgb', selectedColorRgb);
 
     if (preferences.appearance.compactUi) {
       root.classList.add("compact-ui");

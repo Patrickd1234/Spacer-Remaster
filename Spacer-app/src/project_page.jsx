@@ -20,7 +20,7 @@ function getFileStyle(type = "") {
     if (type.includes("word") || type === "application/msword")
         return { icon: "description", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
     if (type.includes("sheet") || type === "application/vnd.ms-excel")
-        return { icon: "table", color: "text-[#aff82a]", bg: "bg-[#aff82a]/10" }
+        return { icon: "table", color: "text-[var(--primary-color)]", bg: "bg-[var(--primary-color)]/10" }
     if (type.includes("zip")) return { icon: "folder_zip", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
     if (type.startsWith("text/")) return { icon: "article", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
     return { icon: "insert_drive_file", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
@@ -449,6 +449,14 @@ function ProjectPage() {
 
     // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
     useEffect(() => {
+        // Reset states to prevent loading flash of previous project
+        setProjectName("Loading...");
+        setProjectDescription("");
+        setProjectTasks([]);
+        setProjectFiles([]);
+        setProjectMembers([]);
+        setActivityLog([]);
+
         const fetchProject = async () => {
             if (!project_id) return
             const { data, error } = await supabase
@@ -705,7 +713,7 @@ function ProjectPage() {
         fetchFiles()
     }
 
-    const PreUploadPreview = () => {
+    const renderPreUploadPreview = () => {
         const isImage = pendingFile?.type?.startsWith("image/")
         const isPDF = pendingFile?.type === "application/pdf"
         const { icon, color, bg } = getFileStyle(pendingFile?.type)
@@ -730,7 +738,7 @@ function ProjectPage() {
                     </div>
                     <div className="flex items-center gap-sm shrink-0">
                         <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
-                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[#aff82a] text-[#1C1F26] font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
+                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[var(--primary-color)] text-[#1C1F26] font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
                             {uploading
                                 ? <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Uploading…</>
                                 : <><span className="material-symbols-outlined text-[16px]">cloud_upload</span> Confirm Upload</>}
@@ -766,7 +774,7 @@ function ProjectPage() {
                                 type="button"
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-label-md transition-colors cursor-pointer ${activeTab === tab.id
-                                    ? "bg-[#8bc34a] text-white font-semibold"
+                                    ? "bg-primary-accent text-[#0F1115] font-bold shadow-sm"
                                     : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]/50"
                                     }`}
                             >
@@ -804,7 +812,7 @@ function ProjectPage() {
                                         {[
                                             { label: 'Backlog', count: project_tasks.filter(t => t.status === 'todo').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
                                             { label: 'Doing', count: project_tasks.filter(t => t.status === 'in_progress').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
-                                            { label: 'Done', count: project_tasks.filter(t => t.status === 'done').length, color: 'text-[#aff82a]', barColor: 'bg-[#aff82a]' },
+                                            { label: 'Done', count: project_tasks.filter(t => t.status === 'done').length, color: 'text-[var(--primary-color)]', barColor: 'bg-[var(--primary-color)]' },
                                             { label: 'Overdue', count: project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length, color: 'text-error', barColor: 'bg-error' },
                                         ].map(stat => {
                                             const total = Math.max(1, project_tasks.length);
@@ -857,7 +865,7 @@ function ProjectPage() {
                                                                 <>deleted file <span className="text-error font-bold">{activity.new_state?.name}</span></>
                                                             )}
                                                             {activity.action === "sprint_completed" && (
-                                                                <>completed a sprint with <span className="text-[#aff82a] font-bold">{activity.new_state?.completionPercent}%</span> success ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
+                                                                <>completed a sprint with <span className="text-[var(--primary-color)] font-bold">{activity.new_state?.completionPercent}%</span> success ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
                                                             )}
                                                         </p>
                                                         <p className="text-[#8c947b] text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
@@ -882,7 +890,7 @@ function ProjectPage() {
                                     </div>
                                     <button 
                                         onClick={handleStartNewSprint}
-                                        className="bg-[#aff82a] hover:bg-[#c4ff4d] text-[#1C1F26] px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(175,248,42,0.3)] flex items-center gap-3"
+                                        className="bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--primary-color-rgb),0.3)] flex items-center gap-3"
                                     >
                                         <span className="material-symbols-outlined">rocket_launch</span>
                                         Start New Sprint
@@ -936,7 +944,7 @@ function ProjectPage() {
                                                         const buttonDisabled = isLocked || cantSelect;
 
                                                         return (
-                                                            <div key={`overdue-${task.id}`} className={`p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors ${isSelected ? 'bg-[#aff82a]/5 border-[#aff82a]/30' : 'bg-[#191c21]'}`}>
+                                                            <div key={`overdue-${task.id}`} className={`p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors ${isSelected ? 'bg-[var(--primary-color)]/5 border-[var(--primary-color)]/30' : 'bg-[#191c21]'}`}>
                                                                 <button 
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
@@ -1102,7 +1110,7 @@ function ProjectPage() {
                                                 )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 w-full mb-6">
-                                                <button onClick={handleTimerStart} className={`${isTimerRunning ? 'bg-[#e05252] hover:bg-[#ff5555]' : 'bg-[#aff82a] hover:bg-[#c4ff4d]'} text-[#1C1F26] p-4 rounded-2xl flex flex-col items-center gap-2 transition-colors cursor-pointer`}>
+                                                <button onClick={handleTimerStart} className={`${isTimerRunning ? 'bg-[#e05252] hover:bg-[#ff5555]' : 'bg-[var(--primary-color)] hover:bg-[#c4ff4d]'} text-[#1C1F26] p-4 rounded-2xl flex flex-col items-center gap-2 transition-colors cursor-pointer`}>
                                                     <span className="material-symbols-outlined text-[24px]">{isTimerRunning ? 'pause' : 'play_arrow'}</span>
                                                     <span className="text-[10px] font-bold uppercase">{isTimerRunning ? 'Pause' : 'Start'}</span>
                                                 </button>
@@ -1119,7 +1127,7 @@ function ProjectPage() {
                             {sprintPhase === 'summary' && currentSprintReport && (
                                 <div className="max-w-2xl mx-auto mt-10">
                                     <div className="bg-[#191c21] border border-[#2D3139] rounded-3xl p-10 relative overflow-hidden shadow-2xl">
-                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#aff82a] to-blue-500"></div>
+                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary-color)] to-blue-500"></div>
                                         <div className="flex justify-between items-start mb-8">
                                             <div>
                                                 <h2 className="text-3xl font-black text-white mb-2">Sprint Report</h2>
@@ -1180,7 +1188,7 @@ function ProjectPage() {
 
                                         <button 
                                             onClick={handleExitSprint}
-                                            className="w-full bg-[#aff82a] hover:bg-[#c4ff4d] text-[#1C1F26] font-bold py-4 rounded-xl text-lg transition-colors cursor-pointer"
+                                            className="w-full bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] font-bold py-4 rounded-xl text-lg transition-colors cursor-pointer"
                                         >
                                             Continue
                                         </button>
@@ -1226,7 +1234,7 @@ function ProjectPage() {
                                                     <div
                                                         key={task.id}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[#aff82a]/50 transition-all group"
+                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[var(--primary-color)]/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
@@ -1281,7 +1289,7 @@ function ProjectPage() {
                                                                     </div>
                                                                     <div className="w-full bg-[#1e222b] rounded-full h-1 overflow-hidden">
                                                                         <div
-                                                                            className="bg-[#aff82a] h-full transition-all duration-300"
+                                                                            className="bg-[var(--primary-color)] h-full transition-all duration-300"
                                                                             style={{ width: `${percent}%` }}
                                                                         ></div>
                                                                     </div>
@@ -1494,7 +1502,7 @@ function ProjectPage() {
                                             onChange={(e) => handleFilePick(e.target.files[0])} />
                                         {!pendingFile && (
                                             <div
-                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[#8bc34a] bg-[#8bc34a]/10" : "border-[#2D3139] hover:border-outline hover:bg-[#2D3139]/50"}`}
+                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[var(--primary-color)] bg-[var(--primary-color)]/10" : "border-[#2D3139] hover:border-outline hover:bg-[#2D3139]/50"}`}
                                                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                                                 onDragLeave={() => setDragOver(false)}
                                                 onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFilePick(e.dataTransfer.files[0]) }}
@@ -1732,7 +1740,7 @@ function ProjectPage() {
                                                         <>
                                                             <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
                                                                 {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" title={`${dayEvents.length} event(s)`}></span>}
-                                                                {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#aff82a]" title={`${dayTasks.length} task(s)`}></span>}
+                                                                {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)]" title={`${dayTasks.length} task(s)`}></span>}
                                                                 <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
                                                                     {date.getDate()}
                                                                 </span>
@@ -1752,7 +1760,7 @@ function ProjectPage() {
                                                                         key={task.id}
                                                                         onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
                                                                         className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                                                                            'bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30'
+                                                                            'bg-[var(--primary-color)]/10 text-[var(--primary-color)] border-[var(--primary-color)]/30'
                                                                             }`}
                                                                         title={task.title}
                                                                     >
@@ -2286,7 +2294,7 @@ function ProjectPage() {
                                     </div>
                                 ) : (
                                     available.map(user => (
-                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-[#191c21] border border-[#2D3139]/50 hover:border-[#aff82a]/30 transition-colors group">
+                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-[#191c21] border border-[#2D3139]/50 hover:border-[var(--primary-color)]/30 transition-colors group">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-9 h-9 rounded-full bg-[#2D3139] flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
                                                     {user.name?.charAt(0) || "?"}
@@ -2298,7 +2306,7 @@ function ProjectPage() {
                                             </div>
                                             <button
                                                 onClick={() => addMember(user)}
-                                                className="px-3 py-1.5 rounded-lg bg-[#aff82a]/10 border border-[#aff82a]/30 text-[#aff82a] text-[12px] font-bold hover:bg-[#aff82a]/20 transition-colors cursor-pointer flex items-center gap-1"
+                                                className="px-3 py-1.5 rounded-lg bg-[var(--primary-color)]/10 border border-[var(--primary-color)]/30 text-[var(--primary-color)] text-[12px] font-bold hover:bg-[var(--primary-color)]/20 transition-colors cursor-pointer flex items-center gap-1"
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">add</span>
                                                 Add

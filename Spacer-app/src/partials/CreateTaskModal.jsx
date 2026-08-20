@@ -20,7 +20,7 @@ const CustomDropdown = ({ options, value, onChange, placeholder, direction = "do
     return (
         <div className="relative" ref={dropdownRef}>
             <div 
-                className={`w-full bg-[#111318] border rounded-xl px-4 py-3 text-sm text-white cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-[#aff82a] ring-1 ring-[#aff82a]' : 'border-[#2D3139] hover:border-[#424934]'}`}
+                className={`w-full bg-[#111318] border rounded-xl px-4 py-3 text-sm text-white cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-[var(--primary-color)] ring-1 ring-[var(--primary-color)]' : 'border-[#2D3139] hover:border-[#424934]'}`}
                 onClick={() => setIsOpen(!isOpen)}
             >
                 <span className={!selectedOption ? "text-[#8c947b]" : ""}>{selectedOption ? selectedOption.label : placeholder}</span>
@@ -64,8 +64,41 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
     useEffect(() => {
         if (!projectId && organizationId) {
             const fetchProjects = async () => {
-                const { data } = await supabase.from("projects").select("id, title").eq("organization_id", organizationId);
-                if (data) setProjects(data);
+                try {
+                    // Try querying team_spaces -> project_spaces first (which matches the Spacer schema)
+                    const { data: teamSpaces } = await supabase
+                        .from("team_spaces")
+                        .select("id")
+                        .eq("organization_id", organizationId);
+                        
+                    if (teamSpaces && teamSpaces.length > 0) {
+                        const teamIds = teamSpaces.map(ts => ts.id);
+                        const { data, error } = await supabase
+                            .from("project_spaces")
+                            .select("id, name")
+                            .in("team_space_id", teamIds);
+                        
+                        if (!error && data) {
+                            setProjects(data.map(p => ({ id: p.id, title: p.name || p.title })));
+                            return;
+                        }
+                    }
+                    
+                    // Fallback to plain project_spaces select
+                    const { data: fallbackSpaces } = await supabase
+                        .from("project_spaces")
+                        .select("id, name");
+                    if (fallbackSpaces) {
+                        setProjects(fallbackSpaces.map(p => ({ id: p.id, title: p.name || p.title })));
+                        return;
+                    }
+
+                    // Fallback to legacy projects table
+                    const { data } = await supabase.from("projects").select("id, title").eq("organization_id", organizationId);
+                    if (data) setProjects(data);
+                } catch (err) {
+                    console.warn("Error fetching projects for modal:", err);
+                }
             };
             fetchProjects();
         }
@@ -185,7 +218,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     </label>
                     <input
                         id="task-title"
-                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b]"
+                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-all placeholder-[#8c947b]"
                         placeholder="e.g. Implement user authentication"
                         type="text"
                         value={title}
@@ -199,7 +232,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     </label>
                     <textarea
                         id="task-description"
-                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b] min-h-[80px] resize-y"
+                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-all placeholder-[#8c947b] min-h-[80px] resize-y"
                         placeholder="Add more details about this task..."
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
@@ -212,7 +245,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     </label>
                     <input
                         id="task-deadline"
-                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#aff82a] transition-all [color-scheme:dark]"
+                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-all [color-scheme:dark]"
                         type="datetime-local"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
@@ -266,7 +299,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     Cancel
                 </button>
                 <button
-                    className="flex-1 py-3 bg-[#5b644d] text-white rounded-xl text-xs font-semibold hover:bg-[#6c765c] transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex-1 py-3 btn-primary-accent rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                     onClick={createTask}
                     disabled={saving}
                 >

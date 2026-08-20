@@ -9,7 +9,7 @@ const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
     high: "bg-amber-500/15 text-amber-400 border-amber-500/30",
     medium: "bg-teal-500/15 text-teal-400 border-teal-500/30",
-    low: "bg-[#aff82a]/15 text-[#aff82a] border-[#aff82a]/30",
+    low: "bg-[var(--primary-color)]/15 text-[var(--primary-color)] border-[var(--primary-color)]/30",
 }
 
 function TaskCard({ task, onClick }) {
@@ -18,7 +18,7 @@ function TaskCard({ task, onClick }) {
     return (
         <div
             onClick={onClick}
-            className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 cursor-pointer hover:border-[#aff82a]/50 transition-all duration-200 group flex flex-col gap-1.5"
+            className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 cursor-pointer hover:border-[var(--primary-color)]/50 transition-all duration-200 group flex flex-col gap-1.5"
         >
             <h4 className={`font-semibold text-sm leading-snug ${task.status === "done" ? "line-through text-[#8c947b]" : "text-white"}`}>
                 {task.title || task.name || "Untitled"}
@@ -31,7 +31,7 @@ function TaskCard({ task, onClick }) {
             )}
 
             {task.due_date && (
-                <div className={`flex items-center gap-1 text-[11px] mt-1 ${isOverdue ? "text-red-400" : "text-[#aff82a]"}`}>
+                <div className={`flex items-center gap-1 text-[11px] mt-1 ${isOverdue ? "text-red-400" : "text-[var(--primary-color)]"}`}>
                     <span className="material-symbols-outlined text-[13px]">calendar_today</span>
                     <span>{new Date(task.due_date).toLocaleDateString("en-GB")}</span>
                 </div>
@@ -48,6 +48,18 @@ export default function Tasks() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const { roleLoading } = useRole()
 
+    // Standup Tab states
+    const [activeTab, setActiveTab] = useState("board")
+    const [standups, setStandups] = useState([])
+    const [standupLoading, setStandupLoading] = useState(true)
+    const [yesterdayText, setYesterdayText] = useState("")
+    const [todayText, setTodayText] = useState("")
+    const [blockersText, setBlockersText] = useState("")
+    const [standupSaving, setStandupSaving] = useState(false)
+    const [isLocalFallback, setIsLocalFallback] = useState(false)
+    const [currentUserProfile, setCurrentUserProfile] = useState(null)
+    const [orgId, setOrgId] = useState(null)
+
 
     useEffect(() => {
         const fetchTasks = async () => {
@@ -59,18 +71,23 @@ export default function Tasks() {
 
                 const { data: profile } = await supabase
                     .from("users")
-                    .select("organization_id")
+                    .select("id, name, email, organization_id")
                     .eq("id", userId)
                     .maybeSingle()
 
-                const orgId = profile?.organization_id
+                if (profile) {
+                    setCurrentUserProfile(profile)
+                    setOrgId(profile.organization_id)
+                }
+
+                const currentOrgId = profile?.organization_id
 
                 let query = supabase
                     .from("tasks")
                     .select("*, project:project_spaces(name)")
 
-                if (orgId) {
-                    query = query.eq("organization_id", orgId)
+                if (currentOrgId) {
+                    query = query.eq("organization_id", currentOrgId)
                 } else {
                     query = query.eq("assignee_id", userId)
                 }
@@ -115,6 +132,111 @@ export default function Tasks() {
         }
     }, [roleLoading])
 
+    const fetchStandups = async (currentOrgId) => {
+        setStandupLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from("daily_standups")
+                .select("*, user:users(name, email)")
+                .eq("organization_id", currentOrgId)
+                .order("standup_date", { ascending: false })
+                .order("created_at", { ascending: false })
+
+            if (error) {
+                console.warn("daily_standups table fetch error, falling back to localStorage:", error)
+                setIsLocalFallback(true)
+                const local = localStorage.getItem("spacers_daily_standups")
+                setStandups(local ? JSON.parse(local) : [])
+            } else {
+                setStandups(data || [])
+                setIsLocalFallback(false)
+            }
+        } catch (err) {
+            console.error("Error fetching standups:", err)
+            setIsLocalFallback(true)
+            const local = localStorage.getItem("spacers_daily_standups")
+            setStandups(local ? JSON.parse(local) : [])
+        } finally {
+            setStandupLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        if (orgId) {
+            fetchStandups(orgId)
+        } else {
+            setIsLocalFallback(true)
+            const local = localStorage.getItem("spacers_daily_standups")
+            setStandups(local ? JSON.parse(local) : [])
+            setStandupLoading(false)
+        }
+    }, [orgId, activeTab])
+
+    const handleAddStandup = async (e) => {
+        e.preventDefault()
+        const yesterdayClean = yesterdayText.trim()
+        const todayClean = todayText.trim()
+        const blockersClean = blockersText.trim()
+        
+        if (!yesterdayClean && !todayClean && !blockersClean) {
+            alert("Please fill out at least one section of your daily standup.")
+            return
+        }
+
+        setStandupSaving(true)
+
+        try {
+            const { data: authData } = await supabase.auth.getUser()
+            const uid = authData?.user?.id
+            
+            if (isLocalFallback) {
+                const newRow = {
+                    id: `std_${Date.now()}`,
+                    organization_id: orgId || "local",
+                    user_id: uid || "local_user",
+                    standup_date: new Date().toISOString().split("T")[0],
+                    yesterday_work: yesterdayClean,
+                    today_work: todayClean,
+                    blockers: blockersClean,
+                    created_at: new Date().toISOString(),
+                    user: {
+                        name: currentUserProfile?.name || authData?.user?.email || "Local User",
+                        email: currentUserProfile?.email || authData?.user?.email || "local@spacers.com"
+                    }
+                }
+                const updated = [newRow, ...standups]
+                localStorage.setItem("spacers_daily_standups", JSON.stringify(updated))
+                setStandups(updated)
+                setYesterdayText("")
+                setTodayText("")
+                setBlockersText("")
+            } else {
+                const { error } = await supabase
+                    .from("daily_standups")
+                    .insert({
+                        organization_id: orgId,
+                        user_id: uid,
+                        yesterday_work: yesterdayClean,
+                        today_work: todayClean,
+                        blockers: blockersClean
+                    })
+
+                if (error) {
+                    alert("Error saving standup: " + error.message)
+                } else {
+                    setYesterdayText("")
+                    setTodayText("")
+                    setBlockersText("")
+                    await fetchStandups(orgId)
+                }
+            }
+        } catch (err) {
+            console.error("Error saving standup:", err)
+        } finally {
+            setStandupSaving(false)
+        }
+    }
+
     const todoTasks = tasks.filter(t => t.status === "todo")
     const inProgressTasks = tasks.filter(t => t.status === "in_progress")
     const doneTasks = tasks.filter(t => t.status === "done")
@@ -146,122 +268,303 @@ export default function Tasks() {
                             </div>
                         </section>
 
-                        {/* Metric Strip */}
-                        {!loading && (
-                            <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
-                                    <p className="text-3xl font-bold text-white">{todoTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">To do</p>
+                        {/* Tab Switcher */}
+                        <div className="flex items-center gap-2 border-b border-[#2D3139] pb-1">
+                            <button
+                                onClick={() => setActiveTab("board")}
+                                className={`px-4 py-2 text-sm font-semibold transition-all border-b-2 cursor-pointer ${
+                                    activeTab === "board"
+                                        ? "border-[var(--primary-color)] text-white"
+                                        : "border-transparent text-[#8c947b] hover:text-white"
+                                }`}
+                            >
+                                Kanban Board
+                            </button>
+                            <button
+                                onClick={() => setActiveTab("standup")}
+                                className={`px-4 py-2 text-sm font-semibold transition-all border-b-2 cursor-pointer ${
+                                    activeTab === "standup"
+                                        ? "border-[var(--primary-color)] text-white"
+                                        : "border-transparent text-[#8c947b] hover:text-white"
+                                }`}
+                            >
+                                Daily Standup Sheet
+                            </button>
+                        </div>
+
+                        {activeTab === "board" && (
+                            <>
+                                {/* Metric Strip */}
+                                {!loading && (
+                                    <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
+                                            <p className="text-3xl font-bold text-white">{todoTasks.length}</p>
+                                            <p className="text-[#8c947b] text-xs font-medium mt-1">To do</p>
+                                        </div>
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
+                                            <p className="text-3xl font-bold text-[var(--primary-color)]">{inProgressTasks.length}</p>
+                                            <p className="text-[#8c947b] text-xs font-medium mt-1">In progress</p>
+                                        </div>
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
+                                            <p className="text-3xl font-bold text-green-400">{doneTasks.length}</p>
+                                            <p className="text-[#8c947b] text-xs font-medium mt-1">Done</p>
+                                        </div>
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
+                                            <p className="text-3xl font-bold text-red-400">{overdueTasks.length}</p>
+                                            <p className="text-[#8c947b] text-xs font-medium mt-1">Overdue</p>
+                                        </div>
+                                    </section>
+                                )}
+
+                                {/* Work Board Section Header */}
+                                <section className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-lg font-semibold text-white">Work Board</h2>
+                                        <span className="text-xs text-[#8c947b] font-medium">{openCount} Open Items</span>
+                                    </div>
+
+                                    {/* 3 Columns Kanban Board */}
+                                    {loading ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {[...Array(3)].map((_, i) => (
+                                                <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-3 animate-pulse">
+                                                    <div className="h-3 w-16 bg-[#252a33] rounded" />
+                                                    <div className="h-24 w-full bg-[#252a33] rounded-xl" />
+                                                    <div className="h-24 w-full bg-[#252a33] rounded-xl" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : openCount === 0 && doneTasks.length === 0 ? (
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center flex-1">
+                                            <div className="text-5xl mb-4">🎉</div>
+                                            <h4 className="text-lg font-semibold text-white">All caught up</h4>
+                                            <p className="text-[#8c947b] text-sm max-w-xs mt-2">There are no open tasks in the organization right now.</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                                            {/* TO-DO Column */}
+                                            <div className="bg-[#191c21]/50 border border-[#2D3139]/30 rounded-xl flex flex-col min-h-[400px]">
+                                                <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D3139]/20">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-[#8c947b]" />
+                                                        <span className="font-bold text-white text-xs uppercase tracking-wider">TO-DO</span>
+                                                    </div>
+                                                    <span className="text-xs text-[#8c947b] font-bold">{todoTasks.length}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-3 p-3 flex-1">
+                                                    {todoTasks.length === 0 ? (
+                                                        <p className="text-xs text-[#8c947b] text-center my-auto py-12">No tasks here</p>
+                                                    ) : todoTasks.map(task => (
+                                                        <TaskCard
+                                                            key={task.id}
+                                                            task={task}
+                                                            onClick={() => setSelectedTask(task)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* IN PROGRESS Column */}
+                                            <div className="bg-[#191c21]/50 border border-[#2D3139]/30 rounded-xl flex flex-col min-h-[400px]">
+                                                <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D3139]/20">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-[var(--primary-color)]" />
+                                                        <span className="font-bold text-white text-xs uppercase tracking-wider">IN PROGRESS</span>
+                                                    </div>
+                                                    <span className="text-xs text-[#8c947b] font-bold">{inProgressTasks.length}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-3 p-3 flex-1">
+                                                    {inProgressTasks.length === 0 ? (
+                                                        <p className="text-xs text-[#8c947b] text-center my-auto py-12">No tasks here</p>
+                                                    ) : inProgressTasks.map(task => (
+                                                        <TaskCard
+                                                            key={task.id}
+                                                            task={task}
+                                                            onClick={() => setSelectedTask(task)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* DONE Column */}
+                                            <div className="bg-[#191c21]/50 border border-[#2D3139]/30 rounded-xl flex flex-col min-h-[400px]">
+                                                <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D3139]/20">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-2 h-2 rounded-full bg-green-400" />
+                                                        <span className="font-bold text-white text-xs uppercase tracking-wider">DONE</span>
+                                                    </div>
+                                                    <span className="text-xs text-[#8c947b] font-bold">{doneTasks.length}</span>
+                                                </div>
+                                                <div className="flex flex-col gap-3 p-3 flex-1">
+                                                    {doneTasks.length === 0 ? (
+                                                        <p className="text-xs text-[#8c947b] text-center my-auto py-12">No tasks here</p>
+                                                    ) : doneTasks.map(task => (
+                                                        <TaskCard
+                                                            key={task.id}
+                                                            task={task}
+                                                            onClick={() => setSelectedTask(task)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </section>
+                            </>
+                        )}
+
+                        {activeTab === "standup" && (
+                            <section className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <h2 className="text-lg font-semibold text-white">Daily Standup Tracker</h2>
+                                        <p className="text-xs text-[#8c947b] mt-0.5">
+                                            Log what you did yesterday, what you are working on today, and any blockers.
+                                        </p>
+                                    </div>
+                                    {isLocalFallback && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-semibold">
+                                            <span className="material-symbols-outlined text-[14px]">warning</span>
+                                            <span>Local storage mode</span>
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
-                                    <p className="text-3xl font-bold text-[#aff82a]">{inProgressTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">In progress</p>
-                                </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
-                                    <p className="text-3xl font-bold text-green-400">{doneTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Done</p>
-                                </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col">
-                                    <p className="text-3xl font-bold text-red-400">{overdueTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Overdue</p>
+
+                                <div className="border border-[#2D3139] rounded-xl overflow-hidden bg-[#191c21]/40 shadow-xl">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse min-w-[900px] text-xs">
+                                            <thead>
+                                                {/* Column Labels (A, B, C, D, E, F) like Excel */}
+                                                <tr className="bg-[#121418] border-b border-[#2D3139] text-[#8c947b] text-center font-mono">
+                                                    <th className="w-10 border-r border-[#2D3139] py-1 bg-[#0F1115]"></th>
+                                                    <th className="border-r border-[#2D3139] py-1">A</th>
+                                                    <th className="border-r border-[#2D3139] py-1">B</th>
+                                                    <th className="border-r border-[#2D3139] py-1">C</th>
+                                                    <th className="border-r border-[#2D3139] py-1">D</th>
+                                                    <th className="border-r border-[#2D3139] py-1">E</th>
+                                                    <th className="py-1">F</th>
+                                                </tr>
+                                                <tr className="bg-[#191c21] border-b border-[#2D3139] text-white">
+                                                    <th className="w-10 border-r border-[#2D3139] text-center font-mono text-[#8c947b] bg-[#121418]">#</th>
+                                                    <th className="px-4 py-3 border-r border-[#2D3139] font-semibold w-[180px]">User</th>
+                                                    <th className="px-4 py-3 border-r border-[#2D3139] font-semibold w-[120px]">Date</th>
+                                                    <th className="px-4 py-3 border-r border-[#2D3139] font-semibold">Yesterday's Work</th>
+                                                    <th className="px-4 py-3 border-r border-[#2D3139] font-semibold">Today's Work</th>
+                                                    <th className="px-4 py-3 border-r border-[#2D3139] font-semibold">Blockers</th>
+                                                    <th className="px-4 py-3 font-semibold text-center w-[80px]">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {/* INLINE EXCEL ROW FOR NEW ENTRY */}
+                                                <tr className="bg-[#1C1F26] border-b border-[#2D3139] focus-within:bg-[#222630] transition-colors">
+                                                    <td className="w-10 border-r border-[#2D3139] text-center font-mono text-[var(--primary-color)] bg-[#121418] font-bold">+</td>
+                                                    <td className="px-4 py-2 border-r border-[#2D3139] font-semibold text-white">
+                                                        <div className="truncate max-w-[170px]" title={currentUserProfile?.name || currentUserProfile?.email}>
+                                                            {currentUserProfile?.name || currentUserProfile?.email || "Loading..."}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-2 border-r border-[#2D3139] text-[#8c947b] font-mono">
+                                                        {new Date().toLocaleDateString("en-GB")}
+                                                    </td>
+                                                    <td className="p-1 border-r border-[#2D3139]">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="What did you complete?"
+                                                            className="w-full bg-transparent border-0 px-3 py-2 text-white placeholder-[#8c947b]/40 focus:ring-1 focus:ring-[var(--primary-color)] focus:bg-[#0F1115] rounded focus:outline-none"
+                                                            value={yesterdayText}
+                                                            onChange={(e) => setYesterdayText(e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="p-1 border-r border-[#2D3139]">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="What are you doing today?"
+                                                            className="w-full bg-transparent border-0 px-3 py-2 text-white placeholder-[#8c947b]/40 focus:ring-1 focus:ring-[var(--primary-color)] focus:bg-[#0F1115] rounded focus:outline-none"
+                                                            value={todayText}
+                                                            onChange={(e) => setTodayText(e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="p-1 border-r border-[#2D3139]">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Any blockers?"
+                                                            className="w-full bg-transparent border-0 px-3 py-2 text-white placeholder-[#8c947b]/40 focus:ring-1 focus:ring-[var(--primary-color)] focus:bg-[#0F1115] rounded focus:outline-none"
+                                                            value={blockersText}
+                                                            onChange={(e) => setBlockersText(e.target.value)}
+                                                        />
+                                                    </td>
+                                                    <td className="p-2 text-center">
+                                                        <button
+                                                            onClick={handleAddStandup}
+                                                            disabled={standupSaving}
+                                                            className="px-3 py-1.5 btn-primary-accent rounded-lg font-bold text-[10px] uppercase transition-all disabled:opacity-50 cursor-pointer w-full flex items-center justify-center gap-1"
+                                                        >
+                                                            {standupSaving ? (
+                                                                <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="material-symbols-outlined text-[12px] font-bold">check</span>
+                                                                    Save
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+
+                                                {/* DATA ROWS */}
+                                                {standupLoading ? (
+                                                    <tr>
+                                                        <td colSpan="7" className="px-4 py-8 text-center text-[#8c947b] bg-[#191c21]/20">
+                                                            <div className="flex items-center justify-center gap-2">
+                                                                <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+                                                                Loading logs...
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ) : standups.length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan="7" className="px-4 py-8 text-center text-[#8c947b] bg-[#191c21]/20">
+                                                            No daily standups logged yet. Add your standup above!
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    standups.map((row, index) => (
+                                                        <tr key={row.id} className="hover:bg-[#1C1F26]/30 border-b border-[#2D3139]/40 transition-colors">
+                                                            <td className="w-10 border-r border-[#2D3139] text-center font-mono text-[#8c947b] bg-[#121418]">{index + 1}</td>
+                                                            <td className="px-4 py-3 border-r border-[#2D3139] font-medium text-white">
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-bold">{row.user?.name || "Team Member"}</span>
+                                                                    <span className="text-[10px] text-[#8c947b]">{row.user?.email || ""}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-4 py-3 border-r border-[#2D3139] text-[#8c947b] font-mono">
+                                                                {row.standup_date ? new Date(row.standup_date).toLocaleDateString("en-GB") : ""}
+                                                            </td>
+                                                            <td className="px-4 py-3 border-r border-[#2D3139] text-[#E0E2DB] whitespace-pre-wrap">
+                                                                {row.yesterday_work || <span className="text-[#8c947b]/40 italic">None</span>}
+                                                            </td>
+                                                            <td className="px-4 py-3 border-r border-[#2D3139] text-[#E0E2DB] whitespace-pre-wrap">
+                                                                {row.today_work || <span className="text-[#8c947b]/40 italic">None</span>}
+                                                            </td>
+                                                            <td className="px-4 py-3 border-r border-[#2D3139] text-[#E0E2DB] whitespace-pre-wrap">
+                                                                {row.blockers ? (
+                                                                    <span className="text-red-400 font-medium">{row.blockers}</span>
+                                                                ) : (
+                                                                    <span className="text-green-400/80">No blockers</span>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-center text-[#8c947b] text-[10px] font-mono">
+                                                                LOGGED
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </section>
                         )}
-
-                        {/* Work Board Section Header */}
-                        <section className="space-y-4">
-                            <div className="flex items-center justify-between">
-                                <h2 className="text-lg font-semibold text-white">Work Board</h2>
-                                <span className="text-xs text-[#8c947b] font-medium">{openCount} Open Items</span>
-                            </div>
-
-                            {/* 3 Columns Kanban Board */}
-                            {loading ? (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {[...Array(3)].map((_, i) => (
-                                        <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-3 animate-pulse">
-                                            <div className="h-3 w-16 bg-[#252a33] rounded" />
-                                            <div className="h-24 w-full bg-[#252a33] rounded-xl" />
-                                            <div className="h-24 w-full bg-[#252a33] rounded-xl" />
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : openCount === 0 && doneTasks.length === 0 ? (
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center flex-1">
-                                    <div className="text-5xl mb-4">🎉</div>
-                                    <h4 className="text-lg font-semibold text-white">All caught up</h4>
-                                    <p className="text-[#8c947b] text-sm max-w-xs mt-2">There are no open tasks in the organization right now.</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                                    {/* TO-DO Column */}
-                                    <div className="bg-[#191c21]/50 border border-[#2D3139]/30 rounded-xl flex flex-col min-h-[400px]">
-                                        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D3139]/20">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#8c947b]" />
-                                                <span className="font-bold text-white text-xs uppercase tracking-wider">TO-DO</span>
-                                            </div>
-                                            <span className="text-xs text-[#8c947b] font-bold">{todoTasks.length}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-3 p-3 flex-1">
-                                            {todoTasks.length === 0 ? (
-                                                <p className="text-xs text-[#8c947b] text-center my-auto py-12">No tasks here</p>
-                                            ) : todoTasks.map(task => (
-                                                <TaskCard
-                                                    key={task.id}
-                                                    task={task}
-                                                    onClick={() => setSelectedTask(task)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* IN PROGRESS Column */}
-                                    <div className="bg-[#191c21]/50 border border-[#2D3139]/30 rounded-xl flex flex-col min-h-[400px]">
-                                        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D3139]/20">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-[#aff82a]" />
-                                                <span className="font-bold text-white text-xs uppercase tracking-wider">IN PROGRESS</span>
-                                            </div>
-                                            <span className="text-xs text-[#8c947b] font-bold">{inProgressTasks.length}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-3 p-3 flex-1">
-                                            {inProgressTasks.length === 0 ? (
-                                                <p className="text-xs text-[#8c947b] text-center my-auto py-12">No tasks here</p>
-                                            ) : inProgressTasks.map(task => (
-                                                <TaskCard
-                                                    key={task.id}
-                                                    task={task}
-                                                    onClick={() => setSelectedTask(task)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    {/* DONE Column */}
-                                    <div className="bg-[#191c21]/50 border border-[#2D3139]/30 rounded-xl flex flex-col min-h-[400px]">
-                                        <div className="flex items-center justify-between px-4 py-3 border-b border-[#2D3139]/20">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2 h-2 rounded-full bg-green-400" />
-                                                <span className="font-bold text-white text-xs uppercase tracking-wider">DONE</span>
-                                            </div>
-                                            <span className="text-xs text-[#8c947b] font-bold">{doneTasks.length}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-3 p-3 flex-1">
-                                            {doneTasks.length === 0 ? (
-                                                <p className="text-xs text-[#8c947b] text-center my-auto py-12">No tasks here</p>
-                                            ) : doneTasks.map(task => (
-                                                <TaskCard
-                                                    key={task.id}
-                                                    task={task}
-                                                    onClick={() => setSelectedTask(task)}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </section>
                     </div>
                 </main>
             </div>
@@ -276,7 +579,7 @@ export default function Tasks() {
                     <div className="relative w-full max-w-md bg-[#191c21] shadow-2xl h-full overflow-y-auto flex flex-col border-l border-[#2D3139]">
                         <div className="flex items-center justify-between p-6 border-b border-[#2D3139]/30 bg-[#1C1F26]">
                             <h2 className="font-bold text-white flex items-center gap-2 text-[15px]">
-                                <span className="material-symbols-outlined text-[#aff82a]">task</span>
+                                <span className="material-symbols-outlined text-[var(--primary-color)]">task</span>
                                 Task Details
                             </h2>
                             <button
@@ -331,7 +634,7 @@ export default function Tasks() {
                             {selectedTask.project_id && (
                                 <button
                                     onClick={() => navigate(`/project_page/${selectedTask.project_id}`)}
-                                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#aff82a]/10 border border-[#aff82a]/30 text-[#aff82a] text-sm font-semibold hover:bg-[#aff82a]/20 transition-colors cursor-pointer"
+                                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--primary-color)]/10 border border-[var(--primary-color)]/30 text-[var(--primary-color)] text-sm font-semibold hover:bg-[var(--primary-color)]/20 transition-colors cursor-pointer"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">open_in_new</span>
                                     Open in Project
