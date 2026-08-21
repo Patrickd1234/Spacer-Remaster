@@ -245,3 +245,96 @@ body {
 .bg-primary-accent {
   background-color: var(--primary-color) !important;
 }
+
+/* --- Dynamic Interface Layout Customizations --- */
+
+/* Sidebar Right Position Global Override */
+:root.sidebar-right aside {
+  left: auto !important;
+  right: 0 !important;
+  border-left: 1px solid var(--bg-border) !important;
+  border-right: none !important;
+}
+
+:root.sidebar-right main {
+  margin-left: 0 !important;
+  margin-right: 260px !important;
+}
+
+:root.sidebar-right main.ml-\[72px\] {
+  margin-right: 72px !important;
+}
+
+:root.sidebar-right main.ml-\[260px\] {
+  margin-right: 260px !important;
+}
+
+/* Compact UI overrides */
+:root.compact-ui .p-lg {
+  padding: 16px !important;
+}
+:root.compact-ui .p-md {
+  padding: 10px !important;
+}
+:root.compact-ui .p-sm {
+  padding: 6px !important;
+}
+:root.compact-ui .py-3 {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+:root.compact-ui .gap-lg, :root.compact-ui .gap-md {
+  gap: 12px !important;
+}
+:root.compact-ui .space-y-lg > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 12px !important;
+}
+:root.compact-ui .space-y-md > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 8px !important;
+}
+
+/* Spacious UI overrides */
+:root.spacious-ui .p-lg {
+  padding: 36px !important;
+}
+:root.spacious-ui .p-md {
+  padding: 24px !important;
+}
+:root.spacious-ui .p-sm {
+  padding: 12px !important;
+}
+:root.spacious-ui .py-3 {
+  padding-top: 16px !important;
+  padding-bottom: 16px !important;
+}
+:root.spacious-ui .gap-lg, :root.spacious-ui .gap-md {
+  gap: 28px !important;
+}
+:root.spacious-ui .space-y-lg > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 28px !important;
+}
+:root.spacious-ui .space-y-md > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 20px !important;
+}
+
+/* Glassmorphism strength overrides */
+.glass-card {
+  backdrop-filter: blur(var(--glass-blur, 8px)) !important;
+  background: rgba(255, 255, 255, var(--glass-opacity, 0.03)) !important;
+}
+
+:root.flat-theme .glass-card {
+  backdrop-filter: none !important;
+  background: var(--bg-surface) !important;
+  border-color: var(--bg-border) !important;
+  box-shadow: none !important;
+}
+
+/* Transitions and animations overrides */
+* {
+  transition-duration: var(--transition-speed, 300ms);
+}
+:root.reduce-motion * {
+  transition: none !important;
+  animation: none !important;
+}

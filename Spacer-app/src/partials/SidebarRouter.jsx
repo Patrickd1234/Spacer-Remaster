@@ -24,6 +24,8 @@ export default function SidebarRouter(props) {
 
     const imageInputRef = useRef(null);
     const docInputRef = useRef(null);
+    const messagesEndRef = useRef(null);
+    const [localUpdateCounter, setLocalUpdateCounter] = useState(0);
 
     // Initial role and coworkers load
     useEffect(() => {
@@ -98,6 +100,7 @@ export default function SidebarRouter(props) {
             });
             if (updated) {
                 localStorage.setItem(key, JSON.stringify(newMsgs));
+                setLocalUpdateCounter(prev => prev + 1);
             }
         };
         window.addEventListener("open_coworker_chat", handleOpenChatEvent);
@@ -158,6 +161,72 @@ export default function SidebarRouter(props) {
         };
     }, [showChatModal, chatRecipient, userId]);
 
+    // Auto-scroll to bottom of chat when messages change or chat is opened
+    useEffect(() => {
+        if (showChatModal && chatRecipient) {
+            setTimeout(() => {
+                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, 80);
+        }
+    }, [chatMessages, showChatModal, chatRecipient]);
+
+    // Global real-time listener for incoming messages to update unread badge counts in real time
+    useEffect(() => {
+        if (!userId) return;
+
+        const globalMsgChannel = supabase
+            .channel(`global_dms_${userId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "direct_messages",
+                },
+                (payload) => {
+                    const newMsg = payload.new;
+                    if (newMsg.receiver_id === userId) {
+                        const senderId = newMsg.sender_id;
+                        const isCurrentlyOpen = showChatModal && !isChatMinimized && chatRecipient?.user_id === senderId;
+                        
+                        const msgObj = {
+                            id: newMsg.id,
+                            sender_id: newMsg.sender_id,
+                            receiver_id: newMsg.receiver_id,
+                            content: newMsg.content,
+                            created_at: newMsg.created_at,
+                            replyToId: newMsg.reply_to_id,
+                            fileAttachment: newMsg.file_attachment,
+                            pinned: newMsg.pinned || false,
+                            unread: !isCurrentlyOpen
+                        };
+
+                        const key = getChatKey(userId, senderId);
+                        const existing = JSON.parse(localStorage.getItem(key) || "[]");
+                        if (!existing.some(m => m.id === msgObj.id)) {
+                            existing.push(msgObj);
+                            localStorage.setItem(key, JSON.stringify(existing));
+                            window.dispatchEvent(new Event("storage_local_update"));
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(globalMsgChannel);
+        };
+    }, [userId, showChatModal, isChatMinimized, chatRecipient]);
+
+    // Listen to local update events to trigger component re-render
+    useEffect(() => {
+        const handleLocalUpdate = () => {
+            setLocalUpdateCounter(prev => prev + 1);
+        };
+        window.addEventListener("storage_local_update", handleLocalUpdate);
+        return () => window.removeEventListener("storage_local_update", handleLocalUpdate);
+    }, []);
+
     // Chat operations
     const getChatKey = (uid1, uid2) => {
         if (!uid1 || !uid2) return "";
@@ -175,7 +244,22 @@ export default function SidebarRouter(props) {
                 .order("created_at", { ascending: true });
 
             if (!error && data) {
-                setChatMessages(data);
+                const mappedData = data.map(m => ({
+                    id: m.id,
+                    sender_id: m.sender_id,
+                    receiver_id: m.receiver_id,
+                    content: m.content,
+                    created_at: m.created_at,
+                    replyToId: m.reply_to_id,
+                    fileAttachment: m.file_attachment,
+                    pinned: m.pinned || false,
+                    unread: m.unread !== undefined ? m.unread : false
+                }));
+                setChatMessages(mappedData);
+
+                const key = getChatKey(userId, recipientId);
+                localStorage.setItem(key, JSON.stringify(mappedData));
+                setLocalUpdateCounter(prev => prev + 1);
             } else {
                 const localMsgs = JSON.parse(localStorage.getItem(getChatKey(userId, recipientId)) || "[]");
                 setChatMessages(localMsgs);
@@ -205,6 +289,7 @@ export default function SidebarRouter(props) {
         });
         if (updated) {
             localStorage.setItem(key, JSON.stringify(newMsgs));
+            setLocalUpdateCounter(prev => prev + 1);
         }
     };
 
@@ -213,6 +298,7 @@ export default function SidebarRouter(props) {
         const existing = JSON.parse(localStorage.getItem(key) || "[]");
         existing.push(msg);
         localStorage.setItem(key, JSON.stringify(existing));
+        setLocalUpdateCounter(prev => prev + 1);
     };
 
     const handleSendMessage = async (e) => {
@@ -310,6 +396,40 @@ export default function SidebarRouter(props) {
             localStorage.setItem(key, JSON.stringify(updatedLocal));
         } catch (err) {
             console.warn("Delete message error:", err);
+        }
+    };
+
+    const handleTogglePinMessage = async (msgId) => {
+        if (!chatRecipient || !userId) return;
+        try {
+            let nextPinnedState = false;
+            const updatedMessages = chatMessages.map(msg => {
+                if (msg.id === msgId) {
+                    nextPinnedState = !msg.pinned;
+                    return { ...msg, pinned: nextPinnedState };
+                }
+                return msg;
+            });
+            setChatMessages(updatedMessages);
+
+            // Attempt database update
+            await supabase
+                .from("direct_messages")
+                .update({ pinned: nextPinnedState })
+                .eq("id", msgId);
+
+            // Save to localStorage fallback
+            const key = getChatKey(userId, chatRecipient.user_id);
+            const localMsgs = JSON.parse(localStorage.getItem(key) || "[]");
+            const updatedLocal = localMsgs.map(m => {
+                if (m.id === msgId) {
+                    return { ...m, pinned: nextPinnedState };
+                }
+                return m;
+            });
+            localStorage.setItem(key, JSON.stringify(updatedLocal));
+        } catch (err) {
+            console.warn("Toggle pin message error:", err);
         }
     };
 
@@ -456,8 +576,17 @@ export default function SidebarRouter(props) {
                                 {chatRecipient ? (chatRecipient.name || "?").charAt(0).toUpperCase() : "M"}
                             </div>
                             
-                            <h4 className="text-white font-semibold text-xs truncate">
-                                {chatRecipient ? (chatRecipient.name || "Team Member") : "Messages"}
+                            <h4 className="text-white font-semibold text-xs truncate flex items-center gap-1.5">
+                                {chatRecipient ? (chatRecipient.name || "Team Member") : (
+                                    <>
+                                        Messages
+                                        {getUnreadConversationsCount() > 0 && (
+                                            <span className="bg-red-500 text-white font-extrabold text-[9px] min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
+                                                {getUnreadConversationsCount()}
+                                            </span>
+                                        )}
+                                    </>
+                                )}
                             </h4>
                         </div>
 
@@ -496,7 +625,19 @@ export default function SidebarRouter(props) {
                                         {orgUsers.length === 0 ? (
                                             <p className="text-xs text-[#8c947b] italic text-center py-8">No other coworkers found</p>
                                         ) : (
-                                            orgUsers.map((member) => {
+                                            [...orgUsers]
+                                                .sort((a, b) => {
+                                                    const keyA = getChatKey(userId, a.user_id);
+                                                    const keyB = getChatKey(userId, b.user_id);
+                                                    const msgsA = JSON.parse(localStorage.getItem(keyA) || "[]");
+                                                    const msgsB = JSON.parse(localStorage.getItem(keyB) || "[]");
+                                                    const lastA = msgsA[msgsA.length - 1];
+                                                    const lastB = msgsB[msgsB.length - 1];
+                                                    const timeA = lastA ? new Date(lastA.created_at).getTime() : 0;
+                                                    const timeB = lastB ? new Date(lastB.created_at).getTime() : 0;
+                                                    return timeB - timeA;
+                                                })
+                                                .map((member) => {
                                                 const chatKey = getChatKey(userId, member.user_id);
                                                 const msgs = JSON.parse(localStorage.getItem(chatKey) || "[]");
                                                 const lastMsg = msgs[msgs.length - 1];
@@ -554,13 +695,31 @@ export default function SidebarRouter(props) {
                                                 <p className="text-[10px] text-[#8c947b] mt-0.5">Send a message to start.</p>
                                             </div>
                                         ) : (
-                                            chatMessages.map((msg) => {
+                                            [...chatMessages]
+                                                .sort((a, b) => {
+                                                    // Pinned messages first
+                                                    if (a.pinned && !b.pinned) return -1;
+                                                    if (!a.pinned && b.pinned) return 1;
+                                                    // Oldest messages first (chronological order)
+                                                    const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                                                    const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                                                    return timeA - timeB;
+                                                })
+                                                .map((msg) => {
                                                 const isMe = msg.sender_id === userId;
                                                 const isEditing = editingMessageId === msg.id;
 
                                                 return (
                                                     <div key={msg.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group relative mb-2`}>
                                                         
+                                                        {/* Pinned Message Indicator */}
+                                                        {msg.pinned && (
+                                                            <div className={`flex items-center gap-0.5 text-[8px] mb-1 text-primary-accent font-bold ${isMe ? 'justify-end' : ''}`}>
+                                                                <span className="material-symbols-outlined text-[9px] rotate-45 text-primary-accent">push_pin</span>
+                                                                <span>PINNED MESSAGE</span>
+                                                            </div>
+                                                        )}
+
                                                         {/* Quoted Message Link */}
                                                         {msg.replyToId && (
                                                             <div className={`flex items-center gap-1 text-[9px] mb-1 opacity-75 ${isMe ? 'justify-end text-primary-accent' : 'text-[#8c947b]'}`}>
@@ -597,6 +756,13 @@ export default function SidebarRouter(props) {
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">reply</span>
                                                                 </button>
+                                                                <button 
+                                                                    onClick={() => handleTogglePinMessage(msg.id)}
+                                                                    className={`cursor-pointer p-0.5 flex items-center justify-center transition-colors ${msg.pinned ? 'text-primary-accent hover:text-white' : 'text-[#8c947b] hover:text-white'}`}
+                                                                    title={msg.pinned ? "Unpin Message" : "Pin Message"}
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[13px]">{msg.pinned ? "keep_off" : "push_pin"}</span>
+                                                                </button>
                                                                 {['👍', '❤️', '🔥', '😂'].map(emoji => (
                                                                     <button 
                                                                         key={emoji}
@@ -614,7 +780,7 @@ export default function SidebarRouter(props) {
                                                             isMe 
                                                                 ? 'bg-primary-accent text-[#0F1115] font-medium rounded-tr-none' 
                                                                 : 'bg-[#2D3139] text-white rounded-tl-none'
-                                                        } ${isMe ? '' : 'order-1'}`}>
+                                                        } ${isMe ? '' : 'order-1'} ${msg.pinned ? 'ring-1 ring-primary-accent border border-primary-accent/40' : ''}`}>
                                                             
                                                             {/* Attached File */}
                                                             {msg.fileAttachment && (
@@ -693,6 +859,7 @@ export default function SidebarRouter(props) {
                                                 );
                                             })
                                         )}
+                                        <div ref={messagesEndRef} />
                                     </div>
 
                                     {/* Quote Reply Banner */}

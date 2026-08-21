@@ -7,7 +7,11 @@ const defaultPreferences = {
     accentColor: "lime",
     compactUi: false,
     autoCollapseSidebar: false,
-    animations: "smooth"
+    animations: "smooth",
+    sidebarPosition: "left",
+    density: "comfortable",
+    animationSpeed: "smooth",
+    glassmorphism: "soft"
   },
   notifications: {
     emailAlerts: true,
@@ -22,10 +26,12 @@ const defaultPreferences = {
     twoFactor: false,
     shareStatus: true,
     analyticsOptIn: false,
-    sessionTimeout: "30_mins"
+    sessionTimeout: "30_mins",
+    twoFactorSecretEncrypted: "",
+    twoFactorRecoveryCodesEncrypted: ""
   },
   integrations: {
-    github: { connected: true, repo: "acme/spacers-web" },
+    github: { connected: false, repo: "" },
     slack: { connected: true, channel: "#proj-spacers" },
     gcal: { connected: false },
     figma: { connected: true }
@@ -88,6 +94,42 @@ export function PreferencesProvider({ children }) {
         highest: "#1a2115",
         surfaceLow: "#070a05"
       },
+      midnight: { // Midnight Blue
+        base: "#0b0f19",
+        surface: "#151b2d",
+        lowest: "#070a12",
+        border: "#2e3a5f",
+        surfaceHigh: "#1e263f",
+        highest: "#283254",
+        surfaceLow: "#101524"
+      },
+      emerald: { // Forest Emerald
+        base: "#05100a",
+        surface: "#0b1c12",
+        lowest: "#020805",
+        border: "#1d3c29",
+        surfaceHigh: "#122b1c",
+        highest: "#1a3b27",
+        surfaceLow: "#08160e"
+      },
+      amethyst: { // Deep Amethyst
+        base: "#0c0714",
+        surface: "#170e24",
+        lowest: "#050308",
+        border: "#3b235c",
+        surfaceHigh: "#231536",
+        highest: "#301d4a",
+        surfaceLow: "#120b1c"
+      },
+      crimson: { // Cyberpunk Red
+        base: "#140505",
+        surface: "#240a0a",
+        lowest: "#080202",
+        border: "#4c1414",
+        surfaceHigh: "#360e0e",
+        highest: "#4a1414",
+        surfaceLow: "#1c0707"
+      },
       system: { // System default (acts as dark for now)
         base: "#101509",
         surface: "#1d2115",
@@ -117,21 +159,33 @@ export function PreferencesProvider({ children }) {
       lime: "#aff82a",
       cyan: "#2dd4bf",
       purple: "#a855f7",
-      gold: "#fbbf24"
+      gold: "#fbbf24",
+      rose: "#f43f5e",
+      orange: "#f97316",
+      sapphire: "#3b82f6",
+      green: "#22c55e"
     };
 
     const accentColorsDim = {
       lime: "#96da00",
       cyan: "#14b8a6",
       purple: "#9333ea",
-      gold: "#f59e0b"
+      gold: "#f59e0b",
+      rose: "#e11d48",
+      orange: "#ea580c",
+      sapphire: "#2563eb",
+      green: "#16a34a"
     };
 
     const accentColorsRgb = {
       lime: "175, 248, 42",
       cyan: "45, 212, 191",
       purple: "168, 85, 247",
-      gold: "251, 191, 36"
+      gold: "251, 191, 36",
+      rose: "244, 63, 94",
+      orange: "249, 115, 22",
+      sapphire: "59, 130, 246",
+      green: "34, 197, 94"
     };
     
     const selectedColor = accentColors[preferences.appearance.accentColor] || accentColors.lime;
@@ -142,9 +196,60 @@ export function PreferencesProvider({ children }) {
     root.style.setProperty('--primary-color-dim', selectedColorDim);
     root.style.setProperty('--primary-color-rgb', selectedColorRgb);
 
+    // Apply layout custom styles to document root
+    const sidebarPos = preferences.appearance.sidebarPosition || "left";
+    root.style.setProperty('--sidebar-position', sidebarPos);
+    if (sidebarPos === "right") {
+      root.classList.add("sidebar-right");
+    } else {
+      root.classList.remove("sidebar-right");
+    }
+
+    // Density setting
+    const density = preferences.appearance.density || "comfortable";
+    if (density === "compact") {
+      root.classList.add("compact-ui");
+      root.classList.remove("spacious-ui");
+      root.style.setProperty('--density-padding-multiplier', '0.7');
+    } else if (density === "spacious") {
+      root.classList.add("spacious-ui");
+      root.classList.remove("compact-ui");
+      root.style.setProperty('--density-padding-multiplier', '1.3');
+    } else {
+      root.classList.remove("compact-ui", "spacious-ui");
+      root.style.setProperty('--density-padding-multiplier', '1.0');
+    }
+
+    // Animations speed
+    const animSpeed = preferences.appearance.animationSpeed || "smooth";
+    if (animSpeed === "fast") {
+      root.style.setProperty('--transition-speed', '150ms');
+    } else if (animSpeed === "none") {
+      root.style.setProperty('--transition-speed', '0ms');
+      root.classList.add("reduce-motion");
+    } else {
+      root.style.setProperty('--transition-speed', '300ms');
+      root.classList.remove("reduce-motion");
+    }
+
+    // Glassmorphism intensity
+    const glass = preferences.appearance.glassmorphism || "soft";
+    if (glass === "intense") {
+      root.style.setProperty('--glass-blur', '20px');
+      root.style.setProperty('--glass-opacity', '0.12');
+    } else if (glass === "flat") {
+      root.style.setProperty('--glass-blur', '0px');
+      root.style.setProperty('--glass-opacity', '1.0');
+      root.classList.add("flat-theme");
+    } else {
+      root.style.setProperty('--glass-blur', '8px');
+      root.style.setProperty('--glass-opacity', '0.03');
+      root.classList.remove("flat-theme");
+    }
+
     if (preferences.appearance.compactUi) {
       root.classList.add("compact-ui");
-    } else {
+    } else if (density !== "compact") {
       root.classList.remove("compact-ui");
     }
 
