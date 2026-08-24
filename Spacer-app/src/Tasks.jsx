@@ -4,6 +4,7 @@ import { supabase } from "./supabase"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import { useRole } from "./RoleContext"
+import CreateTaskModal from "./partials/CreateTaskModal"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -47,6 +48,7 @@ export default function Tasks() {
     const [selectedTask, setSelectedTask] = useState(null)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const { roleLoading } = useRole()
+    const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false)
 
     // Standup Tab states
     const [activeTab, setActiveTab] = useState("board")
@@ -253,10 +255,19 @@ export default function Tasks() {
 
                         {/* Page Header */}
                         <section className="flex items-start justify-between">
-                            <div>
-                                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                                    All Tasks
-                                </h1>
+                            <div className="flex flex-col">
+                                <div className="flex items-center gap-4">
+                                    <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+                                        All Tasks
+                                    </h1>
+                                    <button
+                                        onClick={() => setIsCreateTaskModalOpen(true)}
+                                        className="px-3 py-1.5 btn-primary-accent rounded-lg text-xs font-semibold hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center gap-1"
+                                    >
+                                        <span className="material-symbols-outlined text-[14px]">add</span>
+                                        <span>Add Task</span>
+                                    </button>
+                                </div>
                                 <p className="text-[#8c947b] text-sm mt-1">
                                     View all tasks across the organization.
                                 </p>
@@ -644,6 +655,37 @@ export default function Tasks() {
                     </div>
                 </div>
             )}
+
+            {isCreateTaskModalOpen && (
+                <CreateTaskModal
+                    organizationId={orgId}
+                    onClose={() => setIsCreateTaskModalOpen(false)}
+                    onCreated={async (newTask) => {
+                        const { data: projData } = await supabase
+                            .from("project_spaces")
+                            .select("name")
+                            .eq("id", newTask.project_id)
+                            .maybeSingle();
+                        const updatedTask = {
+                            ...newTask,
+                            project_name: projData?.name || null
+                        };
+                        setTasks(prev => [updatedTask, ...prev]);
+                    }}
+                />
+            )}
+
+            {/* Floating Action Button */}
+            <button
+                type="button"
+                onClick={() => setIsCreateTaskModalOpen(true)}
+                className="fixed bottom-[96px] right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
+            >
+                <span className="material-symbols-outlined text-[28px] font-bold">add</span>
+                <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
+                    Add Task
+                </span>
+            </button>
         </div>
     )
 }

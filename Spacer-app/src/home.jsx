@@ -6,6 +6,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
 import { Link, useNavigate } from "react-router-dom"
 import { useRole } from "./RoleContext"
+import CreateTaskModal from "./partials/CreateTaskModal"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
 const TEAM_ICONS = {
@@ -93,6 +94,7 @@ function Home() {
     const [previewFile, setPreviewFile] = useState(null)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [showAllActivity, setShowAllActivity] = useState(false)
+    const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false)
 
     // Context roles
     const { isSuperAdmin, roleLoading, membershipData } = useRole()
@@ -606,6 +608,30 @@ function Home() {
                     onClose={() => setPreviewFile(null)}
                 />
             )}
+
+            {isCreateTaskModalOpen && (
+                <CreateTaskModal
+                    organizationId={userData?.organization_id}
+                    onClose={() => setIsCreateTaskModalOpen(false)}
+                    onCreated={() => {
+                        if (userData?.id) {
+                            fetchUserTasks(userData.id)
+                        }
+                    }}
+                />
+            )}
+
+            {/* Floating Action Button */}
+            <button
+                type="button"
+                onClick={() => setIsCreateTaskModalOpen(true)}
+                className="fixed bottom-[96px] right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
+            >
+                <span className="material-symbols-outlined text-[28px] font-bold">add</span>
+                <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
+                    Add Task
+                </span>
+            </button>
         </div>
     )
 }

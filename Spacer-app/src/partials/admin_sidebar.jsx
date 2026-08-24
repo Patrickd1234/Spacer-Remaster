@@ -168,6 +168,18 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
 
                 </div>
 
+                {/* NEW PROJECT BUTTON */}
+                <div className="px-4 mb-6">
+                    <button
+                        className={`w-full py-2.5 px-3 btn-primary-accent rounded-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
+                        onClick={() => setShowCreateModal(true)}
+                        title="New Project"
+                    >
+                        <span className="material-symbols-outlined text-[20px]">add</span>
+                        {expanded && <span className="font-bold text-[14px]">New Project</span>}
+                    </button>
+                </div>
+
                 {/* NAVIGATION ITEMS */}
                 <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-thin">
                     <div className="space-y-1">
@@ -294,7 +306,7 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
             {showCreateModal && (
                 <CreateProjectModal
                     onClose={() => setShowCreateModal(false)}
-                    onProjectCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
+                    onCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
                 />
             )}
         </>

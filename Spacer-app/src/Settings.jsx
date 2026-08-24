@@ -450,7 +450,7 @@ export default function Settings() {
 
             {/* Toast Notification */}
             {toast && (
-                <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-highest border border-outline-variant shadow-2xl animate-bounce">
+                <div className="fixed top-20 right-6 z-[150] flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-container-highest border border-outline-variant shadow-2xl animate-bounce">
                     <span className={`material-symbols-outlined ${toast.type === "error" ? "text-error" : "text-primary-fixed"}`}>
                         {toast.type === "error" ? "error" : "check_circle"}
                     </span>

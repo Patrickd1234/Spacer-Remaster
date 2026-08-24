@@ -105,19 +105,44 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
     }, [projectId, organizationId]);
 
     useEffect(() => {
-        if (!teamSpaceId) return;
         const fetchTeamMembers = async () => {
+            let activeTeamSpaceId = teamSpaceId;
+            
+            if (!activeTeamSpaceId && selectedProjectId) {
+                const { data: projData } = await supabase
+                    .from("project_spaces")
+                    .select("team_space_id")
+                    .eq("id", selectedProjectId)
+                    .maybeSingle();
+                if (projData?.team_space_id) {
+                    activeTeamSpaceId = projData.team_space_id;
+                }
+            }
+
+            if (!activeTeamSpaceId) {
+                if (organizationId) {
+                    const { data } = await supabase
+                        .from("users")
+                        .select("id, name")
+                        .eq("organization_id", organizationId);
+                    if (data) {
+                        setUsers(data);
+                    }
+                }
+                return;
+            }
+
             const { data } = await supabase
                 .from("memberships")
                 .select("user:users(id, name)")
-                .eq("team_space_id", teamSpaceId);
+                .eq("team_space_id", activeTeamSpaceId);
             if (data) {
                 const members = data.map(m => m.user).filter(Boolean);
                 setUsers(members);
             }
         };
         fetchTeamMembers();
-    }, [teamSpaceId]);
+    }, [teamSpaceId, selectedProjectId, organizationId]);
 
     const createTask = async () => {
         setError(null);
