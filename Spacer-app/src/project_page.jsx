@@ -5,6 +5,7 @@ import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
+import GroupChat from "./components/GroupChat"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -767,7 +768,8 @@ function ProjectPage() {
                             { id: "calendar", label: "Calendar", icon: "calendar_month" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
-                            { id: "sprint", label: "Sprint", icon: "directions_run" }
+                            { id: "sprint", label: "Sprint", icon: "directions_run" },
+                            { id: "messages", label: "Messages", icon: "chat" }
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -1195,6 +1197,17 @@ function ProjectPage() {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {/* Messages Tab */}
+                    {activeTab === "messages" && (
+                        <div className="tab-pane block h-full">
+                            <GroupChat 
+                                projectId={project_id} 
+                                currentUserId={currentUserId} 
+                                members={orgUsers} 
+                            />
                         </div>
                     )}
 

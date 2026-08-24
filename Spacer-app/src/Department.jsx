@@ -3,6 +3,7 @@ import Header from "./partials/header";
 import { supabase } from "./supabase";
 import { useEffect, useState, useRef } from 'react';
 import { useRole } from "./RoleContext";
+import GroupChat from "./components/GroupChat";
 
 function Department() {
     const [userId, setUserId] = useState(null)
@@ -22,6 +23,7 @@ function Department() {
     const [selectedUserId, setSelectedUserId] = useState("")
     const [selectedRole, setSelectedRole] = useState("member")
     const [actionSaving, setActionSaving] = useState(false)
+    const [activeTab, setActiveTab] = useState("directory")
 
     useEffect(() => {
         const init = async () => {
@@ -351,7 +353,30 @@ return (
                     )}
                 </div>
 
-                {/* Superadmin Team Switcher Tabs */}
+                {/* Tab Navigation */}
+                <div className="flex items-center gap-sm mt-xl mb-lg">
+                    {[
+                        { id: "directory", label: "Directory", icon: "groups" },
+                        { id: "messages", label: "Messages", icon: "chat" }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm transition-colors cursor-pointer ${activeTab === tab.id
+                                ? "bg-[#aff82a] text-[#1C1F26] font-bold shadow-sm"
+                                : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]/50"
+                                }`}
+                        >
+                            <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+
+                {activeTab === "directory" && (
+                    <>
+                        {/* Superadmin Team Switcher Tabs */}
                 {isSuperAdmin && (
                     <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-[#2D3139]">
                         {allTeams.length > 0 && (
@@ -444,6 +469,19 @@ return (
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+                </>
+                )}
+
+                {/* Messages Tab */}
+                {activeTab === "messages" && activeTeam && (
+                    <div className="h-full">
+                        <GroupChat 
+                            departmentId={activeTeam.id} 
+                            currentUserId={userId} 
+                            members={mem_info} 
+                        />
                     </div>
                 )}
             </div>

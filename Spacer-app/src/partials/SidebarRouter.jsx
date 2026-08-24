@@ -3,6 +3,7 @@ import { supabase } from "../supabase";
 import Sidebar from "./sidebar";
 import AdminSidebar from "./admin_sidebar";
 import SuperAdminSidebar from "./super_admin_sidebar";
+import GroupChat from "../components/GroupChat";
 
 export default function SidebarRouter(props) {
     const [userRole, setUserRole] = useState(null);
@@ -12,7 +13,13 @@ export default function SidebarRouter(props) {
 
     // Chat widget state hooks
     const [showChatModal, setShowChatModal] = useState(false);
-    const [chatRecipient, setChatRecipient] = useState(null);
+    const [chatRecipient, setChatRecipient] = useState(null); // For DMs
+    const [activeGroupChat, setActiveGroupChat] = useState(null); // For Groups
+    const [userGroups, setUserGroups] = useState([]);
+    const [groupUnreadCounts, setGroupUnreadCounts] = useState({});
+    const [dmLatestMessages, setDmLatestMessages] = useState({});
+    const [searchQuery, setSearchQuery] = useState("");
+    
     const [chatMessages, setChatMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [isChatMinimized, setIsChatMinimized] = useState(false);
@@ -25,7 +32,7 @@ export default function SidebarRouter(props) {
     const imageInputRef = useRef(null);
     const docInputRef = useRef(null);
     const messagesEndRef = useRef(null);
-    const [localUpdateCounter, setLocalUpdateCounter] = useState(0);
+
 
     // Initial role and coworkers load
     useEffect(() => {
@@ -68,6 +75,69 @@ export default function SidebarRouter(props) {
                         setOrgUsers(mapped);
                     }
                 }
+                
+                // Fetch all DMs for this user to determine latest message and unread counts
+                const { data: allDms } = await supabase
+                    .from("direct_messages")
+                    .select("id, sender_id, receiver_id, created_at, content")
+                    .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
+                    .order("created_at", { ascending: false });
+
+                const dmsMap = {};
+                if (allDms) {
+                    allDms.forEach(msg => {
+                        const otherId = msg.sender_id === authUser.id ? msg.receiver_id : msg.sender_id;
+                        if (!dmsMap[otherId]) {
+                            dmsMap[otherId] = msg;
+                        }
+                    });
+                }
+                setDmLatestMessages(dmsMap);
+
+                // Fetch user groups
+                const { data: memberChannels } = await supabase
+                    .from("chat_channel_members")
+                    .select("channel_id")
+                    .eq("user_id", authUser.id);
+                
+                const channelIds = (memberChannels || []).map(mc => mc.channel_id);
+                
+                let groupQuery = supabase.from("chat_channels").select("*");
+                if (channelIds.length > 0) {
+                    groupQuery = groupQuery.or(`is_private.eq.false,id.in.(${channelIds.join(',')})`);
+                } else {
+                    groupQuery = groupQuery.eq('is_private', false);
+                }
+                
+                const { data: groups } = await groupQuery;
+                if (groups) {
+                    setUserGroups(groups);
+                    
+                    // Fetch latest message for each group to determine unread status
+                    const unreadMap = {};
+                    for (const group of groups) {
+                        const { data: latestMsg } = await supabase
+                            .from('messages')
+                            .select('created_at')
+                            .eq('channel_id', group.id)
+                            .order('created_at', { ascending: false })
+                            .limit(1)
+                            .maybeSingle();
+                        
+                        if (latestMsg) {
+                            group.latest_message_at = latestMsg.created_at;
+                            const lastRead = localStorage.getItem(`group_last_read_${group.id}`);
+                            if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
+                                unreadMap[group.id] = true;
+                            }
+                        } else {
+                            group.latest_message_at = group.created_at; // Fallback
+                        }
+                    }
+                    setUserGroups(groups);
+                    setGroupUnreadCounts(unreadMap);
+                }
+
             } catch (err) {
                 console.error("SidebarRouter init error:", err);
             } finally {
@@ -87,21 +157,7 @@ export default function SidebarRouter(props) {
             setIsChatMinimized(false);
             await fetchChatMessages(member.user_id);
 
-            // Mark received messages as read
-            const key = getChatKey(userId, member.user_id);
-            const msgs = JSON.parse(localStorage.getItem(key) || "[]");
-            let updated = false;
-            const newMsgs = msgs.map(m => {
-                if (m.receiver_id === userId && m.unread) {
-                    updated = true;
-                    return { ...m, unread: false };
-                }
-                return m;
-            });
-            if (updated) {
-                localStorage.setItem(key, JSON.stringify(newMsgs));
-                setLocalUpdateCounter(prev => prev + 1);
-            }
+            localStorage.setItem(`dm_last_read_${member.user_id}`, Date.now());
         };
         window.addEventListener("open_coworker_chat", handleOpenChatEvent);
         return () => window.removeEventListener("open_coworker_chat", handleOpenChatEvent);
@@ -143,21 +199,9 @@ export default function SidebarRouter(props) {
             )
             .subscribe();
 
-        // 4. LocalStorage event listener for same-browser multi-tab simulation
-        const handleStorageChange = (e) => {
-            if (e.key === getChatKey(userId, chatRecipient.user_id)) {
-                try {
-                    const updatedMsgs = JSON.parse(e.newValue || "[]");
-                    setChatMessages(updatedMsgs);
-                } catch (err) {}
-            }
-        };
-        window.addEventListener("storage", handleStorageChange);
-
         return () => {
             clearInterval(intervalId);
             supabase.removeChannel(channel);
-            window.removeEventListener("storage", handleStorageChange);
         };
     }, [showChatModal, chatRecipient, userId]);
 
@@ -185,28 +229,13 @@ export default function SidebarRouter(props) {
                 },
                 (payload) => {
                     const newMsg = payload.new;
-                    if (newMsg.receiver_id === userId) {
-                        const senderId = newMsg.sender_id;
-                        const isCurrentlyOpen = showChatModal && !isChatMinimized && chatRecipient?.user_id === senderId;
+                    if (newMsg.receiver_id === userId || newMsg.sender_id === userId) {
+                        const otherId = newMsg.sender_id === userId ? newMsg.receiver_id : newMsg.sender_id;
+                        setDmLatestMessages(prev => ({ ...prev, [otherId]: newMsg }));
                         
-                        const msgObj = {
-                            id: newMsg.id,
-                            sender_id: newMsg.sender_id,
-                            receiver_id: newMsg.receiver_id,
-                            content: newMsg.content,
-                            created_at: newMsg.created_at,
-                            replyToId: newMsg.reply_to_id,
-                            fileAttachment: newMsg.file_attachment,
-                            pinned: newMsg.pinned || false,
-                            unread: !isCurrentlyOpen
-                        };
-
-                        const key = getChatKey(userId, senderId);
-                        const existing = JSON.parse(localStorage.getItem(key) || "[]");
-                        if (!existing.some(m => m.id === msgObj.id)) {
-                            existing.push(msgObj);
-                            localStorage.setItem(key, JSON.stringify(existing));
-                            window.dispatchEvent(new Event("storage_local_update"));
+                        const isCurrentlyOpen = showChatModal && !isChatMinimized && chatRecipient?.user_id === otherId;
+                        if (isCurrentlyOpen) {
+                            localStorage.setItem(`dm_last_read_${otherId}`, Date.now());
                         }
                     }
                 }
@@ -218,22 +247,48 @@ export default function SidebarRouter(props) {
         };
     }, [userId, showChatModal, isChatMinimized, chatRecipient]);
 
-    // Listen to local update events to trigger component re-render
+    // Global real-time listener for group messages
     useEffect(() => {
-        const handleLocalUpdate = () => {
-            setLocalUpdateCounter(prev => prev + 1);
+        if (userGroups.length === 0) return;
+
+        const groupIds = userGroups.map(g => g.id);
+        const groupChannel = supabase
+            .channel(`global_groups_${userId}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "messages",
+                },
+                (payload) => {
+                    const newMsg = payload.new;
+                    if (groupIds.includes(newMsg.channel_id)) {
+                        // Update the latest message timestamp for the group
+                        setUserGroups(prev => prev.map(g => 
+                            g.id === newMsg.channel_id ? { ...g, latest_message_at: newMsg.created_at } : g
+                        ));
+                        
+                        if (newMsg.sender_id !== userId) {
+                            const isCurrentlyOpen = showChatModal && !isChatMinimized && activeGroupChat?.id === newMsg.channel_id;
+                            if (!isCurrentlyOpen) {
+                                setGroupUnreadCounts(prev => ({ ...prev, [newMsg.channel_id]: true }));
+                            } else {
+                                // Update last read timestamp since we are actively looking at it
+                                localStorage.setItem(`group_last_read_${newMsg.channel_id}`, Date.now());
+                            }
+                        }
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(groupChannel);
         };
-        window.addEventListener("storage_local_update", handleLocalUpdate);
-        return () => window.removeEventListener("storage_local_update", handleLocalUpdate);
-    }, []);
+    }, [userGroups, showChatModal, isChatMinimized, activeGroupChat, userId]);
 
     // Chat operations
-    const getChatKey = (uid1, uid2) => {
-        if (!uid1 || !uid2) return "";
-        const sorted = [uid1, uid2].sort();
-        return `spacers_chat_${sorted[0]}_${sorted[1]}`;
-    };
-
     const fetchChatMessages = async (recipientId) => {
         if (!userId || !recipientId) return;
         try {
@@ -253,21 +308,12 @@ export default function SidebarRouter(props) {
                     replyToId: m.reply_to_id,
                     fileAttachment: m.file_attachment,
                     pinned: m.pinned || false,
-                    unread: m.unread !== undefined ? m.unread : false
+                    reactions: m.reactions || []
                 }));
                 setChatMessages(mappedData);
-
-                const key = getChatKey(userId, recipientId);
-                localStorage.setItem(key, JSON.stringify(mappedData));
-                setLocalUpdateCounter(prev => prev + 1);
-            } else {
-                const localMsgs = JSON.parse(localStorage.getItem(getChatKey(userId, recipientId)) || "[]");
-                setChatMessages(localMsgs);
             }
         } catch (err) {
             console.error("Fetch direct messages error:", err);
-            const localMsgs = JSON.parse(localStorage.getItem(getChatKey(userId, recipientId)) || "[]");
-            setChatMessages(localMsgs);
         }
     };
 
@@ -275,30 +321,8 @@ export default function SidebarRouter(props) {
         setChatRecipient(recipient);
         setShowChatModal(true);
         setIsChatMinimized(false);
+        localStorage.setItem(`dm_last_read_${recipient.user_id}`, Date.now());
         await fetchChatMessages(recipient.user_id);
-        
-        const key = getChatKey(userId, recipient.user_id);
-        const msgs = JSON.parse(localStorage.getItem(key) || "[]");
-        let updated = false;
-        const newMsgs = msgs.map(m => {
-            if (m.receiver_id === userId && m.unread) {
-                updated = true;
-                return { ...m, unread: false };
-            }
-            return m;
-        });
-        if (updated) {
-            localStorage.setItem(key, JSON.stringify(newMsgs));
-            setLocalUpdateCounter(prev => prev + 1);
-        }
-    };
-
-    const saveMessageToLocal = (recipientId, msg) => {
-        const key = getChatKey(userId, recipientId);
-        const existing = JSON.parse(localStorage.getItem(key) || "[]");
-        existing.push(msg);
-        localStorage.setItem(key, JSON.stringify(existing));
-        setLocalUpdateCounter(prev => prev + 1);
     };
 
     const handleSendMessage = async (e) => {
@@ -317,11 +341,11 @@ export default function SidebarRouter(props) {
             replyToId: replyingToMessage ? replyingToMessage.id : null,
             replyToContent: replyingToMessage ? replyingToMessage.content : null,
             replyToSenderName: replyingToMessage ? (replyingToMessage.sender_id === userId ? "You" : chatRecipient.name) : null,
-            fileAttachment: attachedFile || null,
-            unread: true
+            fileAttachment: attachedFile || null
         };
 
         setChatMessages(prev => [...prev, newMsgObj]);
+        setDmLatestMessages(prev => ({ ...prev, [chatRecipient.user_id]: newMsgObj }));
         setReplyingToMessage(null);
         setAttachedFile(null);
 
@@ -336,14 +360,11 @@ export default function SidebarRouter(props) {
                     file_attachment: newMsgObj.fileAttachment
                 });
 
-            saveMessageToLocal(chatRecipient.user_id, newMsgObj);
-
             if (error) {
-                console.warn("DB message save failed, saved locally:", error.message);
+                console.warn("DB message save failed:", error.message);
             }
         } catch (err) {
-            console.warn("Error sending message to DB, saved locally:", err);
-            saveMessageToLocal(chatRecipient.user_id, newMsgObj);
+            console.warn("Error sending message to DB:", err);
         }
     };
 
@@ -364,16 +385,6 @@ export default function SidebarRouter(props) {
                 .from("direct_messages")
                 .update({ content: newText.trim(), edited: true })
                 .eq("id", msgId);
-
-            const key = getChatKey(userId, chatRecipient.user_id);
-            const localMsgs = JSON.parse(localStorage.getItem(key) || "[]");
-            const updatedLocal = localMsgs.map(m => {
-                if (m.id === msgId) {
-                    return { ...m, content: newText.trim(), edited: true };
-                }
-                return m;
-            });
-            localStorage.setItem(key, JSON.stringify(updatedLocal));
         } catch (err) {
             console.warn("Edit message error:", err);
         }
@@ -389,11 +400,6 @@ export default function SidebarRouter(props) {
                 .from("direct_messages")
                 .delete()
                 .eq("id", msgId);
-
-            const key = getChatKey(userId, chatRecipient.user_id);
-            const localMsgs = JSON.parse(localStorage.getItem(key) || "[]");
-            const updatedLocal = localMsgs.filter(m => m.id !== msgId);
-            localStorage.setItem(key, JSON.stringify(updatedLocal));
         } catch (err) {
             console.warn("Delete message error:", err);
         }
@@ -417,17 +423,6 @@ export default function SidebarRouter(props) {
                 .from("direct_messages")
                 .update({ pinned: nextPinnedState })
                 .eq("id", msgId);
-
-            // Save to localStorage fallback
-            const key = getChatKey(userId, chatRecipient.user_id);
-            const localMsgs = JSON.parse(localStorage.getItem(key) || "[]");
-            const updatedLocal = localMsgs.map(m => {
-                if (m.id === msgId) {
-                    return { ...m, pinned: nextPinnedState };
-                }
-                return m;
-            });
-            localStorage.setItem(key, JSON.stringify(updatedLocal));
         } catch (err) {
             console.warn("Toggle pin message error:", err);
         }
@@ -469,16 +464,6 @@ export default function SidebarRouter(props) {
                     .update({ reactions: targetMsg.reactions })
                     .eq("id", msgId);
             }
-
-            const key = getChatKey(userId, chatRecipient.user_id);
-            const localMsgs = JSON.parse(localStorage.getItem(key) || "[]");
-            const updatedLocal = localMsgs.map(m => {
-                if (m.id === msgId) {
-                    return { ...m, reactions: targetMsg ? targetMsg.reactions : [] };
-                }
-                return m;
-            });
-            localStorage.setItem(key, JSON.stringify(updatedLocal));
         } catch (err) {
             console.warn("Add reaction error:", err);
         }
@@ -503,14 +488,23 @@ export default function SidebarRouter(props) {
 
     const getUnreadConversationsCount = () => {
         let count = 0;
+        // Count unread DMs
         orgUsers.forEach(member => {
             if (member.user_id === userId) return;
-            const key = getChatKey(userId, member.user_id);
-            const msgs = JSON.parse(localStorage.getItem(key) || "[]");
-            if (msgs.some(m => m.receiver_id === userId && m.unread)) {
-                count++;
+            const latestMsg = dmLatestMessages[member.user_id];
+            if (latestMsg && latestMsg.receiver_id === userId) {
+                const lastRead = localStorage.getItem(`dm_last_read_${member.user_id}`);
+                if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
+                    count++;
+                }
             }
         });
+        
+        // Count unread Groups
+        Object.values(groupUnreadCounts).forEach(isUnread => {
+            if (isUnread) count++;
+        });
+        
         return count;
     };
 
@@ -560,11 +554,12 @@ export default function SidebarRouter(props) {
                         className={`px-4 py-3 border-b border-[#2D3139] flex items-center justify-between bg-black/20 ${isChatMinimized ? 'cursor-pointer hover:bg-black/30' : ''}`}
                     >
                         <div className="flex items-center gap-2 overflow-hidden">
-                            {chatRecipient && !isChatMinimized ? (
+                            {(chatRecipient || activeGroupChat) && !isChatMinimized ? (
                                 <button 
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         setChatRecipient(null);
+                                        setActiveGroupChat(null);
                                     }}
                                     className="text-[#8c947b] hover:text-white cursor-pointer mr-1 flex items-center"
                                 >
@@ -573,11 +568,11 @@ export default function SidebarRouter(props) {
                             ) : null}
                             
                             <div className="w-5 h-5 rounded-full bg-[#5b644d]/20 text-[#aff82a] flex items-center justify-center font-bold text-[10px]">
-                                {chatRecipient ? (chatRecipient.name || "?").charAt(0).toUpperCase() : "M"}
+                                {chatRecipient ? (chatRecipient.name || "?").charAt(0).toUpperCase() : (activeGroupChat ? "#" : "M")}
                             </div>
                             
                             <h4 className="text-white font-semibold text-xs truncate flex items-center gap-1.5">
-                                {chatRecipient ? (chatRecipient.name || "Team Member") : (
+                                {chatRecipient ? (chatRecipient.name || "Team Member") : activeGroupChat ? activeGroupChat.name : (
                                     <>
                                         Messages
                                         {getUnreadConversationsCount() > 0 && (
@@ -605,6 +600,7 @@ export default function SidebarRouter(props) {
                                     e.stopPropagation();
                                     setShowChatModal(false);
                                     setChatRecipient(null);
+                                    setActiveGroupChat(null);
                                 }}
                                 className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
                             >
@@ -615,75 +611,138 @@ export default function SidebarRouter(props) {
 
                     {!isChatMinimized && (
                         <>
-                            {!chatRecipient ? (
-                                /* DIRECTORY DIRECT LISTING */
+                            {!chatRecipient && !activeGroupChat ? (
+                                /* UNIFIED INBOX LISTING */
                                 <div className="flex-1 flex flex-col overflow-hidden bg-black/5">
                                     <div className="p-3 border-b border-[#2D3139] bg-black/10">
-                                        <p className="text-[10px] text-[#8c947b] font-bold uppercase tracking-wider">Coworkers</p>
+                                        <div className="relative mb-2">
+                                            <input 
+                                                type="text"
+                                                placeholder="Search people or groups..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="w-full bg-[#16191F] border border-white/10 rounded text-white text-xs px-3 py-1.5 focus:outline-none focus:border-[var(--primary-color)]"
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-[#8c947b] font-bold uppercase tracking-wider">Inbox</p>
                                     </div>
                                     <div className="flex-1 overflow-y-auto divide-y divide-[#2D3139]/40 scrollbar-thin">
-                                        {orgUsers.length === 0 ? (
-                                            <p className="text-xs text-[#8c947b] italic text-center py-8">No other coworkers found</p>
-                                        ) : (
-                                            [...orgUsers]
-                                                .sort((a, b) => {
-                                                    const keyA = getChatKey(userId, a.user_id);
-                                                    const keyB = getChatKey(userId, b.user_id);
-                                                    const msgsA = JSON.parse(localStorage.getItem(keyA) || "[]");
-                                                    const msgsB = JSON.parse(localStorage.getItem(keyB) || "[]");
-                                                    const lastA = msgsA[msgsA.length - 1];
-                                                    const lastB = msgsB[msgsB.length - 1];
-                                                    const timeA = lastA ? new Date(lastA.created_at).getTime() : 0;
-                                                    const timeB = lastB ? new Date(lastB.created_at).getTime() : 0;
-                                                    return timeB - timeA;
-                                                })
-                                                .map((member) => {
-                                                const chatKey = getChatKey(userId, member.user_id);
-                                                const msgs = JSON.parse(localStorage.getItem(chatKey) || "[]");
-                                                const lastMsg = msgs[msgs.length - 1];
-                                                const unreadCount = msgs.filter(m => m.receiver_id === userId && m.unread).length;
+                                        {(() => {
+                                            const lowerQuery = searchQuery.toLowerCase();
+                                            
+                                            // Process Coworkers (DMs)
+                                            let dmList = orgUsers.map(member => {
+                                                const latestMsg = dmLatestMessages[member.user_id];
+                                                return { ...member, latestMsg, isGroup: false };
+                                            });
 
-                                                return (
-                                                    <div 
-                                                        key={member.user_id}
-                                                        onClick={() => handleOpenChat(member)}
-                                                        className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
-                                                    >
-                                                        <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                                            <div className="w-8 h-8 rounded-xl bg-[#2D3139] flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
-                                                                {(member.name || "?").charAt(0)}
-                                                            </div>
-                                                            <div className="overflow-hidden flex-1">
-                                                                <div className="flex items-center justify-between gap-1">
-                                                                    <p className="text-white font-semibold text-xs truncate">{member.name || "User"}</p>
-                                                                    {lastMsg && (
-                                                                        <span className="text-[9px] text-[#8c947b] shrink-0">
-                                                                            {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                        </span>
-                                                                    )}
+                                            // Filter Coworkers
+                                            if (lowerQuery) {
+                                                dmList = dmList.filter(m => (m.name || "").toLowerCase().includes(lowerQuery) || (m.email || "").toLowerCase().includes(lowerQuery));
+                                            } else {
+                                                dmList = dmList.filter(m => !!m.latestMsg);
+                                            }
+
+                                            // Process Groups
+                                            let groupList = userGroups.map(g => ({ ...g, isGroup: true }));
+                                            if (lowerQuery) {
+                                                groupList = groupList.filter(g => (g.name || "").toLowerCase().includes(lowerQuery));
+                                            }
+
+                                            // Combine and sort
+                                            const combinedList = [...groupList, ...dmList].sort((a, b) => {
+                                                const timeA = a.isGroup ? new Date(a.latest_message_at || a.created_at || 0).getTime() : (a.latestMsg ? new Date(a.latestMsg.created_at).getTime() : 0);
+                                                const timeB = b.isGroup ? new Date(b.latest_message_at || b.created_at || 0).getTime() : (b.latestMsg ? new Date(b.latestMsg.created_at).getTime() : 0);
+                                                return timeB - timeA;
+                                            });
+
+                                            if (combinedList.length === 0) {
+                                                return <p className="text-xs text-[#8c947b] italic text-center py-8">{lowerQuery ? "No results found" : "No active chats. Search to start one!"}</p>;
+                                            }
+
+                                            return combinedList.map(item => {
+                                                if (item.isGroup) {
+                                                    const isUnread = groupUnreadCounts[item.id];
+                                                    return (
+                                                        <div 
+                                                            key={`group_${item.id}`}
+                                                            onClick={() => {
+                                                                localStorage.setItem(`group_last_read_${item.id}`, Date.now());
+                                                                setGroupUnreadCounts(prev => ({ ...prev, [item.id]: false }));
+                                                                setActiveGroupChat(item);
+                                                            }}
+                                                            className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
+                                                        >
+                                                            <div className="flex items-center gap-3 overflow-hidden flex-1">
+                                                                <div className="w-8 h-8 rounded-xl bg-[var(--primary-color)]/20 flex items-center justify-center font-bold text-[var(--primary-color)] text-xs uppercase shrink-0">
+                                                                    <span className="material-symbols-outlined text-[16px]">tag</span>
                                                                 </div>
-                                                                <p className="text-[10px] text-[#8c947b] truncate mt-0.5">
-                                                                    {lastMsg ? (
-                                                                        lastMsg.fileAttachment ? "📎 Attached file" : lastMsg.content
-                                                                    ) : (
-                                                                        member.email
-                                                                    )}
-                                                                </p>
+                                                                <div className="overflow-hidden flex-1">
+                                                                    <div className="flex items-center justify-between gap-1">
+                                                                        <p className="text-white font-semibold text-xs truncate">{item.name}</p>
+                                                                    </div>
+                                                                    <p className="text-[10px] text-[#8c947b] truncate mt-0.5">Group Channel</p>
+                                                                </div>
                                                             </div>
+                                                            {isUnread && (
+                                                                <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0"></span>
+                                                            )}
                                                         </div>
-                                                        {unreadCount > 0 && (
-                                                            <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-4.5 h-4.5 rounded-full flex items-center justify-center shrink-0">
-                                                                {unreadCount}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })
-                                        )}
+                                                    );
+                                                } else {
+                                                    const lastMsg = item.latestMsg;
+                                                    let isUnread = false;
+                                                    if (lastMsg && lastMsg.receiver_id === userId) {
+                                                        const lastRead = localStorage.getItem(`dm_last_read_${item.user_id}`);
+                                                        if (!lastRead || new Date(lastMsg.created_at).getTime() > Number(lastRead)) {
+                                                            isUnread = true;
+                                                        }
+                                                    }
+
+                                                    return (
+                                                        <div 
+                                                            key={`dm_${item.user_id}`}
+                                                            onClick={() => {
+                                                                localStorage.setItem(`dm_last_read_${item.user_id}`, Date.now());
+                                                                handleOpenChat(item);
+                                                            }}
+                                                            className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
+                                                        >
+                                                            <div className="flex items-center gap-3 overflow-hidden flex-1">
+                                                                <div className="w-8 h-8 rounded-xl bg-[#2D3139] flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
+                                                                    {(item.name || "?").charAt(0)}
+                                                                </div>
+                                                                <div className="overflow-hidden flex-1">
+                                                                    <div className="flex items-center justify-between gap-1">
+                                                                        <p className="text-white font-semibold text-xs truncate">{item.name || "User"}</p>
+                                                                        {lastMsg && (
+                                                                            <span className="text-[9px] text-[#8c947b] shrink-0">
+                                                                                {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-[10px] text-[#8c947b] truncate mt-0.5">
+                                                                        {lastMsg ? (
+                                                                            lastMsg.fileAttachment ? "📎 Attached file" : lastMsg.content
+                                                                        ) : (
+                                                                            item.email
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {isUnread && (
+                                                                <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0">
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                }
+                                            });
+                                        })()}
                                     </div>
                                 </div>
-                            ) : (
-                                /* ACTIVE CONVERSATION VIEW */
+                            ) : chatRecipient ? (
+                                /* ACTIVE DM CONVERSATION VIEW */
                                 <div className="flex-1 flex flex-col overflow-hidden">
 
                                     {/* Chat Messages Log */}
@@ -971,7 +1030,17 @@ export default function SidebarRouter(props) {
                                         </button>
                                     </form>
                                 </div>
-                            )}
+                            ) : activeGroupChat ? (
+                                /* ACTIVE GROUP CONVERSATION VIEW */
+                                <div className="flex-1 flex flex-col overflow-hidden relative">
+                                    <GroupChat 
+                                        currentUserId={userId} 
+                                        members={orgUsers} 
+                                        fabMode={true} 
+                                        activeChannelFromFab={activeGroupChat} 
+                                    />
+                                </div>
+                            ) : null}
                         </>
                     )}
                 </div>
