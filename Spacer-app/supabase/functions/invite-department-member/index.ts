@@ -21,7 +21,9 @@
 // Required secrets: SITE_URL, RESEND_API_KEY (optional), EMAIL_FROM (optional)
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY are auto-injected.
 
+// @ts-ignore – Deno URL imports, resolved at runtime by the Deno runtime.
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
+// @ts-ignore – Deno URL imports, resolved at runtime by the Deno runtime.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 import { corsHeaders } from "../_shared/cors.ts"
 
@@ -34,14 +36,14 @@ const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173"
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
 
-function json(body, status = 200) {
+function json(body: unknown, status = 200) {
     return new Response(JSON.stringify(body), {
         status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
     if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders })
 
     try {
@@ -74,10 +76,10 @@ serve(async (req) => {
         if (memErr) return json({ error: "Could not verify permissions" }, 500)
 
         const isSuperAdmin = (callerMemberships || []).some(
-            (m) => m.role === "super_admin" || m.role === "superadmin"
+            (m: { role: string; team_space_id: string }) => m.role === "super_admin" || m.role === "superadmin"
         )
         const isAdminOnThisTeam = (callerMemberships || []).some(
-            (m) => m.team_space_id === team_space_id && m.role === "admin"
+            (m: { role: string; team_space_id: string }) => m.team_space_id === team_space_id && m.role === "admin"
         )
 
         if (!isSuperAdmin && !isAdminOnThisTeam) {
@@ -233,11 +235,12 @@ serve(async (req) => {
         return json({ status: "invited_new", message: `Invite sent to ${email}` })
     } catch (err) {
         console.error("invite-department-member error:", err)
-        return json({ error: err?.message || "Unexpected server error" }, 500)
+        const message = err instanceof Error ? err.message : "Unexpected server error"
+        return json({ error: message }, 500)
     }
 })
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
     if (!RESEND_API_KEY) {
         console.warn(`RESEND_API_KEY not set — skipping notify email to ${to}`)
         return
@@ -256,7 +259,13 @@ async function sendEmail({ to, subject, html }) {
     }
 }
 
-function addedToTeamEmailHtml({ recipientName, teamName, role, inviterName, loginUrl }) {
+function addedToTeamEmailHtml({ recipientName, teamName, role, inviterName, loginUrl }: {
+    recipientName: string;
+    teamName: string;
+    role: string;
+    inviterName: string;
+    loginUrl: string;
+}) {
     return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
       <h2>You're in ${teamName} \u{1F389}</h2>

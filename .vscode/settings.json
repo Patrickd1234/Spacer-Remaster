@@ -1,0 +1,6 @@
+{
+  "deno.enablePaths": [
+    "Spacer-app/supabase/functions"
+  ],
+  "deno.unstable": true
+}
