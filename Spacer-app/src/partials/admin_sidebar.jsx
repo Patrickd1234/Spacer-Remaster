@@ -74,30 +74,38 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     useEffect(() => {
         const fetchProjects = async () => {
             const userId = localStorage.getItem("userId");
-            if (!userId) {
-                const { data, error } = await supabase.from("project_spaces").select("*");
-                if (!error && data) setProjects(data);
-                return;
-            }
+            if (!userId) return;
 
+            // Fetch all memberships for this user with their roles
             const { data: memberData, error: memberError } = await supabase
                 .from("memberships")
-                .select("team_space_id")
+                .select("team_space_id, role")
                 .eq("user_id", userId);
 
             if (memberError || !memberData || memberData.length === 0) {
-                const { data, error } = await supabase.from("project_spaces").select("*");
-                if (error) console.log(error);
-                else setProjects(data || []);
-            } else {
-                const teamIds = memberData.map((m) => m.team_space_id);
-                const { data, error } = await supabase
-                    .from("project_spaces")
-                    .select("*")
-                    .in("team_space_id", teamIds);
-                if (error) console.log(error);
-                else setProjects(data || []);
+                // No memberships found — show nothing, not everything
+                setProjects([]);
+                return;
             }
+
+            // Pick the team space where this user is admin.
+            // If they somehow belong to multiple departments, prioritise
+            // the one where their role is explicitly "admin".
+            const adminMembership =
+                memberData.find(m => m.role === "admin") ||
+                memberData.find(m => m.role === "super_admin") ||
+                memberData[0];
+
+            const teamSpaceId = adminMembership?.team_space_id;
+            if (!teamSpaceId) { setProjects([]); return; }
+
+            // Show only projects inside that one department
+            const { data, error } = await supabase
+                .from("project_spaces")
+                .select("*")
+                .eq("team_space_id", teamSpaceId);
+
+            if (!error) setProjects(data || []);
         };
         fetchProjects();
 

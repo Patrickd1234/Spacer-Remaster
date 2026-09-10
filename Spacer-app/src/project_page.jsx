@@ -6,6 +6,7 @@ import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
+import { useRole } from "./RoleContext"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -170,9 +171,11 @@ function ProjectPage() {
     const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [project_events, setProjectEvents] = useState([])
-    const [userRole, setUserRole] = useState(null)
     const [currentUserId, setCurrentUserId] = useState(null)
-    const canCreateTasks = userRole === "super_admin" || userRole === "superadmin" || userRole === "admin" || userRole === "team_lead"
+
+    // ── Role comes from the global RoleContext — no local fetch needed
+    const { isSuperAdmin, isAdmin } = useRole()
+    const canCreateTasks = isSuperAdmin || isAdmin
     const canEditTaskDetails = canCreateTasks || (selectedTask && selectedTask.assignee_id === currentUserId)
 
     // ── Delete project
@@ -588,17 +591,6 @@ function ProjectPage() {
                 }
                 if (data[0].team_space_id) {
                     setTeamSpaceId(data[0].team_space_id)
-                    // Fetch current user's role for this team space
-                    const userId = localStorage.getItem("userId")
-                    if (userId) {
-                        const { data: membershipData } = await supabase
-                            .from("memberships")
-                            .select("role")
-                            .eq("user_id", userId)
-                            .eq("team_space_id", data[0].team_space_id)
-                            .maybeSingle()
-                        setUserRole(membershipData?.role ?? "member")
-                    }
                 }
             }
         }
@@ -674,12 +666,6 @@ function ProjectPage() {
             const userId = authData?.user?.id
             if (!userId) return
             setCurrentUserId(userId)
-            const { data: membership } = await supabase
-                .from("memberships")
-                .select("role")
-                .eq("user_id", userId)
-                .maybeSingle()
-            setUserRole(membership?.role ?? null)
         }
 
         fetchProject()
@@ -914,7 +900,7 @@ function ProjectPage() {
                             type="button"
                             title="Delete this project"
                             onClick={() => {
-                                const canDelete = userRole === "admin" || userRole === "super_admin" || userRole === "superadmin"
+                                const canDelete = isSuperAdmin || isAdmin
                                 if (canDelete) setShowDeleteConfirm(true)
                                 else setShowActionBlocked(true)
                             }}

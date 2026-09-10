@@ -12,6 +12,7 @@ import Department from './Department'
 import CalendarView from './CalendarView'
 import Settings from './Settings'
 import Tasks from './Tasks'
+import AcceptInvite from './AcceptInvite'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 import { RoleProvider } from './RoleContext'
@@ -100,6 +101,10 @@ function App() {
             <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
             <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
             <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
+            {/* Always reachable: the invite magic-link itself establishes a session
+                before a password is set, so this can't be gated behind `session`
+                the way other routes are. */}
+            <Route path="/accept-invite" element={<AcceptInvite />} />
             <Route path="/launch" element={session ? <LaunchOrganization /> : <Navigate to="/login" replace />} />
             <Route path="/onboarding" element={session ? <Onboarding /> : <Navigate to="/login" replace />} />
             <Route path="/reports" element={session ? <Reports /> : <Navigate to="/login" replace />} />

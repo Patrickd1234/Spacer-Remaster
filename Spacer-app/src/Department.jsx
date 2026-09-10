@@ -20,8 +20,12 @@ function Department() {
     const [newDeptName, setNewDeptName] = useState("")
     const [showAddMemberModal, setShowAddMemberModal] = useState(false)
     const [orgUsers, setOrgUsers] = useState([])
-    const [selectedUserId, setSelectedUserId] = useState("")
-    const [selectedRole, setSelectedRole] = useState("member")
+    const [addMemberTab, setAddMemberTab] = useState("existing") // "existing" | "invite"
+    const [inviteEmail, setInviteEmail] = useState("")
+    const [inviteRole, setInviteRole] = useState("member")
+    const [inviteSending, setInviteSending] = useState(false)
+    const [inviteError, setInviteError] = useState("")
+    const [inviteSuccess, setInviteSuccess] = useState("")
     const [actionSaving, setActionSaving] = useState(false)
     const [activeTab, setActiveTab] = useState("directory")
 
@@ -213,10 +217,8 @@ function Department() {
                     const activeMemberIds = new Set(mem_info.map(m => m.user_id));
                     const available = data.filter(u => !activeMemberIds.has(u.id));
                     setOrgUsers(available);
-                    if (available.length > 0) {
-                        setSelectedUserId(available[0].id);
-                    } else {
-                        setSelectedUserId("");
+                    if (addMemberTab === "existing") {
+                        setInviteEmail(available.length > 0 ? available[0].email : "");
                     }
                 }
             };
@@ -224,35 +226,84 @@ function Department() {
         }
     }, [showAddMemberModal, organizationId, mem_info]);
 
-    const handleAddMember = async (e) => {
+    const closeAddMemberModal = () => {
+        setShowAddMemberModal(false);
+        setAddMemberTab("existing");
+        setInviteEmail("");
+        setInviteRole("member");
+        setInviteError("");
+        setInviteSuccess("");
+    };
+
+    const switchAddMemberTab = (tab) => {
+        setAddMemberTab(tab);
+        setInviteError("");
+        setInviteSuccess("");
+        setInviteEmail(tab === "existing" ? (orgUsers[0]?.email || "") : "");
+    };
+
+    // Adds an existing Spacer user straight to the department, OR invites someone
+    // by email who may not have a Spacer account yet — both go through the same
+    // Edge Function so permission checks and notifications happen in one place,
+    // server-side, instead of being duplicated (and potentially bypassed) here.
+    const handleAddOrInvite = async (e) => {
         e.preventDefault();
+        setInviteError("");
+        setInviteSuccess("");
+
         if (!canManage) {
             alert("Only admins or super admins can add members.");
             return;
         }
-        if (!selectedUserId || !activeTeam?.id) return;
-        setActionSaving(true);
-        try {
-            const { error } = await supabase
-                .from("memberships")
-                .insert({
-                    user_id: selectedUserId,
-                    team_space_id: activeTeam.id,
-                    role: selectedRole
-                });
+        if (!activeTeam?.id) return;
 
-          if (error) {
-              alert("Error adding member: " + error.message);
-          } else {
-              await fetchTeamMembers(activeTeam.id);
-              setShowAddMemberModal(false);
-          }
-      } catch (err) {
-          console.error("Add member error:", err);
-      } finally {
-          setActionSaving(false);
-      }
-  };
+        const email = (inviteEmail || "").trim().toLowerCase();
+        if (!email) {
+            setInviteError(addMemberTab === "existing" ? "Select a user to add." : "Enter an email address.");
+            return;
+        }
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(email)) {
+            setInviteError("Enter a valid email address.");
+            return;
+        }
+
+        setInviteSending(true);
+        try {
+            // supabase-js automatically attaches the current session's access
+            // token as the Authorization header here — the Edge Function
+            // re-derives who's calling (and re-checks their role) from that
+            // token server-side. It never trusts a role/permission claim sent
+            // in the request body.
+            const { data, error } = await supabase.functions.invoke("invite-department-member", {
+                body: {
+                    email,
+                    role: inviteRole,
+                    team_space_id: activeTeam.id,
+                    organization_id: organizationId,
+                },
+            });
+
+            if (error) throw error;
+
+            if (data?.status === "added_existing") {
+                setInviteSuccess(`${email} has been added to ${activeTeam.name} and notified by email.`);
+                await fetchTeamMembers(activeTeam.id);
+                setTimeout(() => closeAddMemberModal(), 1600);
+            } else if (data?.status === "invited_new") {
+                setInviteSuccess(`Invite sent to ${email}. Once they set a password, they'll land straight in ${activeTeam.name} as ${inviteRole}.`);
+                setInviteEmail("");
+            } else {
+                setInviteSuccess("Done.");
+            }
+        } catch (err) {
+            console.error("Add/invite member error:", err);
+            const message = err?.context?.body?.error || err?.message || "Something went wrong. Please try again.";
+            setInviteError(message);
+        } finally {
+            setInviteSending(false);
+        }
+    };
 
   const handleRemoveMember = async (targetUserId) => {
       if (!targetUserId || !activeTeam?.id) return;
@@ -334,7 +385,7 @@ return (
                     {canManage && (
                         <div className="flex items-center gap-3">
                             <button 
-                                onClick={() => setShowAddMemberModal(true)}
+                                onClick={() => { setAddMemberTab("existing"); setInviteError(""); setInviteSuccess(""); setShowAddMemberModal(true); }}
                                 className="px-4 py-2 bg-[#5b644d] hover:bg-[#6c765c] text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[18px]">person_add</span>
@@ -535,67 +586,118 @@ return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
                 <div className="bg-[#191c21] rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#2D3139] shadow-2xl animate-scaleIn">
                     <div className="flex items-center justify-between border-b border-[#2D3139]/30 pb-3">
-                        <h3 className="text-lg font-bold text-[#aff82a]">Add Member to Department</h3>
-                        <button onClick={() => setShowAddMemberModal(false)} className="text-[#8c947b] hover:text-white cursor-pointer">
+                        <h3 className="text-lg font-bold text-[#aff82a]">Add Member{activeTeam ? ` to ${activeTeam.name}` : ""}</h3>
+                        <button onClick={closeAddMemberModal} className="text-[#8c947b] hover:text-white cursor-pointer">
                             <span className="material-symbols-outlined">close</span>
                         </button>
                     </div>
-                    {orgUsers.length === 0 ? (
-                        <div className="py-6 text-center space-y-2">
-                            <p className="text-white font-medium text-sm">All organization users are already members of this department.</p>
-                            <button
-                                type="button"
-                                onClick={() => setShowAddMemberModal(false)}
-                                className="px-4 py-2 border border-[#2D3139] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white transition-all cursor-pointer"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    ) : (
-                        <form onSubmit={handleAddMember} className="space-y-4">
+
+                    {/* Tab switcher: existing Spacer user vs. brand-new email invite */}
+                    <div className="flex gap-1 bg-[#0F1115] p-1 rounded-xl border border-[#2D3139]">
+                        <button
+                            type="button"
+                            onClick={() => switchAddMemberTab("existing")}
+                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${addMemberTab === "existing" ? "bg-[#aff82a] text-[#1C1F26]" : "text-[#8c947b] hover:text-white"}`}
+                        >
+                            Existing User
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => switchAddMemberTab("invite")}
+                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${addMemberTab === "invite" ? "bg-[#aff82a] text-[#1C1F26]" : "text-[#8c947b] hover:text-white"}`}
+                        >
+                            Invite New User
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleAddOrInvite} className="space-y-4">
+                        {addMemberTab === "existing" ? (
+                            orgUsers.length === 0 ? (
+                                <p className="text-white font-medium text-sm py-6 text-center">
+                                    All organization users are already members of this department.
+                                </p>
+                            ) : (
+                                <div>
+                                    <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Select User</label>
+                                    <select
+                                        className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
+                                        value={inviteEmail}
+                                        onChange={(e) => setInviteEmail(e.target.value)}
+                                    >
+                                        {orgUsers.map(user => (
+                                            <option key={user.id} value={user.email}>
+                                                {user.name || user.email} ({user.email})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )
+                        ) : (
                             <div>
-                                <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Select User</label>
-                                <select
-                                    className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
-                                    value={selectedUserId}
-                                    onChange={(e) => setSelectedUserId(e.target.value)}
-                                >
-                                    {orgUsers.map(user => (
-                                        <option key={user.id} value={user.id}>
-                                            {user.name || user.email} ({user.email})
-                                        </option>
-                                    ))}
-                                </select>
+                                <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Email Address</label>
+                                <input
+                                    type="email"
+                                    required
+                                    placeholder="name@company.com"
+                                    className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none placeholder-[#8c947b]/40"
+                                    value={inviteEmail}
+                                    onChange={(e) => setInviteEmail(e.target.value)}
+                                />
+                                <p className="text-[11px] text-[#8c947b] mt-2 leading-relaxed">
+                                    They'll get an email with a link to create a password. Once they do, they're
+                                    signed in automatically — already added to this department with the role below.
+                                </p>
                             </div>
+                        )}
+
+                        {(addMemberTab === "invite" || orgUsers.length > 0) && (
                             <div>
                                 <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Role in Department</label>
                                 <select
                                     className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
-                                    value={selectedRole}
-                                    onChange={(e) => setSelectedRole(e.target.value)}
+                                    value={inviteRole}
+                                    onChange={(e) => setInviteRole(e.target.value)}
                                 >
                                     <option value="member">Member</option>
                                     <option value="admin">Admin</option>
                                 </select>
                             </div>
-                            <div className="flex items-center justify-end gap-3 pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAddMemberModal(false)}
-                                    className="px-4 py-2 border border-[#2D3139] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
-                                >
-                                    Cancel
-                                </button>
+                        )}
+
+                        {inviteError && (
+                            <p className="text-xs text-red-400 flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">error</span>
+                                {inviteError}
+                            </p>
+                        )}
+                        {inviteSuccess && (
+                            <p className="text-xs text-[#aff82a] flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                {inviteSuccess}
+                            </p>
+                        )}
+
+                        <div className="flex items-center justify-end gap-3 pt-2">
+                            <button
+                                type="button"
+                                onClick={closeAddMemberModal}
+                                className="px-4 py-2 border border-[#2D3139] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
+                            >
+                                Cancel
+                            </button>
+                            {!(addMemberTab === "existing" && orgUsers.length === 0) && (
                                 <button
                                     type="submit"
-                                    disabled={actionSaving}
+                                    disabled={inviteSending}
                                     className="px-4 py-2 bg-[#aff82a] text-[#1C1F26] hover:bg-[#9de022] rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                                 >
-                                    {actionSaving ? "Adding..." : "Add Member"}
+                                    {inviteSending
+                                        ? (addMemberTab === "invite" ? "Sending Invite…" : "Adding…")
+                                        : (addMemberTab === "invite" ? "Send Invite" : "Add Member")}
                                 </button>
-                            </div>
-                        </form>
-                    )}
+                            )}
+                        </div>
+                    </form>
                 </div>
             </div>
         )}
@@ -604,4 +706,4 @@ return (
 )
 }
 
-export default Department;
+export default Department;

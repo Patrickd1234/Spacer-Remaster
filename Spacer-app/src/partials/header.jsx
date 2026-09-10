@@ -165,6 +165,8 @@ function Header({ onSearch = () => {} }) {
                 return `${actorName} updated ${subject}`;
             case "commented":
                 return `${actorName} commented on ${subject}`;
+            case "invited":
+                return `${actorName} added ${activity.new_state?.email || "someone"} to ${activity.new_state?.team_name || "a department"}`;
             default:
                 return `${actorName} performed an action`;
         }
@@ -436,4 +438,4 @@ function Header({ onSearch = () => {} }) {
     )
 }
 
-export default Header
+export default Header
