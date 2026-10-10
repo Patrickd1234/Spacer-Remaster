@@ -14,10 +14,18 @@ const STATUS_COLORS = {
 function Reports() {
   const [metrics, setMetrics] = useState({ todo: 0, in_progress: 0, done: 0, overdue: 0 })
   const [loading, setLoading] = useState(true)
+  const [lastUpdated, setLastUpdated] = useState(null)
 
   useEffect(() => {
-    const fetchMetrics = async () => {
-      const userId = localStorage.getItem("userId")
+    let userId = localStorage.getItem("userId")
+
+    const fetchMetrics = async (quiet = false) => {
+      // Also try Supabase auth as fallback for userId
+      if (!userId) {
+        const { data: authData } = await supabase.auth.getUser()
+        userId = authData?.user?.id
+        if (userId) localStorage.setItem("userId", userId)
+      }
       if (!userId) { setLoading(false); return }
 
       const { data, error } = await supabase
@@ -31,10 +39,30 @@ function Reports() {
           if (counts[status] !== undefined) counts[status]++
         })
         setMetrics(counts)
+        setLastUpdated(new Date())
       }
-      setLoading(false)
+      if (!quiet) setLoading(false)
     }
+
+    // Initial load
     fetchMetrics()
+
+    // ── Realtime subscription ─────────────────────────────────────────────────
+    // Listen to any change on the tasks table and re-fetch metrics silently.
+    // This covers: new projects/tasks being assigned, status changes (in_progress,
+    // done, overdue), and task deletions — all without a page refresh.
+    const channel = supabase
+      .channel("reports-tasks-live")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "tasks" },
+        () => { fetchMetrics(true) }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const pieSlices = [
@@ -113,10 +141,21 @@ function Reports() {
             )}
           </section>
 
-          {/* Summary note */}
-          <p className="text-xs text-on-surface-variant">
-            Showing tasks assigned to you. More report types — by project, by team member, and by date range — coming soon.
-          </p>
+          {/* Live update indicator + summary note */}
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-xs text-on-surface-variant">
+              Showing tasks assigned to you. Updates live as tasks change status.
+            </p>
+            {lastUpdated && (
+              <span className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#33B26C] opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#33B26C]" />
+                </span>
+                Live · updated {lastUpdated.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
 
         </div>
       </main>
