@@ -1,7 +1,7 @@
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import PieChart from "./components/PieChart"
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 
@@ -30,6 +30,44 @@ export default function Reports() {
   // Filters
   const [scope, setScope] = useState("workspace") // "workspace" | "personal"
   const [selectedProjectId, setSelectedProjectId] = useState("all") // "all" | project_id
+
+  // Collapsible Ongoing Projects State (persisted for great UX)
+  const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(() => {
+    return localStorage.getItem("reports_projects_collapsed") === "true"
+  })
+
+  const toggleProjectsCollapsed = () => {
+    setIsProjectsCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem("reports_projects_collapsed", String(next))
+      return next
+    })
+  }
+
+  // Custom Dropdown State & Ref
+  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false)
+  const [projectSearchQuery, setProjectSearchQuery] = useState("")
+  const projectDropdownRef = useRef(null)
+
+  // Close dropdown on click outside or escape key
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target)) {
+        setIsProjectDropdownOpen(false)
+      }
+    }
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setIsProjectDropdownOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [])
 
   // ── Helper: parse subtasks and calculate accurate status ────────────────
   const parseSubtasks = useCallback((raw) => {
@@ -184,7 +222,6 @@ export default function Reports() {
       .subscribe()
 
     // 2. Background polling fallback (every 10 seconds)
-    // Ensures updates are captured even if Supabase Realtime is restricted or disconnected
     const pollingInterval = setInterval(() => {
       fetchReportData(true)
     }, 10000)
@@ -266,6 +303,40 @@ export default function Reports() {
     })
   }, [allProjects, allTasks])
 
+  // Summary statistics for when the project section is collapsed
+  const collapsedProjectSummary = useMemo(() => {
+    const completedCount = projectStats.filter((p) => p.progressPct === 100 && p.totalTasks > 0).length
+    const totalOngoingTasks = projectStats.reduce((acc, p) => acc + p.inProgressTasks, 0)
+    const totalOverdueTasks = projectStats.reduce((acc, p) => acc + p.overdueTasks, 0)
+    const totalDoneTasks = projectStats.reduce((acc, p) => acc + p.doneTasks, 0)
+    const totalAllTasks = projectStats.reduce((acc, p) => acc + p.totalTasks, 0)
+    const avgCompletion = totalAllTasks > 0 ? Math.round((totalDoneTasks / totalAllTasks) * 100) : 0
+
+    return {
+      completedCount,
+      totalOngoingTasks,
+      totalOverdueTasks,
+      avgCompletion,
+    }
+  }, [projectStats])
+
+  // Current selected project object for dropdown trigger label
+  const selectedProjectObj = useMemo(() => {
+    if (selectedProjectId === "all") return null
+    return allProjects.find((p) => String(p.id) === String(selectedProjectId)) || null
+  }, [allProjects, selectedProjectId])
+
+  // Filtered project list for the custom dropdown search
+  const filteredDropdownProjects = useMemo(() => {
+    if (!projectSearchQuery.trim()) return allProjects
+    const query = projectSearchQuery.toLowerCase()
+    return allProjects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        (p.team_space_name && p.team_space_name.toLowerCase().includes(query))
+    )
+  }, [allProjects, projectSearchQuery])
+
   return (
     <div className="flex bg-[#0F1115] text-[#e0e5d0] min-h-screen">
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
@@ -300,7 +371,7 @@ export default function Reports() {
               {/* Scope toggle & Action controls */}
               <div className="flex flex-wrap items-center gap-3">
                 {/* Scope selector */}
-                <div className="bg-[#1C1F26] p-1 rounded-xl border border-[#2D3139] flex items-center">
+                <div className="bg-[#1C1F26] p-1 rounded-xl border border-[#2D3139] flex items-center shadow-sm">
                   <button
                     onClick={() => setScope("workspace")}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
@@ -323,20 +394,181 @@ export default function Reports() {
                   </button>
                 </div>
 
-                {/* Project filter dropdown */}
+                {/* ── Optimal, Sleek Custom Project Dropdown ──────────────────────── */}
                 {allProjects.length > 0 && (
-                  <select
-                    value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
-                    className="bg-[#1C1F26] border border-[#2D3139] text-xs font-medium text-white rounded-xl px-3 py-2 outline-none focus:border-[#aff82a]/50 cursor-pointer transition-all"
-                  >
-                    <option value="all">All Projects ({allProjects.length})</option>
-                    {allProjects.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative" ref={projectDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
+                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer bg-[#1C1F26] shadow-sm ${
+                        isProjectDropdownOpen
+                          ? "border-[#aff82a] text-white ring-2 ring-[#aff82a]/20 shadow-lg"
+                          : selectedProjectId !== "all"
+                          ? "border-[#aff82a]/60 text-white bg-[#1C1F26]"
+                          : "border-[#2D3139] text-[#e0e5d0] hover:border-[#424934] hover:text-white"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[17px] text-[#aff82a]">
+                        {selectedProjectId === "all" ? "dataset" : "folder_open"}
+                      </span>
+                      <span className="truncate max-w-[130px] sm:max-w-[170px] text-left">
+                        {selectedProjectObj ? selectedProjectObj.name : `All Projects (${allProjects.length})`}
+                      </span>
+                      <span
+                        className={`material-symbols-outlined text-[16px] text-[#8c947b] transition-transform duration-200 ${
+                          isProjectDropdownOpen ? "rotate-180 text-white" : ""
+                        }`}
+                      >
+                        expand_more
+                      </span>
+                    </button>
+
+                    {/* Dropdown Menu Popup */}
+                    {isProjectDropdownOpen && (
+                      <div className="absolute right-0 mt-2 w-72 max-w-[90vw] rounded-2xl bg-[#16191F] border border-[#2D3139] shadow-2xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+                        {/* Search input (shown if multiple projects) */}
+                        {allProjects.length > 3 && (
+                          <div className="p-2.5 border-b border-[#2D3139]/70 bg-black/20">
+                            <div className="relative">
+                              <span className="material-symbols-outlined text-[16px] text-[#8c947b] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                                search
+                              </span>
+                              <input
+                                type="text"
+                                placeholder="Search projects..."
+                                value={projectSearchQuery}
+                                onChange={(e) => setProjectSearchQuery(e.target.value)}
+                                className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#8c947b]/60 outline-none focus:border-[#aff82a]/60 focus:ring-1 focus:ring-[#aff82a]/30 transition-all"
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Options List */}
+                        <div className="max-h-64 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin">
+                          {/* "All Projects" Option */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProjectId("all")
+                              setIsProjectDropdownOpen(false)
+                              setProjectSearchQuery("")
+                            }}
+                            className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                              selectedProjectId === "all"
+                                ? "bg-[#aff82a]/15 text-white font-bold"
+                                : "hover:bg-white/5 text-[#e0e5d0]"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                              <div
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                                  selectedProjectId === "all"
+                                    ? "bg-[#aff82a] text-[#0F1115]"
+                                    : "bg-[#2D3139] text-[#8c947b]"
+                                }`}
+                              >
+                                <span className="material-symbols-outlined text-[15px]">apps</span>
+                              </div>
+                              <div className="truncate">
+                                <div className="text-xs font-semibold truncate">All Projects</div>
+                                <div className="text-[10px] text-[#8c947b]">
+                                  Organization portfolio ({allProjects.length})
+                                </div>
+                              </div>
+                            </div>
+
+                            {selectedProjectId === "all" && (
+                              <span className="material-symbols-outlined text-[16px] text-[#aff82a] shrink-0 ml-2">
+                                check
+                              </span>
+                            )}
+                          </button>
+
+                          <div className="h-px bg-[#2D3139]/50 my-1" />
+
+                          {/* Individual Projects */}
+                          {filteredDropdownProjects.length === 0 ? (
+                            <div className="py-4 text-center text-xs text-[#8c947b] italic">
+                              No matching projects found
+                            </div>
+                          ) : (
+                            filteredDropdownProjects.map((proj) => {
+                              const isSelected = String(selectedProjectId) === String(proj.id)
+                              const projTasksCount = allTasks.filter(
+                                (t) => String(t.project_id) === String(proj.id)
+                              ).length
+
+                              return (
+                                <button
+                                  key={proj.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedProjectId(proj.id)
+                                    setIsProjectDropdownOpen(false)
+                                    setProjectSearchQuery("")
+                                  }}
+                                  className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
+                                    isSelected
+                                      ? "bg-[#aff82a]/15 text-white font-bold"
+                                      : "hover:bg-white/5 text-[#e0e5d0]"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2.5 overflow-hidden">
+                                    <div
+                                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                                        isSelected
+                                          ? "bg-[#aff82a] text-[#0F1115]"
+                                          : "bg-[#2D3139] text-[#aff82a]"
+                                      }`}
+                                    >
+                                      <span className="material-symbols-outlined text-[15px]">
+                                        folder
+                                      </span>
+                                    </div>
+                                    <div className="truncate">
+                                      <div className="text-xs font-semibold truncate text-white">
+                                        {proj.name}
+                                      </div>
+                                      <div className="text-[10px] text-[#8c947b] truncate flex items-center gap-1.5">
+                                        <span>{proj.team_space_name}</span>
+                                        <span>•</span>
+                                        <span>{projTasksCount} tasks</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {isSelected && (
+                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a] shrink-0 ml-2">
+                                      check
+                                    </span>
+                                  )}
+                                </button>
+                              )
+                            })
+                          )}
+                        </div>
+
+                        {/* Footer Clear / Reset Link */}
+                        {selectedProjectId !== "all" && (
+                          <div className="p-2 border-t border-[#2D3139]/60 bg-black/10 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProjectId("all")
+                                setIsProjectDropdownOpen(false)
+                                setProjectSearchQuery("")
+                              }}
+                              className="text-[11px] text-[#aff82a] hover:underline font-medium px-2 py-0.5 cursor-pointer"
+                            >
+                              Reset to All Projects
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Manual refresh button */}
@@ -344,7 +576,7 @@ export default function Reports() {
                   onClick={() => fetchReportData(true)}
                   disabled={isRefreshing}
                   title="Force refresh now"
-                  className="bg-[#1C1F26] hover:bg-[#252932] border border-[#2D3139] text-[#8c947b] hover:text-white p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center disabled:opacity-50"
+                  className="bg-[#1C1F26] hover:bg-[#252932] border border-[#2D3139] text-[#8c947b] hover:text-white p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center disabled:opacity-50 shadow-sm"
                 >
                   <span
                     className={`material-symbols-outlined text-[18px] ${
@@ -517,11 +749,15 @@ export default function Reports() {
               )}
             </div>
 
-            {/* ── Ongoing Projects Status Breakdown ────────────────────────────── */}
-            <div className="glass-card rounded-2xl p-6 md:p-8 border border-[#2D3139]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
-                <div>
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            {/* ── Collapsible Ongoing Projects Status Breakdown ───────────────── */}
+            <div className="glass-card rounded-2xl p-6 md:p-8 border border-[#2D3139] transition-all duration-300">
+              {/* Header with Title and Collapse/Expand Toggle */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div
+                  className="cursor-pointer select-none group"
+                  onClick={toggleProjectsCollapsed}
+                >
+                  <h2 className="text-lg font-bold text-white flex items-center gap-2 group-hover:text-[#aff82a] transition-colors">
                     <span className="material-symbols-outlined text-[20px] text-[#aff82a]">
                       rocket_launch
                     </span>
@@ -531,106 +767,182 @@ export default function Reports() {
                     Real-time execution status and completion progress per project
                   </p>
                 </div>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-[#1C1F26] border border-[#2D3139] text-[#8c947b] self-start sm:self-auto">
-                  {projectStats.length} Projects Tracked
-                </span>
+
+                {/* Action badges and Collapse/Expand Button */}
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  <span className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-[#1C1F26] border border-[#2D3139] text-[#8c947b]">
+                    {projectStats.length} Projects Tracked
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={toggleProjectsCollapsed}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm ${
+                      isProjectsCollapsed
+                        ? "bg-[#aff82a]/10 border-[#aff82a]/40 text-[#aff82a] hover:bg-[#aff82a]/20"
+                        : "bg-[#1C1F26] hover:bg-[#252932] border-[#2D3139] text-[#8c947b] hover:text-white"
+                    }`}
+                    title={isProjectsCollapsed ? "Expand ongoing projects grid" : "Collapse section to reduce page length"}
+                  >
+                    <span>{isProjectsCollapsed ? "Expand" : "Collapse"}</span>
+                    <span
+                      className={`material-symbols-outlined text-[16px] transition-transform duration-300 ${
+                        isProjectsCollapsed ? "rotate-180" : ""
+                      }`}
+                    >
+                      expand_less
+                    </span>
+                  </button>
+                </div>
               </div>
 
-              {projectStats.length === 0 ? (
-                <div className="text-center py-12 bg-[#16191F]/50 rounded-xl border border-dashed border-[#2D3139]">
-                  <span className="material-symbols-outlined text-4xl text-[#8c947b]/40 mb-2">
-                    folder_off
-                  </span>
-                  <p className="text-sm text-white font-medium">No projects available yet</p>
-                  <p className="text-xs text-[#8c947b] mt-1">
-                    Create a project to start tracking ongoing milestones and performance.
-                  </p>
+              {/* Collapsed State: Compact Neat Summary Bar */}
+              {isProjectsCollapsed ? (
+                <div
+                  onClick={toggleProjectsCollapsed}
+                  className="mt-5 p-4 bg-[#16191F]/70 hover:bg-[#16191F] border border-[#2D3139] hover:border-[#aff82a]/40 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer transition-all duration-200 group shadow-inner"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-[#aff82a]/15 text-[#aff82a] flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[19px]">unfold_more</span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white group-hover:text-[#aff82a] transition-colors">
+                          {projectStats.length} Project Workspaces Collapsed
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[#8c947b]">
+                          Click to expand
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#8c947b] mt-0.5">
+                        Overview kept compact for a clean, concise page view.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Pills */}
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs">
+                    <span className="px-3 py-1 rounded-lg bg-white/5 text-[#e0e5d0] border border-[#2D3139]/60">
+                      Avg Progress: <strong className="text-white font-bold ml-1">{collapsedProjectSummary.avgCompletion}%</strong>
+                    </span>
+                    <span className="px-3 py-1 rounded-lg bg-[#E8A838]/10 text-[#E8A838] border border-[#E8A838]/20 font-medium">
+                      {collapsedProjectSummary.totalOngoingTasks} tasks ongoing
+                    </span>
+                    {collapsedProjectSummary.totalOverdueTasks > 0 ? (
+                      <span className="px-3 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 font-semibold">
+                        {collapsedProjectSummary.totalOverdueTasks} overdue
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-lg bg-[#33B26C]/10 text-[#33B26C] border border-[#33B26C]/20 font-medium">
+                        0 overdue
+                      </span>
+                    )}
+                    <span className="text-[#aff82a] text-xs font-bold flex items-center gap-0.5 ml-1 group-hover:translate-x-1 transition-transform">
+                      View all <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                    </span>
+                  </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {projectStats.map((proj) => {
-                    const isCompleted = proj.progressPct === 100 && proj.totalTasks > 0
-                    const hasOverdue = proj.overdueTasks > 0
+                /* Expanded State: Full Project Cards Grid */
+                <div className="mt-6">
+                  {projectStats.length === 0 ? (
+                    <div className="text-center py-12 bg-[#16191F]/50 rounded-xl border border-dashed border-[#2D3139]">
+                      <span className="material-symbols-outlined text-4xl text-[#8c947b]/40 mb-2">
+                        folder_off
+                      </span>
+                      <p className="text-sm text-white font-medium">No projects available yet</p>
+                      <p className="text-xs text-[#8c947b] mt-1">
+                        Create a project to start tracking ongoing milestones and performance.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {projectStats.map((proj) => {
+                        const isCompleted = proj.progressPct === 100 && proj.totalTasks > 0
+                        const hasOverdue = proj.overdueTasks > 0
 
-                    return (
-                      <div
-                        key={proj.id}
-                        onClick={() => navigate(`/project_page/${proj.id}`)}
-                        className="bg-[#16191F] hover:bg-[#1A1D24] border border-[#2D3139] hover:border-[#aff82a]/40 rounded-xl p-5 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-200 group"
-                      >
-                        {/* Project Header */}
-                        <div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b] truncate">
-                              {proj.team_space_name}
-                            </span>
-                            <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                isCompleted
-                                  ? "bg-[#33B26C]/15 text-[#33B26C]"
-                                  : hasOverdue
-                                  ? "bg-red-500/15 text-red-400"
-                                  : "bg-[#E8A838]/15 text-[#E8A838]"
-                              }`}
-                            >
-                              {isCompleted
-                                ? "Completed"
-                                : hasOverdue
-                                ? "Needs Attention"
-                                : proj.status || "In Progress"}
-                            </span>
-                          </div>
+                        return (
+                          <div
+                            key={proj.id}
+                            onClick={() => navigate(`/project_page/${proj.id}`)}
+                            className="bg-[#16191F] hover:bg-[#1A1D24] border border-[#2D3139] hover:border-[#aff82a]/40 rounded-xl p-5 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-200 group shadow-sm hover:shadow-lg hover:shadow-black/40"
+                          >
+                            {/* Project Header */}
+                            <div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b] truncate">
+                                  {proj.team_space_name}
+                                </span>
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    isCompleted
+                                      ? "bg-[#33B26C]/15 text-[#33B26C]"
+                                      : hasOverdue
+                                      ? "bg-red-500/15 text-red-400"
+                                      : "bg-[#E8A838]/15 text-[#E8A838]"
+                                  }`}
+                                >
+                                  {isCompleted
+                                    ? "Completed"
+                                    : hasOverdue
+                                    ? "Needs Attention"
+                                    : proj.status || "In Progress"}
+                                </span>
+                              </div>
 
-                          <h3 className="text-base font-bold text-white group-hover:text-[#aff82a] transition-colors mt-1 truncate">
-                            {proj.name}
-                          </h3>
-                        </div>
+                              <h3 className="text-base font-bold text-white group-hover:text-[#aff82a] transition-colors mt-1.5 truncate">
+                                {proj.name}
+                              </h3>
+                            </div>
 
-                        {/* Progress Bar & Stats */}
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-[#8c947b]">
-                              {proj.doneTasks} of {proj.totalTasks} tasks done
-                            </span>
-                            <span className="font-bold text-white">{proj.progressPct}%</span>
-                          </div>
+                            {/* Progress Bar & Stats */}
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-[#8c947b]">
+                                  {proj.doneTasks} of {proj.totalTasks} tasks done
+                                </span>
+                                <span className="font-bold text-white">{proj.progressPct}%</span>
+                              </div>
 
-                          <div className="h-2 w-full bg-[#2D3139] rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-700 ${
-                                isCompleted
-                                  ? "bg-[#33B26C]"
-                                  : hasOverdue
-                                  ? "bg-gradient-to-r from-[#E8A838] to-red-500"
-                                  : "bg-gradient-to-r from-[#818cf8] to-[#aff82a]"
-                              }`}
-                              style={{ width: `${proj.progressPct}%` }}
-                            />
-                          </div>
-                        </div>
+                              <div className="h-2 w-full bg-[#2D3139] rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-700 ${
+                                    isCompleted
+                                      ? "bg-[#33B26C]"
+                                      : hasOverdue
+                                      ? "bg-gradient-to-r from-[#E8A838] to-red-500"
+                                      : "bg-gradient-to-r from-[#818cf8] to-[#aff82a]"
+                                  }`}
+                                  style={{ width: `${proj.progressPct}%` }}
+                                />
+                              </div>
+                            </div>
 
-                        {/* Badges footer */}
-                        <div className="flex items-center justify-between pt-2 border-t border-[#2D3139]/40 text-xs text-[#8c947b]">
-                          <div className="flex items-center gap-3">
-                            <span className="flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#E8A838]" />
-                              {proj.inProgressTasks} ongoing
-                            </span>
-                            {hasOverdue && (
-                              <span className="flex items-center gap-1 text-red-400 font-semibold">
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                                {proj.overdueTasks} overdue
+                            {/* Badges footer */}
+                            <div className="flex items-center justify-between pt-2 border-t border-[#2D3139]/40 text-xs text-[#8c947b]">
+                              <div className="flex items-center gap-3">
+                                <span className="flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#E8A838]" />
+                                  {proj.inProgressTasks} ongoing
+                                </span>
+                                {hasOverdue && (
+                                  <span className="flex items-center gap-1 text-red-400 font-semibold">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                    {proj.overdueTasks} overdue
+                                  </span>
+                                )}
+                              </div>
+
+                              <span className="material-symbols-outlined text-[16px] text-[#8c947b] group-hover:translate-x-1 group-hover:text-white transition-all">
+                                arrow_forward
                               </span>
-                            )}
+                            </div>
                           </div>
-
-                          <span className="material-symbols-outlined text-[16px] text-[#8c947b] group-hover:translate-x-1 group-hover:text-white transition-all">
-                            arrow_forward
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
