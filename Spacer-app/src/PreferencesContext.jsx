@@ -76,14 +76,14 @@ export function PreferencesProvider({ children }) {
     
     // Theme mapping
     const themes = {
-      dark: { // Obsidian Dark
-        base: "#101509",
-        surface: "#1d2115",
-        lowest: "#0b1005",
-        border: "#424934",
-        surfaceHigh: "#272c1e",
-        highest: "#323729",
-        surfaceLow: "#191d11"
+      dark: { // Obsidian Dark / Department palette
+        base: "#0F1115",
+        surface: "#191c21",
+        lowest: "#0b0c0e",
+        border: "#2D3139",
+        surfaceHigh: "#20242b",
+        highest: "#252a33",
+        surfaceLow: "#14161b"
       },
       high_contrast: { // High Contrast
         base: "#050704",
@@ -130,14 +130,14 @@ export function PreferencesProvider({ children }) {
         highest: "#4a1414",
         surfaceLow: "#1c0707"
       },
-      system: { // System default (acts as dark for now)
-        base: "#101509",
-        surface: "#1d2115",
-        lowest: "#0b1005",
-        border: "#424934",
-        surfaceHigh: "#272c1e",
-        highest: "#323729",
-        surfaceLow: "#191d11"
+      system: { // System default (matches department dark)
+        base: "#0F1115",
+        surface: "#191c21",
+        lowest: "#0b0c0e",
+        border: "#2D3139",
+        surfaceHigh: "#20242b",
+        highest: "#252a33",
+        surfaceLow: "#14161b"
       }
     };
 
