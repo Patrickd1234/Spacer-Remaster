@@ -46,7 +46,6 @@ function Login() {
             console.error(error)
             setErrorMsg(error.message)
         } else {
-            console.log("Logged in user:", data)
             if (data && data.user) {
                 localStorage.setItem("userId", data.user.id)
                 localStorage.setItem("userEmail", data.user.email)

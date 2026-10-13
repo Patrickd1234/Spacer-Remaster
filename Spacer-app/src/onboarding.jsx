@@ -38,14 +38,23 @@ function Onboarding() {
         try {
             const { data: userData } = await supabase.auth.getUser()
             if (userData?.user) {
-                // Insert each added team space into Supabase project_spaces table if possible
+                const user = userData.user
+                let orgId = user.user_metadata?.organization_id
+                if (!orgId) {
+                    const { data: memberData } = await supabase
+                        .from("memberships")
+                        .select("team_spaces(organization_id)")
+                        .eq("user_id", user.id)
+                        .limit(1)
+                        .maybeSingle()
+                    orgId = memberData?.team_spaces?.organization_id
+                }
+
+                // Insert each added team space into team_spaces
                 for (const teamName of teams) {
-                    await supabase.from("project_spaces").insert({
-                        name: teamName,
-                        description: `Team collaboration space for ${teamName}`,
-                        status: "Active",
-                        due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-                    })
+                    const payload = { name: teamName }
+                    if (orgId) payload.organization_id = orgId
+                    await supabase.from("team_spaces").insert(payload)
                 }
             }
         } catch (err) {

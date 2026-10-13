@@ -86,6 +86,56 @@ function TeamCard({ team }) {
     )
 }
 
+const formatActivityItem = (act) => {
+    const actorName = act.actor?.name || act.actor?.email?.split('@')[0] || act.new_state?.full_name || "User"
+    const initials = (actorName || "SA")
+        .split(" ")
+        .map(n => n[0])
+        .filter(Boolean)
+        .join("")
+        .toUpperCase()
+        .slice(0, 2) || "SA"
+
+    let title = ""
+    let sub = ""
+
+    if (act.action === "login") {
+        title = `${actorName} logged in`
+        sub = act.new_state?.email ? `Session started (${act.new_state.email})` : "Active session"
+    } else if (act.action === "signup") {
+        title = `${actorName} joined the organization`
+        sub = "New team member onboarded"
+    } else if (act.action === "created") {
+        const entity = act.entity_type || (act.new_state?.title ? "task" : "item")
+        title = `${actorName} created ${entity}: ${act.new_state?.title || act.new_state?.name || "New entry"}`
+        sub = act.new_state?.description || "Created recently"
+    } else if (act.action === "updated") {
+        title = `${actorName} updated ${act.entity_type || "item"}`
+        sub = act.new_state?.title || (act.new_state?.status ? `Status: ${act.new_state.status}` : "Modified recently")
+    } else {
+        title = `${actorName} performed ${act.action || "action"}`
+        sub = act.new_state?.title || act.entity_type || "Activity recorded"
+    }
+
+    if (act.created_at) {
+        try {
+            const date = new Date(act.created_at)
+            const diffMin = Math.floor((Date.now() - date.getTime()) / (1000 * 60))
+            if (diffMin < 1) sub = `${sub} • Just now`
+            else if (diffMin < 60) sub = `${sub} • ${diffMin}m ago`
+            else if (diffMin < 1440) sub = `${sub} • ${Math.floor(diffMin / 60)}h ago`
+            else sub = `${sub} • ${date.toLocaleDateString()}`
+        } catch (e) {}
+    }
+
+    return {
+        id: act.id,
+        initials,
+        title,
+        sub,
+    }
+}
+
 function Home() {
     const navigate = useNavigate()
     const [userEmail, setUserEmail] = useState("")
@@ -108,6 +158,29 @@ function Home() {
     // User tasks (non-superadmin only)
     const [userTasks, setUserTasks] = useState([])
     const [tasksLoading, setTasksLoading] = useState(false)
+    const [activities, setActivities] = useState([])
+    const [activitiesLoading, setActivitiesLoading] = useState(false)
+
+    const fetchActivities = async () => {
+        setActivitiesLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from("activity_log")
+                .select("*, actor:users(name, email)")
+                .order("created_at", { ascending: false })
+                .limit(10)
+
+            if (error) {
+                console.warn("activity_log fetch error:", error)
+            } else if (data && data.length > 0) {
+                setActivities(data.map(formatActivityItem))
+            }
+        } catch (err) {
+            console.error("fetchActivities error:", err)
+        } finally {
+            setActivitiesLoading(false)
+        }
+    }
 
     const fetchOrgData = async (orgId) => {
         try {
@@ -118,35 +191,31 @@ function Home() {
             const teamCount = teamSpaces?.length ?? 0
             const teamIds = teamSpaces?.map(ts => ts.id) || []
 
-            let memberCount = 0
+            let allMembers = []
+            let activeProjects = []
+
             if (teamIds.length > 0) {
-                const { data: allMembers } = await supabase.from("memberships").select("id").in("team_space_id", teamIds)
-                memberCount = allMembers?.length ?? 0
+                const [{ data: memsData }, { data: projsData }] = await Promise.all([
+                    supabase.from("memberships").select("id, team_space_id").in("team_space_id", teamIds),
+                    supabase.from("project_spaces").select("id, team_space_id").in("team_space_id", teamIds),
+                ])
+                allMembers = memsData || []
+                activeProjects = projsData || []
             }
 
-            let projectCount = 0
-            if (teamIds.length > 0) {
-                const { data: activeProjects } = await supabase.from("project_spaces").select("id").in("team_space_id", teamIds)
-                projectCount = activeProjects?.length ?? 0
-            }
-
-            setOrgStats({ members: memberCount, teams: teamCount, activeProjects: projectCount })
+            setOrgStats({
+                members: allMembers.length,
+                teams: teamCount,
+                activeProjects: activeProjects.length
+            })
 
             if (teamSpaces && teamSpaces.length > 0) {
-                const enriched = await Promise.all(
-                    teamSpaces.map(async (ts) => {
-                        const { data: mems } = await supabase
-                            .from("memberships").select("id").eq("team_space_id", ts.id)
-                        const { data: projs } = await supabase
-                            .from("project_spaces").select("id").eq("team_space_id", ts.id)
-                        return {
-                            ...ts,
-                            member_count: mems?.length ?? 0,
-                            project_count: projs?.length ?? 0,
-                            status: ts.status || "ON TRACK",
-                        }
-                    })
-                )
+                const enriched = teamSpaces.map((ts) => ({
+                    ...ts,
+                    member_count: allMembers.filter(m => m.team_space_id === ts.id).length,
+                    project_count: activeProjects.filter(p => p.team_space_id === ts.id).length,
+                    status: ts.status || "ON TRACK",
+                }))
                 setTeams(enriched)
             }
         } catch (err) {
@@ -234,6 +303,7 @@ function Home() {
                 } else {
                     await fetchUserTasks(userId)
                 }
+                await fetchActivities()
             } catch (err) {
                 console.error("Home init error:", err)
             }
@@ -251,15 +321,11 @@ function Home() {
     const doneTasks = userTasks.filter(t => t.status === "done")
     const openCount = todoTasks.length + inProgressTasks.length
 
-    
-    const mockActivities = [
-        { id: 1, initials: "SA", title: "Organization space updated", sub: "System activity log ready" },
-        { id: 2, initials: "JS", title: "John Smith joined the organization", sub: "Added to Frontend Team" },
-        { id: 3, initials: "PR", title: "Project 'Q3 Redesign' created", sub: "Assigned to Design Team" },
-        { id: 4, initials: "TK", title: "Task completed: Review mocks", sub: "Completed by Jane Doe" },
-        { id: 5, initials: "SY", title: "System security scan completed", sub: "No vulnerabilities found" },
+    const fallbackActivities = [
+        { id: "fb-1", initials: "SA", title: "Organization workspace initialized", sub: "Activity logging is live" }
     ];
-    const visibleActivities = showAllActivity ? mockActivities : mockActivities.slice(0, 1);
+    const displayActivities = activities.length > 0 ? activities : fallbackActivities;
+    const visibleActivities = showAllActivity ? displayActivities : displayActivities.slice(0, 3);
 
     const displayName = userData?.full_name || userData?.name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
 
@@ -545,15 +611,17 @@ function Home() {
                                     <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col min-h-[420px]">
                                         <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-outline-variant">Recent Activity</h3>
                                         <div className="space-y-4 overflow-y-auto flex-1">
-                                            <div className="flex gap-3 items-start">
-                                                <div className="w-8 h-8 rounded-full bg-[#5b644d]/20 text-primary-fixed border border-[#5b644d]/40 flex items-center justify-center shrink-0 font-bold text-xs">
-                                                    SP
+                                            {displayActivities.slice(0, 5).map(act => (
+                                                <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
+                                                    <div className="w-8 h-8 rounded-full bg-[#5b644d]/20 text-primary-fixed border border-[#5b644d]/40 flex items-center justify-center shrink-0 font-bold text-xs">
+                                                        {act.initials}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-white">{act.title}</p>
+                                                        <p className="text-[10px] text-outline mt-1">{act.sub}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-white">System dashboard initialized</p>
-                                                    <p className="text-[10px] text-outline mt-1">Just now</p>
-                                                </div>
-                                            </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
