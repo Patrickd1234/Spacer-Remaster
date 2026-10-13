@@ -207,16 +207,16 @@ function Profile() {
     // Stats calculation for Overview
     const stats = isSuperAdmin ? [
         { label: "Organizations Managed", value: "3", icon: "domain", color: "text-primary-fixed" },
-        { label: "Active Users", value: "245", icon: "group", color: "text-emerald-400" },
-        { label: "System Health", value: "99.9%", icon: "monitor_heart", color: "text-amber-400" }
+        { label: "Active Users", value: "245", icon: "group", color: "text-success" },
+        { label: "System Health", value: "99.9%", icon: "monitor_heart", color: "text-warning" }
     ] : isAdmin ? [
         { label: "Department Members", value: "12", icon: "groups", color: "text-secondary-fixed" },
-        { label: "Team Projects", value: "8", icon: "folder", color: "text-emerald-400" },
-        { label: "Pending Approvals", value: "3", icon: "pending_actions", color: "text-amber-400" }
+        { label: "Team Projects", value: "8", icon: "folder", color: "text-success" },
+        { label: "Pending Approvals", value: "3", icon: "pending_actions", color: "text-warning" }
     ] : [
         { label: "Active Projects", value: "4", icon: "folder_open", color: "text-secondary-fixed" },
-        { label: "Tasks Completed", value: "32", icon: "task_alt", color: "text-emerald-400" },
-        { label: "Member Since", value: "Jan 2024", icon: "calendar_today", color: "text-amber-400" }
+        { label: "Tasks Completed", value: "32", icon: "task_alt", color: "text-success" },
+        { label: "Member Since", value: "Jan 2024", icon: "calendar_today", color: "text-warning" }
     ]
 
     const activityFeed = isSuperAdmin ? [
@@ -240,10 +240,10 @@ function Profile() {
         <>
             <Sidebar />
             <Header />
-            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-[#e0e5d0]">
+            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-on-surface">
                 {/* Toast Notification */}
                 {toast && (
-                    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-bounce ${toast.type === "error" ? "bg-red-950/80 border-red-500/50 text-red-200" : "bg-emerald-950/80 border-emerald-500/50 text-emerald-200"}`}>
+                    <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-bounce ${toast.type === "error" ? "bg-error-container/80 border-error/50 text-error" : "bg-success-container/80 border-success/50 text-success"}`}>
                         <span className="material-symbols-outlined">{toast.type === "error" ? "error" : "check_circle"}</span>
                         <span className="text-sm font-medium">{toast.message}</span>
                     </div>
@@ -254,41 +254,41 @@ function Profile() {
                         <span className="material-symbols-outlined animate-spin text-5xl text-primary-fixed">
                             progress_activity
                         </span>
-                        <p className="text-sm text-neutral-400">Loading your profile...</p>
+                        <p className="text-sm text-on-surface-variant">Loading your profile...</p>
                     </div>
                 ) : (
                     <div className="w-full max-w-6xl mx-auto p-4 sm:p-8 space-y-6">
 
                         {/* HERO BANNER & HEADER */}
-                        <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-emerald-950/40 p-6 sm:p-8 shadow-2xl">
+                        <div className="relative rounded-3xl overflow-hidden border border-on-surface/10 bg-gradient-to-r from-surface-container via-surface-container/90 to-success-container/40 p-6 sm:p-8 shadow-2xl">
                             {/* Decorative glow ambient background */}
                             <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" style={{ backgroundColor: "rgba(var(--primary-color-rgb), 0.05)" }} />
-                            <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+                            <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-info/10 rounded-full blur-3xl pointer-events-none" />
 
                             <div className="relative z-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-5">
                                     {/* Avatar with Status Ring */}
                                     <div className="relative group">
                                         <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-[var(--primary-color)] to-emerald-600 p-[2px] shadow-xl">
-                                            <div className="w-full h-full rounded-[14px] bg-neutral-900 flex items-center justify-center text-3xl font-extrabold text-primary-accent tracking-wider">
+                                            <div className="w-full h-full rounded-[14px] bg-surface-container flex items-center justify-center text-3xl font-extrabold text-primary-accent tracking-wider">
                                                 {initials(profile.name, profile.email)}
                                             </div>
                                         </div>
-                                        <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-neutral-900 shadow-md" title="Online & Active" />
+                                        <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-success border-2 border-surface-container shadow-md" title="Online & Active" />
                                     </div>
 
                                     {/* Identity Details */}
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-3 flex-wrap">
-                                            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
+                                            <h1 className="text-2xl sm:text-3xl font-bold text-on-surface tracking-tight">
                                                 {profile.name || "Unnamed User"}
                                             </h1>
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-[var(--primary-color)]/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-blue-400/20' : 'bg-neutral-400/10 text-neutral-400 border border-neutral-400/20'}`}>
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-[var(--primary-color)]/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-info/20' : 'bg-on-surface/10 text-on-surface-variant border border-neutral-400/20'}`}>
                                                 {isSuperAdmin ? 'Superadmin' : isAdmin ? 'Admin' : membershipData?.role || 'Member'}
                                             </span>
                                         </div>
 
-                                        <div className="flex items-center gap-4 text-xs text-neutral-400 pt-1 flex-wrap">
+                                        <div className="flex items-center gap-4 text-xs text-on-surface-variant pt-1 flex-wrap">
                                             <span className="flex items-center gap-1">
                                                 <span className="material-symbols-outlined text-sm">mail</span>
                                                 {profile.email}
@@ -314,7 +314,7 @@ function Profile() {
                         </div>
 
                         {/* TAB NAVIGATION BAR */}
-                        <div className="flex items-center gap-2 border-b border-white/10 overflow-x-auto pb-1 no-scrollbar">
+                        <div className="flex items-center gap-2 border-b border-on-surface/10 overflow-x-auto pb-1 no-scrollbar">
                             {[
                                 { id: "overview", label: "Overview", icon: "dashboard" },
                                 { id: "personal", label: "Personal Info", icon: "person" },
@@ -323,8 +323,8 @@ function Profile() {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${activeTab === tab.id
-                                        ? "bg-white/10 text-primary-accent border border-[var(--primary-color)]/30 shadow-md"
-                                        : "text-neutral-400 hover:text-white hover:bg-white/5"
+                                        ? "bg-on-surface/10 text-primary-accent border border-[var(--primary-color)]/30 shadow-md"
+                                        : "text-on-surface-variant hover:text-on-surface hover:bg-on-surface/5"
                                         }`}
                                 >
                                     <span className="material-symbols-outlined text-lg">{tab.icon}</span>
@@ -341,12 +341,12 @@ function Profile() {
                                 {/* Metrics Cards Grid */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     {stats.map((stat, idx) => (
-                                        <div key={idx} className="p-5 rounded-2xl bg-surface-container border border-white/10 flex items-center justify-between hover:border-white/20 transition-all">
+                                        <div key={idx} className="p-5 rounded-2xl bg-surface-container border border-on-surface/10 flex items-center justify-between hover:border-on-surface/20 transition-all">
                                             <div>
-                                                <p className="text-xs text-neutral-400 font-medium uppercase tracking-wider">{stat.label}</p>
-                                                <p className="text-2xl font-bold text-white mt-1">{stat.value}</p>
+                                                <p className="text-xs text-on-surface-variant font-medium uppercase tracking-wider">{stat.label}</p>
+                                                <p className="text-2xl font-bold text-on-surface mt-1">{stat.value}</p>
                                             </div>
-                                            <div className={`p-3 rounded-xl bg-white/5 ${stat.color}`}>
+                                            <div className={`p-3 rounded-xl bg-on-surface/5 ${stat.color}`}>
                                                 <span className="material-symbols-outlined text-2xl">{stat.icon}</span>
                                             </div>
                                         </div>
@@ -356,41 +356,41 @@ function Profile() {
                                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                     {/* Left Column: About & Skills */}
                                     <div className="lg:col-span-1 space-y-6">
-                                        <div className="p-6 rounded-2xl bg-surface-container border border-white/10 space-y-4">
-                                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                                        <div className="p-6 rounded-2xl bg-surface-container border border-on-surface/10 space-y-4">
+                                            <h3 className="text-base font-semibold text-on-surface flex items-center gap-2">
                                                 <span className="material-symbols-outlined text-primary-fixed">info</span>
                                                 About
                                             </h3>
-                                            <p className="text-sm text-neutral-300 leading-relaxed">
+                                            <p className="text-sm text-on-surface-variant leading-relaxed">
                                                 {profile.bio || "No bio provided."}
                                             </p>
                                         </div>
                                     </div>
 
                                     {/* Right Column: Activity Stream */}
-                                    <div className="lg:col-span-2 p-6 rounded-2xl bg-surface-container border border-white/10 space-y-5">
+                                    <div className="lg:col-span-2 p-6 rounded-2xl bg-surface-container border border-on-surface/10 space-y-5">
                                         <div className="flex items-center justify-between">
-                                            <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                                                <span className="material-symbols-outlined text-emerald-400">history</span>
+                                            <h3 className="text-base font-semibold text-on-surface flex items-center gap-2">
+                                                <span className="material-symbols-outlined text-success">history</span>
                                                 Recent Activity
                                             </h3>
-                                            <span className="text-xs text-neutral-400">Past 30 Days</span>
+                                            <span className="text-xs text-on-surface-variant">Past 30 Days</span>
                                         </div>
 
                                         <div className="space-y-4">
                                             {activityFeed.map((item, idx) => (
-                                                <div key={idx} className="flex items-start gap-4 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors">
+                                                <div key={idx} className="flex items-start gap-4 p-3.5 rounded-xl bg-white/[0.02] border border-on-surface/5 hover:bg-white/[0.05] transition-colors">
                                                     <div className="p-2 rounded-lg bg-primary-fixed/10 text-primary-fixed shrink-0">
                                                         <span className="material-symbols-outlined text-lg">{item.icon}</span>
                                                     </div>
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center justify-between gap-2">
-                                                            <p className="text-sm font-medium text-white truncate">{item.title}</p>
-                                                            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-white/5 text-neutral-400 shrink-0">
+                                                            <p className="text-sm font-medium text-on-surface truncate">{item.title}</p>
+                                                            <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded bg-on-surface/5 text-on-surface-variant shrink-0">
                                                                 {item.badge}
                                                             </span>
                                                         </div>
-                                                        <p className="text-xs text-neutral-400 mt-0.5">{item.time}</p>
+                                                        <p className="text-xs text-on-surface-variant mt-0.5">{item.time}</p>
                                                     </div>
                                                 </div>
                                             ))}
@@ -402,16 +402,16 @@ function Profile() {
 
                         {/* 2. PERSONAL INFORMATION TAB */}
                         {activeTab === "personal" && (
-                            <div className="p-6 sm:p-8 rounded-2xl bg-surface-container border border-white/10 space-y-6 animate-fadeIn">
-                                <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                            <div className="p-6 sm:p-8 rounded-2xl bg-surface-container border border-on-surface/10 space-y-6 animate-fadeIn">
+                                <div className="flex items-center justify-between pb-4 border-b border-on-surface/10">
                                     <div>
-                                        <h2 className="text-lg font-semibold text-white">Personal Information</h2>
-                                        <p className="text-xs text-neutral-400">Manage your profile details and public metadata.</p>
+                                        <h2 className="text-lg font-semibold text-on-surface">Personal Information</h2>
+                                        <p className="text-xs text-on-surface-variant">Manage your profile details and public metadata.</p>
                                     </div>
                                     {!isEditing ? (
                                         <button
                                             onClick={startEditing}
-                                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 text-white hover:bg-white/20 text-sm font-medium transition-all"
+                                            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-on-surface/10 text-on-surface hover:bg-on-surface/20 text-sm font-medium transition-all"
                                         >
                                             <span className="material-symbols-outlined text-base">edit</span>
                                             Edit Details
@@ -429,7 +429,7 @@ function Profile() {
                                             <button
                                                 onClick={cancelEditing}
                                                 disabled={saving}
-                                                className="px-4 py-2 rounded-xl bg-white/5 text-neutral-300 hover:text-white hover:bg-white/10 text-sm font-medium transition-all"
+                                                className="px-4 py-2 rounded-xl bg-on-surface/5 text-on-surface-variant hover:text-on-surface hover:bg-on-surface/10 text-sm font-medium transition-all"
                                             >
                                                 Cancel
                                             </button>
@@ -439,54 +439,54 @@ function Profile() {
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                     <div className="sm:col-span-2">
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                                        <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
                                             Full Name
                                         </label>
                                         {isEditing ? (
                                             <input
                                                 type="text"
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus-border-primary-accent transition-colors"
+                                                className="w-full bg-surface-container/80 border border-on-surface/10 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus-border-primary-accent transition-colors"
                                                 value={draft.name}
                                                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                                             />
                                         ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
+                                            <div className="w-full bg-white/[0.03] border border-on-surface/5 rounded-xl px-4 py-3 text-on-surface text-sm">
                                                 {profile.name || "—"}
                                             </div>
                                         )}
                                     </div>
 
                                     <div className="sm:col-span-2">
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                                        <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
                                             Email Address <span className="text-primary-fixed text-[10px] font-normal lowercase">(auth login)</span>
                                         </label>
                                         {isEditing ? (
                                             <input
                                                 type="email"
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus-border-primary-accent transition-colors"
+                                                className="w-full bg-surface-container/80 border border-on-surface/10 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus-border-primary-accent transition-colors"
                                                 value={draft.email}
                                                 onChange={(e) => setDraft({ ...draft, email: e.target.value })}
                                             />
                                         ) : (
-                                            <div className="w-full bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 text-neutral-400 text-sm flex items-center justify-between">
+                                            <div className="w-full bg-white/[0.02] border border-on-surface/5 rounded-xl px-4 py-3 text-on-surface-variant text-sm flex items-center justify-between">
                                                 <span>{profile.email || "—"}</span>
                                             </div>
                                         )}
                                     </div>
 
                                     <div className="sm:col-span-2">
-                                        <label className="block text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                                        <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">
                                             Bio
                                         </label>
                                         {isEditing ? (
                                             <textarea
-                                                className="w-full bg-neutral-900/80 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus-border-primary-accent transition-colors"
+                                                className="w-full bg-surface-container/80 border border-on-surface/10 rounded-xl px-4 py-3 text-on-surface text-sm focus:outline-none focus-border-primary-accent transition-colors"
                                                 rows="3"
                                                 value={draft.bio}
                                                 onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
                                             />
                                         ) : (
-                                            <div className="w-full bg-white/[0.03] border border-white/5 rounded-xl px-4 py-3 text-white text-sm">
+                                            <div className="w-full bg-white/[0.03] border border-on-surface/5 rounded-xl px-4 py-3 text-on-surface text-sm">
                                                 {profile.bio || "—"}
                                             </div>
                                         )}

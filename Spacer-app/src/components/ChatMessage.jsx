@@ -52,8 +52,8 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
         <div className={`flex w-full ${isMine ? 'justify-end' : 'justify-start'} mb-4 group`}>
             <div className={`relative max-w-[70%] rounded-2xl px-4 py-2 ${
                 isMine 
-                    ? 'bg-[var(--primary-color)] text-white rounded-tr-none' 
-                    : 'bg-[#2a2d32] text-white rounded-tl-none border border-white/5'
+                    ? 'bg-[var(--primary-color)] text-on-surface rounded-tr-none' 
+                    : 'bg-surface-container-high text-on-surface rounded-tl-none border border-on-surface/5'
             }`}>
                 {!isMine && (
                     <div className="text-xs font-semibold mb-1 opacity-70">
@@ -63,7 +63,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                 
                 {/* Reply Context */}
                 {message.parent_message_id && message.parent_message && (
-                    <div className={`text-xs p-2 rounded mb-2 border-l-2 ${isMine ? 'bg-white/10 border-white/30' : 'bg-black/20 border-white/20'}`}>
+                    <div className={`text-xs p-2 rounded mb-2 border-l-2 ${isMine ? 'bg-on-surface/10 border-on-surface/30' : 'bg-black/20 border-on-surface/20'}`}>
                         <div className="font-semibold opacity-70">{message.parent_message.users?.name}</div>
                         <div className="truncate opacity-80">{message.parent_message.content}</div>
                     </div>
@@ -78,7 +78,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                                 href={att.file_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className={`flex items-center gap-2 p-2 rounded text-sm ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-white/5 hover:bg-white/10'} transition-colors`}
+                                className={`flex items-center gap-2 p-2 rounded text-sm ${isMine ? 'bg-on-surface/10 hover:bg-on-surface/20' : 'bg-on-surface/5 hover:bg-on-surface/10'} transition-colors`}
                             >
                                 <span className="material-symbols-outlined text-sm">
                                     {att.file_type.startsWith('image') ? 'image' : 'description'}
@@ -94,7 +94,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                 </div>
 
                 {/* Meta */}
-                <div className={`text-[10px] mt-1 ${isMine ? 'text-white/70 text-right' : 'text-white/50 text-right'}`}>
+                <div className={`text-[10px] mt-1 ${isMine ? 'text-on-surface-variant text-right' : 'text-on-surface-variant text-right'}`}>
                     {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
 
@@ -110,7 +110,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                                     className={`text-xs px-2 py-0.5 rounded-full border ${
                                         hasReacted 
                                             ? 'bg-[var(--primary-color)]/20 border-[var(--primary-color)] text-[var(--primary-color)]' 
-                                            : 'bg-black/30 border-white/10 text-white/70 hover:bg-black/50'
+                                            : 'bg-black/30 border-on-surface/10 text-on-surface-variant hover:bg-black/50'
                                     }`}
                                 >
                                     {emoji} {data.count}
@@ -121,17 +121,17 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                 )}
 
                 {/* Hover Actions */}
-                <div className={`absolute top-0 ${isMine ? 'left-[-70px]' : 'right-[-70px]'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-[#1a1c21] rounded-lg border border-white/10 p-1 shadow-lg`}>
+                <div className={`absolute top-0 ${isMine ? 'left-[-70px]' : 'right-[-70px]'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-surface-container rounded-lg border border-on-surface/10 p-1 shadow-lg`}>
                     <button 
                         onClick={() => setShowReactions(!showReactions)}
-                        className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white"
+                        className="p-1 rounded hover:bg-on-surface/10 text-on-surface-variant hover:text-on-surface"
                         title="React"
                     >
                         <span className="material-symbols-outlined text-sm">add_reaction</span>
                     </button>
                     <button 
                         onClick={() => onReply(message)}
-                        className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white"
+                        className="p-1 rounded hover:bg-on-surface/10 text-on-surface-variant hover:text-on-surface"
                         title="Reply"
                     >
                         <span className="material-symbols-outlined text-sm">reply</span>
@@ -139,7 +139,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                     
                     {/* Reaction Picker Popup */}
                     {showReactions && (
-                        <div className={`absolute top-full mt-1 ${isMine ? 'right-0' : 'left-0'} flex gap-1 bg-[#2a2d32] p-2 rounded-lg shadow-xl border border-white/10 z-10`}>
+                        <div className={`absolute top-full mt-1 ${isMine ? 'right-0' : 'left-0'} flex gap-1 bg-surface-container-high p-2 rounded-lg shadow-xl border border-on-surface/10 z-10`}>
                             {availableEmojis.map(emoji => (
                                 <button
                                     key={emoji}

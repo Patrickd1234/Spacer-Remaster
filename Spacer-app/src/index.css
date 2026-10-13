@@ -1,6 +1,225 @@
+:root,
+:root[data-theme="dark"],
+:root[data-theme="system"][data-color-scheme="dark"] {
+  color-scheme: dark;
+  --bg-base: #101509;
+  --bg-base-rgb: 16, 21, 9;
+  --bg-surface: #1d2115;
+  --bg-surface-rgb: 29, 33, 21;
+  --bg-lowest: #0b1005;
+  --bg-lowest-rgb: 11, 16, 5;
+  --bg-border: #424934;
+  --bg-border-rgb: 66, 73, 52;
+  --bg-surface-high: #272c1e;
+  --bg-surface-high-rgb: 39, 44, 30;
+  --bg-highest: #323729;
+  --bg-highest-rgb: 50, 55, 41;
+  --bg-surface-low: #191d11;
+  --bg-surface-low-rgb: 25, 29, 17;
+  --on-surface: #e0e5d0;
+  --on-surface-rgb: 224, 229, 208;
+  --on-surface-variant: #c2caae;
+  --on-surface-variant-rgb: 194, 202, 174;
+  --on-background: #e0e5d0;
+  --on-background-rgb: 224, 229, 208;
+  --outline: #8c947b;
+  --outline-rgb: 140, 148, 123;
+  --on-primary: #101509;
+  --on-primary-rgb: 16, 21, 9;
+  --primary-color: #aff82a;
+  --primary-color-rgb: 175, 248, 42;
+  --primary-color-dim: #96da00;
+  --primary-color-dim-rgb: 150, 218, 0;
+  --error: #ffb4ab;
+  --error-rgb: 255, 180, 171;
+  --error-container: #93000a;
+  --error-container-rgb: 147, 0, 10;
+  --on-error: #690005;
+  --on-error-rgb: 105, 0, 5;
+  --on-error-container: #ffdad6;
+  --on-error-container-rgb: 255, 218, 214;
+  --success: #4ade80;
+  --success-rgb: 74, 222, 128;
+  --success-container: #12391e;
+  --success-container-rgb: 18, 57, 30;
+  --on-success-container: #c6f6d5;
+  --on-success-container-rgb: 198, 246, 213;
+  --warning: #fbbf24;
+  --warning-rgb: 251, 191, 36;
+  --warning-container: #3d2d04;
+  --warning-container-rgb: 61, 45, 4;
+  --info: #60a5fa;
+  --info-rgb: 96, 165, 250;
+  --info-container: #13294b;
+  --info-container-rgb: 19, 41, 75;
+}
+
+:root[data-theme="high_contrast"] {
+  --bg-base: #050704;
+  --bg-base-rgb: 5, 7, 4;
+  --bg-surface: #0a0d08;
+  --bg-surface-rgb: 10, 13, 8;
+  --bg-lowest: #000000;
+  --bg-lowest-rgb: 0, 0, 0;
+  --bg-border: #5c664b;
+  --bg-border-rgb: 92, 102, 75;
+  --bg-surface-high: #12170f;
+  --bg-surface-high-rgb: 18, 23, 15;
+  --bg-highest: #1a2115;
+  --bg-highest-rgb: 26, 33, 21;
+  --bg-surface-low: #070a05;
+  --bg-surface-low-rgb: 7, 10, 5;
+}
+
+:root[data-theme="midnight"] {
+  --bg-base: #0b0f19;
+  --bg-base-rgb: 11, 15, 25;
+  --bg-surface: #151b2d;
+  --bg-surface-rgb: 21, 27, 45;
+  --bg-lowest: #070a12;
+  --bg-lowest-rgb: 7, 10, 18;
+  --bg-border: #2e3a5f;
+  --bg-border-rgb: 46, 58, 95;
+  --bg-surface-high: #1e263f;
+  --bg-surface-high-rgb: 30, 38, 63;
+  --bg-highest: #283254;
+  --bg-highest-rgb: 40, 50, 84;
+  --bg-surface-low: #101524;
+  --bg-surface-low-rgb: 16, 21, 36;
+}
+
+:root[data-theme="emerald"] {
+  --bg-base: #05100a;
+  --bg-base-rgb: 5, 16, 10;
+  --bg-surface: #0b1c12;
+  --bg-surface-rgb: 11, 28, 18;
+  --bg-lowest: #020805;
+  --bg-lowest-rgb: 2, 8, 5;
+  --bg-border: #1d3c29;
+  --bg-border-rgb: 29, 60, 41;
+  --bg-surface-high: #122b1c;
+  --bg-surface-high-rgb: 18, 43, 28;
+  --bg-highest: #1a3b27;
+  --bg-highest-rgb: 26, 59, 39;
+  --bg-surface-low: #08160e;
+  --bg-surface-low-rgb: 8, 22, 14;
+}
+
+:root[data-theme="amethyst"] {
+  --bg-base: #0c0714;
+  --bg-base-rgb: 12, 7, 20;
+  --bg-surface: #170e24;
+  --bg-surface-rgb: 23, 14, 36;
+  --bg-lowest: #050308;
+  --bg-lowest-rgb: 5, 3, 8;
+  --bg-border: #3b235c;
+  --bg-border-rgb: 59, 35, 92;
+  --bg-surface-high: #231536;
+  --bg-surface-high-rgb: 35, 21, 54;
+  --bg-highest: #301d4a;
+  --bg-highest-rgb: 48, 29, 74;
+  --bg-surface-low: #120b1c;
+  --bg-surface-low-rgb: 18, 11, 28;
+}
+
+:root[data-theme="crimson"] {
+  --bg-base: #140505;
+  --bg-base-rgb: 20, 5, 5;
+  --bg-surface: #240a0a;
+  --bg-surface-rgb: 36, 10, 10;
+  --bg-lowest: #080202;
+  --bg-lowest-rgb: 8, 2, 2;
+  --bg-border: #4c1414;
+  --bg-border-rgb: 76, 20, 20;
+  --bg-surface-high: #360e0e;
+  --bg-surface-high-rgb: 54, 14, 14;
+  --bg-highest: #4a1414;
+  --bg-highest-rgb: 74, 20, 20;
+  --bg-surface-low: #1c0707;
+  --bg-surface-low-rgb: 28, 7, 7;
+}
+
+:root.light,
+:root[data-theme="light"],
+:root[data-theme="system"][data-color-scheme="light"] {
+  color-scheme: light;
+  --bg-base: #f7f8f3;
+  --bg-base-rgb: 247, 248, 243;
+  --bg-surface: #ffffff;
+  --bg-surface-rgb: 255, 255, 255;
+  --bg-lowest: #ffffff;
+  --bg-lowest-rgb: 255, 255, 255;
+  --bg-border: #d0d7c5;
+  --bg-border-rgb: 208, 215, 197;
+  --bg-surface-high: #eef1e8;
+  --bg-surface-high-rgb: 238, 241, 232;
+  --bg-highest: #e3e9da;
+  --bg-highest-rgb: 227, 233, 218;
+  --bg-surface-low: #f1f4eb;
+  --bg-surface-low-rgb: 241, 244, 235;
+  --on-surface: #1b2114;
+  --on-surface-rgb: 27, 33, 20;
+  --on-surface-variant: #4e5943;
+  --on-surface-variant-rgb: 78, 89, 67;
+  --on-background: #20261a;
+  --on-background-rgb: 32, 38, 26;
+  --outline: #596449;
+  --outline-rgb: 89, 100, 73;
+  --on-primary: #ffffff;
+  --on-primary-rgb: 255, 255, 255;
+  --primary-color: #507500;
+  --primary-color-rgb: 80, 117, 0;
+  --primary-color-dim: #3e5b00;
+  --primary-color-dim-rgb: 62, 91, 0;
+  --error: #b42318;
+  --error-rgb: 180, 35, 24;
+  --error-container: #fee4e2;
+  --error-container-rgb: 254, 228, 226;
+  --on-error: #ffffff;
+  --on-error-rgb: 255, 255, 255;
+  --on-error-container: #7a271a;
+  --on-error-container-rgb: 122, 39, 26;
+  --success: #15803d;
+  --success-rgb: 21, 128, 61;
+  --success-container: #dcfce7;
+  --success-container-rgb: 220, 252, 231;
+  --on-success-container: #14532d;
+  --on-success-container-rgb: 20, 83, 45;
+  --warning: #92400e;
+  --warning-rgb: 146, 64, 14;
+  --warning-container: #fef3c7;
+  --warning-container-rgb: 254, 243, 199;
+  --info: #1d4ed8;
+  --info-rgb: 29, 78, 216;
+  --info-container: #dbeafe;
+  --info-container-rgb: 219, 234, 254;
+}
+
+:root[data-accent="lime"] {
+  --primary-color: #aff82a;
+  --primary-color-rgb: 175, 248, 42;
+  --primary-color-dim: #96da00;
+  --primary-color-dim-rgb: 150, 218, 0;
+}
+:root.light[data-accent="lime"] { --primary-color: #507500; --primary-color-rgb: 80, 117, 0; --primary-color-dim: #3e5b00; --primary-color-dim-rgb: 62, 91, 0; }
+:root[data-accent="cyan"] { --primary-color: #2dd4bf; --primary-color-rgb: 45, 212, 191; --primary-color-dim: #14b8a6; --primary-color-dim-rgb: 20, 184, 166; }
+:root.light[data-accent="cyan"] { --primary-color: #00786e; --primary-color-rgb: 0, 120, 110; --primary-color-dim: #005e57; --primary-color-dim-rgb: 0, 94, 87; }
+:root[data-accent="purple"] { --primary-color: #a855f7; --primary-color-rgb: 168, 85, 247; --primary-color-dim: #9333ea; --primary-color-dim-rgb: 147, 51, 234; }
+:root.light[data-accent="purple"] { --primary-color: #7e22ce; --primary-color-rgb: 126, 34, 206; --primary-color-dim: #6417a7; --primary-color-dim-rgb: 100, 23, 167; }
+:root[data-accent="gold"] { --primary-color: #fbbf24; --primary-color-rgb: 251, 191, 36; --primary-color-dim: #f59e0b; --primary-color-dim-rgb: 245, 158, 11; }
+:root.light[data-accent="gold"] { --primary-color: #885500; --primary-color-rgb: 136, 85, 0; --primary-color-dim: #684000; --primary-color-dim-rgb: 104, 64, 0; }
+:root[data-accent="rose"] { --primary-color: #f43f5e; --primary-color-rgb: 244, 63, 94; --primary-color-dim: #e11d48; --primary-color-dim-rgb: 225, 29, 72; }
+:root.light[data-accent="rose"] { --primary-color: #be123c; --primary-color-rgb: 190, 18, 60; --primary-color-dim: #9f1239; --primary-color-dim-rgb: 159, 18, 57; }
+:root[data-accent="orange"] { --primary-color: #f97316; --primary-color-rgb: 249, 115, 22; --primary-color-dim: #ea580c; --primary-color-dim-rgb: 234, 88, 12; }
+:root.light[data-accent="orange"] { --primary-color: #c2410c; --primary-color-rgb: 194, 65, 12; --primary-color-dim: #9a3412; --primary-color-dim-rgb: 154, 52, 18; }
+:root[data-accent="sapphire"] { --primary-color: #3b82f6; --primary-color-rgb: 59, 130, 246; --primary-color-dim: #2563eb; --primary-color-dim-rgb: 37, 99, 235; }
+:root.light[data-accent="sapphire"] { --primary-color: #1d4ed8; --primary-color-rgb: 29, 78, 216; --primary-color-dim: #1e40af; --primary-color-dim-rgb: 30, 64, 175; }
+:root[data-accent="green"] { --primary-color: #22c55e; --primary-color-rgb: 34, 197, 94; --primary-color-dim: #16a34a; --primary-color-dim-rgb: 22, 163, 74; }
+:root.light[data-accent="green"] { --primary-color: #15803d; --primary-color-rgb: 21, 128, 61; --primary-color-dim: #166534; --primary-color-dim-rgb: 22, 101, 52; }
+
 body {
-  background-color: #0F1115;
-  color: #e0e5d0;
+  background-color: var(--bg-base);
+  color: var(--on-background);
   font-family: 'Inter', sans-serif;
   overflow-x: hidden;
 }
@@ -10,13 +229,13 @@ body {
 }
 
 .glass-card {
-  background: #1C1F26;
-  border: 1px solid #2D3139;
+  background: rgb(var(--on-surface-rgb) / var(--glass-opacity, 0.03));
+  border: 1px solid rgb(var(--on-surface-rgb) / 0.08);
   transition: all 0.2s ease;
 }
 
 .glass-card:hover {
-  border-color: #424934;
+  border-color: var(--outline);
 }
 
 ::-webkit-scrollbar {
@@ -24,11 +243,11 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0F1115;
+  background: var(--bg-base);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2D3139;
+  background: var(--bg-border);
   border-radius: 10px;
 }
 
@@ -48,19 +267,13 @@ body {
   animation: pulse-glow 4s ease-in-out infinite;
 }
 
-.glass-card {
-  background: rgba(28, 33, 21, 0.4);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(182, 255, 51, 0.1);
-}
-
 .inner-glow {
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 1px 0 rgb(var(--on-surface-rgb) / 0.05);
 }
 
 /* Hierarchy visualization styling */
 .hierarchy-line {
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgb(var(--on-surface-rgb) / 0.1);
   margin-left: 20px;
   padding-left: 24px;
   position: relative;
@@ -73,16 +286,10 @@ body {
   left: 0;
   width: 16px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--on-surface-rgb) / 0.1);
 }
 
 /* Glassmorphism card */
-.glass-card {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
 /* Atmospheric glow */
 .glow-overlay {
   position: absolute;
@@ -91,7 +298,7 @@ body {
   transform: translate(-50%, -50%);
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at 30% 30%, rgba(182, 255, 51, 0.05) 0%, transparent 50%);
+  background: radial-gradient(circle at 30% 30%, rgba(var(--primary-color-rgb), 0.05) 0%, transparent 50%);
   pointer-events: none;
   z-index: -1;
 }
@@ -102,15 +309,15 @@ body {
   justify-content: center;
   gap: 8px;
   padding: 10px 20px;
-  background-color: #22c55e; /* Vibrant green */
-  color: #ffffff;
+  background-color: var(--primary-color);
+  color: var(--on-primary);
   font-family: system-ui, -apple-system, sans-serif;
   font-size: 15px;
   font-weight: 600;
   border: none;
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 2px 4px rgba(34, 197, 94, 0.2);
+  box-shadow: 0 2px 4px rgba(var(--primary-color-rgb), 0.2);
   transition: all 0.2s ease;
 }
 
@@ -122,30 +329,30 @@ body {
 
 /* Hover state: brightens background and adds lift */
 .check-btn:hover {
-  background-color: #16a34a;
-  box-shadow: 0 4px 8px rgba(34, 197, 94, 0.3);
+  background-color: var(--primary-color-dim);
+  box-shadow: 0 4px 8px rgba(var(--primary-color-rgb), 0.3);
   transform: translateY(-1px);
 }
 
 /* Active/Click state: presses down */
 .check-btn:active {
   transform: translateY(0);
-  box-shadow: 0 1px 2px rgba(34, 197, 94, 0.2);
+  box-shadow: 0 1px 2px rgba(var(--primary-color-rgb), 0.2);
 }
 
 /* Focus state for accessibility */
 .check-btn:focus-visible {
-  outline: 2px solid #22c55e;
+  outline: 2px solid var(--primary-color);
   outline-offset: 2px;
   outline-offset: 2px;
 }
 
 /* --- Sprint Timer Custom Styling --- */
 .timer-wrapper {
-  --card-bg: #1e293b;
-  --text-color: #38bdf8;
-  --label-color: #94a3b8;
-  --border-color: #334155;
+  --card-bg: var(--bg-surface-high);
+  --text-color: var(--primary-color);
+  --label-color: var(--on-surface-variant);
+  --border-color: var(--bg-border);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -157,7 +364,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 24px 32px;
-  background: rgba(30, 41, 59, 0.5);
+  background: rgb(var(--bg-surface-rgb) / 0.7);
   border: 1px solid var(--border-color);
   border-radius: 16px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
@@ -181,7 +388,7 @@ body {
   font-weight: bold;
   color: var(--text-color);
   letter-spacing: 2px;
-  text-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+  text-shadow: 0 0 12px rgba(var(--primary-color-rgb), 0.4);
 }
 
 .timer-label {
@@ -320,7 +527,7 @@ body {
 /* Glassmorphism strength overrides */
 .glass-card {
   backdrop-filter: blur(var(--glass-blur, 8px)) !important;
-  background: rgba(255, 255, 255, var(--glass-opacity, 0.03)) !important;
+  background: rgb(var(--on-surface-rgb) / var(--glass-opacity, 0.03)) !important;
 }
 
 :root.flat-theme .glass-card {
@@ -337,4 +544,4 @@ body {
 :root.reduce-motion * {
   transition: none !important;
   animation: none !important;
-}
+}

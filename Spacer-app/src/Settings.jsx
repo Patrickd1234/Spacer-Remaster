@@ -748,6 +748,7 @@ export default function Settings() {
                                         <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-md">
                                             {[
                                                 { id: "dark", label: "Obsidian Dark", desc: "Sleek dark olive-grey", color: "#101509" },
+                                                { id: "light", label: "Light", desc: "Bright neutral surfaces", color: "#f7f8f3" },
                                                 { id: "high_contrast", label: "High Contrast", desc: "Pure black and bright borders", color: "#000000" },
                                                 { id: "midnight", label: "Midnight Blue", desc: "Deep space navy blue", color: "#0b0f19" },
                                                 { id: "emerald", label: "Forest Emerald", desc: "Rich organic green theme", color: "#05100a" },
@@ -937,7 +938,7 @@ export default function Settings() {
                                             </div>
                                         </div>
                                         <div className="text-left sm:text-right shrink-0">
-                                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">SECURE VAULT ACTIVE</span>
+                                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-success-container text-success border border-success/30">SECURE VAULT ACTIVE</span>
                                             <p className="font-mono text-[9px] text-on-surface-variant mt-1">Key ID: {masterKey ? `${masterKey.slice(0, 16)}...` : "Loading Vault Key..."}</p>
                                         </div>
                                     </div>
@@ -1237,7 +1238,7 @@ export default function Settings() {
                                 <div className="flex flex-col md:flex-row items-center gap-lg py-sm">
                                     {/* SVG QR Code Illustration with Laser Scan */}
                                     <div className="relative w-40 h-40 bg-white p-3 rounded-2xl flex items-center justify-center border-2 border-primary-fixed shrink-0 overflow-hidden shadow-inner">
-                                        <svg viewBox="0 0 100 100" className="w-full h-full text-neutral-900" fill="currentColor">
+                                        <svg viewBox="0 0 100 100" className="w-full h-full text-on-surface-variant" fill="currentColor">
                                             {/* Outer bounding blocks */}
                                             <rect x="0" y="0" width="30" height="30" fill="currentColor" />
                                             <rect x="3" y="3" width="24" height="24" fill="white" />
@@ -1342,11 +1343,11 @@ export default function Settings() {
                         {/* Step 2: Verification Success & Recovery Keys */}
                         {twoFactorStep === "success" && (
                             <div className="space-y-md">
-                                <div className="flex items-center gap-3 p-md rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-emerald-200">
+                                <div className="flex items-center gap-3 p-md rounded-xl bg-success-container/20 border border-success/30 text-success">
                                     <span className="material-symbols-outlined text-2xl">check_circle</span>
                                     <div>
                                         <h4 className="font-body-md font-bold text-sm">Authenticator Verified Successfully!</h4>
-                                        <p className="text-xs text-neutral-400">Two-factor auth has been configured. Write down these backup codes to prevent lockouts.</p>
+                                        <p className="text-xs text-on-surface-variant">Two-factor auth has been configured. Write down these backup codes to prevent lockouts.</p>
                                     </div>
                                 </div>
 
@@ -1406,11 +1407,11 @@ export default function Settings() {
                         {/* Step 3: Locked Settings Details */}
                         {twoFactorStep === "view" && (
                             <div className="space-y-md">
-                                <div className="p-md rounded-xl bg-amber-950/20 border border-amber-500/20 flex gap-sm items-start text-amber-200">
+                                <div className="p-md rounded-xl bg-warning-container/20 border border-warning/20 flex gap-sm items-start text-warning">
                                     <span className="material-symbols-outlined text-xl">lock_open</span>
                                     <div>
                                         <h4 className="font-body-md font-bold text-sm">Decryption Authentication Required</h4>
-                                        <p className="text-xs text-neutral-400">To inspect vault records or disable 2FA, please verify your credentials to decrypt the keys.</p>
+                                        <p className="text-xs text-on-surface-variant">To inspect vault records or disable 2FA, please verify your credentials to decrypt the keys.</p>
                                     </div>
                                 </div>
 
@@ -1469,7 +1470,7 @@ export default function Settings() {
                         {/* Step 4: Display Decrypted Details */}
                         {twoFactorStep === "view_decrypted" && (
                             <div className="space-y-md">
-                                <div className="p-sm rounded-xl bg-emerald-950/20 border border-emerald-500/20 flex gap-sm items-center text-emerald-200">
+                                <div className="p-sm rounded-xl bg-success-container/20 border border-success/20 flex gap-sm items-center text-success">
                                     <span className="material-symbols-outlined text-base">verified</span>
                                     <p className="text-xs">Secure decryption completed locally on client.</p>
                                 </div>

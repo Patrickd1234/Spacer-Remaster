@@ -532,7 +532,7 @@ export default function SidebarRouter(props) {
                 >
                     <span className="material-symbols-outlined text-2xl">forum</span>
                     {getUnreadConversationsCount() > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white font-extrabold text-[10px] min-w-[20px] h-[20px] rounded-full flex items-center justify-center px-1 border-2 border-[#16191F] animate-bounce">
+                        <span className="absolute -top-1 -right-1 bg-error text-on-surface font-extrabold text-[10px] min-w-[20px] h-[20px] rounded-full flex items-center justify-center px-1 border-2 border-[#16191F] animate-bounce">
                             {getUnreadConversationsCount()}
                         </span>
                     )}
@@ -542,7 +542,7 @@ export default function SidebarRouter(props) {
             {/* Floating Message Hub Window */}
             {showChatModal && (
                 <div 
-                    className={`fixed z-[100] transition-all duration-300 shadow-2xl border border-[#2D3139] bg-[#16191F]/95 backdrop-blur-md rounded-2xl flex flex-col overflow-hidden ${
+                    className={`fixed z-[100] transition-all duration-300 shadow-2xl border border-outline-variant bg-surface-container/95 backdrop-blur-md rounded-2xl flex flex-col overflow-hidden ${
                         isChatMinimized 
                             ? 'bottom-6 right-6 w-[280px] h-[48px]' 
                             : 'bottom-6 right-6 w-[360px] h-[480px]'
@@ -551,7 +551,7 @@ export default function SidebarRouter(props) {
                     {/* Header */}
                     <div 
                         onClick={() => isChatMinimized && setIsChatMinimized(false)}
-                        className={`px-4 py-3 border-b border-[#2D3139] flex items-center justify-between bg-black/20 ${isChatMinimized ? 'cursor-pointer hover:bg-black/30' : ''}`}
+                        className={`px-4 py-3 border-b border-outline-variant flex items-center justify-between bg-black/20 ${isChatMinimized ? 'cursor-pointer hover:bg-black/30' : ''}`}
                     >
                         <div className="flex items-center gap-2 overflow-hidden">
                             {(chatRecipient || activeGroupChat) && !isChatMinimized ? (
@@ -561,22 +561,22 @@ export default function SidebarRouter(props) {
                                         setChatRecipient(null);
                                         setActiveGroupChat(null);
                                     }}
-                                    className="text-[#8c947b] hover:text-white cursor-pointer mr-1 flex items-center"
+                                    className="text-on-surface-variant hover:text-on-surface cursor-pointer mr-1 flex items-center"
                                 >
                                     <span className="material-symbols-outlined text-base">arrow_back</span>
                                 </button>
                             ) : null}
                             
-                            <div className="w-5 h-5 rounded-full bg-[#5b644d]/20 text-[#aff82a] flex items-center justify-center font-bold text-[10px]">
+                            <div className="w-5 h-5 rounded-full bg-surface-container-high/20 text-primary-fixed flex items-center justify-center font-bold text-[10px]">
                                 {chatRecipient ? (chatRecipient.name || "?").charAt(0).toUpperCase() : (activeGroupChat ? "#" : "M")}
                             </div>
                             
-                            <h4 className="text-white font-semibold text-xs truncate flex items-center gap-1.5">
+                            <h4 className="text-on-surface font-semibold text-xs truncate flex items-center gap-1.5">
                                 {chatRecipient ? (chatRecipient.name || "Team Member") : activeGroupChat ? activeGroupChat.name : (
                                     <>
                                         Messages
                                         {getUnreadConversationsCount() > 0 && (
-                                            <span className="bg-red-500 text-white font-extrabold text-[9px] min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
+                                            <span className="bg-error text-on-surface font-extrabold text-[9px] min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
                                                 {getUnreadConversationsCount()}
                                             </span>
                                         )}
@@ -591,7 +591,7 @@ export default function SidebarRouter(props) {
                                     e.stopPropagation();
                                     setIsChatMinimized(!isChatMinimized);
                                 }}
-                                className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
+                                className="text-on-surface-variant hover:text-on-surface cursor-pointer p-0.5 flex items-center justify-center transition-colors"
                             >
                                 <span className="material-symbols-outlined text-sm">{isChatMinimized ? "open_in_full" : "minimize"}</span>
                             </button>
@@ -602,7 +602,7 @@ export default function SidebarRouter(props) {
                                     setChatRecipient(null);
                                     setActiveGroupChat(null);
                                 }}
-                                className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
+                                className="text-on-surface-variant hover:text-on-surface cursor-pointer p-0.5 flex items-center justify-center transition-colors"
                             >
                                 <span className="material-symbols-outlined text-sm">close</span>
                             </button>
@@ -614,17 +614,17 @@ export default function SidebarRouter(props) {
                             {!chatRecipient && !activeGroupChat ? (
                                 /* UNIFIED INBOX LISTING */
                                 <div className="flex-1 flex flex-col overflow-hidden bg-black/5">
-                                    <div className="p-3 border-b border-[#2D3139] bg-black/10">
+                                    <div className="p-3 border-b border-outline-variant bg-black/10">
                                         <div className="relative mb-2">
                                             <input 
                                                 type="text"
                                                 placeholder="Search people or groups..."
                                                 value={searchQuery}
                                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="w-full bg-[#16191F] border border-white/10 rounded text-white text-xs px-3 py-1.5 focus:outline-none focus:border-[var(--primary-color)]"
+                                                className="w-full bg-surface-container border border-on-surface/10 rounded text-on-surface text-xs px-3 py-1.5 focus:outline-none focus:border-[var(--primary-color)]"
                                             />
                                         </div>
-                                        <p className="text-[10px] text-[#8c947b] font-bold uppercase tracking-wider">Inbox</p>
+                                        <p className="text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">Inbox</p>
                                     </div>
                                     <div className="flex-1 overflow-y-auto divide-y divide-[#2D3139]/40 scrollbar-thin">
                                         {(() => {
@@ -657,7 +657,7 @@ export default function SidebarRouter(props) {
                                             });
 
                                             if (combinedList.length === 0) {
-                                                return <p className="text-xs text-[#8c947b] italic text-center py-8">{lowerQuery ? "No results found" : "No active chats. Search to start one!"}</p>;
+                                                return <p className="text-xs text-on-surface-variant italic text-center py-8">{lowerQuery ? "No results found" : "No active chats. Search to start one!"}</p>;
                                             }
 
                                             return combinedList.map(item => {
@@ -671,7 +671,7 @@ export default function SidebarRouter(props) {
                                                                 setGroupUnreadCounts(prev => ({ ...prev, [item.id]: false }));
                                                                 setActiveGroupChat(item);
                                                             }}
-                                                            className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
+                                                            className="px-4 py-3 flex items-center justify-between hover:bg-on-surface/5 transition-colors cursor-pointer"
                                                         >
                                                             <div className="flex items-center gap-3 overflow-hidden flex-1">
                                                                 <div className="w-8 h-8 rounded-xl bg-[var(--primary-color)]/20 flex items-center justify-center font-bold text-[var(--primary-color)] text-xs uppercase shrink-0">
@@ -679,13 +679,13 @@ export default function SidebarRouter(props) {
                                                                 </div>
                                                                 <div className="overflow-hidden flex-1">
                                                                     <div className="flex items-center justify-between gap-1">
-                                                                        <p className="text-white font-semibold text-xs truncate">{item.name}</p>
+                                                                        <p className="text-on-surface font-semibold text-xs truncate">{item.name}</p>
                                                                     </div>
-                                                                    <p className="text-[10px] text-[#8c947b] truncate mt-0.5">Group Channel</p>
+                                                                    <p className="text-[10px] text-on-surface-variant truncate mt-0.5">Group Channel</p>
                                                                 </div>
                                                             </div>
                                                             {isUnread && (
-                                                                <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0"></span>
+                                                                <span className="ml-2 bg-primary-accent text-on-primary font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0"></span>
                                                             )}
                                                         </div>
                                                     );
@@ -706,22 +706,22 @@ export default function SidebarRouter(props) {
                                                                 localStorage.setItem(`dm_last_read_${item.user_id}`, Date.now());
                                                                 handleOpenChat(item);
                                                             }}
-                                                            className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
+                                                            className="px-4 py-3 flex items-center justify-between hover:bg-on-surface/5 transition-colors cursor-pointer"
                                                         >
                                                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                                                <div className="w-8 h-8 rounded-xl bg-[#2D3139] flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
+                                                                <div className="w-8 h-8 rounded-xl bg-surface-container-highest flex items-center justify-center font-bold text-on-surface text-xs uppercase shrink-0">
                                                                     {(item.name || "?").charAt(0)}
                                                                 </div>
                                                                 <div className="overflow-hidden flex-1">
                                                                     <div className="flex items-center justify-between gap-1">
-                                                                        <p className="text-white font-semibold text-xs truncate">{item.name || "User"}</p>
+                                                                        <p className="text-on-surface font-semibold text-xs truncate">{item.name || "User"}</p>
                                                                         {lastMsg && (
-                                                                            <span className="text-[9px] text-[#8c947b] shrink-0">
+                                                                            <span className="text-[9px] text-on-surface-variant shrink-0">
                                                                                 {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                                             </span>
                                                                         )}
                                                                     </div>
-                                                                    <p className="text-[10px] text-[#8c947b] truncate mt-0.5">
+                                                                    <p className="text-[10px] text-on-surface-variant truncate mt-0.5">
                                                                         {lastMsg ? (
                                                                             lastMsg.fileAttachment ? "📎 Attached file" : lastMsg.content
                                                                         ) : (
@@ -731,7 +731,7 @@ export default function SidebarRouter(props) {
                                                                 </div>
                                                             </div>
                                                             {isUnread && (
-                                                                <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0">
+                                                                <span className="ml-2 bg-primary-accent text-on-primary font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0">
                                                                 </span>
                                                             )}
                                                         </div>
@@ -749,9 +749,9 @@ export default function SidebarRouter(props) {
                                     <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
                                         {chatMessages.length === 0 ? (
                                             <div className="h-full flex flex-col items-center justify-center text-center p-4">
-                                                <span className="material-symbols-outlined text-[#8c947b] text-3xl mb-1">forum</span>
-                                                <p className="text-white font-medium text-xs">No messages yet</p>
-                                                <p className="text-[10px] text-[#8c947b] mt-0.5">Send a message to start.</p>
+                                                <span className="material-symbols-outlined text-on-surface-variant text-3xl mb-1">forum</span>
+                                                <p className="text-on-surface font-medium text-xs">No messages yet</p>
+                                                <p className="text-[10px] text-on-surface-variant mt-0.5">Send a message to start.</p>
                                             </div>
                                         ) : (
                                             [...chatMessages]
@@ -781,7 +781,7 @@ export default function SidebarRouter(props) {
 
                                                         {/* Quoted Message Link */}
                                                         {msg.replyToId && (
-                                                            <div className={`flex items-center gap-1 text-[9px] mb-1 opacity-75 ${isMe ? 'justify-end text-primary-accent' : 'text-[#8c947b]'}`}>
+                                                            <div className={`flex items-center gap-1 text-[9px] mb-1 opacity-75 ${isMe ? 'justify-end text-primary-accent' : 'text-on-surface-variant'}`}>
                                                                 <span className="material-symbols-outlined text-[10px]">reply</span>
                                                                 <span>Quoting {msg.replyToSenderName || 'Member'}: "{msg.replyToContent}"</span>
                                                             </div>
@@ -789,19 +789,19 @@ export default function SidebarRouter(props) {
 
                                                         {/* Actions Hover Menu */}
                                                         {!isEditing && (
-                                                            <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1.5 absolute -top-5 z-20 transition-opacity bg-[#1C1F26] border border-[#2D3139] rounded-lg px-1.5 py-0.5 ${isMe ? 'right-0' : 'left-0'}`}>
+                                                            <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1.5 absolute -top-5 z-20 transition-opacity bg-surface-container border border-outline-variant rounded-lg px-1.5 py-0.5 ${isMe ? 'right-0' : 'left-0'}`}>
                                                                 {isMe && (
                                                                     <>
                                                                         <button 
                                                                             onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content); }}
-                                                                            className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center"
+                                                                            className="text-on-surface-variant hover:text-on-surface cursor-pointer p-0.5 flex items-center justify-center"
                                                                             title="Edit"
                                                                         >
                                                                             <span className="material-symbols-outlined text-[13px]">edit</span>
                                                                         </button>
                                                                         <button 
                                                                             onClick={() => handleDeleteMessage(msg.id)}
-                                                                            className="text-[#8c947b] hover:text-red-400 cursor-pointer p-0.5 flex items-center justify-center"
+                                                                            className="text-on-surface-variant hover:text-error cursor-pointer p-0.5 flex items-center justify-center"
                                                                             title="Delete"
                                                                         >
                                                                             <span className="material-symbols-outlined text-[13px]">delete</span>
@@ -810,14 +810,14 @@ export default function SidebarRouter(props) {
                                                                 )}
                                                                 <button 
                                                                     onClick={() => setReplyingToMessage(msg)}
-                                                                    className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center"
+                                                                    className="text-on-surface-variant hover:text-on-surface cursor-pointer p-0.5 flex items-center justify-center"
                                                                     title="Quote Reply"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">reply</span>
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => handleTogglePinMessage(msg.id)}
-                                                                    className={`cursor-pointer p-0.5 flex items-center justify-center transition-colors ${msg.pinned ? 'text-primary-accent hover:text-white' : 'text-[#8c947b] hover:text-white'}`}
+                                                                    className={`cursor-pointer p-0.5 flex items-center justify-center transition-colors ${msg.pinned ? 'text-primary-accent hover:text-on-surface' : 'text-on-surface-variant hover:text-on-surface'}`}
                                                                     title={msg.pinned ? "Unpin Message" : "Pin Message"}
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">{msg.pinned ? "keep_off" : "push_pin"}</span>
@@ -837,13 +837,13 @@ export default function SidebarRouter(props) {
                                                         {/* Message bubble */}
                                                         <div className={`rounded-2xl px-3 py-2 text-xs relative ${
                                                             isMe 
-                                                                ? 'bg-primary-accent text-[#0F1115] font-medium rounded-tr-none' 
-                                                                : 'bg-[#2D3139] text-white rounded-tl-none'
+                                                                ? 'bg-primary-accent text-on-primary font-medium rounded-tr-none' 
+                                                                : 'bg-surface-container-highest text-on-surface rounded-tl-none'
                                                         } ${isMe ? '' : 'order-1'} ${msg.pinned ? 'ring-1 ring-primary-accent border border-primary-accent/40' : ''}`}>
                                                             
                                                             {/* Attached File */}
                                                             {msg.fileAttachment && (
-                                                                <div className="mb-2 p-1.5 rounded-lg bg-black/20 border border-white/5 max-w-[240px]">
+                                                                <div className="mb-2 p-1.5 rounded-lg bg-black/20 border border-on-surface/5 max-w-[240px]">
                                                                     {msg.fileAttachment.type.startsWith("image/") ? (
                                                                         <img 
                                                                             src={msg.fileAttachment.dataUrl} 
@@ -874,19 +874,19 @@ export default function SidebarRouter(props) {
                                                                     <textarea
                                                                         value={editingText}
                                                                         onChange={(e) => setEditingText(e.target.value)}
-                                                                        className="w-full bg-[#0F1115] border border-[#2D3139] text-white p-1.5 rounded text-[11px] focus:outline-none"
+                                                                        className="w-full bg-background border border-outline-variant text-on-surface p-1.5 rounded text-[11px] focus:outline-none"
                                                                         rows={2}
                                                                     />
                                                                     <div className="flex justify-end gap-1.5">
                                                                         <button 
                                                                             onClick={() => { setEditingMessageId(null); setEditingText(""); }}
-                                                                            className="text-[10px] text-neutral-400 hover:text-white px-1.5 py-0.5 rounded cursor-pointer"
+                                                                            className="text-[10px] text-on-surface-variant hover:text-on-surface px-1.5 py-0.5 rounded cursor-pointer"
                                                                         >
                                                                             Cancel
                                                                         </button>
                                                                         <button 
                                                                             onClick={() => handleEditMessage(msg.id, editingText)}
-                                                                            className="text-[10px] bg-white text-black font-semibold px-2 py-0.5 rounded hover:bg-neutral-200 cursor-pointer"
+                                                                            className="text-[10px] bg-white text-on-surface font-semibold px-2 py-0.5 rounded hover:bg-surface-container-high cursor-pointer"
                                                                         >
                                                                             Save
                                                                         </button>
@@ -898,11 +898,11 @@ export default function SidebarRouter(props) {
 
                                                             {/* Reaction Badges */}
                                                             {msg.reactions && msg.reactions.length > 0 && (
-                                                                <div className="absolute -bottom-2.5 right-2 flex items-center gap-0.5 bg-[#1C1F26] border border-[#2D3139] rounded-full px-1.5 py-0.5 shadow-md scale-90 select-none">
+                                                                <div className="absolute -bottom-2.5 right-2 flex items-center gap-0.5 bg-surface-container border border-outline-variant rounded-full px-1.5 py-0.5 shadow-md scale-90 select-none">
                                                                     {msg.reactions.map((r, idx) => (
                                                                         <span key={idx} className="text-[10px] flex items-center gap-0.5" title={`${r.users.length} reaction(s)`}>
                                                                             <span>{r.emoji}</span>
-                                                                            {r.users.length > 1 && <span className="text-[8px] text-[#8c947b] font-bold">{r.users.length}</span>}
+                                                                            {r.users.length > 1 && <span className="text-[8px] text-on-surface-variant font-bold">{r.users.length}</span>}
                                                                         </span>
                                                                     ))}
                                                                 </div>
@@ -910,7 +910,7 @@ export default function SidebarRouter(props) {
                                                         </div>
 
                                                         {/* Timestamp and Edited tag */}
-                                                        <span className="text-[8px] text-[#8c947b] mt-1 opacity-75">
+                                                        <span className="text-[8px] text-on-surface-variant mt-1 opacity-75">
                                                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             {msg.edited && <span className="ml-1 italic font-medium text-primary-accent">(edited)</span>}
                                                         </span>
@@ -923,14 +923,14 @@ export default function SidebarRouter(props) {
 
                                     {/* Quote Reply Banner */}
                                     {replyingToMessage && (
-                                        <div className="px-3 py-1.5 bg-black/40 border-t border-[#2D3139] flex items-center justify-between text-[10px] text-primary-accent">
+                                        <div className="px-3 py-1.5 bg-black/40 border-t border-outline-variant flex items-center justify-between text-[10px] text-primary-accent">
                                             <div className="flex items-center gap-1.5 overflow-hidden">
                                                 <span className="material-symbols-outlined text-xs">reply</span>
                                                 <span className="truncate">Replying to: "{replyingToMessage.content}"</span>
                                             </div>
                                             <button 
                                                 onClick={() => setReplyingToMessage(null)}
-                                                className="text-[#8c947b] hover:text-white cursor-pointer"
+                                                className="text-on-surface-variant hover:text-on-surface cursor-pointer"
                                             >
                                                 <span className="material-symbols-outlined text-xs">close</span>
                                             </button>
@@ -939,18 +939,18 @@ export default function SidebarRouter(props) {
 
                                     {/* Attachment Preview */}
                                     {attachedFile && (
-                                        <div className="px-3 py-2 bg-black/40 border-t border-[#2D3139] flex items-center justify-between text-[10px] text-primary-accent">
+                                        <div className="px-3 py-2 bg-black/40 border-t border-outline-variant flex items-center justify-between text-[10px] text-primary-accent">
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <span className="material-symbols-outlined text-xs flex-shrink-0">
                                                     {attachedFile.type.startsWith("image/") ? "image" : "description"}
                                                 </span>
                                                 <span className="truncate font-medium">{attachedFile.name}</span>
-                                                <span className="text-[8px] text-[#8c947b]">({attachedFile.size})</span>
+                                                <span className="text-[8px] text-on-surface-variant">({attachedFile.size})</span>
                                             </div>
                                             <button 
                                                 type="button"
                                                 onClick={() => setAttachedFile(null)}
-                                                className="text-[#8c947b] hover:text-white cursor-pointer"
+                                                className="text-on-surface-variant hover:text-on-surface cursor-pointer"
                                             >
                                                 <span className="material-symbols-outlined text-xs">close</span>
                                             </button>
@@ -958,7 +958,7 @@ export default function SidebarRouter(props) {
                                     )}
 
                                     {/* Input Footer */}
-                                    <form onSubmit={handleSendMessage} className="p-3 border-t border-[#2D3139] bg-black/20 flex gap-2 items-center relative">
+                                    <form onSubmit={handleSendMessage} className="p-3 border-t border-outline-variant bg-black/20 flex gap-2 items-center relative">
                                         {/* Hidden input tags */}
                                         <input 
                                             type="file" 
@@ -980,7 +980,7 @@ export default function SidebarRouter(props) {
                                             <button
                                                 type="button"
                                                 onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                                                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
+                                                className="w-8 h-8 rounded-xl bg-on-surface/5 hover:bg-on-surface/10 text-on-surface-variant hover:text-on-surface flex items-center justify-center cursor-pointer transition-colors"
                                             >
                                                 <span className="material-symbols-outlined text-base">attach_file</span>
                                             </button>
@@ -993,11 +993,11 @@ export default function SidebarRouter(props) {
                                                         className="fixed inset-0 z-40" 
                                                         onClick={() => setShowAttachmentMenu(false)}
                                                     />
-                                                    <div className="absolute bottom-10 left-0 bg-[#191c21] border border-[#2D3139] rounded-2xl p-2 w-48 shadow-2xl z-50 flex flex-col gap-1">
+                                                    <div className="absolute bottom-10 left-0 bg-surface-container border border-outline-variant rounded-2xl p-2 w-48 shadow-2xl z-50 flex flex-col gap-1">
                                                         <button
                                                             type="button"
                                                             onClick={() => { imageInputRef.current?.click(); }}
-                                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-xs font-semibold text-white transition-colors cursor-pointer"
+                                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-on-surface/5 text-left text-xs font-semibold text-on-surface transition-colors cursor-pointer"
                                                         >
                                                             <span className="material-symbols-outlined text-[#ff5722] text-lg">image</span>
                                                             <span>Photos & Videos</span>
@@ -1005,7 +1005,7 @@ export default function SidebarRouter(props) {
                                                         <button
                                                             type="button"
                                                             onClick={() => { docInputRef.current?.click(); }}
-                                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 text-left text-xs font-semibold text-white transition-colors cursor-pointer"
+                                                            className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-on-surface/5 text-left text-xs font-semibold text-on-surface transition-colors cursor-pointer"
                                                         >
                                                             <span className="material-symbols-outlined text-[#2196f3] text-lg">description</span>
                                                             <span>Document</span>
@@ -1020,11 +1020,11 @@ export default function SidebarRouter(props) {
                                             value={newMessage}
                                             onChange={(e) => setNewMessage(e.target.value)}
                                             placeholder={attachedFile ? "Add a caption..." : `Message ${chatRecipient.name ? chatRecipient.name.split(' ')[0] : 'member'}...`}
-                                            className="flex-1 bg-[#0F1115] border border-[#2D3139] rounded-xl px-3 py-2 text-white text-xs focus:ring-1 focus:ring-primary-accent focus:outline-none"
+                                            className="flex-1 bg-background border border-outline-variant rounded-xl px-3 py-2 text-on-surface text-xs focus:ring-1 focus:ring-primary-accent focus:outline-none"
                                         />
                                         <button
                                             type="submit"
-                                            className="w-8 h-8 bg-primary-accent text-[#0F1115] hover:opacity-90 rounded-xl flex items-center justify-center transition-all flex-shrink-0 cursor-pointer"
+                                            className="w-8 h-8 bg-primary-accent text-on-primary hover:opacity-90 rounded-xl flex items-center justify-center transition-all flex-shrink-0 cursor-pointer"
                                         >
                                             <span className="material-symbols-outlined text-base">send</span>
                                         </button>

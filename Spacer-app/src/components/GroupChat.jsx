@@ -372,26 +372,26 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
     };
 
     if (loading) {
-        return <div className="h-full flex items-center justify-center text-white/50">Loading messages...</div>;
+        return <div className="h-full flex items-center justify-center text-on-surface-variant">Loading messages...</div>;
     }
 
     return (
-        <div className={`flex ${fabMode ? 'h-full bg-transparent' : 'h-[calc(100vh-140px)] bg-[#191c21] rounded-2xl overflow-hidden border border-white/5'}`}>
+        <div className={`flex ${fabMode ? 'h-full bg-transparent' : 'h-[calc(100vh-140px)] bg-surface-container rounded-2xl overflow-hidden border border-on-surface/5'}`}>
             {/* Sidebar: Channels (Hidden in FAB Mode) */}
             {!fabMode && (
-                <div className="w-64 bg-[#1e2126] border-r border-white/5 flex flex-col">
-                    <div className="p-4 border-b border-white/5 flex items-center justify-between">
-                        <h3 className="font-semibold text-white/90">Channels</h3>
+                <div className="w-64 bg-surface-container border-r border-on-surface/5 flex flex-col">
+                    <div className="p-4 border-b border-on-surface/5 flex items-center justify-between">
+                        <h3 className="font-semibold text-on-surface">Channels</h3>
                         <button 
                             onClick={() => setShowCreateModal(true)}
-                            className="text-white/50 hover:text-white transition-colors p-1"
+                            className="text-on-surface-variant hover:text-on-surface transition-colors p-1"
                         >
                             <span className="material-symbols-outlined text-[20px]">add</span>
                         </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2">
                         {channels.length === 0 && (
-                            <div className="text-sm text-white/40 p-2 text-center mt-4">
+                            <div className="text-sm text-on-surface-variant p-2 text-center mt-4">
                                 No channels yet. Create one!
                             </div>
                         )}
@@ -402,7 +402,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 className={`w-full flex items-center gap-2 p-2 rounded-lg mb-1 text-sm transition-colors ${
                                     activeChannel?.id === channel.id 
                                         ? 'bg-[var(--primary-color)]/20 text-[var(--primary-color)] font-medium' 
-                                        : 'text-white/70 hover:bg-white/5'
+                                        : 'text-on-surface-variant hover:bg-on-surface/5'
                                 }`}
                             >
                                 <span className="material-symbols-outlined text-[18px]">
@@ -420,17 +420,17 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
-                        <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1e2126]">
+                        <div className="h-14 border-b border-on-surface/5 flex items-center justify-between px-6 bg-surface-container">
                             <div className="flex items-center gap-3">
-                                <span className="material-symbols-outlined text-white/50">
+                                <span className="material-symbols-outlined text-on-surface-variant">
                                     {activeChannel.is_private ? 'lock' : 'tag'}
                                 </span>
-                                <h2 className="font-semibold text-white/90">{activeChannel.name}</h2>
+                                <h2 className="font-semibold text-on-surface">{activeChannel.name}</h2>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button 
                                     onClick={() => setShowMembersModal(true)}
-                                    className="flex items-center gap-2 text-sm text-white/50 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5"
+                                    className="flex items-center gap-2 text-sm text-on-surface-variant hover:text-on-surface transition-colors p-2 rounded-lg hover:bg-on-surface/5"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">group</span>
                                     <span>{activeChannelMembers.length}</span>
@@ -440,7 +440,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                         setEditChannelName(activeChannel.name);
                                         setShowSettingsModal(true);
                                     }}
-                                    className="text-white/50 hover:text-white transition-colors p-2 rounded-lg hover:bg-white/5"
+                                    className="text-on-surface-variant hover:text-on-surface transition-colors p-2 rounded-lg hover:bg-on-surface/5"
                                 >
                                     <span className="material-symbols-outlined text-[20px]">settings</span>
                                 </button>
@@ -450,8 +450,8 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                         {/* Messages List */}
                         <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
                             {messages.length === 0 && (
-                                <div className="h-full flex flex-col items-center justify-center text-white/40 space-y-4">
-                                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
+                                <div className="h-full flex flex-col items-center justify-center text-on-surface-variant space-y-4">
+                                    <div className="w-16 h-16 rounded-full bg-on-surface/5 flex items-center justify-center">
                                         <span className="material-symbols-outlined text-3xl">chat</span>
                                     </div>
                                     <p>No messages yet. Start the conversation!</p>
@@ -469,17 +469,17 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-4 bg-[#1e2126] border-t border-white/5">
+                        <div className="p-4 bg-surface-container border-t border-on-surface/5">
                             {/* Reply Indicator */}
                             {replyingTo && (
                                 <div className="flex items-center justify-between bg-black/20 p-2 rounded-t-lg border-l-2 border-[var(--primary-color)] mb-[-1px]">
-                                    <div className="text-xs text-white/70">
+                                    <div className="text-xs text-on-surface-variant">
                                         Replying to <span className="font-semibold">{replyingTo.users?.name || 'User'}</span>: 
                                         <span className="ml-1 opacity-70 truncate inline-block max-w-[200px] align-bottom">
                                             {replyingTo.content}
                                         </span>
                                     </div>
-                                    <button onClick={() => setReplyingTo(null)} className="text-white/50 hover:text-white">
+                                    <button onClick={() => setReplyingTo(null)} className="text-on-surface-variant hover:text-on-surface">
                                         <span className="material-symbols-outlined text-sm">close</span>
                                     </button>
                                 </div>
@@ -487,9 +487,9 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
 
                             {/* File Error Indicator */}
                             {fileError && (
-                                <div className="flex items-center justify-between bg-red-900/30 p-2 rounded-t-lg border-l-2 border-red-500 mb-[-1px]">
-                                    <div className="text-xs text-red-200">{fileError}</div>
-                                    <button onClick={() => setFileError('')} className="text-red-300 hover:text-red-100">
+                                <div className="flex items-center justify-between bg-error-container/30 p-2 rounded-t-lg border-l-2 border-error mb-[-1px]">
+                                    <div className="text-xs text-error">{fileError}</div>
+                                    <button onClick={() => setFileError('')} className="text-error hover:text-error">
                                         <span className="material-symbols-outlined text-sm">close</span>
                                     </button>
                                 </div>
@@ -499,7 +499,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                             {attachments.length > 0 && (
                                 <div className="flex gap-2 mb-2 p-2 bg-black/20 rounded-lg flex-wrap">
                                     {attachments.map((att, i) => (
-                                        <div key={i} className="flex items-center gap-1 bg-white/10 p-1 px-2 rounded-md text-xs">
+                                        <div key={i} className="flex items-center gap-1 bg-on-surface/10 p-1 px-2 rounded-md text-xs">
                                             <span className="truncate max-w-[100px]">{att.name}</span>
                                             <button onClick={() => setAttachments(prev => prev.filter((_, idx) => idx !== i))} className="hover:text-error">
                                                 <span className="material-symbols-outlined text-[14px]">close</span>
@@ -513,7 +513,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 <button 
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="p-3 rounded-xl bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                                    className="p-3 rounded-xl bg-on-surface/5 text-on-surface-variant hover:bg-on-surface/10 hover:text-on-surface transition-colors"
                                 >
                                     <span className="material-symbols-outlined">attach_file</span>
                                 </button>
@@ -530,12 +530,12 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder={`Message ${activeChannel.name}...`}
-                                    className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 text-white placeholder-white/30 focus:outline-none focus:border-[var(--primary-color)] transition-colors ${replyingTo ? 'rounded-tl-none' : ''}`}
+                                    className={`flex-1 bg-on-surface/5 border border-on-surface/10 rounded-xl px-4 text-on-surface placeholder:text-on-surface-variant/30 focus:outline-none focus:border-[var(--primary-color)] transition-colors ${replyingTo ? 'rounded-tl-none' : ''}`}
                                 />
                                 <button 
                                     type="submit"
                                     disabled={!newMessage.trim() && attachments.length === 0}
-                                    className="p-3 rounded-xl bg-[var(--primary-color)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 transition-all flex items-center justify-center"
+                                    className="p-3 rounded-xl bg-[var(--primary-color)] text-on-surface disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 transition-all flex items-center justify-center"
                                 >
                                     <span className="material-symbols-outlined text-[20px] ml-1">send</span>
                                 </button>
@@ -543,7 +543,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                         </div>
                     </>
                 ) : (
-                    <div className="h-full flex items-center justify-center text-white/50">
+                    <div className="h-full flex items-center justify-center text-on-surface-variant">
                         Select or create a channel to start messaging
                     </div>
                 )}
@@ -551,25 +551,25 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* Create Channel Modal Overlay */}
                 {showCreateModal && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
-                            <h3 className="text-lg font-semibold text-white/90 mb-4">Create Channel</h3>
+                        <div className="bg-surface-container border border-on-surface/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                            <h3 className="text-lg font-semibold text-on-surface mb-4">Create Channel</h3>
                             
                             {createError && (
-                                <div className="mb-4 p-3 bg-red-900/30 border border-red-500/50 rounded-xl text-red-200 text-sm">
+                                <div className="mb-4 p-3 bg-error-container/30 border border-error/50 rounded-xl text-error text-sm">
                                     {createError}
                                 </div>
                             )}
 
-                            <label className="block text-sm text-white/70 mb-1">Channel Name</label>
+                            <label className="block text-sm text-on-surface-variant mb-1">Channel Name</label>
                             <input 
                                 type="text"
                                 value={newChannelName}
                                 onChange={(e) => setNewChannelName(e.target.value)}
                                 placeholder="e.g. general, design-team"
-                                className="w-full bg-[#141518] border border-white/10 rounded-xl px-4 py-2 text-white placeholder-white/20 focus:outline-none focus:border-[var(--primary-color)] mb-4"
+                                className="w-full bg-surface-container-low border border-on-surface/10 rounded-xl px-4 py-2 text-on-surface placeholder:text-on-surface-variant/20 focus:outline-none focus:border-[var(--primary-color)] mb-4"
                             />
 
-                            <label className="flex items-center gap-2 text-sm text-white/70 mb-4 cursor-pointer">
+                            <label className="flex items-center gap-2 text-sm text-on-surface-variant mb-4 cursor-pointer">
                                 <input 
                                     type="checkbox"
                                     checked={isPrivate}
@@ -581,12 +581,12 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
 
                             {isPrivate && members.length > 0 && (
                                 <div className="mb-4">
-                                    <label className="block text-sm text-white/70 mb-2">Select Members</label>
-                                    <div className="max-h-40 overflow-y-auto space-y-1 bg-[#141518] border border-white/5 rounded-xl p-2">
+                                    <label className="block text-sm text-on-surface-variant mb-2">Select Members</label>
+                                    <div className="max-h-40 overflow-y-auto space-y-1 bg-surface-container-low border border-on-surface/5 rounded-xl p-2">
                                         {members.filter(m => (m.id || m.user_id) !== currentUserId).map(member => {
                                             const memberId = member.id || member.user_id;
                                             return (
-                                            <label key={memberId} className="flex items-center gap-2 text-sm text-white/80 p-1 hover:bg-white/5 rounded cursor-pointer">
+                                            <label key={memberId} className="flex items-center gap-2 text-sm text-on-surface p-1 hover:bg-on-surface/5 rounded cursor-pointer">
                                                 <input 
                                                     type="checkbox"
                                                     checked={selectedMembers.includes(memberId)}
@@ -606,14 +606,14 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                             <div className="flex justify-end gap-2 mt-6">
                                 <button 
                                     onClick={() => setShowCreateModal(false)}
-                                    className="px-4 py-2 rounded-xl text-white/70 hover:bg-white/5 transition-colors"
+                                    className="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-on-surface/5 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button 
                                     onClick={createChannel}
                                     disabled={!newChannelName.trim()}
-                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-white disabled:opacity-50 transition-colors"
+                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-on-surface disabled:opacity-50 transition-colors"
                                 >
                                     Create
                                 </button>
@@ -625,14 +625,14 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* View Members Modal */}
                 {showMembersModal && activeChannel && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                        <div className="bg-surface-container border border-on-surface/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="text-lg font-semibold text-white/90">
+                                <h3 className="text-lg font-semibold text-on-surface">
                                     Members in #{activeChannel.name}
                                 </h3>
                                 <button 
                                     onClick={() => setShowMembersModal(false)}
-                                    className="text-white/50 hover:text-white transition-colors"
+                                    className="text-on-surface-variant hover:text-on-surface transition-colors"
                                 >
                                     <span className="material-symbols-outlined">close</span>
                                 </button>
@@ -644,25 +644,25 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                         setShowMembersModal(false);
                                         setShowAddMemberModal(true);
                                     }}
-                                    className="w-full flex items-center justify-center gap-2 py-2 px-4 mb-4 bg-white/5 hover:bg-white/10 rounded-xl text-sm font-medium text-white transition-colors"
+                                    className="w-full flex items-center justify-center gap-2 py-2 px-4 mb-4 bg-on-surface/5 hover:bg-on-surface/10 rounded-xl text-sm font-medium text-on-surface transition-colors"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">person_add</span>
                                     Add New Members
                                 </button>
                             )}
                             
-                            <div className="max-h-60 overflow-y-auto space-y-2 bg-[#141518] border border-white/5 rounded-xl p-3">
+                            <div className="max-h-60 overflow-y-auto space-y-2 bg-surface-container-low border border-on-surface/5 rounded-xl p-3">
                                 {activeChannelMembers.length === 0 ? (
-                                    <div className="text-sm text-white/50 text-center py-4">No members found.</div>
+                                    <div className="text-sm text-on-surface-variant text-center py-4">No members found.</div>
                                 ) : (
                                     activeChannelMembers.map(member => (
-                                        <div key={member.id || member.user_id} className="flex items-center gap-3 text-sm text-white/90 p-2 hover:bg-white/5 rounded-lg transition-colors">
+                                        <div key={member.id || member.user_id} className="flex items-center gap-3 text-sm text-on-surface p-2 hover:bg-on-surface/5 rounded-lg transition-colors">
                                             <div className="w-8 h-8 rounded-full bg-[var(--primary-color)]/20 text-[var(--primary-color)] flex items-center justify-center font-bold">
                                                 {(member.name || member.email || '?').charAt(0).toUpperCase()}
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="font-medium">{member.name || 'Unknown User'}</span>
-                                                <span className="text-xs text-white/50">{member.email || ''}</span>
+                                                <span className="text-xs text-on-surface-variant">{member.email || ''}</span>
                                             </div>
                                         </div>
                                     ))
@@ -675,10 +675,10 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* Add Member to Private Channel Modal */}
                 {showAddMemberModal && activeChannel && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
-                            <h3 className="text-lg font-semibold text-white/90 mb-4">Add Members</h3>
+                        <div className="bg-surface-container border border-on-surface/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                            <h3 className="text-lg font-semibold text-on-surface mb-4">Add Members</h3>
                             
-                            <div className="max-h-40 overflow-y-auto space-y-1 bg-[#141518] border border-white/5 rounded-xl p-2 mb-6">
+                            <div className="max-h-40 overflow-y-auto space-y-1 bg-surface-container-low border border-on-surface/5 rounded-xl p-2 mb-6">
                                 {members
                                     .filter(m => {
                                         const uid = m.id || m.user_id;
@@ -688,7 +688,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     .map(member => {
                                         const memberId = member.id || member.user_id;
                                         return (
-                                            <label key={memberId} className="flex items-center gap-2 text-sm text-white/80 p-1 hover:bg-white/5 rounded cursor-pointer">
+                                            <label key={memberId} className="flex items-center gap-2 text-sm text-on-surface p-1 hover:bg-on-surface/5 rounded cursor-pointer">
                                                 <input 
                                                     type="checkbox"
                                                     checked={newMembersToAdd.includes(memberId)}
@@ -710,14 +710,14 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                         setShowAddMemberModal(false);
                                         setNewMembersToAdd([]);
                                     }}
-                                    className="px-4 py-2 rounded-xl text-white/70 hover:bg-white/5 transition-colors"
+                                    className="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-on-surface/5 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button 
                                     onClick={handleAddMembersToChannel}
                                     disabled={newMembersToAdd.length === 0}
-                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-white disabled:opacity-50 transition-colors"
+                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-on-surface disabled:opacity-50 transition-colors"
                                 >
                                     Add Selected
                                 </button>
@@ -729,39 +729,39 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* Channel Settings Modal */}
                 {showSettingsModal && activeChannel && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                        <div className="bg-surface-container border border-on-surface/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
                             <div className="flex items-center justify-between mb-6">
-                                <h3 className="text-lg font-semibold text-white/90">Channel Settings</h3>
-                                <button onClick={() => setShowSettingsModal(false)} className="text-white/50 hover:text-white">
+                                <h3 className="text-lg font-semibold text-on-surface">Channel Settings</h3>
+                                <button onClick={() => setShowSettingsModal(false)} className="text-on-surface-variant hover:text-on-surface">
                                     <span className="material-symbols-outlined">close</span>
                                 </button>
                             </div>
                             
                             <div className="space-y-6">
                                 <div>
-                                    <label className="block text-sm text-white/70 mb-2">Rename Channel</label>
+                                    <label className="block text-sm text-on-surface-variant mb-2">Rename Channel</label>
                                     <div className="flex gap-2">
                                         <input 
                                             type="text"
                                             value={editChannelName}
                                             onChange={(e) => setEditChannelName(e.target.value)}
-                                            className="flex-1 bg-[#141518] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-[var(--primary-color)]"
+                                            className="flex-1 bg-surface-container-low border border-on-surface/10 rounded-xl px-4 py-2 text-on-surface focus:outline-none focus:border-[var(--primary-color)]"
                                         />
                                         <button 
                                             onClick={handleRenameChannel}
                                             disabled={!editChannelName.trim() || editChannelName === activeChannel.name}
-                                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-colors disabled:opacity-50"
+                                            className="px-4 py-2 bg-on-surface/10 hover:bg-on-surface/20 text-on-surface rounded-xl transition-colors disabled:opacity-50"
                                         >
                                             Save
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t border-white/10 space-y-3">
+                                <div className="pt-4 border-t border-on-surface/10 space-y-3">
                                     {activeChannel.is_private && (
                                         <button 
                                             onClick={handleLeaveChannel}
-                                            className="w-full flex items-center justify-between p-3 rounded-xl bg-orange-500/10 text-orange-400 hover:bg-orange-500/20 transition-colors text-sm font-medium"
+                                            className="w-full flex items-center justify-between p-3 rounded-xl bg-warning/10 text-warning hover:bg-warning/20 transition-colors text-sm font-medium"
                                         >
                                             <div className="flex items-center gap-2">
                                                 <span className="material-symbols-outlined text-[18px]">logout</span>
@@ -771,7 +771,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     )}
                                     <button 
                                         onClick={handleDeleteChannel}
-                                        className="w-full flex items-center justify-between p-3 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
+                                        className="w-full flex items-center justify-between p-3 rounded-xl bg-error/10 text-error hover:bg-error/20 transition-colors text-sm font-medium"
                                     >
                                         <div className="flex items-center gap-2">
                                             <span className="material-symbols-outlined text-[18px]">delete_forever</span>

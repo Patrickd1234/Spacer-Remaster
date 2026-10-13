@@ -94,7 +94,7 @@ function App() {
   }
 
   return (
-    <PreferencesProvider>
+    <PreferencesProvider initialSession={session}>
       <RoleProvider>
         <Router>
           <Routes>

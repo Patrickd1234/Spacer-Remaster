@@ -244,28 +244,28 @@ export default function CalendarView() {
     }
 
     return (
-        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
+        <div className="bg-background min-h-screen text-on-surface font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <Header />
             <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col pt-16 transition-all duration-300 ease-out p-8 h-[calc(100vh-64px)] overflow-hidden`}>
                 <div className="flex items-center justify-between mb-6 shrink-0">
                     <div>
-                        <h1 className="text-2xl font-bold text-white">Global Calendar</h1>
-                        <p className="text-[#8c947b] text-sm mt-1">View assigned tasks and scheduled company events.</p>
+                        <h1 className="text-2xl font-bold text-on-surface">Global Calendar</h1>
+                        <p className="text-on-surface-variant text-sm mt-1">View assigned tasks and scheduled company events.</p>
                     </div>
                 </div>
 
-                <div className="flex-1 flex flex-col min-h-0 bg-[#191c21] border border-[#2D3139] rounded-xl p-6">
+                <div className="flex-1 flex flex-col min-h-0 bg-surface-container border border-outline-variant rounded-xl p-6">
                     {/* Calendar Header */}
-                    <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] shrink-0">
-                        <h3 className="text-lg font-bold text-white capitalize">
+                    <div className="flex items-center justify-between pb-4 border-b border-outline-variant shrink-0">
+                        <h3 className="text-lg font-bold text-on-surface capitalize">
                             {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                         </h3>
                         <div className="flex items-center gap-2">
-                            <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                            <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant">
                                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                             </button>
-                            <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                            <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant">
                                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                             </button>
                         </div>
@@ -273,10 +273,10 @@ export default function CalendarView() {
 
                     {/* Calendar Grid */}
                     <div className="flex-1 overflow-y-auto min-h-0 mt-4">
-                        <div className="grid grid-cols-7 gap-px bg-[#2D3139] overflow-hidden rounded-lg border border-[#2D3139]">
+                        <div className="grid grid-cols-7 gap-px bg-surface-container-highest overflow-hidden rounded-lg border border-outline-variant">
                             {/* Day Names */}
                             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                                <div key={day} className="bg-[#181a20] p-3 text-center text-xs font-bold text-[#8c947b] uppercase tracking-wider">
+                                <div key={day} className="bg-background p-3 text-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
                                     {day}
                                 </div>
                             ))}
@@ -291,14 +291,14 @@ export default function CalendarView() {
                                     <div 
                                         key={idx} 
                                         onClick={() => date && setSelectedDateEvents(date)}
-                                        className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-[#191c21] hover:bg-[#1C1F26]' : 'bg-[#111318]'}`}
+                                        className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-surface-container hover:bg-surface-container' : 'bg-surface-container-lowest'}`}
                                     >
                                         {date && (
                                             <>
-                                                <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
-                                                    {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>}
-                                                    {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#aff82a]"></span>}
-                                                    <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
+                                                <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-on-surface-variant'}`}>
+                                                    {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary-container"></span>}
+                                                    {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary-container"></span>}
+                                                    <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-surface-container-high text-on-surface font-bold rounded-full text-[11px]' : ''}>
                                                         {date.getDate()}
                                                     </span>
                                                 </div>
@@ -306,7 +306,7 @@ export default function CalendarView() {
                                                     {dayEvents.map(event => (
                                                         <div 
                                                             key={`evt-${event.id}`} 
-                                                            className="px-2 py-1 text-[10px] font-medium rounded truncate bg-purple-500/10 text-purple-400 border border-purple-500/30"
+                                                            className="px-2 py-1 text-[10px] font-medium rounded truncate bg-primary-container/10 text-primary-fixed border border-primary-fixed/30"
                                                         >
                                                             {event.title}
                                                         </div>
@@ -315,8 +315,8 @@ export default function CalendarView() {
                                                         <div 
                                                             key={`tsk-${task.id}`} 
                                                             className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${
-                                                                task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                                                                'bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30'
+                                                                task.status === 'done' ? 'bg-success/10 text-success border-success/30' :
+                                                                'bg-primary-container/10 text-primary-fixed border-primary-fixed/30'
                                                             }`}
                                                         >
                                                             {task.title}
@@ -335,17 +335,17 @@ export default function CalendarView() {
                 {/* Date Schedule Side Drawer */}
                 {selectedDateEvents && (
                     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-                        <div className="w-full max-w-lg bg-[#191c21] border-l border-[#2D3139] shadow-2xl h-full flex flex-col text-white">
-                            <div className="flex items-center justify-between p-6 border-b border-[#2D3139] bg-[#181a20] shrink-0">
+                        <div className="w-full max-w-lg bg-surface-container border-l border-outline-variant shadow-2xl h-full flex flex-col text-on-surface">
+                            <div className="flex items-center justify-between p-6 border-b border-outline-variant bg-background shrink-0">
                                 <div>
-                                    <h2 className="text-lg font-bold text-white">
+                                    <h2 className="text-lg font-bold text-on-surface">
                                         Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
                                     </h2>
-                                    <p className="text-xs text-[#8c947b] mt-0.5">Tasks and events scheduled for this day</p>
+                                    <p className="text-xs text-on-surface-variant mt-0.5">Tasks and events scheduled for this day</p>
                                 </div>
                                 <div className="flex items-center gap-2 relative">
                                     <button 
-                                        className="text-[#8c947b] hover:text-white bg-[#1e2025] hover:bg-[#2D3139] w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]" 
+                                        className="text-on-surface-variant hover:text-on-surface bg-surface-container-high hover:bg-surface-container-highest w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border border-outline-variant" 
                                         onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
                                         title="Add Item"
                                     >
@@ -354,23 +354,23 @@ export default function CalendarView() {
                                     {sidebarActionMenuOpen && (
                                         <>
                                             <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl z-50 overflow-hidden">
+                                            <div className="absolute right-0 top-full mt-1 w-44 bg-surface-container border border-outline-variant rounded-xl shadow-2xl z-50 overflow-hidden">
                                                 <button 
-                                                    className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
+                                                    className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest transition-colors flex items-center gap-2 text-xs font-medium text-on-surface cursor-pointer"
                                                     onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
                                                 >
-                                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a]">task</span> Add Task
+                                                    <span className="material-symbols-outlined text-[16px] text-primary-fixed">task</span> Add Task
                                                 </button>
                                                 <button 
-                                                    className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
+                                                    className="w-full text-left px-4 py-2.5 hover:bg-surface-container-highest transition-colors flex items-center gap-2 text-xs font-medium text-on-surface cursor-pointer"
                                                     onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
                                                 >
-                                                    <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Add Event
+                                                    <span className="material-symbols-outlined text-[16px] text-primary-fixed">event</span> Add Event
                                                 </button>
                                             </div>
                                         </>
                                     )}
-                                    <button className="text-[#8c947b] hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2D3139] transition-colors cursor-pointer" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
+                                    <button className="text-on-surface-variant hover:text-on-surface w-8 h-8 flex items-center justify-center rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
                                         <span className="material-symbols-outlined text-[20px]">close</span>
                                     </button>
                                 </div>
@@ -379,7 +379,7 @@ export default function CalendarView() {
                             <div className="p-6 overflow-y-auto flex-1 space-y-4">
                                 {creatingInSidebar === 'task' ? (
                                     <div className="h-full flex flex-col">
-                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-[#8c947b] hover:text-white flex items-center gap-1 cursor-pointer w-fit">
+                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-on-surface-variant hover:text-on-surface flex items-center gap-1 cursor-pointer w-fit">
                                             <span className="material-symbols-outlined text-[14px]">arrow_back</span> Back to day schedule
                                         </button>
                                         <CreateTaskModal
@@ -396,11 +396,11 @@ export default function CalendarView() {
                                     </div>
                                 ) : creatingInSidebar === 'meeting' ? (
                                     <div className="h-full flex flex-col">
-                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-[#8c947b] hover:text-white flex items-center gap-1 cursor-pointer w-fit">
+                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-on-surface-variant hover:text-on-surface flex items-center gap-1 cursor-pointer w-fit">
                                             <span className="material-symbols-outlined text-[14px]">arrow_back</span> Back to day schedule
                                         </button>
-                                        <div className="flex-1 flex items-center justify-center bg-[#1C1F26] rounded-xl border border-[#2D3139] border-dashed p-6 text-center">
-                                            <p className="text-[#8c947b] text-xs">Event creation added for this date.</p>
+                                        <div className="flex-1 flex items-center justify-center bg-surface-container rounded-xl border border-outline-variant border-dashed p-6 text-center">
+                                            <p className="text-on-surface-variant text-xs">Event creation added for this date.</p>
                                         </div>
                                     </div>
                                 ) : (() => {
@@ -415,9 +415,9 @@ export default function CalendarView() {
 
                                     if (combined.length === 0) {
                                         return (
-                                            <div className="flex flex-col items-center justify-center py-12 text-center text-[#8c947b] space-y-2">
+                                            <div className="flex flex-col items-center justify-center py-12 text-center text-on-surface-variant space-y-2">
                                                 <span className="material-symbols-outlined text-4xl">calendar_today</span>
-                                                <p className="text-sm font-medium text-white">Nothing scheduled for this day</p>
+                                                <p className="text-sm font-medium text-on-surface">Nothing scheduled for this day</p>
                                                 <p className="text-xs">Click the "+" button above to add a task or meeting.</p>
                                             </div>
                                         );
@@ -431,23 +431,23 @@ export default function CalendarView() {
                                                     setSelectedTask(item);
                                                 }
                                             }}
-                                            className={`bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139] flex flex-col gap-2 ${!item.isEvent ? 'cursor-pointer hover:border-[#424934] transition-all' : ''}`}
+                                            className={`bg-surface-container p-4 rounded-xl border border-outline-variant flex flex-col gap-2 ${!item.isEvent ? 'cursor-pointer hover:border-outline transition-all' : ''}`}
                                         >
                                             <div className="flex items-center justify-between">
                                                 <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
-                                                    item.isEvent ? 'bg-purple-500/20 text-purple-400' : 'bg-[#aff82a]/20 text-[#aff82a]'
+                                                    item.isEvent ? 'bg-primary-container/20 text-primary-fixed' : 'bg-primary-container/20 text-primary-fixed'
                                                 }`}>
                                                     <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
                                                     {item.isEvent ? 'Event' : 'Task'}
                                                 </span>
-                                                <span className="text-xs text-[#8c947b] font-medium">
+                                                <span className="text-xs text-on-surface-variant font-medium">
                                                     {(item.originalDateStr && (item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))) 
                                                         ? new Date(item.sortTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                                         : 'All Day'}
                                                 </span>
                                             </div>
-                                            <h3 className="text-sm font-bold text-white mt-1">{item.title}</h3>
-                                            {item.description && <p className="text-xs text-[#8c947b] line-clamp-2">{item.description}</p>}
+                                            <h3 className="text-sm font-bold text-on-surface mt-1">{item.title}</h3>
+                                            {item.description && <p className="text-xs text-on-surface-variant line-clamp-2">{item.description}</p>}
                                             {item.isTask && (() => {
                                                 let subtasksList = [];
                                                 if (item.sub_tasks) {
@@ -464,16 +464,16 @@ export default function CalendarView() {
 
                                                 return (
                                                     <div className="mt-2">
-                                                        <div className="flex items-center justify-between text-[10px] text-[#8c947b] mb-1 font-medium">
+                                                        <div className="flex items-center justify-between text-[10px] text-on-surface-variant mb-1 font-medium">
                                                             <span className="flex items-center gap-1">
                                                                 <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
                                                                 Sub-tasks
                                                             </span>
                                                             <span>{completedCount}/{totalCount}</span>
                                                         </div>
-                                                        <div className="w-full bg-[#16181e] rounded-full h-1 overflow-hidden">
+                                                        <div className="w-full bg-surface-container rounded-full h-1 overflow-hidden">
                                                             <div 
-                                                                className="bg-[#aff82a] h-full transition-all duration-300"
+                                                                className="bg-primary-container h-full transition-all duration-300"
                                                                 style={{ width: `${percent}%` }}
                                                             ></div>
                                                         </div>
@@ -491,24 +491,24 @@ export default function CalendarView() {
                 {/* Task details drawer */}
                 {selectedTask && (
                     <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-                        <div className="w-full max-w-md bg-[#191c21] border-l border-[#2D3139] p-6 flex flex-col justify-between h-full text-white">
+                        <div className="w-full max-w-md bg-surface-container border-l border-outline-variant p-6 flex flex-col justify-between h-full text-on-surface">
                             <div>
-                                <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] mb-6">
-                                    <h3 className="font-bold text-lg text-white">Task Details</h3>
-                                    <button onClick={() => setSelectedTask(null)} className="text-[#8c947b] hover:text-white">
+                                <div className="flex items-center justify-between pb-4 border-b border-outline-variant mb-6">
+                                    <h3 className="font-bold text-lg text-on-surface">Task Details</h3>
+                                    <button onClick={() => setSelectedTask(null)} className="text-on-surface-variant hover:text-on-surface">
                                         <span className="material-symbols-outlined">close</span>
                                     </button>
                                 </div>
-                                <h2 className="text-xl font-bold text-white mb-2">{selectedTask.title}</h2>
-                                <p className="text-sm text-[#8c947b] mb-4">{selectedTask.description || "No description provided."}</p>
+                                <h2 className="text-xl font-bold text-on-surface mb-2">{selectedTask.title}</h2>
+                                <p className="text-sm text-on-surface-variant mb-4">{selectedTask.description || "No description provided."}</p>
 
                                 <div className="mb-6 space-y-3">
-                                    <h4 className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider flex items-center gap-1">
+                                    <h4 className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider flex items-center gap-1">
                                         <span className="material-symbols-outlined text-[14px]">format_list_bulleted</span>
                                         Sub-tasks
                                     </h4>
                                     
-                                    <div className="bg-[#181a20] p-4 rounded-xl border border-[#2D3139] space-y-2">
+                                    <div className="bg-background p-4 rounded-xl border border-outline-variant space-y-2">
                                         {(() => {
                                             let subtasksList = [];
                                             if (selectedTask.sub_tasks) {
@@ -547,29 +547,29 @@ export default function CalendarView() {
                                             return (
                                                 <>
                                                     {subtasksList.length === 0 ? (
-                                                        <p className="text-[11px] text-[#8c947b] italic">No sub-tasks added yet.</p>
+                                                        <p className="text-[11px] text-on-surface-variant italic">No sub-tasks added yet.</p>
                                                     ) : (
                                                         <div className="space-y-1">
                                                             {subtasksList.map(st => (
                                                                 <div key={st.id} className="flex items-center justify-between group py-0.5">
-                                                                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-white flex-1">
+                                                                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-on-surface flex-1">
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => handleToggleSubtask(st.id)}
-                                                                            className={`check-btn ${!st.done ? '!bg-[#111318] !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} !p-0 !w-3.5 !h-3.5 !rounded flex items-center justify-center shrink-0`}
+                                                                            className={`check-btn ${!st.done ? '!bg-surface-container-lowest !shadow-none !border !border-outline-variant hover:!bg-surface-container-highest' : ''} !p-0 !w-3.5 !h-3.5 !rounded flex items-center justify-center shrink-0`}
                                                                             title={st.done ? "Mark as incomplete" : "Mark as done"}
                                                                         >
                                                                             <svg className={`check-icon transition-opacity ${!st.done ? 'opacity-0' : 'opacity-100'} !w-2.5 !h-2.5`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                                                                             </svg>
                                                                         </button>
-                                                                        <span className={st.done ? 'line-through text-[#8c947b]' : ''}>
+                                                                        <span className={st.done ? 'line-through text-on-surface-variant' : ''}>
                                                                             {st.title}
                                                                         </span>
                                                                     </label>
                                                                     <button
                                                                         onClick={() => handleDeleteSubtask(st.id)}
-                                                                        className="opacity-0 group-hover:opacity-100 text-[#8c947b] hover:text-red-400 w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer"
+                                                                        className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-error w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer"
                                                                     >
                                                                         <span className="material-symbols-outlined text-[14px]">delete</span>
                                                                     </button>
@@ -578,17 +578,17 @@ export default function CalendarView() {
                                                         </div>
                                                     )}
                                                     
-                                                    <form onSubmit={handleAddSubtask} className="flex gap-2 pt-2 border-t border-[#2D3139] mt-2">
+                                                    <form onSubmit={handleAddSubtask} className="flex gap-2 pt-2 border-t border-outline-variant mt-2">
                                                         <input
                                                             type="text"
                                                             placeholder="Add sub-task..."
                                                             value={newSubtaskTitle}
                                                             onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                                                            className="flex-1 bg-[#111318] border border-[#2D3139] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b]"
+                                                            className="flex-1 bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary-fixed transition-all placeholder:text-on-surface-variant"
                                                         />
                                                         <button
                                                             type="submit"
-                                                            className="px-3 bg-[#5b644d] text-white rounded-lg text-[11px] font-semibold hover:bg-[#6c765c] transition-all cursor-pointer flex items-center justify-center gap-1"
+                                                            className="px-3 bg-surface-container-high text-on-surface rounded-lg text-[11px] font-semibold hover:bg-surface-container-highest transition-all cursor-pointer flex items-center justify-center gap-1"
                                                         >
                                                             <span className="material-symbols-outlined text-[14px]">add</span>
                                                             Add
@@ -601,34 +601,34 @@ export default function CalendarView() {
                                 </div>
 
                                 <div className="space-y-4 text-xs">
-                                    <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
-                                        <span className="text-[#8c947b]">Status</span>
+                                    <div className="flex items-center justify-between py-2 border-b border-outline-variant">
+                                        <span className="text-on-surface-variant">Status</span>
                                         <select
                                             value={selectedTask.status || "todo"}
                                             onChange={(e) => updateTaskStatus(selectedTask.id, e.target.value)}
-                                            className="bg-[#181a20] border border-[#2D3139] text-white font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
+                                            className="bg-background border border-outline-variant text-on-surface font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary-fixed uppercase cursor-pointer"
                                         >
-                                            <option value="todo" className="bg-[#191c21]">Backlog / To Do</option>
-                                            <option value="in_progress" className="bg-[#191c21]">Doing / In Progress</option>
-                                            <option value="done" className="bg-[#191c21]">Done</option>
+                                            <option value="todo" className="bg-surface-container">Backlog / To Do</option>
+                                            <option value="in_progress" className="bg-surface-container">Doing / In Progress</option>
+                                            <option value="done" className="bg-surface-container">Done</option>
                                         </select>
                                     </div>
-                                    <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
-                                        <span className="text-[#8c947b]">Priority</span>
+                                    <div className="flex items-center justify-between py-2 border-b border-outline-variant">
+                                        <span className="text-on-surface-variant">Priority</span>
                                         <select
                                             value={selectedTask.priority || "medium"}
                                             onChange={(e) => updateTaskPriority(selectedTask.id, e.target.value)}
-                                            className="bg-[#181a20] border border-[#2D3139] text-[#aff82a] font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
+                                            className="bg-background border border-outline-variant text-primary-fixed font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-primary-fixed uppercase cursor-pointer"
                                         >
-                                            <option value="low" className="bg-[#191c21] text-white">Low</option>
-                                            <option value="medium" className="bg-[#191c21] text-white">Medium</option>
-                                            <option value="high" className="bg-[#191c21] text-amber-400">High</option>
-                                            <option value="urgent" className="bg-[#191c21] text-red-400">Urgent</option>
+                                            <option value="low" className="bg-surface-container text-on-surface">Low</option>
+                                            <option value="medium" className="bg-surface-container text-on-surface">Medium</option>
+                                            <option value="high" className="bg-surface-container text-warning">High</option>
+                                            <option value="urgent" className="bg-surface-container text-error">Urgent</option>
                                         </select>
                                     </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-[#2D3139]">
-                                        <span className="text-[#8c947b]">Due Date</span>
-                                        <span className="font-semibold text-white">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : "—"}</span>
+                                    <div className="flex justify-between items-center py-2 border-b border-outline-variant">
+                                        <span className="text-on-surface-variant">Due Date</span>
+                                        <span className="font-semibold text-on-surface">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : "—"}</span>
                                     </div>
                                 </div>
                             </div>

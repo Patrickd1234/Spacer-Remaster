@@ -131,12 +131,12 @@ function getFileStyle(type = "") {
     if (type.startsWith("image/")) return { icon: "image", color: "text-primary-fixed-dim", bg: "bg-primary-container/20" }
     if (type === "application/pdf") return { icon: "picture_as_pdf", color: "text-error", bg: "bg-error-container/20" }
     if (type.includes("word") || type === "application/msword")
-        return { icon: "description", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
+        return { icon: "description", color: "text-on-surface-variant", bg: "bg-surface-container" }
     if (type.includes("sheet") || type === "application/vnd.ms-excel")
         return { icon: "table", color: "text-[var(--primary-color)]", bg: "bg-[var(--primary-color)]/10" }
-    if (type.includes("zip")) return { icon: "folder_zip", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
-    if (type.startsWith("text/")) return { icon: "article", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
-    return { icon: "insert_drive_file", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
+    if (type.includes("zip")) return { icon: "folder_zip", color: "text-on-surface-variant", bg: "bg-surface-container" }
+    if (type.startsWith("text/")) return { icon: "article", color: "text-on-surface-variant", bg: "bg-surface-container" }
+    return { icon: "insert_drive_file", color: "text-on-surface-variant", bg: "bg-surface-container" }
 }
 
 function formatBytes(bytes) {
@@ -829,8 +829,8 @@ function ProjectPage() {
         const isPDF = pendingFile?.type === "application/pdf"
         const { icon, color, bg } = getFileStyle(pendingFile?.type)
         return (
-            <div className="mt-lg border border-[#2D3139]/40 rounded-xl overflow-hidden">
-                <div className="bg-[#1C1F26] flex items-center justify-center" style={{ minHeight: 220 }}>
+            <div className="mt-lg border border-outline-variant/40 rounded-xl overflow-hidden">
+                <div className="bg-surface-container flex items-center justify-center" style={{ minHeight: 220 }}>
                     {isImage && <img src={pendingUrl} alt={pendingFile.name} className="max-w-full max-h-[220px] object-contain rounded" />}
                     {isPDF && <iframe src={pendingUrl} title={pendingFile.name} className="w-full border-0" style={{ height: 220 }} />}
                     {!isImage && !isPDF && (
@@ -838,18 +838,18 @@ function ProjectPage() {
                             <div className={`w-16 h-16 ${bg} flex items-center justify-center rounded-2xl`}>
                                 <span className={`material-symbols-outlined text-4xl ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
                             </div>
-                            <p className="text-[#8c947b] text-sm">No visual preview for this file type</p>
+                            <p className="text-on-surface-variant text-sm">No visual preview for this file type</p>
                         </div>
                     )}
                 </div>
-                <div className="bg-[#191c21] px-md py-sm flex items-center justify-between gap-md border-t border-[#2D3139]/30">
+                <div className="bg-surface-container px-md py-sm flex items-center justify-between gap-md border-t border-outline-variant/30">
                     <div className="min-w-0">
-                        <p className="font-body-md text-white font-semibold truncate">{pendingFile?.name}</p>
-                        <p className="text-[11px] text-[#8c947b]">{formatBytes(pendingFile?.size)}</p>
+                        <p className="font-body-md text-on-surface font-semibold truncate">{pendingFile?.name}</p>
+                        <p className="text-[11px] text-on-surface-variant">{formatBytes(pendingFile?.size)}</p>
                     </div>
                     <div className="flex items-center gap-sm shrink-0">
-                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
-                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[var(--primary-color)] text-[#1C1F26] font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
+                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-highest text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
+                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[var(--primary-color)] text-on-primary font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
                             {uploading
                                 ? <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Uploading…</>
                                 : <><span className="material-symbols-outlined text-[16px]">cloud_upload</span> Confirm Upload</>}
@@ -861,7 +861,7 @@ function ProjectPage() {
     }
 
     return (
-        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
+        <div className="bg-background min-h-screen text-on-surface font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <Header />
             <main className="ml-[260px] mt-16 p-lg h-[calc(100vh-64px)] overflow-y-auto scroll-hide">
@@ -886,8 +886,8 @@ function ProjectPage() {
                                 type="button"
                                 onClick={() => setActiveTab(tab.id)}
                                 className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-label-md transition-colors cursor-pointer ${activeTab === tab.id
-                                    ? "bg-primary-accent text-[#0F1115] font-bold shadow-sm"
-                                    : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]/50"
+                                    ? "bg-primary-accent text-on-primary font-bold shadow-sm"
+                                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest/50"
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
@@ -904,7 +904,7 @@ function ProjectPage() {
                                 if (canDelete) setShowDeleteConfirm(true)
                                 else setShowActionBlocked(true)
                             }}
-                            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
+                            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-on-surface-variant hover:text-error hover:bg-error-container/20 transition-colors cursor-pointer text-[13px] font-medium"
                         >
                             <span className="material-symbols-outlined text-[18px]">delete</span>
                             Delete project
@@ -918,12 +918,12 @@ function ProjectPage() {
                         <div className="tab-pane block" id="section-summary">
                             <div className="bento-grid">
                                 {/* Task Status Overview */}
-                                <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-xl rounded-xl mb-lg">
-                                    <h3 className="font-headline-lg text-headline-lg mb-xl text-white">Task Overview</h3>
+                                <div className="col-span-12 bg-surface-container border border-outline-variant p-xl rounded-xl mb-lg">
+                                    <h3 className="font-headline-lg text-headline-lg mb-xl text-on-surface">Task Overview</h3>
                                     <div className="space-y-lg max-w-3xl">
                                         {[
-                                            { label: 'Backlog', count: project_tasks.filter(t => t.status === 'todo').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
-                                            { label: 'Doing', count: project_tasks.filter(t => t.status === 'in_progress').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
+                                            { label: 'Backlog', count: project_tasks.filter(t => t.status === 'todo').length, color: 'text-on-surface', barColor: 'bg-[#8c947b]' },
+                                            { label: 'Doing', count: project_tasks.filter(t => t.status === 'in_progress').length, color: 'text-on-surface', barColor: 'bg-[#8c947b]' },
                                             { label: 'Done', count: project_tasks.filter(t => t.status === 'done').length, color: 'text-[var(--primary-color)]', barColor: 'bg-[var(--primary-color)]' },
                                             { label: 'Overdue', count: project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length, color: 'text-error', barColor: 'bg-error' },
                                         ].map(stat => {
@@ -932,10 +932,10 @@ function ProjectPage() {
                                             return (
                                                 <div key={stat.label} className="flex items-center gap-6">
                                                     <span className={`w-28 text-right font-headline-sm tracking-wide ${stat.color}`}>{stat.label}</span>
-                                                    <div className="flex-1 h-3.5 bg-[#2D3139] rounded-full overflow-hidden">
+                                                    <div className="flex-1 h-3.5 bg-surface-container-highest rounded-full overflow-hidden">
                                                         <div className={`h-full ${stat.barColor} rounded-full transition-all duration-1000`} style={{ width: `${percent}%` }}></div>
                                                     </div>
-                                                    <span className="w-12 font-headline-sm text-white">{stat.count}</span>
+                                                    <span className="w-12 font-headline-sm text-on-surface">{stat.count}</span>
                                                 </div>
                                             );
                                         })}
@@ -943,15 +943,15 @@ function ProjectPage() {
                                 </div>
 
                                 {/* Recent Activity Feed (Full Width) */}
-                                <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-lg rounded-xl">
-                                    <h3 className="font-headline-md text-headline-md mb-lg text-white">Recent Activity</h3>
+                                <div className="col-span-12 bg-surface-container border border-outline-variant p-lg rounded-xl">
+                                    <h3 className="font-headline-md text-headline-md mb-lg text-on-surface">Recent Activity</h3>
                                     <div className="space-y-lg overflow-y-auto max-h-[600px] scroll-hide">
                                         {activityLog.length === 0 ? (
-                                            <p className="text-[#8c947b] font-body-md">No recent activity found.</p>
+                                            <p className="text-on-surface-variant font-body-md">No recent activity found.</p>
                                         ) : (
                                             activityLog.map(activity => (
                                                 <div key={activity.id} className="flex gap-sm">
-                                                    <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-[#2D3139] flex items-center justify-center font-bold text-xs text-[#8c947b] uppercase">
+                                                    <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-surface-container-highest flex items-center justify-center font-bold text-xs text-on-surface-variant uppercase">
                                                         {activity.actor?.name?.charAt(0) || '?'}
                                                     </div>
                                                     <div className="flex-1">
@@ -965,10 +965,10 @@ function ProjectPage() {
                                                                 <>deleted task <span className="text-error font-bold">{activity.new_state?.title}</span></>
                                                             )}
                                                             {activity.action === "status_changed" && (
-                                                                <>moved task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-[#2D3139] rounded px-1">{activity.new_state?.status?.replace("_", " ")}</span></>
+                                                                <>moved task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-on-surface capitalize border border-outline-variant rounded px-1">{activity.new_state?.status?.replace("_", " ")}</span></>
                                                             )}
                                                             {activity.action === "priority_changed" && (
-                                                                <>changed priority of task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-[#2D3139] rounded px-1">{activity.new_state?.priority}</span></>
+                                                                <>changed priority of task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-on-surface capitalize border border-outline-variant rounded px-1">{activity.new_state?.priority}</span></>
                                                             )}
                                                             {activity.action === "file_added" && (
                                                                 <>uploaded file <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span></>
@@ -980,7 +980,7 @@ function ProjectPage() {
                                                                 <>completed a sprint with <span className="text-[var(--primary-color)] font-bold">{activity.new_state?.completionPercent}%</span> success ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
                                                             )}
                                                         </p>
-                                                        <p className="text-[#8c947b] text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
+                                                        <p className="text-on-surface-variant text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
                                                     </div>
                                                 </div>
                                             ))
@@ -997,12 +997,12 @@ function ProjectPage() {
                             {sprintPhase === 'idle' && (
                                 <div className="flex flex-col gap-8 max-w-4xl mx-auto items-center pt-10">
                                     <div className="text-center space-y-4">
-                                        <h2 className="text-3xl font-black text-white">Sprint Lobby</h2>
-                                        <p className="text-[#8c947b]">Start a new sprint or review your past sprint history.</p>
+                                        <h2 className="text-3xl font-black text-on-surface">Sprint Lobby</h2>
+                                        <p className="text-on-surface-variant">Start a new sprint or review your past sprint history.</p>
                                     </div>
                                     <button 
                                         onClick={handleStartNewSprint}
-                                        className="bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--primary-color-rgb),0.3)] flex items-center gap-3"
+                                        className="bg-[var(--primary-color)] hover:bg-primary-fixed-dim text-on-primary px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--primary-color-rgb),0.3)] flex items-center gap-3"
                                     >
                                         <span className="material-symbols-outlined">rocket_launch</span>
                                         Start New Sprint
@@ -1016,19 +1016,19 @@ function ProjectPage() {
                                     <div className="lg:col-span-8 flex flex-col gap-lg">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-sm">
-                                                <h3 className="font-headline-xl text-white">Active Sprint</h3>
+                                                <h3 className="font-headline-xl text-on-surface">Active Sprint</h3>
                                             </div>
                                             <div className="flex gap-2">
-                                                <span className="px-3 py-1 bg-[#1C1F26] text-[#8c947b] border border-[#2D3139] rounded-full text-sm font-medium">{sprintTasks.length} Tasks</span>
+                                                <span className="px-3 py-1 bg-surface-container text-on-surface-variant border border-outline-variant rounded-full text-sm font-medium">{sprintTasks.length} Tasks</span>
                                                 {(isTimerRunning || sprintTimeRemaining < sprintTotalTime) && (
-                                                    <button onClick={handleEndSprint} className="px-4 py-1 bg-error text-white rounded-full text-sm font-bold hover:bg-error/80 transition-colors shadow-lg">End Sprint</button>
+                                                    <button onClick={handleEndSprint} className="px-4 py-1 bg-error text-on-surface rounded-full text-sm font-bold hover:bg-error/80 transition-colors shadow-lg">End Sprint</button>
                                                 )}
                                             </div>
                                         </div>
                                         
                                         {/* Task Add From Overdue */}
                                         {project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length > 0 && (
-                                            <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-4">
+                                            <div className="bg-surface-container border border-outline-variant rounded-xl p-4">
                                                 <h4 className="text-error text-xs font-bold uppercase mb-3 flex items-center gap-2">
                                                     <span className="material-symbols-outlined text-sm">assignment_late</span> Overdue Tasks
                                                 </h4>
@@ -1056,20 +1056,20 @@ function ProjectPage() {
                                                         const buttonDisabled = isLocked || cantSelect;
 
                                                         return (
-                                                            <div key={`overdue-${task.id}`} className={`p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors ${isSelected ? 'bg-[var(--primary-color)]/5 border-[var(--primary-color)]/30' : 'bg-[#191c21]'}`}>
+                                                            <div key={`overdue-${task.id}`} className={`p-3 border border-outline-variant rounded-lg flex items-center gap-3 transition-colors ${isSelected ? 'bg-[var(--primary-color)]/5 border-[var(--primary-color)]/30' : 'bg-surface-container'}`}>
                                                                 <button 
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         if (cantSelect) return;
                                                                         handleToggleTaskInSprint(task);
                                                                     }}
-                                                                    className={`check-btn flex items-center justify-center ${!isSelected ? '!bg-transparent !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} ${buttonDisabled ? '!bg-[#191c21] !border-[#2D3139] opacity-50 cursor-not-allowed hover:!bg-[#191c21]' : ''}`}
+                                                                    className={`check-btn flex items-center justify-center ${!isSelected ? '!bg-transparent !shadow-none !border !border-outline-variant hover:!bg-surface-container-highest' : ''} ${buttonDisabled ? '!bg-surface-container !border-outline-variant opacity-50 cursor-not-allowed hover:!bg-surface-container' : ''}`}
                                                                     title={cantSelect ? "Requires sub-tasks" : (isLocked ? "Locked - Complete all subtasks" : (isSelected ? "Remove from Sprint" : "Add to Sprint"))}
                                                                 >
                                                                     {cantSelect ? (
-                                                                        <span className="material-symbols-outlined text-[14px] text-[#8c947b] opacity-100 block">block</span>
+                                                                        <span className="material-symbols-outlined text-[14px] text-on-surface-variant opacity-100 block">block</span>
                                                                     ) : isLocked ? (
-                                                                        <svg className="check-icon opacity-100 text-[#8c947b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <svg className="check-icon opacity-100 text-on-surface-variant" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                                         </svg>
                                                                     ) : (
@@ -1082,7 +1082,7 @@ function ProjectPage() {
                                                                     className="flex-1 cursor-pointer"
                                                                     onClick={() => setSelectedTask(task)}
                                                                 >
-                                                                    <p className={`text-sm font-medium hover:underline ${isSelected ? 'text-white' : 'text-[#8c947b]'}`}>{task.title}</p>
+                                                                    <p className={`text-sm font-medium hover:underline ${isSelected ? 'text-on-surface' : 'text-on-surface-variant'}`}>{task.title}</p>
                                                                     <p className="text-error text-[10px] font-semibold">Due: {new Date(task.due_date).toLocaleDateString()}</p>
                                                                 </div>
                                                             </div>
@@ -1097,15 +1097,15 @@ function ProjectPage() {
                                             const finishedSprintTasks = project_tasks.filter(t => t.status === 'done' && sprintTasks.find(st => st.id === t.id));
                                             if (finishedSprintTasks.length === 0) return null;
                                             return (
-                                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-4 mt-6">
-                                                    <h4 className="text-[#22c55e] text-xs font-bold uppercase mb-3 flex items-center gap-2">
+                                                <div className="bg-surface-container border border-outline-variant rounded-xl p-4 mt-6">
+                                                    <h4 className="text-success text-xs font-bold uppercase mb-3 flex items-center gap-2">
                                                         <span className="material-symbols-outlined text-sm">check_circle</span> Finished
                                                     </h4>
                                                     <div className="flex flex-col gap-2 opacity-60">
                                                         {finishedSprintTasks.map(task => (
-                                                            <div key={`done-${task.id}`} className="p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors bg-[#191c21]">
-                                                                <div className="w-8 h-8 rounded bg-[#22c55e]/10 border border-[#22c55e]/30 flex items-center justify-center shrink-0">
-                                                                    <svg className="w-4 h-4 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <div key={`done-${task.id}`} className="p-3 border border-outline-variant rounded-lg flex items-center gap-3 transition-colors bg-surface-container">
+                                                                <div className="w-8 h-8 rounded bg-success/10 border border-success/30 flex items-center justify-center shrink-0">
+                                                                    <svg className="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                                                                     </svg>
                                                                 </div>
@@ -1113,7 +1113,7 @@ function ProjectPage() {
                                                                     className="flex-1 cursor-pointer"
                                                                     onClick={() => setSelectedTask(task)}
                                                                 >
-                                                                    <p className="text-sm font-medium hover:underline text-[#8c947b] line-through">{task.title}</p>
+                                                                    <p className="text-sm font-medium hover:underline text-on-surface-variant line-through">{task.title}</p>
                                                                     {task.due_date && <p className="text-error text-[10px] font-semibold opacity-50">Due: {new Date(task.due_date).toLocaleDateString()}</p>}
                                                                 </div>
                                                             </div>
@@ -1126,8 +1126,8 @@ function ProjectPage() {
                                     </div>
                                     {/* Right Column: Sprint Timer */}
                                     <div className="lg:col-span-4 flex flex-col gap-lg">
-                                        <div className="bg-[#191c21] border border-[#2D3139] p-8 rounded-3xl shadow-sm flex flex-col items-center">
-                                            <h4 className="text-xs font-black uppercase tracking-[0.2em] text-[#8c947b] mb-8">Sprint Timer</h4>
+                                        <div className="bg-surface-container border border-outline-variant p-8 rounded-3xl shadow-sm flex flex-col items-center">
+                                            <h4 className="text-xs font-black uppercase tracking-[0.2em] text-on-surface-variant mb-8">Sprint Timer</h4>
                                             <div className="flex items-center justify-center mb-10 w-full mt-4">
                                                 {isEditingTimer ? (() => {
                                                     const parts = timerInputValue.split(':');
@@ -1222,11 +1222,11 @@ function ProjectPage() {
                                                 )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-4 w-full mb-6">
-                                                <button onClick={handleTimerStart} className={`${isTimerRunning ? 'bg-[#e05252] hover:bg-[#ff5555]' : 'bg-[var(--primary-color)] hover:bg-[#c4ff4d]'} text-[#1C1F26] p-4 rounded-2xl flex flex-col items-center gap-2 transition-colors cursor-pointer`}>
+                                                <button onClick={handleTimerStart} className={`${isTimerRunning ? 'bg-error hover:bg-error' : 'bg-[var(--primary-color)] hover:bg-primary-fixed-dim'} text-on-primary p-4 rounded-2xl flex flex-col items-center gap-2 transition-colors cursor-pointer`}>
                                                     <span className="material-symbols-outlined text-[24px]">{isTimerRunning ? 'pause' : 'play_arrow'}</span>
                                                     <span className="text-[10px] font-bold uppercase">{isTimerRunning ? 'Pause' : 'Start'}</span>
                                                 </button>
-                                                <button onClick={handleTimerReset} className="bg-[#2D3139] text-white p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-[#3D4149] transition-colors cursor-pointer">
+                                                <button onClick={handleTimerReset} className="bg-surface-container-highest text-on-surface p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-surface-container-high transition-colors cursor-pointer">
                                                     <span className="material-symbols-outlined text-[24px]">refresh</span>
                                                     <span className="text-[10px] font-bold uppercase">Reset</span>
                                                 </button>
@@ -1238,44 +1238,44 @@ function ProjectPage() {
 
                             {sprintPhase === 'summary' && currentSprintReport && (
                                 <div className="max-w-2xl mx-auto mt-10">
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-3xl p-10 relative overflow-hidden shadow-2xl">
-                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary-color)] to-blue-500"></div>
+                                    <div className="bg-surface-container border border-outline-variant rounded-3xl p-10 relative overflow-hidden shadow-2xl">
+                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary-color)] to-info"></div>
                                         <div className="flex justify-between items-start mb-8">
                                             <div>
-                                                <h2 className="text-3xl font-black text-white mb-2">Sprint Report</h2>
-                                                <p className="text-[#8c947b]">
+                                                <h2 className="text-3xl font-black text-on-surface mb-2">Sprint Report</h2>
+                                                <p className="text-on-surface-variant">
                                                     {new Date(currentSprintReport.startTime).toLocaleTimeString()} - {new Date(currentSprintReport.endTime).toLocaleTimeString()}
                                                 </p>
                                             </div>
                                             <div className="flex flex-col items-end">
-                                                <span className="text-5xl font-black text-white">{currentSprintReport.completionPercent}%</span>
-                                                <span className="text-[#8c947b] text-sm uppercase font-bold tracking-widest mt-1">Completed</span>
+                                                <span className="text-5xl font-black text-on-surface">{currentSprintReport.completionPercent}%</span>
+                                                <span className="text-on-surface-variant text-sm uppercase font-bold tracking-widest mt-1">Completed</span>
                                             </div>
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-4 mb-8">
-                                            <div className="bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139]">
-                                                <span className="text-[#8c947b] text-xs uppercase font-bold">Time Elapsed</span>
-                                                <p className="text-xl font-bold text-white mt-1">
+                                            <div className="bg-surface-container p-4 rounded-xl border border-outline-variant">
+                                                <span className="text-on-surface-variant text-xs uppercase font-bold">Time Elapsed</span>
+                                                <p className="text-xl font-bold text-on-surface mt-1">
                                                     {Math.floor(currentSprintReport.timeElapsed / 60)}m {currentSprintReport.timeElapsed % 60}s
                                                 </p>
                                             </div>
-                                            <div className="bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139]">
-                                                <span className="text-[#8c947b] text-xs uppercase font-bold">Total Tasks</span>
-                                                <p className="text-xl font-bold text-white mt-1">{currentSprintReport.totalTasks}</p>
+                                            <div className="bg-surface-container p-4 rounded-xl border border-outline-variant">
+                                                <span className="text-on-surface-variant text-xs uppercase font-bold">Total Tasks</span>
+                                                <p className="text-xl font-bold text-on-surface mt-1">{currentSprintReport.totalTasks}</p>
                                             </div>
                                         </div>
 
                                         {currentSprintReport.completedTasks.length > 0 && (
                                             <div className="mb-6">
-                                                <h4 className="text-[#22c55e] text-sm font-bold uppercase mb-3 flex items-center gap-2">
+                                                <h4 className="text-success text-sm font-bold uppercase mb-3 flex items-center gap-2">
                                                     <span className="material-symbols-outlined text-sm">check_circle</span> Completed Tasks
                                                 </h4>
                                                 <div className="flex flex-col gap-2">
                                                     {currentSprintReport.completedTasks.map(t => (
-                                                        <div key={t.id} className="bg-[#1C1F26] px-4 py-3 rounded-lg border border-[#22c55e]/30 flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-[#22c55e] text-[18px]">done</span>
-                                                            <span className="text-[#8c947b] line-through text-sm font-medium">{t.title}</span>
+                                                        <div key={t.id} className="bg-surface-container px-4 py-3 rounded-lg border border-success/30 flex items-center gap-3">
+                                                            <span className="material-symbols-outlined text-success text-[18px]">done</span>
+                                                            <span className="text-on-surface-variant line-through text-sm font-medium">{t.title}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -1284,14 +1284,14 @@ function ProjectPage() {
 
                                         {currentSprintReport.incompleteTasks.length > 0 && (
                                             <div className="mb-8">
-                                                <h4 className="text-[#e05252] text-sm font-bold uppercase mb-3 flex items-center gap-2">
+                                                <h4 className="text-error text-sm font-bold uppercase mb-3 flex items-center gap-2">
                                                     <span className="material-symbols-outlined text-sm">cancel</span> Left Incomplete
                                                 </h4>
                                                 <div className="flex flex-col gap-2">
                                                     {currentSprintReport.incompleteTasks.map(t => (
-                                                        <div key={t.id} className="bg-[#1C1F26] px-4 py-3 rounded-lg border border-[#e05252]/30 flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-[#e05252] text-[18px]">close</span>
-                                                            <span className="text-white text-sm font-medium">{t.title}</span>
+                                                        <div key={t.id} className="bg-surface-container px-4 py-3 rounded-lg border border-error/30 flex items-center gap-3">
+                                                            <span className="material-symbols-outlined text-error text-[18px]">close</span>
+                                                            <span className="text-on-surface text-sm font-medium">{t.title}</span>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -1300,7 +1300,7 @@ function ProjectPage() {
 
                                         <button 
                                             onClick={handleExitSprint}
-                                            className="w-full bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] font-bold py-4 rounded-xl text-lg transition-colors cursor-pointer"
+                                            className="w-full bg-[var(--primary-color)] hover:bg-primary-fixed-dim text-on-primary font-bold py-4 rounded-xl text-lg transition-colors cursor-pointer"
                                         >
                                             Continue
                                         </button>
@@ -1326,8 +1326,8 @@ function ProjectPage() {
                         <div className="tab-pane block" id="section-tasks">
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[
-                                    { key: "todo", label: "Backlog", dotColor: "bg-[#2D3139]" },
-                                    { key: "in_progress", label: "Doing", dotColor: "bg-[#3b82f6]" },
+                                    { key: "todo", label: "Backlog", dotColor: "bg-surface-container-highest" },
+                                    { key: "in_progress", label: "Doing", dotColor: "bg-info" },
                                     { key: "done", label: "Done", dotColor: "bg-primary-fixed-dim" },
                                     { key: "overdue", label: "Overdue", dotColor: "bg-error" },
                                 ].map(column => {
@@ -1340,14 +1340,14 @@ function ProjectPage() {
                                     return (
                                         <div
                                             key={column.key}
-                                            className="flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border border-[#2D3139]/30"
+                                            className="flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-surface-container/50 border border-outline-variant/30"
                                         >
                                             {/* Column Header */}
                                             <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
                                                 <div className="flex items-center gap-sm">
                                                     <span className={`w-2.5 h-2.5 rounded-full ${column.dotColor}`}></span>
-                                                    <span className="font-label-md text-label-md text-white font-bold">{column.label}</span>
-                                                    <span className="text-[10px] text-[#8c947b] bg-[#1C1F26] border border-[#2D3139]/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
+                                                    <span className="font-label-md text-label-md text-on-surface font-bold">{column.label}</span>
+                                                    <span className="text-[10px] text-on-surface-variant bg-surface-container border border-outline-variant/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
                                                 </div>
                                             </div>
 
@@ -1357,17 +1357,17 @@ function ProjectPage() {
                                                     <div
                                                         key={task.id}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[var(--primary-color)]/50 transition-all group"
+                                                        className="bg-surface-container border border-outline-variant rounded-lg p-md cursor-pointer hover:border-[var(--primary-color)]/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
                                                             <span className={`inline-flex items-center gap-xs px-sm py-[2px] rounded text-[10px] font-bold uppercase ${task.priority === 'urgent' ? 'bg-error/15 text-error' :
-                                                                task.priority === 'high' ? 'bg-[#f59e0b]/15 text-[#f59e0b]' :
+                                                                task.priority === 'high' ? 'bg-warning/15 text-warning' :
                                                                     task.priority === 'medium' ? 'bg-tertiary/15 text-tertiary' :
                                                                         'bg-primary-fixed-dim/15 text-primary-fixed-dim'
                                                                 }`}>
                                                                 <span className={`w-1.5 h-1.5 rounded-sm ${task.priority === 'urgent' ? 'bg-error' :
-                                                                    task.priority === 'high' ? 'bg-[#f59e0b]' :
+                                                                    task.priority === 'high' ? 'bg-warning' :
                                                                         task.priority === 'medium' ? 'bg-tertiary' :
                                                                             'bg-primary-fixed-dim'
                                                                     }`}></span>
@@ -1376,14 +1376,14 @@ function ProjectPage() {
                                                         </div>
 
                                                         {/* Project Name */}
-                                                        <p className="text-[11px] text-[#8c947b] mb-[2px]">{project_name}</p>
+                                                        <p className="text-[11px] text-on-surface-variant mb-[2px]">{project_name}</p>
 
                                                         {/* Task Title */}
-                                                        <h4 className="font-body-md text-white font-bold leading-snug mb-xs">{task.title}</h4>
+                                                        <h4 className="font-body-md text-on-surface font-bold leading-snug mb-xs">{task.title}</h4>
 
                                                         {/* Description */}
                                                         {task.description && (
-                                                            <p className="text-[11px] text-[#8c947b]/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
+                                                            <p className="text-[11px] text-on-surface-variant/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
                                                         )}
 
                                                         {/* Sub-tasks Progress Bar */}
@@ -1403,14 +1403,14 @@ function ProjectPage() {
 
                                                             return (
                                                                 <div className="mb-md">
-                                                                    <div className="flex items-center justify-between text-[10px] text-[#8c947b] mb-1 font-medium">
+                                                                    <div className="flex items-center justify-between text-[10px] text-on-surface-variant mb-1 font-medium">
                                                                         <span className="flex items-center gap-xs">
                                                                             <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
                                                                             Sub-tasks
                                                                         </span>
                                                                         <span>{completedCount}/{totalCount}</span>
                                                                     </div>
-                                                                    <div className="w-full bg-[#1e222b] rounded-full h-1 overflow-hidden">
+                                                                    <div className="w-full bg-surface-container-high rounded-full h-1 overflow-hidden">
                                                                         <div
                                                                             className="bg-[var(--primary-color)] h-full transition-all duration-300"
                                                                             style={{ width: `${percent}%` }}
@@ -1421,20 +1421,20 @@ function ProjectPage() {
                                                         })()}
 
                                                         {/* Footer */}
-                                                        <div className="flex items-center justify-between mt-auto pt-sm border-t border-[#2D3139]/20">
-                                                            <div className="flex items-center gap-sm text-[#8c947b]">
+                                                        <div className="flex items-center justify-between mt-auto pt-sm border-t border-outline-variant/20">
+                                                            <div className="flex items-center gap-sm text-on-surface-variant">
                                                                 {(() => {
                                                                     const assignee = orgUsers.find(u => u.id === task.assignee_id);
                                                                     return task.assignee_id ? (
-                                                                        <div className="w-5 h-5 rounded-full bg-[#1C1F26] border border-[#2D3139] flex items-center justify-center" title={assignee?.name || 'Assigned'}>
-                                                                            <span className="text-[9px] font-bold text-[#8c947b] uppercase">
+                                                                        <div className="w-5 h-5 rounded-full bg-surface-container border border-outline-variant flex items-center justify-center" title={assignee?.name || 'Assigned'}>
+                                                                            <span className="text-[9px] font-bold text-on-surface-variant uppercase">
                                                                                 {assignee?.name?.charAt(0) || '?'}
                                                                             </span>
                                                                         </div>
                                                                     ) : null;
                                                                 })()}
                                                             </div>
-                                                            <div className="flex items-center gap-sm text-[#8c947b]">
+                                                            <div className="flex items-center gap-sm text-on-surface-variant">
                                                                 {task.due_date && (
                                                                     <span className="flex items-center gap-[3px] text-[10px]">
                                                                         <span className="material-symbols-outlined text-[13px]">calendar_today</span>
@@ -1446,7 +1446,7 @@ function ProjectPage() {
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id, task.title); }}
-                                                                    className="text-[#8c947b] hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                                                                    className="text-on-surface-variant hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
                                                                     title="Delete Task"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">delete</span>
@@ -1457,8 +1457,8 @@ function ProjectPage() {
                                                 ))}
                                                 {columnTasks.length === 0 && (
                                                     <div className="flex flex-col items-center justify-center py-xl text-center opacity-40">
-                                                        <span className="material-symbols-outlined text-[32px] text-[#8c947b] mb-xs">drag_indicator</span>
-                                                        <p className="text-[11px] text-[#8c947b]">Drag tasks here</p>
+                                                        <span className="material-symbols-outlined text-[32px] text-on-surface-variant mb-xs">drag_indicator</span>
+                                                        <p className="text-[11px] text-on-surface-variant">Drag tasks here</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -1477,14 +1477,14 @@ function ProjectPage() {
                                 onClick={() => setSelectedDateEvents(null)}
                             ></div>
                             {/* Sidebar */}
-                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-[#191c21] border-l border-[#2D3139] shadow-2xl flex flex-col transform transition-transform duration-300">
-                                <div className="flex items-center justify-between p-lg border-b border-[#2D3139]/20 shrink-0">
-                                    <h2 className="font-headline-md text-white">
+                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-surface-container border-l border-outline-variant shadow-2xl flex flex-col transform transition-transform duration-300">
+                                <div className="flex items-center justify-between p-lg border-b border-outline-variant/20 shrink-0">
+                                    <h2 className="font-headline-md text-on-surface">
                                         Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                     </h2>
                                     <div className="flex items-center gap-sm relative">
                                         <button
-                                            className="text-[#8c947b] hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#2D3139] transition-colors relative"
+                                            className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors relative"
                                             onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
                                         >
                                             <span className="material-symbols-outlined">add</span>
@@ -1492,17 +1492,17 @@ function ProjectPage() {
                                         {sidebarActionMenuOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden">
+                                                <div className="absolute right-0 top-full mt-1 w-48 bg-surface-container border border-outline-variant rounded-lg shadow-xl z-[70] overflow-hidden">
                                                     {canCreateTasks && (
                                                         <button
-                                                            className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
+                                                            className="w-full text-left px-4 py-3 hover:bg-surface-container-highest transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
                                                             onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
                                                         >
                                                             <span className="material-symbols-outlined text-[18px]">task</span> Add Task
                                                         </button>
                                                     )}
                                                     <button
-                                                        className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
+                                                        className="w-full text-left px-4 py-3 hover:bg-surface-container-highest transition-colors flex items-center gap-3 text-sm font-medium text-on-surface cursor-pointer"
                                                         onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]">event</span> Add Meeting
@@ -1510,7 +1510,7 @@ function ProjectPage() {
                                                 </div>
                                             </>
                                         )}
-                                        <button className="text-[#8c947b] hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#2D3139] transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
+                                        <button className="text-on-surface-variant hover:text-on-surface cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container-highest transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
                                             <span className="material-symbols-outlined">close</span>
                                         </button>
                                     </div>
@@ -1518,7 +1518,7 @@ function ProjectPage() {
                                 <div className="p-lg overflow-y-auto flex-1 scroll-hide space-y-md">
                                     {creatingInSidebar === 'task' ? (
                                         <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-[#8c947b] flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
                                             <CreateTaskModal
@@ -1537,11 +1537,11 @@ function ProjectPage() {
                                         </div>
                                     ) : creatingInSidebar === 'meeting' ? (
                                         <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-[#8c947b] flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-on-surface-variant flex items-center gap-1 hover:text-on-surface transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
-                                            <div className="flex-1 flex items-center justify-center bg-[#191c21] rounded-xl border border-[#2D3139]/20 border-dashed p-6 text-center">
-                                                <p className="text-[#8c947b] italic">Meeting creation functionality coming soon...</p>
+                                            <div className="flex-1 flex items-center justify-center bg-surface-container rounded-xl border border-outline-variant/20 border-dashed p-6 text-center">
+                                                <p className="text-on-surface-variant italic">Meeting creation functionality coming soon...</p>
                                             </div>
                                         </div>
                                     ) : (() => {
@@ -1562,7 +1562,7 @@ function ProjectPage() {
                                         ].sort((a, b) => a.sortTime - b.sortTime);
 
                                         if (combined.length === 0) {
-                                            return <p className="text-[#8c947b] text-center italic py-md">Nothing scheduled for this day.</p>;
+                                            return <p className="text-on-surface-variant text-center italic py-md">Nothing scheduled for this day.</p>;
                                         }
 
                                         return combined.map(item => (
@@ -1573,7 +1573,7 @@ function ProjectPage() {
                                                         setSelectedTask(item);
                                                     }
                                                 }}
-                                                className={`bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
+                                                className={`bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${item.isEvent ? 'bg-[#9c27b0]/20 text-[#9c27b0]' : 'bg-primary-fixed-dim/20 text-primary-fixed-dim'
@@ -1581,14 +1581,14 @@ function ProjectPage() {
                                                         <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
                                                         {item.isEvent ? 'Event' : 'Task'}
                                                     </span>
-                                                    <span className="text-xs text-[#8c947b] font-medium">
+                                                    <span className="text-xs text-on-surface-variant font-medium">
                                                         {(item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))
                                                             ? new Date(item.sortTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                                                             : 'All Day'}
                                                     </span>
                                                 </div>
-                                                <h3 className="font-body-lg text-white font-semibold mt-1">{item.title}</h3>
-                                                {item.description && <p className="text-body-sm text-[#8c947b] line-clamp-2">{item.description}</p>}
+                                                <h3 className="font-body-lg text-on-surface font-semibold mt-1">{item.title}</h3>
+                                                {item.description && <p className="text-body-sm text-on-surface-variant line-clamp-2">{item.description}</p>}
                                             </div>
                                         ));
                                     })()}
@@ -1600,13 +1600,13 @@ function ProjectPage() {
                     {/* Public Files Tab */}
                     {activeTab === "files" && (
                         <div className="tab-pane block" id="section-files">
-                            <div className="bg-[#191c21] p-lg rounded-xl glass-panel">
+                            <div className="bg-surface-container p-lg rounded-xl glass-panel">
                                 {/* Header */}
                                 <div className="flex items-center justify-between mb-lg">
                                     <div className="flex items-center gap-sm">
                                         <span className="material-symbols-outlined text-primary-fixed-dim">move_to_inbox</span>
                                         <h3 className="font-headline-md text-headline-md">Project Files</h3>
-                                        <span className="text-[11px] text-[#8c947b]">
+                                        <span className="text-[11px] text-on-surface-variant">
                                             {projectFiles.length} file{projectFiles.length !== 1 ? "s" : ""}
                                         </span>
                                     </div>
@@ -1625,15 +1625,15 @@ function ProjectPage() {
                                             onChange={(e) => handleFilePick(e.target.files[0])} />
                                         {!pendingFile && (
                                             <div
-                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[var(--primary-color)] bg-[var(--primary-color)]/10" : "border-[#2D3139] hover:border-outline hover:bg-[#2D3139]/50"}`}
+                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[var(--primary-color)] bg-[var(--primary-color)]/10" : "border-outline-variant hover:border-outline hover:bg-surface-container-highest/50"}`}
                                                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                                                 onDragLeave={() => setDragOver(false)}
                                                 onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFilePick(e.dataTransfer.files[0]) }}
                                                 onClick={() => fileInputRef.current?.click()}>
-                                                <span className="material-symbols-outlined text-[#8c947b] text-6xl">upload_file</span>
-                                                <p className="font-body-md text-white font-semibold">Drop a file here or click to browse</p>
-                                                <p className="text-[12px] text-[#8c947b] text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
-                                                <p className="text-[11px] text-[#8c947b]/70 text-center">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
+                                                <span className="material-symbols-outlined text-on-surface-variant text-6xl">upload_file</span>
+                                                <p className="font-body-md text-on-surface font-semibold">Drop a file here or click to browse</p>
+                                                <p className="text-[12px] text-on-surface-variant text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
+                                                <p className="text-[11px] text-on-surface-variant/70 text-center">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
                                             </div>
                                         )}
                                         {pendingFile && renderPreUploadPreview()}
@@ -1644,9 +1644,9 @@ function ProjectPage() {
                                 {/* File list */}
                                 {projectFiles.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                                        <span className="material-symbols-outlined text-[#8c947b] text-5xl">folder_open</span>
-                                        <p className="text-[#8c947b] font-body-md">No files uploaded yet.</p>
-                                        <p className="text-[12px] text-[#8c947b]">Click <strong>Upload</strong> above to add the first file.</p>
+                                        <span className="material-symbols-outlined text-on-surface-variant text-5xl">folder_open</span>
+                                        <p className="text-on-surface-variant font-body-md">No files uploaded yet.</p>
+                                        <p className="text-[12px] text-on-surface-variant">Click <strong>Upload</strong> above to add the first file.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-sm">
@@ -1656,7 +1656,7 @@ function ProjectPage() {
                                             return (
                                                 <div key={f.id} className="rounded-lg overflow-hidden">
                                                     <div
-                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-[#2D3139]"}`}
+                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-surface-container-highest"}`}
                                                         onClick={() => { if (!isConfirming) setReviewFile(f) }}>
                                                         <div className="flex items-center gap-md">
                                                             {f.type?.startsWith("image/") ? (
@@ -1668,7 +1668,7 @@ function ProjectPage() {
                                                             )}
                                                             <div>
                                                                 <p className={`font-body-md text-body-md ${isConfirming ? "text-error" : "text-primary"}`}>{f.name}</p>
-                                                                <p className="text-[#8c947b] text-[11px]">
+                                                                <p className="text-on-surface-variant text-[11px]">
                                                                     {f.uploaded_by ? `Added by ${f.uploaded_by}` : "Uploaded"}
                                                                     {f.size ? ` · ${formatBytes(f.size)}` : ""}
                                                                     {f.created_at ? ` · ${new Date(f.created_at).toLocaleDateString()}` : ""}
@@ -1679,13 +1679,13 @@ function ProjectPage() {
                                                             <div className="flex items-center gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button type="button" title="Preview"
                                                                     onClick={(e) => { e.stopPropagation(); setReviewFile(f) }}
-                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[18px]">visibility</button>
+                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[18px]">visibility</button>
                                                                 <a href={f.url} download={f.name} target="_blank" rel="noreferrer"
                                                                     title="Download" onClick={(e) => e.stopPropagation()}
-                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[18px]">download</a>
+                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[18px]">download</a>
                                                                 <button type="button" title="Delete"
                                                                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(f.id) }}
-                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-error transition-colors text-[18px]">delete</button>
+                                                                    className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-[18px]">delete</button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1698,10 +1698,10 @@ function ProjectPage() {
                                                             <div className="flex items-center gap-sm">
                                                                 <button type="button"
                                                                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
-                                                                    className="px-md py-[5px] rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
+                                                                    className="px-md py-[5px] rounded-lg border border-outline-variant text-on-surface-variant hover:bg-surface-container-highest text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
                                                                 <button type="button"
                                                                     onClick={(e) => { e.stopPropagation(); deleteFile(f) }}
-                                                                    className="px-md py-[5px] rounded-lg bg-error text-white text-[12px] font-bold hover:opacity-90 cursor-pointer flex items-center gap-xs">
+                                                                    className="px-md py-[5px] rounded-lg bg-error text-on-surface text-[12px] font-bold hover:opacity-90 cursor-pointer flex items-center gap-xs">
                                                                     <span className="material-symbols-outlined text-[14px]">delete</span>Yes, delete
                                                                 </button>
                                                             </div>
@@ -1730,21 +1730,21 @@ function ProjectPage() {
                         return (
                         <div className="tab-pane block" id="section-members">
                             {allMembers.length === 0 ? (
-                                <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
-                                    <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
-                                    <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
-                                    <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
+                                <div className="bg-surface-container rounded-xl p-xl flex flex-col items-center justify-center text-center border border-outline-variant/30">
+                                    <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-md opacity-50">group_off</span>
+                                    <p className="font-headline-sm text-on-surface mb-xs">No Members Yet</p>
+                                    <p className="font-body-md text-on-surface-variant max-w-md">Tap the <strong className="text-on-surface">+</strong> button to add team members to this project.</p>
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
                                     {allMembers.map((member) => (
                                         <div
                                             key={member.id}
-                                            className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
+                                            className="bg-surface-container border border-outline-variant/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-outline-variant/60"
                                         >
                                             <div className="flex items-start justify-between mb-sm">
                                                 <div className="relative">
-                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
+                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-outline-variant bg-surface-container flex items-center justify-center text-on-surface-variant font-bold text-lg uppercase">
                                                         {member.name?.charAt(0) || "?"}
                                                     </div>
                                                     <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
@@ -1753,21 +1753,21 @@ function ProjectPage() {
                                                     <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
                                                         MEMBER
                                                     </span>
-                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
+                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-surface-container-highest text-on-surface-variant transition-colors cursor-pointer">
                                                         <span className="material-symbols-outlined text-xs">more_vert</span>
                                                     </button>
                                                 </div>
                                             </div>
                                             <div className="mb-md">
-                                                <h4 className="font-headline-md text-body-lg text-white font-bold">
+                                                <h4 className="font-headline-md text-body-lg text-on-surface font-bold">
                                                     {member.name}
                                                 </h4>
-                                                <p className="font-body-sm text-[11px] text-[#8c947b]">
+                                                <p className="font-body-sm text-[11px] text-on-surface-variant">
                                                     member
                                                 </p>
                                             </div>
                                             <div className="mt-auto flex items-center gap-2">
-                                                <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
+                                                <button className="flex-1 bg-surface-container text-on-surface font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-surface-container-highest transition-all text-body-sm cursor-pointer">
                                                     <span className="material-symbols-outlined text-sm">chat_bubble</span>
                                                     Message
                                                 </button>
@@ -1775,7 +1775,7 @@ function ProjectPage() {
                                                     <button
                                                         title="Remove from project"
                                                         onClick={() => removeMember(member.id)}
-                                                        className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
+                                                        className="w-8 h-8 bg-error-container/20 text-error rounded-lg flex items-center justify-center hover:bg-error-container/40 transition-all cursor-pointer"
                                                     >
                                                         <span className="material-symbols-outlined text-sm">person_remove</span>
                                                     </button>
@@ -1825,25 +1825,25 @@ function ProjectPage() {
                         return (
                             <div className="tab-pane block h-full min-h-[600px] flex flex-col" id="section-calendar">
                                 {/* Calendar Header */}
-                                <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] shrink-0">
-                                    <h3 className="text-lg font-bold text-white capitalize">
+                                <div className="flex items-center justify-between pb-4 border-b border-outline-variant shrink-0">
+                                    <h3 className="text-lg font-bold text-on-surface capitalize">
                                         {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
                                     </h3>
                                     <div className="flex items-center gap-2">
-                                        <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                                        <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant">
                                             <span className="material-symbols-outlined text-[18px]">chevron_left</span>
                                         </button>
-                                        <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
+                                        <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer border border-outline-variant">
                                             <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                                         </button>
                                     </div>
                                 </div>
                                 {/* Calendar Grid */}
                                 <div className="flex-1 overflow-y-auto min-h-0 mt-4">
-                                    <div className="grid grid-cols-7 gap-px bg-[#2D3139] overflow-hidden rounded-lg border border-[#2D3139]">
+                                    <div className="grid grid-cols-7 gap-px bg-surface-container-highest overflow-hidden rounded-lg border border-outline-variant">
                                         {/* Day Names */}
                                         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                                            <div key={day} className="bg-[#181a20] p-3 text-center text-xs font-bold text-[#8c947b] uppercase tracking-wider">
+                                            <div key={day} className="bg-background p-3 text-center text-xs font-bold text-on-surface-variant uppercase tracking-wider">
                                                 {day}
                                             </div>
                                         ))}
@@ -1858,14 +1858,14 @@ function ProjectPage() {
                                                 <div
                                                     key={idx}
                                                     onClick={() => date && setSelectedDateEvents(date)}
-                                                    className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-[#191c21] hover:bg-[#1C1F26]' : 'bg-[#111318]'}`}
+                                                    className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-surface-container hover:bg-surface-container' : 'bg-surface-container-lowest'}`}
                                                 >
                                                     {date && (
                                                         <>
-                                                            <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
-                                                                {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" title={`${dayEvents.length} event(s)`}></span>}
+                                                            <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-on-surface-variant'}`}>
+                                                                {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-primary-container" title={`${dayEvents.length} event(s)`}></span>}
                                                                 {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)]" title={`${dayTasks.length} task(s)`}></span>}
-                                                                <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
+                                                                <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-surface-container-high text-on-surface font-bold rounded-full text-[11px]' : ''}>
                                                                     {date.getDate()}
                                                                 </span>
                                                             </div>
@@ -1873,7 +1873,7 @@ function ProjectPage() {
                                                                 {dayEvents.map(event => (
                                                                     <div
                                                                         key={`evt-${event.id}`}
-                                                                        className="px-2 py-1 text-[10px] font-medium rounded truncate bg-purple-500/10 text-purple-400 border border-purple-500/30"
+                                                                        className="px-2 py-1 text-[10px] font-medium rounded truncate bg-primary-container/10 text-primary-fixed border border-primary-fixed/30"
                                                                         title={event.title}
                                                                     >
                                                                         {event.title}
@@ -1883,7 +1883,7 @@ function ProjectPage() {
                                                                     <div
                                                                         key={task.id}
                                                                         onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                                                                        className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
+                                                                        className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${task.status === 'done' ? 'bg-success/10 text-success border-success/30' :
                                                                             'bg-[var(--primary-color)]/10 text-[var(--primary-color)] border-[var(--primary-color)]/30'
                                                                             }`}
                                                                         title={task.title}
@@ -1918,7 +1918,7 @@ function ProjectPage() {
                         className="fixed bottom-[96px] right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
                     >
                         <span className="material-symbols-outlined text-[28px] font-bold">{cfg.icon}</span>
-                        <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
+                        <span className="absolute right-full mr-md px-md py-sm bg-surface-container text-on-surface font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-outline-variant">
                             {cfg.label}
                         </span>
                     </button>
@@ -1940,15 +1940,15 @@ function ProjectPage() {
                     ></div>
 
                     {/* Sidebar */}
-                    <div className="relative w-1/2 bg-[#191c21] shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-[#2D3139]">
+                    <div className="relative w-1/2 bg-surface-container shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-outline-variant">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-lg border-b border-[#2D3139]/30 bg-[#1C1F26]">
-                            <h2 className="font-headline-md text-white font-bold flex items-center gap-sm">
+                        <div className="flex items-center justify-between p-lg border-b border-outline-variant/30 bg-surface-container">
+                            <h2 className="font-headline-md text-on-surface font-bold flex items-center gap-sm">
                                 <span className="material-symbols-outlined">task</span>
                                 Task Details
                             </h2>
                             <button
-                                className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
+                                className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
                                 onClick={() => setSelectedTask(null)}
                             >
                                 <span className="material-symbols-outlined">close</span>
@@ -1958,13 +1958,13 @@ function ProjectPage() {
                         {/* Content */}
                         <div className="p-lg space-y-xl flex-1">
                             <div>
-                                <h1 className="font-headline-lg text-white font-bold mb-md leading-tight">{selectedTask.title}</h1>
+                                <h1 className="font-headline-lg text-on-surface font-bold mb-md leading-tight">{selectedTask.title}</h1>
                                 <div className="flex flex-wrap gap-sm">
                                     {(() => {
                                         const isOverdue = selectedTask.status !== 'done' && selectedTask.due_date && new Date(selectedTask.due_date) < new Date();
                                         const displayStatus = isOverdue ? 'overdue' : selectedTask.status;
                                         return (
-                                            <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-[#1C1F26] border border-[#2D3139]/50 text-[#8c947b]'
+                                            <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-surface-container border border-outline-variant/50 text-on-surface-variant'
                                                 }`}>
                                                 <span className="material-symbols-outlined text-[14px]">{isOverdue ? 'error' : 'flag'}</span>
                                                 {displayStatus.replace('_', ' ')}
@@ -1974,7 +1974,7 @@ function ProjectPage() {
                                     <div className="relative">
                                         <button
                                             className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity ${selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
-                                                selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
+                                                selectedTask.priority === 'high' ? 'bg-warning/10 border-[#f59e0b]/30 text-warning' :
                                                     selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
                                                         'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
                                                 }`}
@@ -1986,11 +1986,11 @@ function ProjectPage() {
                                         {priorityDropdownOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
-                                                <div className="absolute left-0 top-full mt-1 w-32 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
+                                                <div className="absolute left-0 top-full mt-1 w-32 bg-surface-container border border-outline-variant rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
                                                     {['low', 'medium', 'high', 'urgent'].map(p => (
                                                         <button
                                                             key={p}
-                                                            className={`text-left px-4 py-2 hover:bg-[#2D3139] transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-white'}`}
+                                                            className={`text-left px-4 py-2 hover:bg-surface-container-highest transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-on-surface'}`}
                                                             onClick={() => {
                                                                 updateTaskPriority(selectedTask.id, p);
                                                                 setPriorityDropdownOpen(false);
@@ -2007,22 +2007,22 @@ function ProjectPage() {
                             </div>
 
                             <div>
-                                <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider mb-sm flex items-center gap-xs">
+                                <h3 className="font-label-md text-on-surface-variant uppercase tracking-wider mb-sm flex items-center gap-xs">
                                     <span className="material-symbols-outlined text-[16px]">description</span>
                                     Description
                                 </h3>
                                 {selectedTask.description ? (
-                                    <p className="font-body-md text-white whitespace-pre-wrap leading-relaxed bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">{selectedTask.description}</p>
+                                    <p className="font-body-md text-on-surface whitespace-pre-wrap leading-relaxed bg-surface-container-low p-md rounded-xl border border-outline-variant/20">{selectedTask.description}</p>
                                 ) : (
-                                    <div className="bg-[#0F1115] p-md rounded-xl border border-[#2D3139]/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
-                                        <span className="material-symbols-outlined text-[#8c947b]/50 text-3xl">notes</span>
-                                        <p className="font-body-sm text-[#8c947b]/70 italic">No description provided for this task.</p>
+                                    <div className="bg-background p-md rounded-xl border border-outline-variant/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
+                                        <span className="material-symbols-outlined text-on-surface-variant/50 text-3xl">notes</span>
+                                        <p className="font-body-sm text-on-surface-variant/70 italic">No description provided for this task.</p>
                                     </div>
                                 )}
                             </div>
 
                             <div>
-                                <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider mb-sm flex items-center gap-xs">
+                                <h3 className="font-label-md text-on-surface-variant uppercase tracking-wider mb-sm flex items-center gap-xs">
                                     <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
                                     Sub-tasks
                                 </h3>
@@ -2063,7 +2063,7 @@ function ProjectPage() {
                                     };
 
                                     return (
-                                        <div className="space-y-sm bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">
+                                        <div className="space-y-sm bg-surface-container-low p-md rounded-xl border border-outline-variant/20">
                                             {subtasksList.length > 0 ? (
                                                 <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
                                                     {subtasksList.map(st => (
@@ -2073,14 +2073,14 @@ function ProjectPage() {
                                                                     type="button"
                                                                     onClick={() => { if (canEditSubtasks) handleToggleSubtask(st.id) }}
                                                                     disabled={!canEditSubtasks}
-                                                                    className={`check-btn ${!st.done ? '!bg-transparent !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} disabled:opacity-50 disabled:cursor-not-allowed !p-0 !w-4 !h-4 !rounded flex items-center justify-center shrink-0`}
+                                                                    className={`check-btn ${!st.done ? '!bg-transparent !shadow-none !border !border-outline-variant hover:!bg-surface-container-highest' : ''} disabled:opacity-50 disabled:cursor-not-allowed !p-0 !w-4 !h-4 !rounded flex items-center justify-center shrink-0`}
                                                                     title={st.done ? "Mark as incomplete" : "Mark as done"}
                                                                 >
                                                                     <svg className={`check-icon transition-opacity ${!st.done ? 'opacity-0' : 'opacity-100'} !w-3 !h-3`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                                                                     </svg>
                                                                 </button>
-                                                                <span className={`text-sm text-white leading-tight transition-all ${st.done ? 'line-through text-[#8c947b]/50' : ''}`}>
+                                                                <span className={`text-sm text-on-surface leading-tight transition-all ${st.done ? 'line-through text-on-surface-variant/50' : ''}`}>
                                                                     {st.title}
                                                                 </span>
                                                             </label>
@@ -2088,7 +2088,7 @@ function ProjectPage() {
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleDeleteSubtask(st.id)}
-                                                                    className="text-[#8c947b] hover:text-white opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer flex items-center justify-center p-0.5 rounded hover:bg-[#2D3139]"
+                                                                    className="text-on-surface-variant hover:text-on-surface opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer flex items-center justify-center p-0.5 rounded hover:bg-surface-container-highest"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[16px]">delete</span>
                                                                 </button>
@@ -2097,16 +2097,16 @@ function ProjectPage() {
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs text-[#8c947b]/60 italic pb-xs">No sub-tasks yet.</p>
+                                                <p className="text-xs text-on-surface-variant/60 italic pb-xs">No sub-tasks yet.</p>
                                             )}
                                             {canEditSubtasks && (
-                                                <form onSubmit={handleAddSubtask} className="flex items-center gap-xs pt-xs border-t border-[#2D3139]/10">
+                                                <form onSubmit={handleAddSubtask} className="flex items-center gap-xs pt-xs border-t border-outline-variant/10">
                                                     <input
                                                         type="text"
                                                         placeholder="Add a sub-task..."
                                                         value={newSubtaskTitle}
                                                         onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                                                        className="flex-1 bg-[#0F1115] border border-[#2D3139]/20 rounded px-sm py-[5px] text-sm text-white placeholder-[#8c947b]/40 focus:outline-none focus:border-primary/50"
+                                                        className="flex-1 bg-background border border-outline-variant/20 rounded px-sm py-[5px] text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:outline-none focus:border-primary/50"
                                                     />
                                                     <button
                                                         type="submit"
@@ -2123,7 +2123,7 @@ function ProjectPage() {
 
                             <div>
                                 <div className="flex items-center justify-between mb-sm">
-                                    <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                    <h3 className="font-label-md text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[16px]">attach_file</span>
                                         Attachments
                                     </h3>
@@ -2165,18 +2165,18 @@ function ProjectPage() {
                                     <p className="text-xs text-error mb-xs">{taskUploadError}</p>
                                 )}
                                 {canEditTaskDetails && !taskUploadError && (
-                                    <p className="text-[10px] text-[#8c947b]/60 mb-xs">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
+                                    <p className="text-[10px] text-on-surface-variant/60 mb-xs">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
                                 )}
                                 {(() => {
                                     const taskFiles = projectFiles.filter(f => String(f.task_id) === String(selectedTask.id));
                                     return (
-                                        <div className="space-y-xs bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">
+                                        <div className="space-y-xs bg-surface-container-low p-md rounded-xl border border-outline-variant/20">
                                             {taskFiles.length > 0 ? (
                                                 <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
                                                     {taskFiles.map(f => {
                                                         const { icon, color, bg } = getFileStyle(f.type);
                                                         return (
-                                                            <div key={f.id} className="flex items-center justify-between gap-sm group/file p-1 hover:bg-[#2D3139]/30 rounded transition-colors">
+                                                            <div key={f.id} className="flex items-center justify-between gap-sm group/file p-1 hover:bg-surface-container-highest/30 rounded transition-colors">
                                                                 <div
                                                                     onClick={() => setReviewFile(f)}
                                                                     className="flex items-center gap-sm cursor-pointer min-w-0 flex-1"
@@ -2185,8 +2185,8 @@ function ProjectPage() {
                                                                         <span className={`material-symbols-outlined text-[18px] ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
                                                                     </div>
                                                                     <div className="min-w-0">
-                                                                        <p className="text-sm font-semibold text-white truncate" title={f.name}>{f.name}</p>
-                                                                        <p className="text-[10px] text-[#8c947b]">
+                                                                        <p className="text-sm font-semibold text-on-surface truncate" title={f.name}>{f.name}</p>
+                                                                        <p className="text-[10px] text-on-surface-variant">
                                                                             {f.size ? formatBytes(f.size) : ""} {f.uploaded_by ? `· by ${f.uploaded_by}` : ""}
                                                                         </p>
                                                                     </div>
@@ -2196,7 +2196,7 @@ function ProjectPage() {
                                                                         type="button"
                                                                         title="Preview"
                                                                         onClick={() => setReviewFile(f)}
-                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[16px] cursor-pointer"
+                                                                        className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[16px] cursor-pointer"
                                                                     >
                                                                         visibility
                                                                     </button>
@@ -2206,7 +2206,7 @@ function ProjectPage() {
                                                                         target="_blank"
                                                                         rel="noreferrer"
                                                                         title="Download"
-                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[16px] cursor-pointer"
+                                                                        className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors text-[16px] cursor-pointer"
                                                                     >
                                                                         download
                                                                     </a>
@@ -2215,7 +2215,7 @@ function ProjectPage() {
                                                                             type="button"
                                                                             title="Delete"
                                                                             onClick={() => deleteFile(f)}
-                                                                            className="material-symbols-outlined text-[#8c947b] hover:text-error transition-colors text-[16px] cursor-pointer"
+                                                                            className="material-symbols-outlined text-on-surface-variant hover:text-error transition-colors text-[16px] cursor-pointer"
                                                                         >
                                                                             delete
                                                                         </button>
@@ -2226,7 +2226,7 @@ function ProjectPage() {
                                                     })}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs text-[#8c947b]/60 italic">No attachments yet.</p>
+                                                <p className="text-xs text-on-surface-variant/60 italic">No attachments yet.</p>
                                             )}
                                         </div>
                                     );
@@ -2234,29 +2234,29 @@ function ProjectPage() {
                             </div>
 
                             <div className="grid grid-cols-2 gap-md">
-                                <div className="bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
+                                    <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">person</span> Assignee
                                     </h3>
                                     {(() => {
                                         const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
                                         return assignee ? (
                                             <div className="flex items-center gap-sm mt-1">
-                                                <div className="w-6 h-6 rounded-full bg-[#1C1F26] border border-[#2D3139]/50 flex items-center justify-center text-[10px] font-bold text-[#8c947b] uppercase">
+                                                <div className="w-6 h-6 rounded-full bg-surface-container border border-outline-variant/50 flex items-center justify-center text-[10px] font-bold text-on-surface-variant uppercase">
                                                     {assignee.name.charAt(0)}
                                                 </div>
-                                                <p className="font-body-md text-white font-semibold">{assignee.name}</p>
+                                                <p className="font-body-md text-on-surface font-semibold">{assignee.name}</p>
                                             </div>
                                         ) : (
-                                            <p className="font-body-md text-white mt-1 italic opacity-70">Unassigned</p>
+                                            <p className="font-body-md text-on-surface mt-1 italic opacity-70">Unassigned</p>
                                         );
                                     })()}
                                 </div>
-                                <div className="bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                <div className="bg-surface-container p-md rounded-xl border border-outline-variant/20 flex flex-col gap-xs">
+                                    <h3 className="font-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
                                     </h3>
-                                    <p className="font-body-md text-white font-semibold mt-1">
+                                    <p className="font-body-md text-on-surface font-semibold mt-1">
                                         {selectedTask.due_date ? (
                                             selectedTask.due_date.includes('T') || selectedTask.due_date.includes(' ')
                                                 ? new Date(selectedTask.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
@@ -2266,8 +2266,8 @@ function ProjectPage() {
                                 </div>
                             </div>
 
-                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-[#8c947b] border-t border-[#2D3139]/20">
-                                <span>ID: <span className="font-mono text-white opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
+                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-on-surface-variant border-t border-outline-variant/20">
+                                <span>ID: <span className="font-mono text-on-surface opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
                                 <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>
@@ -2288,27 +2288,27 @@ function ProjectPage() {
                     onClick={() => setShowActionBlocked(false)}
                 >
                     <div
-                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                        className="bg-surface-container border border-outline-variant rounded-2xl shadow-2xl w-full max-w-sm p-6"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Icon */}
-                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto mb-4">
-                            <span className="material-symbols-outlined text-amber-400 text-[32px]">lock</span>
+                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-warning/10 border border-warning/20 mx-auto mb-4">
+                            <span className="material-symbols-outlined text-warning text-[32px]">lock</span>
                         </div>
 
                         {/* Text */}
-                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Action Blocked</h2>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-1">
+                        <h2 className="text-on-surface font-bold text-[18px] text-center mb-2">Action Blocked</h2>
+                        <p className="text-on-surface-variant text-[13px] text-center mb-1">
                             You don't have permission to delete this project.
                         </p>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-6">
-                            Only <span className="text-amber-400 font-semibold">Admins</span> and <span className="text-amber-400 font-semibold">Super Admins</span> can perform this action. Contact your workspace admin if you need this project removed.
+                        <p className="text-on-surface-variant text-[13px] text-center mb-6">
+                            Only <span className="text-warning font-semibold">Admins</span> and <span className="text-warning font-semibold">Super Admins</span> can perform this action. Contact your workspace admin if you need this project removed.
                         </p>
 
                         <button
                             type="button"
                             onClick={() => setShowActionBlocked(false)}
-                            className="w-full py-2.5 rounded-xl bg-[#2D3139] hover:bg-[#3a3f4a] text-white text-[13px] font-semibold transition-colors cursor-pointer"
+                            className="w-full py-2.5 rounded-xl bg-surface-container-highest hover:bg-surface-container-high text-on-surface text-[13px] font-semibold transition-colors cursor-pointer"
                         >
                             Got it
                         </button>
@@ -2324,19 +2324,19 @@ function ProjectPage() {
                     onClick={() => !deletingProject && setShowDeleteConfirm(false)}
                 >
                     <div
-                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                        className="bg-surface-container border border-outline-variant rounded-2xl shadow-2xl w-full max-w-sm p-6"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Icon */}
-                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
-                            <span className="material-symbols-outlined text-red-400 text-[32px]">delete_forever</span>
+                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-error/10 border border-error/20 mx-auto mb-4">
+                            <span className="material-symbols-outlined text-error text-[32px]">delete_forever</span>
                         </div>
 
                         {/* Text */}
-                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Delete this project?</h2>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
-                        <p className="text-white font-bold text-[15px] text-center mb-3">"{project_name}"</p>
-                        <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                        <h2 className="text-on-surface font-bold text-[18px] text-center mb-2">Delete this project?</h2>
+                        <p className="text-on-surface-variant text-[13px] text-center mb-1">You are about to permanently delete</p>
+                        <p className="text-on-surface font-bold text-[15px] text-center mb-3">"{project_name}"</p>
+                        <p className="text-on-surface-variant text-[12px] text-center mb-6">
                             All tasks, files, and activity linked to this project will also be removed. This cannot be undone.
                         </p>
 
@@ -2346,7 +2346,7 @@ function ProjectPage() {
                                 type="button"
                                 onClick={() => setShowDeleteConfirm(false)}
                                 disabled={deletingProject}
-                                className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                                className="flex-1 py-2.5 rounded-xl border border-outline-variant text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                             >
                                 No, keep it
                             </button>
@@ -2354,7 +2354,7 @@ function ProjectPage() {
                                 type="button"
                                 onClick={handleDeleteProject}
                                 disabled={deletingProject}
-                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                                className="flex-1 py-2.5 rounded-xl bg-error hover:bg-error text-on-surface text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                             >
                                 {deletingProject ? (
                                     <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Deleting…</>
@@ -2398,16 +2398,16 @@ function ProjectPage() {
                         onClick={() => setShowAddMemberModal(false)}
                     >
                         <div
-                            className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                            className="bg-surface-container border border-outline-variant rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Header */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2D3139]">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-outline-variant">
                                 <div>
-                                    <h2 className="text-white font-bold text-[16px]">Add Members</h2>
-                                    <p className="text-[#8c947b] text-[12px]">Pick team members to add to this project</p>
+                                    <h2 className="text-on-surface font-bold text-[16px]">Add Members</h2>
+                                    <p className="text-on-surface-variant text-[12px]">Pick team members to add to this project</p>
                                 </div>
-                                <button onClick={() => setShowAddMemberModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors cursor-pointer">
+                                <button onClick={() => setShowAddMemberModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer">
                                     <span className="material-symbols-outlined text-[20px]">close</span>
                                 </button>
                             </div>
@@ -2416,19 +2416,19 @@ function ProjectPage() {
                             <div className="max-h-80 overflow-y-auto p-4 space-y-2">
                                 {available.length === 0 ? (
                                     <div className="text-center py-8">
-                                        <span className="material-symbols-outlined text-[#8c947b] text-4xl mb-2 block">group</span>
-                                        <p className="text-[#8c947b] text-[13px]">All team space members are already in this project.</p>
+                                        <span className="material-symbols-outlined text-on-surface-variant text-4xl mb-2 block">group</span>
+                                        <p className="text-on-surface-variant text-[13px]">All team space members are already in this project.</p>
                                     </div>
                                 ) : (
                                     available.map(user => (
-                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-[#191c21] border border-[#2D3139]/50 hover:border-[var(--primary-color)]/30 transition-colors group">
+                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-surface-container border border-outline-variant/50 hover:border-[var(--primary-color)]/30 transition-colors group">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-[#2D3139] flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
+                                                <div className="w-9 h-9 rounded-full bg-surface-container-highest flex items-center justify-center font-bold text-[14px] text-on-surface uppercase shrink-0">
                                                     {user.name?.charAt(0) || "?"}
                                                 </div>
                                                 <div>
-                                                    <p className="text-white text-[13px] font-semibold">{user.name}</p>
-                                                    <p className="text-[#8c947b] text-[11px]">{user.email}</p>
+                                                    <p className="text-on-surface text-[13px] font-semibold">{user.name}</p>
+                                                    <p className="text-on-surface-variant text-[11px]">{user.email}</p>
                                                 </div>
                                             </div>
                                             <button
@@ -2443,8 +2443,8 @@ function ProjectPage() {
                                 )}
                             </div>
 
-                            <div className="px-6 py-4 border-t border-[#2D3139]">
-                                <button onClick={() => setShowAddMemberModal(false)} className="w-full py-2.5 rounded-xl bg-[#2D3139] text-white text-[13px] font-semibold hover:bg-[#3a3f4a] transition-colors cursor-pointer">
+                            <div className="px-6 py-4 border-t border-outline-variant">
+                                <button onClick={() => setShowAddMemberModal(false)} className="w-full py-2.5 rounded-xl bg-surface-container-highest text-on-surface text-[13px] font-semibold hover:bg-surface-container-high transition-colors cursor-pointer">
                                     Done
                                 </button>
                             </div>

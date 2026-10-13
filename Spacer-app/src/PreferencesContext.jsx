@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { supabase } from './supabase';
 
 const defaultPreferences = {
@@ -38,163 +38,163 @@ const defaultPreferences = {
   }
 };
 
+const APPEARANCE_CACHE_VERSION = 1;
+const GUEST_APPEARANCE_CACHE_KEY = 'spacers:appearance:v1:guest';
+const THEME_IDS = ['dark', 'high_contrast', 'midnight', 'emerald', 'amethyst', 'crimson', 'light', 'system'];
+const ACCENT_COLOR_IDS = ['lime', 'cyan', 'purple', 'gold', 'rose', 'orange', 'sapphire', 'green'];
+const APPEARANCE_OPTIONS = {
+  sidebarPosition: ['left', 'right'],
+  density: ['comfortable', 'compact', 'spacious'],
+  animationSpeed: ['smooth', 'fast', 'none'],
+  glassmorphism: ['soft', 'intense', 'flat']
+};
+
+function sanitizeAppearance(value) {
+  const appearance = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const sanitized = { ...defaultPreferences.appearance };
+
+  if (THEME_IDS.includes(appearance.theme)) sanitized.theme = appearance.theme;
+  if (ACCENT_COLOR_IDS.includes(appearance.accentColor)) sanitized.accentColor = appearance.accentColor;
+
+  for (const [key, options] of Object.entries(APPEARANCE_OPTIONS)) {
+    if (options.includes(appearance[key])) sanitized[key] = appearance[key];
+  }
+
+  for (const key of ['compactUi', 'autoCollapseSidebar']) {
+    if (typeof appearance[key] === 'boolean') sanitized[key] = appearance[key];
+  }
+
+  if (typeof appearance.animations === 'string') sanitized.animations = appearance.animations;
+  return sanitized;
+}
+
+function appearanceCacheKey(userId) {
+  return `spacers:appearance:v1:user:${encodeURIComponent(userId)}`;
+}
+
+function readAppearanceCache(key) {
+  if (typeof localStorage === 'undefined') return null;
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(key));
+    if (cached?.version !== APPEARANCE_CACHE_VERSION || !cached.appearance || typeof cached.appearance !== 'object') {
+      if (cached !== null) localStorage.removeItem(key);
+      return null;
+    }
+    return sanitizeAppearance(cached.appearance);
+  } catch {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      return null;
+    }
+    return null;
+  }
+}
+
+function writeAppearanceCache(key, appearance) {
+  if (typeof localStorage === 'undefined') return;
+
+  try {
+    localStorage.setItem(key, JSON.stringify({
+      version: APPEARANCE_CACHE_VERSION,
+      appearance: sanitizeAppearance(appearance)
+    }));
+  } catch {
+    // Storage may be unavailable or full; Supabase remains the account source of truth.
+  }
+}
+
+function preferencesForSession(session) {
+  const user = session?.user;
+  if (!user) {
+    return {
+      ...defaultPreferences,
+      appearance: readAppearanceCache(GUEST_APPEARANCE_CACHE_KEY) || defaultPreferences.appearance
+    };
+  }
+
+  const remotePreferences = user.user_metadata?.preferences || {};
+  const remoteAppearance = remotePreferences.appearance;
+  const hasRemoteAppearance = remoteAppearance && typeof remoteAppearance === 'object' && !Array.isArray(remoteAppearance);
+  const userCacheKey = appearanceCacheKey(user.id);
+  const appearance = hasRemoteAppearance
+    ? sanitizeAppearance(remoteAppearance)
+    : readAppearanceCache(userCacheKey) || defaultPreferences.appearance;
+
+  writeAppearanceCache(userCacheKey, appearance);
+  return { ...defaultPreferences, ...remotePreferences, appearance };
+}
+
 const PreferencesContext = createContext();
 
-export function PreferencesProvider({ children }) {
-  const [preferences, setPreferences] = useState(defaultPreferences);
-  const [loading, setLoading] = useState(true);
+export function PreferencesProvider({ children, initialSession = null }) {
+  const [preferences, setPreferences] = useState(() => preferencesForSession(initialSession));
+  const [loading] = useState(false);
+  const activeUserId = useRef(initialSession?.user?.id || null);
+  const preferencesRef = useRef(preferences);
 
-  // Load from Supabase user_metadata
+  // Supabase appearance overrides the matching user's local fallback; guest cache never hydrates a new account.
   useEffect(() => {
-    const fetchPrefs = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.user_metadata?.preferences) {
-        setPreferences({
-          ...defaultPreferences,
-          ...session.user.user_metadata.preferences
-        });
-      }
-      setLoading(false);
-    };
-    fetchPrefs();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user?.user_metadata?.preferences) {
-        setPreferences({
-          ...defaultPreferences,
-          ...session.user.user_metadata.preferences
-        });
+      if (session?.user) {
+        const nextPreferences = preferencesForSession(session);
+        activeUserId.current = session.user.id;
+        preferencesRef.current = nextPreferences;
+        setPreferences(nextPreferences);
+        return;
       }
+
+      const previousUserId = activeUserId.current;
+      if (previousUserId) {
+        writeAppearanceCache(GUEST_APPEARANCE_CACHE_KEY, preferencesRef.current.appearance);
+      }
+
+      activeUserId.current = null;
+      const nextPreferences = preferencesForSession(null);
+      preferencesRef.current = nextPreferences;
+      setPreferences(nextPreferences);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Apply appearance globally
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
-    
-    // Theme mapping
-    const themes = {
-      dark: { // Obsidian Dark
-        base: "#101509",
-        surface: "#1d2115",
-        lowest: "#0b1005",
-        border: "#424934",
-        surfaceHigh: "#272c1e",
-        highest: "#323729",
-        surfaceLow: "#191d11"
-      },
-      high_contrast: { // High Contrast
-        base: "#050704",
-        surface: "#0a0d08",
-        lowest: "#000000",
-        border: "#5c664b",
-        surfaceHigh: "#12170f",
-        highest: "#1a2115",
-        surfaceLow: "#070a05"
-      },
-      midnight: { // Midnight Blue
-        base: "#0b0f19",
-        surface: "#151b2d",
-        lowest: "#070a12",
-        border: "#2e3a5f",
-        surfaceHigh: "#1e263f",
-        highest: "#283254",
-        surfaceLow: "#101524"
-      },
-      emerald: { // Forest Emerald
-        base: "#05100a",
-        surface: "#0b1c12",
-        lowest: "#020805",
-        border: "#1d3c29",
-        surfaceHigh: "#122b1c",
-        highest: "#1a3b27",
-        surfaceLow: "#08160e"
-      },
-      amethyst: { // Deep Amethyst
-        base: "#0c0714",
-        surface: "#170e24",
-        lowest: "#050308",
-        border: "#3b235c",
-        surfaceHigh: "#231536",
-        highest: "#301d4a",
-        surfaceLow: "#120b1c"
-      },
-      crimson: { // Cyberpunk Red
-        base: "#140505",
-        surface: "#240a0a",
-        lowest: "#080202",
-        border: "#4c1414",
-        surfaceHigh: "#360e0e",
-        highest: "#4a1414",
-        surfaceLow: "#1c0707"
-      },
-      system: { // System default (acts as dark for now)
-        base: "#101509",
-        surface: "#1d2115",
-        lowest: "#0b1005",
-        border: "#424934",
-        surfaceHigh: "#272c1e",
-        highest: "#323729",
-        surfaceLow: "#191d11"
+
+    const theme = sanitizeAppearance(preferences.appearance).theme;
+    const accentColor = sanitizeAppearance(preferences.appearance).accentColor;
+    root.dataset.theme = theme;
+    root.dataset.accent = accentColor;
+
+    const mediaQuery = window.matchMedia?.('(prefers-color-scheme: light)');
+    const applyColorScheme = () => {
+      const isLight = theme === 'light' || (theme === 'system' && mediaQuery?.matches);
+      root.dataset.colorScheme = isLight ? 'light' : 'dark';
+      root.classList.toggle('light', isLight);
+      root.classList.toggle('dark', !isLight);
+    };
+
+    applyColorScheme();
+    if (theme !== 'system' || !mediaQuery) return undefined;
+
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', applyColorScheme);
+    } else {
+      mediaQuery.addListener?.(applyColorScheme);
+    }
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener('change', applyColorScheme);
+      } else {
+        mediaQuery.removeListener?.(applyColorScheme);
       }
     };
+  }, [preferences.appearance]);
 
-    const selectedTheme = themes[preferences.appearance.theme] || themes.dark;
-    root.style.setProperty('--bg-base', selectedTheme.base);
-    root.style.setProperty('--bg-surface', selectedTheme.surface);
-    root.style.setProperty('--bg-lowest', selectedTheme.lowest);
-    root.style.setProperty('--bg-border', selectedTheme.border);
-    root.style.setProperty('--bg-surface-high', selectedTheme.surfaceHigh);
-    root.style.setProperty('--bg-highest', selectedTheme.highest);
-    root.style.setProperty('--bg-surface-low', selectedTheme.surfaceLow);
-
-    // Always maintain dark class as per default setup
-    root.classList.add("dark");
-    root.classList.remove("light");
-
-    // Accent Color mapping (using hex values or Tailwind colors)
-    const accentColors = {
-      lime: "#aff82a",
-      cyan: "#2dd4bf",
-      purple: "#a855f7",
-      gold: "#fbbf24",
-      rose: "#f43f5e",
-      orange: "#f97316",
-      sapphire: "#3b82f6",
-      green: "#22c55e"
-    };
-
-    const accentColorsDim = {
-      lime: "#96da00",
-      cyan: "#14b8a6",
-      purple: "#9333ea",
-      gold: "#f59e0b",
-      rose: "#e11d48",
-      orange: "#ea580c",
-      sapphire: "#2563eb",
-      green: "#16a34a"
-    };
-
-    const accentColorsRgb = {
-      lime: "175, 248, 42",
-      cyan: "45, 212, 191",
-      purple: "168, 85, 247",
-      gold: "251, 191, 36",
-      rose: "244, 63, 94",
-      orange: "249, 115, 22",
-      sapphire: "59, 130, 246",
-      green: "34, 197, 94"
-    };
-    
-    const selectedColor = accentColors[preferences.appearance.accentColor] || accentColors.lime;
-    const selectedColorDim = accentColorsDim[preferences.appearance.accentColor] || accentColorsDim.lime;
-    const selectedColorRgb = accentColorsRgb[preferences.appearance.accentColor] || accentColorsRgb.lime;
-    
-    root.style.setProperty('--primary-color', selectedColor);
-    root.style.setProperty('--primary-color-dim', selectedColorDim);
-    root.style.setProperty('--primary-color-rgb', selectedColorRgb);
+  // Apply non-color appearance settings globally.
+  useEffect(() => {
+    const root = document.documentElement;
 
     // Apply layout custom styles to document root
     const sidebarPos = preferences.appearance.sidebarPosition || "left";
@@ -257,9 +257,18 @@ export function PreferencesProvider({ children }) {
 
   const updatePreferences = async (category, newValues) => {
     const updatedCategory = { ...preferences[category], ...newValues };
+    if (category === 'appearance') {
+      Object.assign(updatedCategory, sanitizeAppearance(updatedCategory));
+      const userId = activeUserId.current;
+      writeAppearanceCache(
+        userId ? appearanceCacheKey(userId) : GUEST_APPEARANCE_CACHE_KEY,
+        updatedCategory
+      );
+    }
     const updatedPreferences = { ...preferences, [category]: updatedCategory };
     
     // Optimistic UI update
+    preferencesRef.current = updatedPreferences;
     setPreferences(updatedPreferences);
 
     // Persist to Supabase

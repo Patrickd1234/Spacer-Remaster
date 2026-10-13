@@ -25,7 +25,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         return `rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors ${
             active
                 ? "nav-item-active"
-                : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+                : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest"
         }`;
     };
 
@@ -141,7 +141,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     return (
         <>
             <aside
-                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-[#2D3139] bg-[#1C1F26] flex flex-col py-6 z-50 transition-all duration-300 ease-out overflow-hidden`}
+                className={`fixed left-0 top-0 h-full ${expanded ? "w-[260px]" : "w-[72px]"} border-r border-outline-variant bg-surface-container flex flex-col py-6 z-50 transition-all duration-300 ease-out overflow-hidden`}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
                 onClick={handleSidebarClick}
@@ -152,13 +152,13 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         {expanded && (
                             <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary-accent font-bold text-[20px]">token</span>
-                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
+                                <h1 className="font-bold text-[14px] text-on-surface tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
                             </div>
                         )}
                         <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleToggle(); }}
-                            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2D3139] text-[#8c947b] hover:text-white transition-colors"
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-container-highest text-on-surface-variant hover:text-on-surface transition-colors"
                             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                         >
                             <span className="material-symbols-outlined text-[18px]">{collapsed ? "chevron_right" : "chevron_left"}</span>
@@ -217,13 +217,13 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     <div>
                         {expanded && (
                             <div className="flex items-center justify-between px-3 mb-2">
-                                <span className="text-[11px] font-bold tracking-wider text-[#8c947b] uppercase">Projects</span>
+                                <span className="text-[11px] font-bold tracking-wider text-on-surface-variant uppercase">Projects</span>
                             </div>
                         )}
                         <div className="space-y-1">
                             {visibleProjects.length > 0 ? (
                                 visibleProjects.map((project, idx) => {
-                                    const colors = ["text-green-500", "text-pink-500", "text-red-500", "text-blue-500", "text-amber-500"];
+                                    const colors = ["text-success", "text-primary-fixed", "text-error", "text-info", "text-warning"];
                                     const iconColor = colors[idx % colors.length];
                                     const projectActive = location.pathname === `/project_page/${project.id}`;
                                     return (
@@ -233,7 +233,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                             className={`rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors group ${
                                                 projectActive
                                                     ? "nav-item-active"
-                                                    : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+                                                    : "text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest"
                                             }`}
                                         >
                                             {expanded && (
@@ -248,7 +248,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                                 })
                             ) : (
                                 expanded && (
-                                    <div className="text-[#8c947b] text-[13px] px-3 py-1 italic">No projects found</div>
+                                    <div className="text-on-surface-variant text-[13px] px-3 py-1 italic">No projects found</div>
                                 )
                             )}
                         </div>
@@ -256,24 +256,24 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                 </nav>
 
                 {/* USER PROFILE & LOGOUT FOOTER */}
-                <div className="mt-auto px-4 border-t border-[#2D3139] pt-4 pb-2 relative" ref={dropdownRef}>
+                <div className="mt-auto px-4 border-t border-outline-variant pt-4 pb-2 relative" ref={dropdownRef}>
                     <div onClick={() => setProfileDropdownOpen(!profileDropdownOpen)} className="block w-full">
                         {expanded ? (
-                            <div className="flex items-center justify-between px-3 py-1 cursor-pointer group rounded-lg hover:bg-[#2D3139] transition-colors">
+                            <div className="flex items-center justify-between px-3 py-1 cursor-pointer group rounded-lg hover:bg-surface-container-highest transition-colors">
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139] shrink-0">
+                                    <div className="w-9 h-9 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-[14px] border border-outline-variant shrink-0">
                                         {displayName.charAt(0).toUpperCase()}
                                     </div>
                                     <div className="flex flex-col min-w-0">
-                                        <span className="text-white text-[14px] font-medium leading-tight truncate">{displayName}</span>
-                                        <span className="text-[#8c947b] text-[12px] truncate">{displayEmail}</span>
+                                        <span className="text-on-surface text-[14px] font-medium leading-tight truncate">{displayName}</span>
+                                        <span className="text-on-surface-variant text-[12px] truncate">{displayEmail}</span>
                                     </div>
                                 </div>
-                                <span className={`material-symbols-outlined text-[#8c947b] group-hover:text-white transition-all duration-200 ${profileDropdownOpen ? "rotate-180" : ""}`}>expand_more</span>
+                                <span className={`material-symbols-outlined text-on-surface-variant group-hover:text-on-surface transition-all duration-200 ${profileDropdownOpen ? "rotate-180" : ""}`}>expand_more</span>
                             </div>
                         ) : (
-                            <div className="flex justify-center px-3 py-1 cursor-pointer rounded-lg hover:bg-[#2D3139] transition-colors" title={displayName}>
-                                <div className="w-9 h-9 rounded-full bg-[#3d424d] text-white flex items-center justify-center font-bold text-[14px] border border-[#2D3139]">
+                            <div className="flex justify-center px-3 py-1 cursor-pointer rounded-lg hover:bg-surface-container-highest transition-colors" title={displayName}>
+                                <div className="w-9 h-9 rounded-full bg-surface-container-high text-on-surface flex items-center justify-center font-bold text-[14px] border border-outline-variant">
                                     {displayName.charAt(0).toUpperCase()}
                                 </div>
                             </div>
@@ -281,17 +281,17 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                     </div>
 
                     {profileDropdownOpen && (
-                        <div className={`absolute ${collapsed && !hovered ? "left-16 w-48" : "left-4 right-4"} bottom-full mb-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
-                            <Link to="/profile" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors">
+                        <div className={`absolute ${collapsed && !hovered ? "left-16 w-48" : "left-4 right-4"} bottom-full mb-2 bg-surface-container border border-outline-variant rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+                            <Link to="/profile" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">person</span>
                                 <span className="text-sm font-medium">Your Profile</span>
                             </Link>
-                            <Link to="/settings" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors">
+                            <Link to="/settings" onClick={() => setProfileDropdownOpen(false)} className="flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">settings</span>
                                 <span className="text-sm font-medium">Settings</span>
                             </Link>
-                            <div className="h-[1px] bg-[#2D3139] mx-2"></div>
-                            <button onClick={() => { setProfileDropdownOpen(false); handleLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-950/20 transition-colors">
+                            <div className="h-[1px] bg-surface-container-highest mx-2"></div>
+                            <button onClick={() => { setProfileDropdownOpen(false); handleLogout(); }} className="w-full flex items-center gap-3 px-4 py-3 text-error hover:bg-error-container/20 transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">logout</span>
                                 <span className="text-sm font-medium">Log out</span>
                             </button>

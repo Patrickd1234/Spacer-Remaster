@@ -69,28 +69,28 @@ function AcceptInvite() {
     }
 
     return (
-        <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-6">
+        <div className="min-h-screen bg-background flex items-center justify-center px-6">
             <div className="w-full max-w-[420px]">
                 <div className="w-10 h-10 mb-6 flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
+                    <span className="material-symbols-outlined text-primary-fixed text-[36px]">token</span>
                 </div>
 
                 {status === "checking" && (
                     <div className="text-center py-10">
-                        <span className="material-symbols-outlined animate-spin text-4xl text-[#aff82a]">progress_activity</span>
-                        <p className="text-[#8c947b] text-sm mt-4">Verifying your invite…</p>
+                        <span className="material-symbols-outlined animate-spin text-4xl text-primary-fixed">progress_activity</span>
+                        <p className="text-on-surface-variant text-sm mt-4">Verifying your invite…</p>
                     </div>
                 )}
 
                 {status === "invalid" && (
                     <div className="text-center py-6 space-y-3">
-                        <span className="material-symbols-outlined text-4xl text-red-400">link_off</span>
-                        <h2 className="text-xl font-bold text-white">This invite link isn't valid</h2>
-                        <p className="text-[#8c947b] text-sm leading-relaxed">
+                        <span className="material-symbols-outlined text-4xl text-error">link_off</span>
+                        <h2 className="text-xl font-bold text-on-surface">This invite link isn't valid</h2>
+                        <p className="text-on-surface-variant text-sm leading-relaxed">
                             It may have already been used, or it's expired. Ask whoever invited you to send a new one,
                             or log in below if you've already set your password.
                         </p>
-                        <Link to="/login" className="inline-block mt-2 text-[#aff82a] font-semibold hover:underline text-sm">
+                        <Link to="/login" className="inline-block mt-2 text-primary-fixed font-semibold hover:underline text-sm">
                             Go to Login
                         </Link>
                     </div>
@@ -98,10 +98,10 @@ function AcceptInvite() {
 
                 {status === "ready" && (
                     <>
-                        <h2 className="text-[28px] font-bold text-white mb-2 tracking-tight text-center">Welcome to Spacer</h2>
-                        <p className="text-[#8c947b] text-[14px] mb-8 leading-relaxed text-center">
+                        <h2 className="text-[28px] font-bold text-on-surface mb-2 tracking-tight text-center">Welcome to Spacer</h2>
+                        <p className="text-on-surface-variant text-[14px] mb-8 leading-relaxed text-center">
                             You've been added to your team already — just set a password for
-                            <span className="text-white font-medium"> {email}</span> to finish signing in.
+                            <span className="text-on-surface font-medium"> {email}</span> to finish signing in.
                         </p>
 
                         <form onSubmit={handleSetPassword} className="space-y-4">
@@ -109,7 +109,7 @@ function AcceptInvite() {
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     placeholder="Create a password"
-                                    className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                    className="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed rounded-xl px-4 py-3.5 text-on-surface text-[14px] placeholder:text-on-surface-variant focus:outline-none transition-colors"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
@@ -117,7 +117,7 @@ function AcceptInvite() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
+                                    className="absolute right-4 top-[14px] text-on-surface-variant hover:text-on-surface transition-colors"
                                 >
                                     <span className="material-symbols-outlined text-[20px]">
                                         {showPassword ? "visibility_off" : "visibility"}
@@ -128,14 +128,14 @@ function AcceptInvite() {
                             <input
                                 type={showPassword ? "text" : "password"}
                                 placeholder="Confirm password"
-                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                className="w-full bg-surface-container-lowest border border-outline-variant focus:border-primary-fixed rounded-xl px-4 py-3.5 text-on-surface text-[14px] placeholder:text-on-surface-variant focus:outline-none transition-colors"
                                 value={confirmPassword}
                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                 required
                             />
 
                             {errorMsg && (
-                                <p className="text-red-400 text-xs flex items-center gap-1.5">
+                                <p className="text-error text-xs flex items-center gap-1.5">
                                     <span className="material-symbols-outlined text-[14px]">error</span>
                                     {errorMsg}
                                 </p>
@@ -144,7 +144,7 @@ function AcceptInvite() {
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                                className="w-full bg-primary-container hover:bg-primary-fixed-dim text-on-primary font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                             >
                                 {submitting ? (
                                     <>
@@ -161,9 +161,9 @@ function AcceptInvite() {
 
                 {status === "success" && (
                     <div className="text-center py-10 space-y-3">
-                        <span className="material-symbols-outlined text-4xl text-[#aff82a]">check_circle</span>
-                        <h2 className="text-xl font-bold text-white">You're all set!</h2>
-                        <p className="text-[#8c947b] text-sm">Taking you into Spacer…</p>
+                        <span className="material-symbols-outlined text-4xl text-primary-fixed">check_circle</span>
+                        <h2 className="text-xl font-bold text-on-surface">You're all set!</h2>
+                        <p className="text-on-surface-variant text-sm">Taking you into Spacer…</p>
                     </div>
                 )}
             </div>

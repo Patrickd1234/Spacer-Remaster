@@ -1,10 +1,39 @@
 <!doctype html>
-<html class="dark" lang="en">
+<html class="dark" data-theme="dark" data-color-scheme="dark" data-accent="lime" lang="en">
 
 <head>
   <meta charset="utf-8">
   <meta content="width=device-width, initial-scale=1.0" name="viewport">
   <title>Spacers | Dashboard</title>
+  <script>
+    (() => {
+      const root = document.documentElement;
+      try {
+        const cached = JSON.parse(localStorage.getItem("spacers:appearance:v1:guest") || "null");
+        const appearance = cached?.version === 1 ? cached.appearance : null;
+        if (typeof appearance?.theme === "string" && appearance.theme.length <= 32) {
+          root.dataset.theme = appearance.theme;
+        }
+        if (typeof appearance?.accentColor === "string" && appearance.accentColor.length <= 24) {
+          root.dataset.accent = appearance.accentColor;
+        }
+      } catch {
+        // The default dark palette remains active when local storage is unavailable.
+      }
+
+      const systemTheme = window.matchMedia?.("(prefers-color-scheme: light)");
+      const applyColorScheme = () => {
+        const isLight = root.dataset.theme === "light" || (root.dataset.theme === "system" && systemTheme?.matches);
+        root.dataset.colorScheme = isLight ? "light" : "dark";
+        root.classList.toggle("light", isLight);
+        root.classList.toggle("dark", !isLight);
+      };
+      applyColorScheme();
+      systemTheme?.addEventListener?.("change", () => {
+        if (root.dataset.theme === "system") applyColorScheme();
+      });
+    })();
+  </script>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap"
     rel="stylesheet">
@@ -17,53 +46,57 @@
       theme: {
         extend: {
           "colors": {
-            "secondary-fixed-dim": "#c4c6d0",
-            "on-error-container": "#ffdad6",
-            "tertiary-container": "#eaddf8",
-            "tertiary-fixed": "#eaddf8",
-            "on-surface-variant": "#c2caae",
-            "surface-dim": "var(--bg-base, #101509)",
-            "on-secondary": "#2d3038",
-            "surface-container": "var(--bg-surface, #1d2115)",
-            "secondary": "#c4c6d0",
-            "on-secondary-fixed-variant": "#44474e",
-            "secondary-fixed": "#e0e2ec",
-            "on-secondary-fixed": "#191c22",
-            "primary": "#ffffff",
-            "inverse-primary": "#466800",
-            "on-primary-container": "#4a6f00",
-            "surface-container-lowest": "var(--bg-lowest, #0b1005)",
-            "surface": "var(--bg-base, #101509)",
-            "outline-variant": "var(--bg-border, #424934)",
-            "on-tertiary-fixed-variant": "#4b4358",
-            "surface-bright": "#363b2d",
-            "on-tertiary": "#352d41",
-            "on-background": "#e0e5d0",
-            "on-error": "#690005",
-            "tertiary": "#ffffff",
-            "on-surface": "#e0e5d0",
-            "on-primary-fixed": "#121f00",
-            "primary-container": "var(--primary-color, #aff82a)",
-            "on-tertiary-container": "#6a6077",
-            "tertiary-fixed-dim": "#cec2dc",
-            "inverse-surface": "#e0e5d0",
-            "error-container": "#93000a",
-            "on-tertiary-fixed": "#1f182b",
-            "on-secondary-container": "#b6b8c1",
-            "surface-container-high": "var(--bg-surface-high, #272c1e)",
-            "on-primary-fixed-variant": "#344e00",
-            "surface-variant": "var(--bg-surface-high, #323729)",
-            "secondary-container": "#464951",
-            "on-primary": "#223600",
-            "outline": "#8c947b",
-            "error": "#ffb4ab",
-            "background": "var(--bg-base, #101509)",
-            "surface-container-highest": "var(--bg-highest, #323729)",
-            "primary-fixed": "var(--primary-color, #aff82a)",
-            "surface-tint": "var(--primary-color-dim, #96da00)",
-            "surface-container-low": "var(--bg-surface-low, #191d11)",
-            "inverse-on-surface": "#2d3224",
-            "primary-fixed-dim": "var(--primary-color-dim, #96da00)"
+            "primary": "rgb(var(--primary-color-rgb) / <alpha-value>)",
+            "primary-container": "rgb(var(--primary-color-rgb) / <alpha-value>)",
+            "primary-fixed": "rgb(var(--primary-color-rgb) / <alpha-value>)",
+            "primary-fixed-dim": "rgb(var(--primary-color-dim-rgb) / <alpha-value>)",
+            "on-primary": "rgb(var(--on-primary-rgb) / <alpha-value>)",
+            "on-primary-container": "rgb(var(--on-primary-rgb) / <alpha-value>)",
+            "secondary": "rgb(var(--on-surface-variant-rgb) / <alpha-value>)",
+            "secondary-container": "rgb(var(--bg-surface-high-rgb) / <alpha-value>)",
+            "secondary-fixed": "rgb(var(--on-surface-variant-rgb) / <alpha-value>)",
+            "secondary-fixed-dim": "rgb(var(--on-surface-variant-rgb) / <alpha-value>)",
+            "on-secondary": "rgb(var(--on-surface-rgb) / <alpha-value>)",
+            "on-secondary-container": "rgb(var(--on-surface-rgb) / <alpha-value>)",
+            "on-secondary-fixed": "rgb(var(--on-surface-rgb) / <alpha-value>)",
+            "on-secondary-fixed-variant": "rgb(var(--on-surface-variant-rgb) / <alpha-value>)",
+            "tertiary": "rgb(var(--primary-color-rgb) / <alpha-value>)",
+            "tertiary-container": "rgb(var(--primary-color-rgb) / <alpha-value>)",
+            "tertiary-fixed": "rgb(var(--primary-color-rgb) / <alpha-value>)",
+            "tertiary-fixed-dim": "rgb(var(--primary-color-dim-rgb) / <alpha-value>)",
+            "on-tertiary": "rgb(var(--on-primary-rgb) / <alpha-value>)",
+            "on-tertiary-container": "rgb(var(--on-surface-rgb) / <alpha-value>)",
+            "on-tertiary-fixed": "rgb(var(--on-primary-rgb) / <alpha-value>)",
+            "on-tertiary-fixed-variant": "rgb(var(--on-surface-variant-rgb) / <alpha-value>)",
+            "surface": "rgb(var(--bg-base-rgb) / <alpha-value>)",
+            "surface-dim": "rgb(var(--bg-base-rgb) / <alpha-value>)",
+            "surface-bright": "rgb(var(--bg-surface-high-rgb) / <alpha-value>)",
+            "surface-variant": "rgb(var(--bg-surface-high-rgb) / <alpha-value>)",
+            "surface-container": "rgb(var(--bg-surface-rgb) / <alpha-value>)",
+            "surface-container-low": "rgb(var(--bg-surface-low-rgb) / <alpha-value>)",
+            "surface-container-lowest": "rgb(var(--bg-lowest-rgb) / <alpha-value>)",
+            "surface-container-high": "rgb(var(--bg-surface-high-rgb) / <alpha-value>)",
+            "surface-container-highest": "rgb(var(--bg-highest-rgb) / <alpha-value>)",
+            "background": "rgb(var(--bg-base-rgb) / <alpha-value>)",
+            "on-background": "rgb(var(--on-background-rgb) / <alpha-value>)",
+            "on-surface": "rgb(var(--on-surface-rgb) / <alpha-value>)",
+            "on-surface-variant": "rgb(var(--on-surface-variant-rgb) / <alpha-value>)",
+            "outline": "rgb(var(--outline-rgb) / <alpha-value>)",
+            "outline-variant": "rgb(var(--bg-border-rgb) / <alpha-value>)",
+            "inverse-primary": "rgb(var(--primary-color-dim-rgb) / <alpha-value>)",
+            "inverse-surface": "rgb(var(--on-surface-rgb) / <alpha-value>)",
+            "inverse-on-surface": "rgb(var(--bg-base-rgb) / <alpha-value>)",
+            "error": "rgb(var(--error-rgb) / <alpha-value>)",
+            "error-container": "rgb(var(--error-container-rgb) / <alpha-value>)",
+            "on-error": "rgb(var(--on-error-rgb) / <alpha-value>)",
+            "on-error-container": "rgb(var(--on-error-container-rgb) / <alpha-value>)",
+            "success": "rgb(var(--success-rgb) / <alpha-value>)",
+            "success-container": "rgb(var(--success-container-rgb) / <alpha-value>)",
+            "on-success-container": "rgb(var(--on-success-container-rgb) / <alpha-value>)",
+            "warning": "rgb(var(--warning-rgb) / <alpha-value>)",
+            "warning-container": "rgb(var(--warning-container-rgb) / <alpha-value>)",
+            "info": "rgb(var(--info-rgb) / <alpha-value>)",
+            "info-container": "rgb(var(--info-container-rgb) / <alpha-value>)"
           },
           "borderRadius": {
             "DEFAULT": "0.25rem",
@@ -105,41 +138,6 @@
       },
     }
   </script>
-  <style>
-    body {
-      background-color: #0F1115;
-      color: #e0e5d0;
-      font-family: 'Inter', sans-serif;
-      overflow-x: hidden;
-    }
-
-    .material-symbols-outlined {
-      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    }
-
-    .glass-card {
-      background: #1C1F26;
-      border: 1px solid #2D3139;
-      transition: all 0.2s ease;
-    }
-
-    .glass-card:hover {
-      border-color: #424934;
-    }
-
-    ::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    ::-webkit-scrollbar-track {
-      background: #0F1115;
-    }
-
-    ::-webkit-scrollbar-thumb {
-      background: #2D3139;
-      border-radius: 10px;
-    }
-  </style>
 </head>
 
 <body>

@@ -268,14 +268,14 @@ function Header({ onSearch = () => {} }) {
     return (
         <>
             {/* HEADER */}
-            <header className="h-16 flex items-center justify-between gap-3 px-3 sm:px-lg w-full border-b border-[#2D3139] bg-[#0F1115] sticky top-0 z-40">
+            <header className="h-16 flex items-center justify-between gap-3 px-3 sm:px-lg w-full border-b border-outline-variant bg-background sticky top-0 z-40">
                 <div className="ml-auto flex items-center gap-2 sm:gap-3">
                     
                     {/* SEARCH BAR CONTAINER */}
                     <div className="relative w-full max-w-[220px] sm:max-w-[260px]" ref={searchRef}>
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8c947b]">search</span>
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant">search</span>
                         <input
-                            className="w-full bg-[#191c21] border border-[#2D3139] rounded-lg pl-10 pr-4 py-2 text-white font-body-sm focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none transition-colors"
+                            className="w-full bg-surface-container border border-outline-variant rounded-lg pl-10 pr-4 py-2 text-on-surface font-body-sm focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none transition-colors"
                             placeholder="Search workspace..."
                             type="text"
                             value={searchQuery}
@@ -290,31 +290,31 @@ function Header({ onSearch = () => {} }) {
 
                         {/* SEARCH DROPDOWN */}
                         {showDropdown && searchQuery.trim().length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-surface-container border border-outline-variant rounded-xl shadow-xl overflow-hidden z-50">
                                 {isSearching ? (
-                                    <div className="p-4 text-center text-sm text-[#8c947b] flex items-center justify-center gap-2">
+                                    <div className="p-4 text-center text-sm text-on-surface-variant flex items-center justify-center gap-2">
                                         <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
                                         Searching...
                                     </div>
                                 ) : !hasResults ? (
-                                    <div className="p-4 text-center text-sm text-[#8c947b]">
+                                    <div className="p-4 text-center text-sm text-on-surface-variant">
                                         No results found for "{searchQuery}"
                                     </div>
                                 ) : (
                                     <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                                         {searchResults.projects.length > 0 && (
                                             <div className="py-2">
-                                                <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">Projects</div>
+                                                <div className="px-3 py-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider">Projects</div>
                                                 {searchResults.projects.map((p) => {
                                                     const itemIndex = searchItems.findIndex((item) => item.id === `project-${p.id}`);
                                                     return (
                                                         <div
                                                             key={p.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-surface-container-highest" : "hover:bg-surface-container-highest"}`}
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
-                                                            <span className="material-symbols-outlined text-[16px] text-pink-400">book</span>
+                                                            <span className="material-symbols-outlined text-[16px] text-primary-fixed">book</span>
                                                             <span className="truncate">{p.name}</span>
                                                         </div>
                                                     )
@@ -322,14 +322,14 @@ function Header({ onSearch = () => {} }) {
                                             </div>
                                         )}
                                         {searchResults.tasks.length > 0 && (
-                                            <div className="py-2 border-t border-[#2D3139]/50">
-                                                <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">Tasks</div>
+                                            <div className="py-2 border-t border-outline-variant/50">
+                                                <div className="px-3 py-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider">Tasks</div>
                                                 {searchResults.tasks.map((t) => {
                                                     const itemIndex = searchItems.findIndex((item) => item.id === `task-${t.id}`);
                                                     return (
                                                         <div
                                                             key={t.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-surface-container-highest" : "hover:bg-surface-container-highest"}`}
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
@@ -341,18 +341,18 @@ function Header({ onSearch = () => {} }) {
                                             </div>
                                         )}
                                         {searchResults.users.length > 0 && (
-                                            <div className="py-2 border-t border-[#2D3139]/50">
-                                                <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">People</div>
+                                            <div className="py-2 border-t border-outline-variant/50">
+                                                <div className="px-3 py-1 text-xs font-bold text-on-surface-variant uppercase tracking-wider">People</div>
                                                 {searchResults.users.map((u) => {
                                                     const itemIndex = searchItems.findIndex((item) => item.id === `user-${u.id}`);
                                                     return (
                                                         <div
                                                             key={u.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-surface-container-highest" : "hover:bg-surface-container-highest"}`}
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
-                                                            <div className="w-5 h-5 rounded-full bg-[#3d424d] flex items-center justify-center text-[10px] font-bold">
+                                                            <div className="w-5 h-5 rounded-full bg-surface-container-high flex items-center justify-center text-[10px] font-bold">
                                                                 {u.name.charAt(0).toUpperCase()}
                                                             </div>
                                                             <div className="flex flex-col truncate">
@@ -371,23 +371,23 @@ function Header({ onSearch = () => {} }) {
 
                     <div className="relative" ref={notificationRef}>
                         <button
-                            className="p-2 text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-full transition-colors relative"
+                            className="p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest rounded-full transition-colors relative"
                             onClick={() => setShowNotifications((prev) => !prev)}
                             aria-label="Notifications"
                         >
                             <span className="material-symbols-outlined">notifications</span>
                             {unreadCount > 0 && (
-                                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center border border-[#0F1115]">
+                                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-error text-[10px] font-bold text-on-surface flex items-center justify-center border border-[#0F1115]">
                                     {unreadCount > 9 ? "9+" : unreadCount}
                                 </span>
                             )}
                         </button>
                         {showNotifications && (
-                            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-[#2D3139] bg-[#191c21] shadow-xl p-3 z-50">
+                            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-outline-variant bg-surface-container shadow-xl p-3 z-50">
                                 <div className="flex items-center justify-between mb-3">
                                     <div>
-                                        <p className="text-sm font-bold text-white">In-app notifications</p>
-                                        <p className="text-xs text-[#8c947b]">{unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}</p>
+                                        <p className="text-sm font-bold text-on-surface">In-app notifications</p>
+                                        <p className="text-xs text-on-surface-variant">{unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {unreadCount > 0 && (
@@ -398,31 +398,31 @@ function Header({ onSearch = () => {} }) {
                                                 Mark all read
                                             </button>
                                         )}
-                                        <button className="text-xs text-[#8c947b] hover:underline" onClick={() => setShowNotifications(false)}>Close</button>
+                                        <button className="text-xs text-on-surface-variant hover:underline" onClick={() => setShowNotifications(false)}>Close</button>
                                     </div>
                                 </div>
                                 {notificationsLoading ? (
-                                    <div className="flex items-center justify-center py-6 text-sm text-[#8c947b]">
+                                    <div className="flex items-center justify-center py-6 text-sm text-on-surface-variant">
                                         <span className="material-symbols-outlined animate-spin text-[16px] mr-2">progress_activity</span>
                                         Loading notifications...
                                     </div>
                                 ) : notifications.length === 0 ? (
-                                    <div className="rounded-lg bg-[#252a33] p-3 border border-[#2D3139] text-sm text-[#8c947b]">
+                                    <div className="rounded-lg bg-surface-container-high p-3 border border-outline-variant text-sm text-on-surface-variant">
                                         No notifications right now.
                                     </div>
                                 ) : (
                                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                                         {notifications.map((notification) => (
-                                            <div key={notification.id} className="rounded-lg bg-[#252a33] p-3 border border-[#2D3139] flex gap-2">
-                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : "text-[#8c947b]"}`}>
+                                            <div key={notification.id} className="rounded-lg bg-surface-container-high p-3 border border-outline-variant flex gap-2">
+                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : "text-on-surface-variant"}`}>
                                                     {notification.type === "success" ? "check_circle" : "notifications_active"}
                                                 </span>
                                                 <div className="flex-1">
                                                     <div className="flex items-start justify-between gap-2">
-                                                        <p className="text-sm text-white">{notification.title}</p>
+                                                        <p className="text-sm text-on-surface">{notification.title}</p>
                                                         {notification.unread && <span className="w-2 h-2 rounded-full bg-[var(--primary-color)] mt-1.5 flex-shrink-0" />}
                                                     </div>
-                                                    <p className="text-xs text-[#8c947b] mt-1">{notification.message}</p>
+                                                    <p className="text-xs text-on-surface-variant mt-1">{notification.message}</p>
                                                     <p className="text-[11px] text-[#6b7280] mt-2">{notification.time}</p>
                                                 </div>
                                             </div>

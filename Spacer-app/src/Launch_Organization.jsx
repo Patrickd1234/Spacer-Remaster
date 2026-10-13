@@ -69,59 +69,59 @@ export default function LaunchOrganization() {
                     <div class="z-10 mb-20">
                         <div class="flex items-center gap-2 mb-4">
                             <div class="w-6 h-6 bg-brand rounded-sm flex items-center justify-center">
-                                <svg class="w-4 h-4 text-black" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                                <svg class="w-4 h-4 text-on-surface" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
                             </div>
                             <span class="font-bold text-lg tracking-widest uppercase">SPACER</span>
                         </div>
-                        <p class="text-gray-400 max-w-sm text-sm leading-relaxed">
+                        <p class="text-on-surface-variant max-w-sm text-sm leading-relaxed">
                             One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place.
                         </p>
                     </div>
                     {/* Workspace Hierarchy Visualization */}
                     <div class="relative z-10 flex flex-col items-start space-y-4">
                         {/* Organization Level */}
-                        <div class="flex items-center gap-3 bg-surface-bright/20 border border-white/10 p-3 rounded-custom w-80 glass-panel">
-                            <div class="w-8 h-8 bg-blue-500/20 rounded flex items-center justify-center border border-blue-500/30">
-                                <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                        <div class="flex items-center gap-3 bg-surface-bright/20 border border-on-surface/10 p-3 rounded-custom w-80 glass-panel">
+                            <div class="w-8 h-8 bg-info/20 rounded flex items-center justify-center border border-info/30">
+                                <svg class="w-4 h-4 text-info" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
                             </div>
                             <span class="font-medium text-sm">Spacer</span>
-                            <div class="ml-auto text-gray-500">
+                            <div class="ml-auto text-on-surface-variant">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M9 5l7 7-7 7"></path></svg>
                             </div>
                         </div>
                         {/* Tree Connections & Team Level */}
-                        <div class="ml-6 border-l border-white/10 pl-8 space-y-6 py-2">
+                        <div class="ml-6 border-l border-on-surface/10 pl-8 space-y-6 py-2">
                             {/* Team Header */}
                             <div class="relative">
-                                <div class="absolute -left-8 top-4 w-8 h-px bg-white/10"></div>
+                                <div class="absolute -left-8 top-4 w-8 h-px bg-on-surface/10"></div>
                                 <div class="flex items-center gap-2 mb-4">
                                     <span class="text-sm font-semibold">Development Team</span>
-                                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                                    <svg class="w-4 h-4 text-on-surface-variant" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
                                 </div>
                                 {/* Project Items */}
                                 <div class="space-y-3 ml-4">
-                                    <div class="flex items-center gap-3 bg-white/5 border border-white/5 p-2 px-4 rounded-custom w-64">
-                                        <span class="text-gray-400 text-xs">✨ Project Launch</span>
-                                        <svg class="ml-auto w-3 h-3 text-gray-600" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                                    <div class="flex items-center gap-3 bg-on-surface/5 border border-on-surface/5 p-2 px-4 rounded-custom w-64">
+                                        <span class="text-on-surface-variant text-xs">✨ Project Launch</span>
+                                        <svg class="ml-auto w-3 h-3 text-on-surface-variant" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
                                     </div>
-                                    <div class="flex items-center gap-3 bg-white/10 border border-white/10 p-2 px-4 rounded-custom w-64 neon-glow">
-                                        <span class="text-white text-xs">💻 App Redesign</span>
-                                        <svg class="ml-auto w-3 h-3 text-white" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
+                                    <div class="flex items-center gap-3 bg-on-surface/10 border border-on-surface/10 p-2 px-4 rounded-custom w-64 neon-glow">
+                                        <span class="text-on-surface text-xs">💻 App Redesign</span>
+                                        <svg class="ml-auto w-3 h-3 text-on-surface" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7"></path></svg>
                                     </div>
                                 </div>
                             </div>
                             {/* My Space Section */}
                             <div class="relative pt-4">
-                                <div class="absolute -left-8 top-8 w-8 h-px bg-white/10"></div>
+                                <div class="absolute -left-8 top-8 w-8 h-px bg-on-surface/10"></div>
                                 <div class="flex items-center gap-2 mb-4">
-                                    <span class="text-sm font-semibold">My Space <span class="text-gray-500 font-normal">(personal workspace)</span></span>
+                                    <span class="text-sm font-semibold">My Space <span class="text-on-surface-variant font-normal">(personal workspace)</span></span>
                                 </div>
                                 {/* Task Card */}
-                                <div class="ml-4 p-4 bg-surface-container border border-white/5 rounded-custom w-72 shadow-2xl">
-                                    <p class="text-[10px] text-gray-500 mb-2 font-medium">My Task</p>
-                                    <div class="p-3 bg-white/5 rounded-md border border-white/5">
+                                <div class="ml-4 p-4 bg-surface-container border border-on-surface/5 rounded-custom w-72 shadow-2xl">
+                                    <p class="text-[10px] text-on-surface-variant mb-2 font-medium">My Task</p>
+                                    <div class="p-3 bg-on-surface/5 rounded-md border border-on-surface/5">
                                         <p class="text-xs font-medium mb-1">Fix auth token expiry bug</p>
-                                        <p class="text-[10px] text-gray-500">Sessions dropping before timeout period ends — users getting logged...</p>
+                                        <p class="text-[10px] text-on-surface-variant">Sessions dropping before timeout period ends — users getting logged...</p>
                                     </div>
                                 </div>
                             </div>
@@ -137,11 +137,11 @@ export default function LaunchOrganization() {
                 <section class="flex-1 flex flex-col justify-center items-center px-8 lg:px-20 bg-surface" data-purpose="onboarding-form">
                     <div class="max-w-md w-full">
                         {/* Step Indicator */}
-                        <span class="text-xs font-medium text-gray-500 mb-6 block">Step 1 of 3</span>
+                        <span class="text-xs font-medium text-on-surface-variant mb-6 block">Step 1 of 3</span>
                         {/* Header */}
                         <header class="mb-10">
-                            <h1 class="text-4xl font-bold text-white mb-4 tracking-tight">Create Your Organization</h1>
-                            <p class="text-gray-400 text-sm leading-relaxed">
+                            <h1 class="text-4xl font-bold text-on-surface mb-4 tracking-tight">Create Your Organization</h1>
+                            <p class="text-on-surface-variant text-sm leading-relaxed">
                                 One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place.
                             </p>
                         </header>
@@ -149,26 +149,26 @@ export default function LaunchOrganization() {
                         <form action="#" class="space-y-6" method="POST">
                             {/* Field: Company Name */}
                             <div data-purpose="input-group">
-                                <label class="block text-sm font-medium text-gray-300 mb-2" for="company-name">
-                                    Company Name <span class="text-red-500">*</span>
+                                <label class="block text-sm font-medium text-on-surface-variant mb-2" for="company-name">
+                                    Company Name <span class="text-error">*</span>
                                 </label>
-                                <input class="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600" id="company-name" placeholder="Enter company name" required="" type="text" />
+                                <input class="w-full bg-surface-dim border border-on-surface/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-on-surface-variant" id="company-name" placeholder="Enter company name" required="" type="text" />
                             </div>
                             {/* Field: Email */}
                             <div data-purpose="input-group">
-                                <label class="block text-sm font-medium text-gray-300 mb-2" for="email">
-                                    Company Email/Personal Email <span class="text-red-500">*</span>
+                                <label class="block text-sm font-medium text-on-surface-variant mb-2" for="email">
+                                    Company Email/Personal Email <span class="text-error">*</span>
                                 </label>
-                                <input class="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600" id="email" placeholder="Enter company email" required="" type="email" />
+                                <input class="w-full bg-surface-dim border border-on-surface/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-on-surface-variant" id="email" placeholder="Enter company email" required="" type="email" />
                             </div>
                             {/* Field: Password */}
                             <div class="relative" data-purpose="input-group">
-                                <label class="block text-sm font-medium text-gray-300 mb-2" for="password">
-                                    Password <span class="text-red-500">*</span>
+                                <label class="block text-sm font-medium text-on-surface-variant mb-2" for="password">
+                                    Password <span class="text-error">*</span>
                                 </label>
                                 <div class="relative">
-                                    <input class="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600 pr-10" id="password" placeholder="Enter Password" required="" type="password" />
-                                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300" type="button">
+                                    <input class="w-full bg-surface-dim border border-on-surface/10 rounded-custom px-4 py-3 text-sm focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-on-surface-variant pr-10" id="password" placeholder="Enter Password" required="" type="password" />
+                                    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface-variant" type="button">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path><path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
                                     </button>
                                 </div>
@@ -176,18 +176,18 @@ export default function LaunchOrganization() {
                             {/* Terms Checkbox */}
                             <div class="flex items-start gap-3">
                                 <div class="flex items-center h-5">
-                                    <input class="h-4 w-4 rounded border-white/10 bg-surface-dim text-brand focus:ring-brand" id="terms" name="terms" required="" type="checkbox" />
+                                    <input class="h-4 w-4 rounded border-on-surface/10 bg-surface-dim text-brand focus:ring-brand" id="terms" name="terms" required="" type="checkbox" />
                                 </div>
-                                <label class="text-sm text-gray-400" for="terms">
+                                <label class="text-sm text-on-surface-variant" for="terms">
                                     To establish an Organization, please accept our <a class="text-brand hover:underline" href="#">Terms &amp; Services</a>
                                 </label>
                             </div>
                             {/* Submit Button */}
-                            <button class="w-full py-4 px-6 bg-surface-container border border-white/5 text-gray-600 font-bold rounded-custom transition-all hover:bg-white/5 cursor-not-allowed mt-4" disabled="" type="submit">
+                            <button class="w-full py-4 px-6 bg-surface-container border border-on-surface/5 text-on-surface-variant font-bold rounded-custom transition-all hover:bg-on-surface/5 cursor-not-allowed mt-4" disabled="" type="submit">
                                 Create Account
                             </button>
                             {/* Sign In Link */}
-                            <p class="text-center text-sm text-gray-400 mt-6">
+                            <p class="text-center text-sm text-on-surface-variant mt-6">
                                 Already have an account? <a class="text-brand hover:underline" href="#">Sign in</a>
                             </p>
                         </form>
