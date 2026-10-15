@@ -21,6 +21,16 @@ const triggerAuthChange = (event, session) => {
     });
 };
 
+// Mock-only password check: stores a SHA-256 hash, never the plain password.
+// Not real security — localStorage is readable by any script on the page.
+const hashPassword = async (password) => {
+    const bytes = new TextEncoder().encode(password || "");
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
+};
+
+const INVALID_CREDENTIALS = { message: "Invalid login credentials", code: "invalid_credentials" };
+
 const mockAuth = {
     async signUp({ email, password, options }) {
         const users = JSON.parse(localStorage.getItem("mock_users") || "[]");
@@ -32,7 +42,7 @@ const mockAuth = {
             email,
             user_metadata: options?.data || {}
         };
-        users.push(newUser);
+        users.push({ ...newUser, passwordHash: await hashPassword(password) });
         localStorage.setItem("mock_users", JSON.stringify(users));
 
         // Create the user profile in the mock users table as well
@@ -56,10 +66,14 @@ const mockAuth = {
 
     async signInWithPassword({ email, password }) {
         const users = JSON.parse(localStorage.getItem("mock_users") || "[]");
-        const user = users.find(u => u.email === email);
-        if (!user) {
-            return { data: null, error: { message: "Invalid login credentials", code: "invalid_credentials" } };
+        const record = users.find(u => u.email === email);
+        // Same error for unknown email and wrong password, like the real API.
+        // Mock users created before password hashing have no hash and cannot sign in.
+        if (!record?.passwordHash || record.passwordHash !== await hashPassword(password)) {
+            return { data: null, error: INVALID_CREDENTIALS };
         }
+        const user = { ...record };
+        delete user.passwordHash; // never expose the hash in the session
         const session = {
             user,
             access_token: "mock-token",
