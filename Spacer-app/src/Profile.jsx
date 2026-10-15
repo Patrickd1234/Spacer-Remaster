@@ -68,7 +68,9 @@ function Profile() {
             const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
 
             if (authError || !authUser) {
-                console.log("No authenticated user found:", authError)
+                if (import.meta.env.DEV) {
+                    console.error("No authenticated user found:", authError)
+                }
                 setLoading(false)
                 return
             }
@@ -77,12 +79,14 @@ function Profile() {
 
             const { data, error } = await supabase
                 .from("users")
-                .select("*")
+                .select("id, name, email, phone, job_title, department, location, bio, website")
                 .eq("id", authUser.id)
                 .maybeSingle()
 
             if (error) {
-                console.log("Error fetching users row:", error)
+                if (import.meta.env.DEV) {
+                    console.error("Error fetching users row:", error)
+                }
             }
 
             const next = {
@@ -99,13 +103,17 @@ function Profile() {
             setDraft(next)
 
             if (!data) {
-                console.log("No users row for this account yet — creating one")
+                if (import.meta.env.DEV) {
+                    console.info("No users row for this account yet — creating one")
+                }
                 const { error: insertError } = await supabase.from("users").insert({
                     id: authUser.id,
                     email: authUser.email,
                     name: authUser.user_metadata?.full_name || "",
                 })
-                if (insertError) console.log("Could not create users row:", insertError)
+                if (insertError && import.meta.env.DEV) {
+                    console.error("Could not create users row:", insertError)
+                }
             }
 
             setLoading(false)
@@ -144,7 +152,9 @@ function Profile() {
         if (draft.email !== profile.email) {
             const { error: authError } = await supabase.auth.updateUser({ email: draft.email })
             if (authError) {
-                console.log("Error updating auth email:", authError)
+                if (import.meta.env.DEV) {
+                    console.error("Error updating auth email:", authError)
+                }
                 showToast("Could not update email: " + authError.message, "error")
             }
         }
@@ -152,7 +162,9 @@ function Profile() {
         setSaving(false)
 
         if (error || authMetaError) {
-            console.log("DB or Auth Update error:", error || authMetaError)
+            if (import.meta.env.DEV) {
+                console.error("DB or Auth Update error:", error || authMetaError)
+            }
             showToast("Failed to update profile", "error")
             return
         }
@@ -181,7 +193,9 @@ function Profile() {
         setPasswordSaving(false)
 
         if (error) {
-            console.log(error)
+            if (import.meta.env.DEV) {
+                console.error("Password update error:", error)
+            }
             setPasswordMsg({ type: "error", text: error.message })
         } else {
             setPasswordMsg({ type: "success", text: "Password updated successfully." })
@@ -196,7 +210,9 @@ function Profile() {
         const { error } = await supabase.auth.signOut({ scope: "others" })
         setSigningOutOthers(false)
         if (error) {
-            console.log(error)
+            if (import.meta.env.DEV) {
+                console.error("Error signing out other sessions:", error)
+            }
             showToast("Could not sign out other sessions: " + error.message, "error")
         } else {
             setOthersSignedOut(true)

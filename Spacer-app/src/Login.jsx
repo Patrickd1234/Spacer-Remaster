@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { useNavigate, Link, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
 
 function Login() {
@@ -9,6 +9,10 @@ function Login() {
     const [errorMsg, setErrorMsg] = useState("")
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const navigate = useNavigate()
+    const location = useLocation()
+    const [successMsg, setSuccessMsg] = useState(
+        location.state?.resetSuccess ? "Your password has been reset successfully. Please sign in with your new password." : ""
+    )
 
     const [isDemoMode, setIsDemoMode] = useState(localStorage.getItem("use_mock_supabase") === "true")
     const isFormFilled = email.trim() !== "" && password.trim() !== ""
@@ -96,6 +100,26 @@ function Login() {
 
     return (
         <div className="min-h-screen bg-[#181a20] flex overflow-hidden">
+            {/* Top Success Toast */}
+            {successMsg && (
+                <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#1b381e]/95 backdrop-blur-md border border-[#aff82a]/60 rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
+                    <div className="w-8 h-8 rounded border border-[#aff82a]/40 flex items-center justify-center shrink-0 text-[#aff82a]">
+                        <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                    </div>
+                    <p className="text-white text-[14px] leading-tight">
+                        {successMsg}
+                    </p>
+                    <button
+                        type="button"
+                        aria-label="Dismiss message"
+                        onClick={() => setSuccessMsg("")}
+                        className="text-[#8c947b] hover:text-white transition-colors ml-auto text-sm"
+                    >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                </div>
+            )}
+
             {/* Top Error Toast */}
             {errorMsg && (
                 <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
@@ -213,6 +237,7 @@ function Login() {
                             />
                             <button
                                 type="button"
+                                aria-label="Toggle password visibility"
                                 onClick={() => setShowPassword(!showPassword)}
                                 className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
                             >
@@ -229,7 +254,13 @@ function Login() {
 
                         {/* Forgot Password */}
                         <div className="flex justify-end mt-2 mb-2">
-                            <a href="#" className="text-[#aff82a] text-[13px] hover:underline">Forgot Password?</a>
+                            <Link
+                                to="/forgot-password"
+                                state={{ email }}
+                                className="text-[#aff82a] text-[13px] hover:underline"
+                            >
+                                Forgot Password?
+                            </Link>
                         </div>
 
                         {/* Sign In Button */}

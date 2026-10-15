@@ -20,7 +20,7 @@ export default function Reports() {
   const [lastUpdated, setLastUpdated] = useState(null)
 
   // Current session & profile
-  const [currentUserId, setCurrentUserId] = useState(null)
+  const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem("userId") || null)
   const [organizationId, setOrganizationId] = useState(null)
 
   // Raw data from DB
@@ -74,8 +74,15 @@ export default function Reports() {
     if (!raw) return []
     try {
       const parsed = typeof raw === "string" ? JSON.parse(raw) : raw
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
+      if (!Array.isArray(parsed)) {
+        if (parsed !== null && parsed !== undefined) {
+          console.warn("Malformed sub_tasks (expected array):", parsed)
+        }
+        return []
+      }
+      return parsed
+    } catch (error) {
+      console.warn("Malformed sub_tasks:", error)
       return []
     }
   }, [])
@@ -144,7 +151,7 @@ export default function Reports() {
         if (teamIds.length > 0) {
           const { data: projs } = await supabase
             .from("project_spaces")
-            .select("*")
+            .select("id, name, status, team_space_id, created_at")
             .in("team_space_id", teamIds)
             .order("created_at", { ascending: false })
 
@@ -202,12 +209,28 @@ export default function Reports() {
   useEffect(() => {
     fetchReportData()
 
+    const userId = currentUserId || localStorage.getItem("userId")
+    // Determine realtime filter:
+    // - Personal reports: filter by assignee_id to only react to user's own tasks
+    // - Organization reports: filter by organization_id if available, otherwise fallback to assignee_id
+    const taskFilter = scope === "personal" || !organizationId
+      ? (userId ? `assignee_id=eq.${userId}` : undefined)
+      : `organization_id=eq.${organizationId}`
+
+    const taskSubOptions = {
+      event: "*",
+      schema: "public",
+      table: "tasks",
+      ...(taskFilter ? { filter: taskFilter } : {})
+    }
+
     // 1. Supabase Realtime channel on both tasks and project_spaces
+    const channelName = `reports-realtime-${scope}-${userId || "anon"}-${organizationId || "none"}`
     const channel = supabase
-      .channel("reports-realtime-feed")
+      .channel(channelName)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "tasks" },
+        taskSubOptions,
         () => {
           fetchReportData(true)
         }
@@ -245,7 +268,7 @@ export default function Reports() {
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("focus", handleWindowFocus)
     }
-  }, [fetchReportData])
+  }, [fetchReportData, scope, currentUserId, organizationId])
 
   // ── Filtered tasks according to active scope & project ───────────────────
   const filteredTasks = useMemo(() => {
