@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
+import AuthBrandPanel from "./partials/AuthBrandPanel"
 
 function Login() {
     const [email, setEmail] = useState("")
@@ -94,7 +95,7 @@ function Login() {
     const isPasswordError = errorMsg.toLowerCase().includes("password") || errorMsg.toLowerCase().includes("invalid login credentials")
 
     return (
-        <div className="min-h-screen bg-[#181a20] flex overflow-hidden">
+        <div className="min-h-screen bg-[var(--bg-surface)] flex overflow-hidden">
             {/* Top Error Toast */}
             {errorMsg && (
                 <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
@@ -111,31 +112,23 @@ function Login() {
 
             {/* Demo Mode Toggle */}
             <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
-                <button onClick={toggleDemoMode} className="text-xs bg-[#2D3139] text-white px-2 py-1 rounded">
+                <button onClick={toggleDemoMode} className="text-xs bg-[var(--bg-border)] text-white px-2 py-1 rounded">
                     Demo: {isDemoMode ? "ON" : "OFF"}
                 </button>
             </div>
 
             {/* Left Side: Visual/Brand (Hidden on mobile) */}
-            <div className="hidden lg:flex w-[55%] relative flex-col px-16 py-12 border-r border-[#2D3139]/30">
-                {/* Abstract Glowing Backgrounds */}
-                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#2A3A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
-                <div className="absolute bottom-[-10%] right-[10%] w-[400px] h-[400px] bg-[#3B2A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
-                <div className="absolute bottom-[20%] left-[-5%] w-[300px] h-[300px] bg-[#1A4A3A] rounded-full blur-[100px] opacity-40 mix-blend-screen pointer-events-none" />
-
-                {/* Branding */}
-                <div className="relative z-10 mb-12">
-                    <div className="flex items-center gap-2 mb-8">
-                        <span className="material-symbols-outlined text-[#aff82a] font-bold text-[24px]">token</span>
-                        <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
-                    </div>
+            <AuthBrandPanel
+                showThirdGlow
+                quote="Spacer helped us organize all our department workspaces into a single unified dashboard."
+                tagline={
                     <p className="text-white text-[20px] leading-relaxed max-w-md">
                         One workspace for every team. HR, Design, Dev and Marketing—each in their own space, all in one place.
                     </p>
-                </div>
-
+                }
+            >
                 {/* Decorative Showcase */}
-                <div className="relative z-10 w-full max-w-[420px] bg-[#1C1F26]/80 backdrop-blur-xl border border-[#2D3139] rounded-2xl p-6 shadow-2xl mt-4 space-y-4">
+                <div className="relative z-10 w-full max-w-[420px] bg-[color:color-mix(in_srgb,var(--bg-surface-high)_80%,transparent)] backdrop-blur-xl border border-[var(--bg-border)] rounded-2xl p-6 shadow-2xl mt-4 space-y-4">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
@@ -146,7 +139,7 @@ function Login() {
                                 <p className="text-xs text-[#8c947b]">Development • Active</p>
                             </div>
                         </div>
-                        <span className="bg-[#aff82a]/10 text-[#aff82a] border border-[#aff82a]/30 text-[11px] font-bold px-2.5 py-1 rounded-full">
+                        <span className="bg-[rgba(var(--primary-color-rgb),0.1)] text-[var(--primary-color)] border border-[rgba(var(--primary-color-rgb),0.3)] text-[11px] font-bold px-2.5 py-1 rounded-full">
                             On Track
                         </span>
                     </div>
@@ -155,24 +148,18 @@ function Login() {
                             <span>Sprint Progress</span>
                             <span className="text-white font-medium">78%</span>
                         </div>
-                        <div className="w-full bg-[#252a33] h-2 rounded-full overflow-hidden">
-                            <div className="bg-[#aff82a] h-full rounded-full" style={{ width: "78%" }}></div>
+                        <div className="w-full bg-[var(--bg-highest)] h-2 rounded-full overflow-hidden">
+                            <div className="bg-[var(--primary-color)] h-full rounded-full" style={{ width: "78%" }}></div>
                         </div>
                     </div>
                 </div>
-
-                <div className="relative z-10 mt-auto pt-8 border-l-2 border-[#aff82a] pl-4">
-                    <p className="text-sm text-[#8c947b] italic">
-                        "Spacer helped us organize all our department workspaces into a single unified dashboard."
-                    </p>
-                </div>
-            </div>
+            </AuthBrandPanel>
 
             {/* Right Side: Sign In Form */}
-            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[#181a20] relative z-10">
+            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[var(--bg-surface)] relative z-10">
                 <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
+                        <span className="material-symbols-outlined text-[var(--primary-color)] text-[36px]">token</span>
                     </div>
 
                     <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Welcome Back</h2>
@@ -187,7 +174,7 @@ function Login() {
                                 type="email"
                                 id="email"
                                 placeholder="Email address"
-                                className={`w-full bg-[#111318] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[var(--bg-surface-low)] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-[var(--primary-color)]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 required
@@ -205,7 +192,7 @@ function Login() {
                                 type={showPassword ? "text" : "password"}
                                 id="password"
                                 placeholder="Password"
-                                className={`w-full bg-[#111318] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[var(--bg-surface-low)] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-[var(--primary-color)]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 required
@@ -228,7 +215,7 @@ function Login() {
 
                         {/* Forgot Password */}
                         <div className="flex justify-end mt-2 mb-2">
-                            <a href="#" className="text-[#aff82a] text-[13px] hover:underline">Forgot Password?</a>
+                            <a href="#" className="text-[var(--primary-color)] text-[13px] hover:underline">Forgot Password?</a>
                         </div>
 
                         {/* Sign In Button */}
@@ -236,7 +223,7 @@ function Login() {
                             type="submit"
                             className={`w-full font-medium text-sm py-3.5 rounded-xl border transition-all mt-2 ${
                                 isFormFilled
-                                    ? 'bg-[#aff82a] text-[#1C1F26] border-[#9de022] shadow-[0_0_12px_rgba(173,248,42,0.35)] hover:bg-[#9de022]'
+                                    ? 'bg-[var(--primary-color)] text-[var(--bg-base)] border-[var(--primary-color-dim)] shadow-[0_0_12px_rgba(var(--primary-color-rgb),0.35)] hover:bg-[var(--primary-color-dim)]'
                                     : 'bg-[#5b644d] hover:bg-[#6c765c] text-white border-[#5b644d]'
                             }`}
                         >
@@ -244,16 +231,16 @@ function Login() {
                         </button>
 
                         <div className="flex items-center gap-4 my-6">
-                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                            <div className="h-px bg-[var(--bg-border)] flex-1"></div>
                             <span className="text-[#8c947b] text-[13px]">or</span>
-                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                            <div className="h-px bg-[var(--bg-border)] flex-1"></div>
                         </div>
 
                         <button
                             type="button"
                             onClick={handleGoogleSignIn}
                             disabled={isGoogleLoading || !googleAuthReady}
-                            className="w-full flex items-center justify-center gap-3 border border-[#2D3139] bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#4B5563]"
+                            className="w-full flex items-center justify-center gap-3 border border-[var(--bg-border)] bg-[var(--bg-surface-low)] hover:bg-[var(--bg-surface-high)] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#4B5563]"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -273,7 +260,7 @@ function Login() {
                         {/* Create Account Link */}
                         <div className="text-center mt-6">
                             <p className="text-[#8c947b] text-[14px]">
-                                Don't have an account? <Link to="/signup" className="text-[#aff82a] font-semibold hover:underline">Create Account</Link>
+                                Don't have an account? <Link to="/signup" className="text-[var(--primary-color)] font-semibold hover:underline">Create Account</Link>
                             </p>
                         </div>
                     </form>
