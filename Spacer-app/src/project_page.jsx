@@ -656,7 +656,7 @@ function ProjectPage() {
 
         const fetchActivity = async () => {
             if (!project_id) return
-            const { data, error } = await supabase.from("activity_log").select("*, actor:users(name, email)").eq("new_state->>project_id", project_id).order("created_at", { ascending: false }).limit(20)
+            const { data, error } = await supabase.from("activity_log").select("id, action, new_state, created_at, actor:users(name, email)").eq("new_state->>project_id", project_id).order("created_at", { ascending: false }).limit(20)
             if (error) { console.error("Error fetching activity:", error) }
             else { setActivityLog(data || []) }
         }

@@ -182,7 +182,7 @@ function Header({ onSearch = () => {} }) {
             setNotificationsLoading(true);
             const { data, error } = await supabase
                 .from("activity_log")
-                .select("*, actor:users(name, email)")
+                .select("id, action, new_state, created_at, actor:users(name, email)")
                 .order("created_at", { ascending: false })
                 .limit(10);
 
@@ -238,7 +238,7 @@ function Header({ onSearch = () => {} }) {
                 setNotificationsLoading(true);
                 const { data, error } = await supabase
                     .from("activity_log")
-                    .select("*, actor:users(name, email)")
+                    .select("id, action, new_state, created_at, actor:users(name, email)")
                     .order("created_at", { ascending: false })
                     .limit(10);
 

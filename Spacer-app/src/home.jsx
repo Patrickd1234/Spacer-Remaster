@@ -166,7 +166,7 @@ function Home() {
         try {
             const { data, error } = await supabase
                 .from("activity_log")
-                .select("*, actor:users(name, email)")
+                .select("id, action, entity_type, new_state, created_at, actor:users(name, email)")
                 .order("created_at", { ascending: false })
                 .limit(10)
 
@@ -228,7 +228,7 @@ function Home() {
         try {
             const { data, error } = await supabase
                 .from("tasks")
-                .select("*")
+                .select("id, title, description, status, sub_tasks, due_date, project_id")
                 .eq("assignee_id", userId)
 
             if (error) {

@@ -173,7 +173,7 @@ export default function Reports() {
         if (teamIds.length > 0) {
           const { data: projs } = await supabase
             .from("project_spaces")
-            .select("*")
+            .select("id, name, team_space_id, created_at")
             .in("team_space_id", teamIds)
             .order("created_at", { ascending: false })
 
@@ -199,7 +199,7 @@ export default function Reports() {
       // 5. Fetch tasks strictly for the user's workspace or assigned
       let taskQuery = supabase
         .from("tasks")
-        .select("*, project:project_spaces(id, name, status)")
+        .select("id, status, sub_tasks, due_date, assignee_id, project_id, organization_id, project:project_spaces(id, name, status)")
 
       if (orgId) {
         taskQuery = taskQuery.eq("organization_id", orgId)

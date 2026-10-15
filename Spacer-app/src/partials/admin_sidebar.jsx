@@ -101,7 +101,7 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
             // Show only projects inside that one department
             const { data, error } = await supabase
                 .from("project_spaces")
-                .select("*")
+                .select("id, name")
                 .eq("team_space_id", teamSpaceId);
 
             if (!error) setProjects(data || []);

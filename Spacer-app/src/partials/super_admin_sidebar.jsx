@@ -123,7 +123,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
             }
             const { data, error } = await supabase
                 .from("project_spaces")
-                .select("*")
+                .select("id, name")
                 .eq("team_space_id", selectedTeamSpaceId);
             if (!error) setProjects(data || []);
             else console.log(error);

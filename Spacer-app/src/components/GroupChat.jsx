@@ -97,7 +97,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
 
     const fetchChannels = async () => {
         try {
-            let query = supabase.from('chat_channels').select('*');
+            let query = supabase.from('chat_channels').select('id, name, is_private');
             if (projectId) query = query.eq('project_id', projectId);
             if (departmentId) query = query.eq('department_id', departmentId);
 

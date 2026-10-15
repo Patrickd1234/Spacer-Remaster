@@ -92,7 +92,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
 
             const { data, error } = await supabase
                 .from("project_spaces")
-                .select("*")
+                .select("id, name")
                 .in("team_space_id", teamIds);
 
             if (!error) setProjects(data || []);

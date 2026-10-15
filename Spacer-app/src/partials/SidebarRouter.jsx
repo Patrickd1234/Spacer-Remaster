@@ -102,7 +102,7 @@ export default function SidebarRouter(props) {
                 
                 const channelIds = (memberChannels || []).map(mc => mc.channel_id);
                 
-                let groupQuery = supabase.from("chat_channels").select("*");
+                let groupQuery = supabase.from("chat_channels").select("id, name, is_private, created_at");
                 if (channelIds.length > 0) {
                     groupQuery = groupQuery.or(`is_private.eq.false,id.in.(${channelIds.join(',')})`);
                 } else {
