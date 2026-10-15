@@ -354,6 +354,19 @@
       Authorizing redirects to Spacer application. By authorizing, you agree to Spacer's <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>.
     </p>
 
+    <!-- GitHub Account Input -->
+    <div style="margin-bottom: 20px; text-align: left;">
+      <label for="ghUsernameInput" style="display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-text-muted); margin-bottom: 6px;">
+        GitHub Username
+      </label>
+      <input
+        type="text"
+        id="ghUsernameInput"
+        style="width: 100%; box-sizing: border-box; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 6px; padding: 10px 12px; color: var(--color-text-white); font-size: 13px; font-family: inherit; outline: none;"
+        placeholder="Enter your GitHub username (e.g. octocat)..."
+      />
+    </div>
+
     <!-- Primary Actions -->
     <div class="actions-grid">
       <button type="button" id="btnCancel" class="btn btn-secondary">Cancel</button>
@@ -369,29 +382,47 @@
     const btnAuthorize = document.getElementById('btnAuthorize');
     const btnCancel = document.getElementById('btnCancel');
     const loadingOverlay = document.getElementById('loadingOverlay');
+    const ghUsernameInput = document.getElementById('ghUsernameInput');
 
-    btnAuthorize.addEventListener('click', () => {
+    // Auto-populate with username from query param or localStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const suggestedUser = urlParams.get('user') || (localStorage.getItem('userEmail') ? localStorage.getItem('userEmail').split('@')[0] : '');
+    if (ghUsernameInput && suggestedUser) {
+      ghUsernameInput.value = suggestedUser.replace(/[^a-zA-Z0-9_-]/g, '');
+    }
+
+    btnAuthorize.addEventListener('click', async () => {
       // Activate loading animation
       loadingOverlay.classList.add('active');
       
-      // Simulate real callback latency
+      const rawUser = (ghUsernameInput?.value || '').trim();
+      const targetUser = rawUser || suggestedUser || 'developer';
+
+      let repos = [];
+      try {
+        const response = await fetch(`https://api.github.com/users/${encodeURIComponent(targetUser)}/repos?per_page=15&sort=updated`);
+        if (response.ok) {
+          const repoData = await response.json();
+          if (Array.isArray(repoData)) {
+            repos = repoData.map(r => r.full_name);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch public GitHub repos:', err);
+      }
+
+      // Send postMessage to notify the parent window (Settings.jsx)
       setTimeout(() => {
-        // Send postMessage to notify the parent window (Settings.jsx)
         if (window.opener) {
           window.opener.postMessage({
             type: 'GITHUB_AUTHORIZED',
             success: true,
-            user: 'Arduinobeginner13',
-            repos: [
-              'Arduinobeginner13/Spacer-reMastered',
-              'Arduinobeginner13/spacers-mobile',
-              'Arduinobeginner13/spacers-api',
-              'Arduinobeginner13/design-system'
-            ]
+            user: targetUser,
+            repos: repos
           }, '*');
         }
         window.close();
-      }, 1500);
+      }, 1000);
     });
 
     btnCancel.addEventListener('click', () => {

@@ -15,7 +15,7 @@ export default function Settings() {
     const [toast, setToast] = useState(null)
     const { preferences, updatePreferences } = usePreferences()
     const { isSuperAdmin, isAdmin, membershipData } = useRole()
-    
+
     const notifications = preferences?.notifications || {}
     const appearance = preferences?.appearance || {}
     const security = preferences?.security || {}
@@ -40,20 +40,25 @@ export default function Settings() {
     const [passwordConfirmError, setPasswordConfirmError] = useState("")
 
     // GitHub Link & Repositories Selector States
-    const [githubRepos] = useState([
-        "Arduinobeginner13/Spacer-reMastered",
-        "Arduinobeginner13/spacers-mobile",
-        "Arduinobeginner13/spacers-api",
-        "Arduinobeginner13/design-system"
-    ])
+    const [githubRepos, setGithubRepos] = useState(() => {
+        const cached = localStorage.getItem("spacers_github_repos")
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached)
+                return Array.isArray(parsed) ? parsed.filter(r => !r.includes("Arduinobeginner13")) : []
+            } catch {
+                return []
+            }
+        }
+        return []
+    })
 
     // Personal Access Tokens State
-    const [apiTokens, setApiTokens] = useState([
-        { id: "tok_1", name: "CI/CD Deployment Pipeline", created: "2026-05-12", lastUsed: "2 hours ago" },
-        { id: "tok_2", name: "Figma Spacers Plugin", created: "2026-06-01", lastUsed: "Yesterday" }
-    ])
+    const [apiTokens, setApiTokens] = useState([])
     const [newTokenName, setNewTokenName] = useState("")
     const [showTokenModal, setShowTokenModal] = useState(false)
+    const [generatedTokenSecret, setGeneratedTokenSecret] = useState("")
+    const [tokenCopied, setTokenCopied] = useState(false)
 
     // User & Org details from Supabase / localStorage
     const [user, setUser] = useState({
@@ -65,14 +70,14 @@ export default function Settings() {
 
     // Workspace Settings State
     const [workspace, setWorkspace] = useState({
-        name: "Acme Workspace",
-        slug: "acme-corp",
-        description: "Primary workspace for cross-functional project tracking and engineering collaboration.",
+        name: "",
+        slug: "",
+        description: "",
         defaultPage: "/",
         defaultVisibility: "team",
         dataRetention: "90_days",
         autoJoinDomain: true,
-        allowedDomain: "acme.com"
+        allowedDomain: ""
     })
 
     // Integrations State (now from context)
@@ -89,49 +94,81 @@ export default function Settings() {
                 const { data: authData } = await supabase.auth.getUser()
                 const authUser = authData?.user
 
-                let dbName = "";
+                let fetchedOrgName = ""
+                let derivedSlug = ""
+                let derivedDomain = ""
+                let derivedDescription = ""
+
                 if (authUser) {
                     const { data: userProfile } = await supabase
                         .from("users")
-                        .select("*")
+                        .select("id, name, email, organization_id")
                         .eq("id", authUser.id)
                         .maybeSingle()
 
                     setUser({
                         id: authUser.id,
                         name: userProfile?.name || authUser.user_metadata?.full_name || "Workspace User",
-                        email: authUser.email || "",
+                        email: authUser.email || userProfile?.email || "",
                         role: isSuperAdmin ? "Superadmin" : isAdmin ? "Admin" : membershipData?.role || "Member"
                     })
+
+                    const userEmail = authUser.email || userProfile?.email || ""
+                    const emailDomain = userEmail.includes("@") ? userEmail.split("@")[1].toLowerCase() : ""
 
                     const orgId = userProfile?.organization_id
                     if (orgId) {
                         const { data: orgData } = await supabase
                             .from("organizations")
-                            .select("name")
+                            .select("id, name")
                             .eq("id", orgId)
                             .maybeSingle()
 
                         if (orgData?.name) {
-                            dbName = orgData.name.toLowerCase().includes("redtech") ? "Spacer" : orgData.name;
-                            setWorkspace(prev => ({
-                                ...prev,
-                                name: dbName
-                            }))
+                            fetchedOrgName = orgData.name.toLowerCase().includes("redtech") ? "Spacer" : orgData.name
+                            derivedSlug = fetchedOrgName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "workspace"
+                            derivedDomain = emailDomain && !["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com"].includes(emailDomain)
+                                ? emailDomain
+                                : `${derivedSlug}.com`
+                            derivedDescription = `${fetchedOrgName} workspace for cross-functional project tracking and engineering collaboration.`
                         }
+                    } else if (emailDomain) {
+                        derivedSlug = emailDomain.split(".")[0] || "workspace"
+                        derivedDomain = emailDomain
+                        derivedDescription = "Primary workspace for cross-functional project tracking and engineering collaboration."
                     }
                 }
 
-                // Restore local workspace settings if available
+                // Restore local workspace settings if available, while ensuring real organization data takes precedence
                 const savedWorkspace = localStorage.getItem("spacers_settings_workspace")
+                let parsed = null
                 if (savedWorkspace) {
-                    const parsed = JSON.parse(savedWorkspace);
-                    setWorkspace(prev => ({
-                        ...prev,
-                        ...parsed,
-                        name: dbName || (parsed.name && parsed.name.toLowerCase().includes("redtech") ? "Spacer" : parsed.name) || prev.name
-                    }))
+                    try {
+                        parsed = JSON.parse(savedWorkspace)
+                    } catch (e) {
+                        console.warn("Could not parse saved workspace settings:", e)
+                    }
                 }
+
+                // Filter out any stale mock "Acme" values from localStorage
+                const cleanCachedName = parsed?.name && !parsed.name.toLowerCase().includes("acme") ? parsed.name : ""
+                const cleanCachedSlug = parsed?.slug && !parsed.slug.toLowerCase().includes("acme") ? parsed.slug : ""
+                const cleanCachedDomain = parsed?.allowedDomain && !parsed.allowedDomain.toLowerCase().includes("acme") ? parsed.allowedDomain : ""
+                const cleanCachedDesc = parsed?.description && !parsed.description.toLowerCase().includes("acme") ? parsed.description : ""
+
+                const resolvedName = fetchedOrgName || cleanCachedName || "Workspace"
+                const resolvedSlug = cleanCachedSlug || derivedSlug || (resolvedName ? resolvedName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "workspace")
+                const resolvedDomain = cleanCachedDomain || derivedDomain || `${resolvedSlug}.com`
+                const resolvedDesc = cleanCachedDesc || derivedDescription || `${resolvedName} workspace for cross-functional project tracking and engineering collaboration.`
+
+                setWorkspace(prev => ({
+                    ...prev,
+                    ...(parsed || {}),
+                    name: resolvedName,
+                    slug: resolvedSlug,
+                    allowedDomain: resolvedDomain,
+                    description: resolvedDesc
+                }))
             } catch (err) {
                 console.error("Error initializing settings:", err)
             } finally {
@@ -159,13 +196,22 @@ export default function Settings() {
         const handleOAuthMessage = async (event) => {
             if (event.data?.type === "GITHUB_AUTHORIZED") {
                 if (event.data.success) {
-                    const defaultRepo = event.data.repos?.[0] || ""
+                    const repos = Array.isArray(event.data.repos) ? event.data.repos : []
+                    const defaultRepo = repos[0] || ""
+                    const githubUser = event.data.user || ""
+                    setGithubRepos(repos)
+                    localStorage.setItem("spacers_github_repos", JSON.stringify(repos))
                     const updated = {
                         ...integrations,
-                        github: { connected: true, repo: defaultRepo }
+                        github: {
+                            connected: true,
+                            repo: defaultRepo,
+                            user: githubUser,
+                            repos: repos
+                        }
                     }
                     await updatePreferences("integrations", updated)
-                    showToast(`GitHub successfully connected to ${event.data.user}!`, "success")
+                    showToast(`GitHub successfully connected${githubUser ? ` to @${githubUser}` : ""}!`, "success")
                 } else {
                     showToast(event.data.error || "GitHub authorization failed.", "error")
                 }
@@ -174,6 +220,40 @@ export default function Settings() {
         window.addEventListener("message", handleOAuthMessage)
         return () => window.removeEventListener("message", handleOAuthMessage)
     }, [integrations])
+
+    // Synchronize GitHub repository list from stored preferences
+    useEffect(() => {
+        if (integrations?.github?.connected) {
+            if (Array.isArray(integrations.github.repos) && integrations.github.repos.length > 0) {
+                const cleaned = integrations.github.repos.filter(r => !r.includes("Arduinobeginner13"))
+                setGithubRepos(cleaned)
+            }
+        } else {
+            setGithubRepos([])
+        }
+    }, [integrations?.github?.connected, integrations?.github?.repos])
+
+    // Synchronize API Tokens from user security preferences & user-scoped storage
+    useEffect(() => {
+        if (Array.isArray(security?.apiTokens)) {
+            const valid = security.apiTokens.filter((t) => !["tok_1", "tok_2"].includes(t.id))
+            setApiTokens(valid)
+            return
+        }
+        const storageKey = user.id ? `spacers_api_tokens_${user.id}` : "spacers_api_tokens"
+        const cached = localStorage.getItem(storageKey) || localStorage.getItem("spacers_api_tokens")
+        if (cached) {
+            try {
+                const parsed = JSON.parse(cached)
+                const valid = Array.isArray(parsed) ? parsed.filter((t) => !["tok_1", "tok_2"].includes(t.id)) : []
+                setApiTokens(valid)
+            } catch {
+                setApiTokens([])
+            }
+        } else {
+            setApiTokens([])
+        }
+    }, [security?.apiTokens, user.id])
 
     // Handlers
     const handleSaveWorkspace = async () => {
@@ -204,7 +284,7 @@ export default function Settings() {
             }
             localStorage.setItem("spacers_settings_workspace", JSON.stringify(workspace))
             showToast("Workspace settings saved successfully!")
-            
+
             // Reload page to reflect name changes globally
             setTimeout(() => {
                 window.location.reload()
@@ -255,23 +335,77 @@ export default function Settings() {
         }
     }
 
-    const handleCreateToken = () => {
+    const handleCreateToken = async () => {
         if (!newTokenName.trim()) return
-        const newToken = {
-            id: `tok_${Date.now()}`,
-            name: newTokenName.trim(),
-            created: new Date().toISOString().split("T")[0],
-            lastUsed: "Never"
+        try {
+            // Cryptographically secure random token generation
+            const randomBytes = new Uint8Array(20)
+            window.crypto.getRandomValues(randomBytes)
+            const secretHex = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, "0")).join("")
+            const rawTokenSecret = `spc_live_${secretHex}`
+
+            // Compute SHA-256 hash for secure storage (never store raw token permanently)
+            const encoder = new TextEncoder()
+            const data = encoder.encode(rawTokenSecret)
+            const hashBuffer = await window.crypto.subtle.digest("SHA-256", data)
+            const tokenHash = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
+
+            const newTokenRecord = {
+                id: `tok_${Date.now()}`,
+                name: newTokenName.trim(),
+                tokenPrefix: `spc_live_${secretHex.slice(0, 4)}...${secretHex.slice(-4)}`,
+                tokenHash: tokenHash,
+                created: new Date().toISOString().split("T")[0],
+                lastUsed: "Never"
+            }
+
+            const updatedTokens = [newTokenRecord, ...apiTokens]
+            setApiTokens(updatedTokens)
+
+            // Persist to user security preferences in Supabase
+            const updatedSecurity = {
+                ...security,
+                apiTokens: updatedTokens
+            }
+            await updatePreferences("security", updatedSecurity)
+
+            // Persist to user-scoped storage
+            const storageKey = user.id ? `spacers_api_tokens_${user.id}` : "spacers_api_tokens"
+            localStorage.setItem(storageKey, JSON.stringify(updatedTokens))
+            localStorage.setItem("spacers_api_tokens", JSON.stringify(updatedTokens))
+
+            setGeneratedTokenSecret(rawTokenSecret)
+            setTokenCopied(false)
+            showToast("New API Token generated!", "success")
+        } catch (err) {
+            console.error("Token creation error:", err)
+            showToast("Failed to generate API token.", "error")
         }
-        setApiTokens([newToken, ...apiTokens])
-        setNewTokenName("")
-        setShowTokenModal(false)
-        showToast("New API Token generated!")
     }
 
-    const handleRevokeToken = (id) => {
-        setApiTokens(apiTokens.filter((t) => t.id !== id))
+    const handleRevokeToken = async (id) => {
+        const updatedTokens = apiTokens.filter((t) => t.id !== id)
+        setApiTokens(updatedTokens)
+
+        const updatedSecurity = {
+            ...security,
+            apiTokens: updatedTokens
+        }
+        await updatePreferences("security", updatedSecurity)
+
+        const storageKey = user.id ? `spacers_api_tokens_${user.id}` : "spacers_api_tokens"
+        localStorage.setItem(storageKey, JSON.stringify(updatedTokens))
+        localStorage.setItem("spacers_api_tokens", JSON.stringify(updatedTokens))
+
         showToast("API token revoked.", "info")
+    }
+
+    const handleCopyToken = () => {
+        if (!generatedTokenSecret) return
+        navigator.clipboard.writeText(generatedTokenSecret)
+        setTokenCopied(true)
+        setTimeout(() => setTokenCopied(false), 3000)
+        showToast("Token copied to clipboard!", "success")
     }
 
     const handleToggleIntegration = async (key) => {
@@ -283,16 +417,19 @@ export default function Settings() {
                 const height = 740;
                 const left = window.screen.width / 2 - width / 2;
                 const top = window.screen.height / 2 - height / 2;
+                const defaultUser = user.name ? user.name.replace(/\s+/g, "").toLowerCase() : (user.email ? user.email.split("@")[0] : "");
                 window.open(
-                    "/github-oauth.html",
+                    `/github-oauth.html?user=${encodeURIComponent(defaultUser)}`,
                     "GitHub Authorization",
                     `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes`
                 );
             } else {
                 const updated = {
                     ...integrations,
-                    github: { connected: false, repo: "" }
+                    github: { connected: false, repo: "", user: "", repos: [] }
                 }
+                setGithubRepos([])
+                localStorage.removeItem("spacers_github_repos")
                 await updatePreferences("integrations", updated)
                 showToast("GitHub integration disconnected.", "info")
             }
@@ -326,10 +463,10 @@ export default function Settings() {
             for (let i = 0; i < 16; i++) {
                 secret += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
             }
-            
+
             // Encrypt secret
             const enc = await encryptText(secret, masterKey);
-            
+
             // Generate recovery codes
             const codes = [];
             for (let i = 0; i < 8; i++) {
@@ -391,7 +528,7 @@ export default function Settings() {
         }
         setDecryptingSecret(true);
         setPasswordConfirmError("");
-        
+
         setTimeout(async () => {
             try {
                 const encrypted = security.twoFactorSecretEncrypted;
@@ -401,7 +538,7 @@ export default function Settings() {
                     const decrypted = await decryptText(encrypted, masterKey);
                     setDecryptedSecret(decrypted || "Error decrypting token");
                 }
-                
+
                 if (security.twoFactorRecoveryCodesEncrypted) {
                     const decCodes = await decryptText(security.twoFactorRecoveryCodesEncrypted, masterKey);
                     if (decCodes) {
@@ -495,11 +632,10 @@ export default function Settings() {
                                     <button
                                         key={tab.id}
                                         onClick={() => setActiveTab(tab.id)}
-                                        className={`w-full flex items-center gap-md px-md py-3 rounded-xl font-body-md transition-all duration-200 text-left ${
-                                            isActive
-                                                ? "bg-primary-container text-on-primary-container font-semibold shadow-sm"
-                                                : "text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"
-                                        }`}
+                                        className={`w-full flex items-center gap-md px-md py-3 rounded-xl font-body-md transition-all duration-200 text-left ${isActive
+                                            ? "bg-primary-container text-on-primary-container font-semibold shadow-sm"
+                                            : "text-on-surface-variant hover:bg-surface-variant hover:text-on-surface"
+                                            }`}
                                     >
                                         <span className={`material-symbols-outlined text-xl ${isActive ? "text-on-primary-container" : "text-on-surface-variant"}`}>
                                             {tab.icon}
@@ -530,6 +666,7 @@ export default function Settings() {
                                             <input
                                                 type="text"
                                                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
+                                                placeholder="e.g. My Organization"
                                                 value={workspace.name}
                                                 onChange={(e) => setWorkspace({ ...workspace, name: e.target.value })}
                                             />
@@ -545,10 +682,31 @@ export default function Settings() {
                                                 <input
                                                     type="text"
                                                     className="w-full bg-transparent px-md py-2.5 text-on-surface font-body-md focus:outline-none"
+                                                    placeholder="workspace-slug"
                                                     value={workspace.slug}
                                                     onChange={(e) => setWorkspace({ ...workspace, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
                                                 />
                                             </div>
+                                        </div>
+
+                                        {/* Allowed Email Domain */}
+                                        <div>
+                                            <label className="block text-label-md font-semibold text-on-surface mb-2">Allowed Email Domain</label>
+                                            <div className="flex items-center rounded-xl bg-surface-container-highest border border-outline-variant overflow-hidden">
+                                                <span className="px-md py-2.5 text-on-surface-variant font-body-sm bg-surface-container-high border-r border-outline-variant select-none">
+                                                    @
+                                                </span>
+                                                <input
+                                                    type="text"
+                                                    className="w-full bg-transparent px-md py-2.5 text-on-surface font-body-md focus:outline-none"
+                                                    placeholder="company.com"
+                                                    value={workspace.allowedDomain}
+                                                    onChange={(e) => setWorkspace({ ...workspace, allowedDomain: e.target.value.toLowerCase().replace(/[@\s]/g, "") })}
+                                                />
+                                            </div>
+                                            <p className="text-on-surface-variant text-xs mt-1">
+                                                Team members with this email domain can automatically join your workspace.
+                                            </p>
                                         </div>
 
                                         {/* Description */}
@@ -557,6 +715,7 @@ export default function Settings() {
                                             <textarea
                                                 rows="3"
                                                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl p-md text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
+                                                placeholder="Brief workspace description..."
                                                 value={workspace.description}
                                                 onChange={(e) => setWorkspace({ ...workspace, description: e.target.value })}
                                             />
@@ -704,9 +863,8 @@ export default function Settings() {
                                                         const next = { ...notifications, [item.key]: !notifications[item.key] }
                                                         handleSaveNotifications(next)
                                                     }}
-                                                    className={`w-12 h-6 rounded-full p-1 flex items-center transition-all duration-300 ${
-                                                        notifications[item.key] ? "bg-primary-container justify-end" : "bg-surface-container-highest justify-start"
-                                                    }`}
+                                                    className={`w-12 h-6 rounded-full p-1 flex items-center transition-all duration-300 ${notifications[item.key] ? "bg-primary-container justify-end" : "bg-surface-container-highest justify-start"
+                                                        }`}
                                                 >
                                                     <span className={`w-4 h-4 rounded-full shadow-md transition-transform ${notifications[item.key] ? "bg-on-primary-container" : "bg-on-surface-variant"}`} />
                                                 </button>
@@ -758,11 +916,10 @@ export default function Settings() {
                                                 <button
                                                     key={t.id}
                                                     onClick={() => handleSaveAppearance({ ...appearance, theme: t.id })}
-                                                    className={`p-md rounded-xl border text-left flex flex-col justify-between h-28 transition-all duration-200 ${
-                                                        appearance.theme === t.id
-                                                            ? "border-primary-fixed bg-surface-container-high ring-1 ring-primary-fixed scale-[0.98]"
-                                                            : "border-outline-variant bg-surface-container-low hover:border-outline hover:scale-[1.01]"
-                                                    }`}
+                                                    className={`p-md rounded-xl border text-left flex flex-col justify-between h-28 transition-all duration-200 ${appearance.theme === t.id
+                                                        ? "border-primary-fixed bg-surface-container-high ring-1 ring-primary-fixed scale-[0.98]"
+                                                        : "border-outline-variant bg-surface-container-low hover:border-outline hover:scale-[1.01]"
+                                                        }`}
                                                 >
                                                     <div className="flex items-center justify-between w-full">
                                                         <span className="font-body-md font-bold text-on-surface text-sm truncate">{t.label}</span>
@@ -794,11 +951,10 @@ export default function Settings() {
                                                 <button
                                                     key={acc.id}
                                                     onClick={() => handleSaveAppearance({ ...appearance, accentColor: acc.id })}
-                                                    className={`flex items-center gap-2 px-md py-2.5 rounded-xl border font-body-sm transition-all duration-200 ${
-                                                        appearance.accentColor === acc.id
-                                                            ? "border-primary-fixed bg-surface-container-highest ring-1 ring-primary-fixed"
-                                                            : "border-outline-variant bg-surface-container-low hover:border-outline"
-                                                    }`}
+                                                    className={`flex items-center gap-2 px-md py-2.5 rounded-xl border font-body-sm transition-all duration-200 ${appearance.accentColor === acc.id
+                                                        ? "border-primary-fixed bg-surface-container-highest ring-1 ring-primary-fixed"
+                                                        : "border-outline-variant bg-surface-container-low hover:border-outline"
+                                                        }`}
                                                 >
                                                     <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: acc.hex }} />
                                                     <span className="text-on-surface font-medium truncate text-xs">{acc.name}</span>
@@ -809,7 +965,7 @@ export default function Settings() {
 
                                     {/* Layout Options Grid */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-lg pt-md border-t border-outline-variant">
-                                        
+
                                         {/* Sidebar Placement */}
                                         <div className="space-y-2">
                                             <label className="block text-label-md font-semibold text-on-surface">Sidebar Position</label>
@@ -822,11 +978,10 @@ export default function Settings() {
                                                     <button
                                                         key={pos.id}
                                                         onClick={() => handleSaveAppearance({ ...appearance, sidebarPosition: pos.id })}
-                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${
-                                                            (appearance.sidebarPosition || "left") === pos.id
-                                                                ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
-                                                                : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
-                                                        }`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${(appearance.sidebarPosition || "left") === pos.id
+                                                            ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
+                                                            : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
+                                                            }`}
                                                     >
                                                         <span className="material-symbols-outlined text-sm">{pos.icon}</span>
                                                         <span>{pos.label}</span>
@@ -848,11 +1003,10 @@ export default function Settings() {
                                                     <button
                                                         key={den.id}
                                                         onClick={() => handleSaveAppearance({ ...appearance, density: den.id })}
-                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${
-                                                            (appearance.density || "comfortable") === den.id
-                                                                ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
-                                                                : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
-                                                        }`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${(appearance.density || "comfortable") === den.id
+                                                            ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
+                                                            : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
+                                                            }`}
                                                     >
                                                         <span className="material-symbols-outlined text-sm">{den.icon}</span>
                                                         <span>{den.label}</span>
@@ -874,11 +1028,10 @@ export default function Settings() {
                                                     <button
                                                         key={speed.id}
                                                         onClick={() => handleSaveAppearance({ ...appearance, animationSpeed: speed.id })}
-                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${
-                                                            (appearance.animationSpeed || "smooth") === speed.id
-                                                                ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
-                                                                : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
-                                                        }`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${(appearance.animationSpeed || "smooth") === speed.id
+                                                            ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
+                                                            : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
+                                                            }`}
                                                     >
                                                         <span className="material-symbols-outlined text-sm">{speed.icon}</span>
                                                         <span>{speed.label}</span>
@@ -900,11 +1053,10 @@ export default function Settings() {
                                                     <button
                                                         key={gl.id}
                                                         onClick={() => handleSaveAppearance({ ...appearance, glassmorphism: gl.id })}
-                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${
-                                                            (appearance.glassmorphism || "soft") === gl.id
-                                                                ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
-                                                                : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
-                                                        }`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl font-body-sm transition-all ${(appearance.glassmorphism || "soft") === gl.id
+                                                            ? "border-primary-fixed bg-surface-container-highest text-primary-fixed"
+                                                            : "border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-outline"
+                                                            }`}
                                                     >
                                                         <span className="material-symbols-outlined text-sm">{gl.icon}</span>
                                                         <span>{gl.label}</span>
@@ -1008,7 +1160,12 @@ export default function Settings() {
                                                 <p className="text-body-sm text-on-surface-variant">Tokens used for authenticating with Spacers CLI and API webhooks.</p>
                                             </div>
                                             <button
-                                                onClick={() => setShowTokenModal(true)}
+                                                onClick={() => {
+                                                    setNewTokenName("")
+                                                    setGeneratedTokenSecret("")
+                                                    setTokenCopied(false)
+                                                    setShowTokenModal(true)
+                                                }}
                                                 className="px-md py-1.5 bg-surface-container-highest border border-outline-variant text-primary-fixed hover:bg-surface-variant font-body-sm font-semibold rounded-xl flex items-center gap-sm transition-colors"
                                             >
                                                 <span className="material-symbols-outlined text-base">add</span>
@@ -1017,20 +1174,33 @@ export default function Settings() {
                                         </div>
 
                                         <div className="space-y-2">
-                                            {apiTokens.map((tok) => (
-                                                <div key={tok.id} className="flex items-center justify-between p-md rounded-xl bg-surface-container-low border border-outline-variant">
-                                                    <div>
-                                                        <p className="font-body-md font-semibold text-on-surface">{tok.name}</p>
-                                                        <p className="text-xs text-on-surface-variant">Created {tok.created} • Last used {tok.lastUsed}</p>
+                                            {apiTokens.length > 0 ? (
+                                                apiTokens.map((tok) => (
+                                                    <div key={tok.id} className="flex items-center justify-between p-md rounded-xl bg-surface-container-low border border-outline-variant">
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-body-md font-semibold text-on-surface">{tok.name}</p>
+                                                                <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant border border-outline-variant">
+                                                                    {tok.tokenPrefix || "spc_live_••••"}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-on-surface-variant">Created {tok.created} • Last used {tok.lastUsed || "Never"}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => handleRevokeToken(tok.id)}
+                                                            className="text-xs text-error hover:bg-error/10 px-3 py-1 rounded-lg transition-colors border border-error/20 font-medium"
+                                                        >
+                                                            Revoke
+                                                        </button>
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleRevokeToken(tok.id)}
-                                                        className="text-xs text-error hover:bg-error/10 px-3 py-1 rounded-lg transition-colors border border-error/20"
-                                                    >
-                                                        Revoke
-                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="p-md rounded-xl bg-surface-container-low border border-dashed border-outline-variant text-center py-6 space-y-1">
+                                                    <span className="material-symbols-outlined text-on-surface-variant text-2xl">key_off</span>
+                                                    <p className="font-body-md font-semibold text-on-surface">No Personal Access Tokens</p>
+                                                    <p className="text-body-sm text-on-surface-variant">You have not created any active API access tokens yet.</p>
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1062,15 +1232,16 @@ export default function Settings() {
                                         <div className="flex items-center justify-between p-md rounded-xl bg-surface-container-low border border-outline-variant">
                                             <div>
                                                 <p className="font-body-md font-semibold text-on-surface">Automated Domain Joining</p>
-                                                <p className="text-body-sm text-on-surface-variant">Allow anyone with an @acme.com email address to automatically join workspace.</p>
+                                                <p className="text-body-sm text-on-surface-variant">
+                                                    Allow anyone with an @{workspace.allowedDomain || (workspace.slug ? `${workspace.slug}.com` : "domain.com")} email address to automatically join workspace.
+                                                </p>
                                             </div>
                                             <button
                                                 role="switch"
                                                 aria-checked={workspace.autoJoinDomain}
                                                 onClick={() => setWorkspace({ ...workspace, autoJoinDomain: !workspace.autoJoinDomain })}
-                                                className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${
-                                                    workspace.autoJoinDomain ? "bg-primary-container justify-end" : "bg-surface-container-highest justify-start"
-                                                }`}
+                                                className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${workspace.autoJoinDomain ? "bg-primary-container justify-end" : "bg-surface-container-highest justify-start"
+                                                    }`}
                                             >
                                                 <span className={`w-4 h-4 rounded-full ${workspace.autoJoinDomain ? "bg-on-primary-container" : "bg-on-surface-variant"}`} />
                                             </button>
@@ -1107,25 +1278,43 @@ export default function Settings() {
                                                 </span>
                                             </div>
 
-                                            {integrations.github.connected && (
+                                            {integrations.github?.connected ? (
                                                 <div className="p-sm rounded-lg bg-surface-container-high border border-outline-variant space-y-2">
-                                                    <label className="block text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider">Sync Repository</label>
-                                                    <select
-                                                        value={integrations.github.repo || ""}
-                                                        onChange={(e) => handleSelectRepo(e.target.value)}
-                                                        className="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface focus:outline-none"
-                                                    >
-                                                        <option value="" disabled>-- Select Repository --</option>
-                                                        {githubRepos.map((repo) => (
-                                                            <option key={repo} value={repo}>{repo}</option>
-                                                        ))}
-                                                    </select>
-                                                    {integrations.github.repo && (
-                                                        <div className="flex items-center gap-2 pt-1 text-[10px] text-primary-fixed">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed animate-ping"></span>
-                                                            <span>Monitoring commits & branches</span>
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="block text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider">Sync Repository</label>
+                                                        {integrations.github.user && (
+                                                            <span className="text-[10px] text-primary-fixed font-mono font-semibold">@{integrations.github.user}</span>
+                                                        )}
+                                                    </div>
+                                                    {githubRepos.length > 0 ? (
+                                                        <>
+                                                            <select
+                                                                value={integrations.github.repo || ""}
+                                                                onChange={(e) => handleSelectRepo(e.target.value)}
+                                                                className="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface focus:outline-none"
+                                                            >
+                                                                <option value="" disabled>-- Select Repository --</option>
+                                                                {githubRepos.map((repo) => (
+                                                                    <option key={repo} value={repo}>{repo}</option>
+                                                                ))}
+                                                            </select>
+                                                            {integrations.github.repo && (
+                                                                <div className="flex items-center gap-2 pt-1 text-[10px] text-primary-fixed">
+                                                                    <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed animate-ping"></span>
+                                                                    <span>Monitoring commits & branches</span>
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <div className="py-2 text-center text-on-surface-variant text-xs">
+                                                            No repositories found for this account.
                                                         </div>
                                                     )}
+                                                </div>
+                                            ) : (
+                                                <div className="p-sm rounded-lg bg-surface-container-high border border-outline-variant text-xs text-on-surface-variant flex items-center gap-2">
+                                                    <span className="material-symbols-outlined text-sm">info</span>
+                                                    <span>Connect your GitHub account to view and link repositories.</span>
                                                 </div>
                                             )}
 
@@ -1174,35 +1363,106 @@ export default function Settings() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
                     <div className="glass-card rounded-2xl p-lg max-w-md w-full space-y-md border border-outline-variant shadow-2xl animate-scaleIn">
                         <div className="flex items-center justify-between border-b border-outline-variant pb-sm">
-                            <h3 className="text-headline-md font-bold text-on-surface">Generate API Access Token</h3>
-                            <button onClick={() => setShowTokenModal(false)} className="text-on-surface-variant hover:text-on-surface">
+                            <h3 className="text-headline-md font-bold text-on-surface">
+                                {generatedTokenSecret ? "Token Generated" : "Generate API Access Token"}
+                            </h3>
+                            <button
+                                onClick={() => {
+                                    setShowTokenModal(false)
+                                    setGeneratedTokenSecret("")
+                                    setNewTokenName("")
+                                }}
+                                className="text-on-surface-variant hover:text-on-surface"
+                            >
                                 <span className="material-symbols-outlined">close</span>
                             </button>
                         </div>
-                        <div>
-                            <label className="block text-label-md font-semibold text-on-surface mb-2">Token Name / Service</label>
-                            <input
-                                type="text"
-                                placeholder="e.g. Mobile CLI App"
-                                className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
-                                value={newTokenName}
-                                onChange={(e) => setNewTokenName(e.target.value)}
-                            />
-                        </div>
-                        <div className="flex items-center justify-end gap-md pt-sm">
-                            <button
-                                onClick={() => setShowTokenModal(false)}
-                                className="px-md py-2 bg-surface-container-highest text-on-surface font-body-sm font-semibold rounded-xl hover:bg-surface-variant transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleCreateToken}
-                                className="px-md py-2 bg-primary-container text-on-primary-container font-body-sm font-semibold rounded-xl hover:scale-[0.98] transition-all"
-                            >
-                                Generate Token
-                            </button>
-                        </div>
+
+                        {generatedTokenSecret ? (
+                            <div className="space-y-md">
+                                <div className="p-md rounded-xl bg-primary-container/10 border border-primary-fixed/30 text-on-surface space-y-2">
+                                    <div className="flex items-center gap-2 text-primary-fixed font-semibold text-sm">
+                                        <span className="material-symbols-outlined text-base">warning</span>
+                                        <span>Copy your new token now</span>
+                                    </div>
+                                    <p className="text-xs text-on-surface-variant">
+                                        For security reasons, this token will never be displayed again. If you lose it, you will need to generate a new one.
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-label-md font-semibold text-on-surface mb-2">Access Token</label>
+                                    <div className="flex items-center rounded-xl bg-surface-container-highest border border-outline-variant overflow-hidden">
+                                        <input
+                                            type="text"
+                                            readOnly
+                                            value={generatedTokenSecret}
+                                            className="w-full bg-transparent px-md py-2.5 font-mono text-xs text-primary-fixed select-all focus:outline-none"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleCopyToken}
+                                            className="px-md py-2.5 bg-surface-container-high hover:bg-surface-variant border-l border-outline-variant text-on-surface font-body-sm font-semibold flex items-center gap-1 transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-sm">
+                                                {tokenCopied ? "check" : "content_copy"}
+                                            </span>
+                                            <span>{tokenCopied ? "Copied" : "Copy"}</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-end pt-sm border-t border-outline-variant">
+                                    <button
+                                        onClick={() => {
+                                            setShowTokenModal(false)
+                                            setGeneratedTokenSecret("")
+                                            setNewTokenName("")
+                                        }}
+                                        className="px-lg py-2 bg-primary-container text-on-primary-container font-body-sm font-semibold rounded-xl hover:scale-[0.98] transition-all"
+                                    >
+                                        Done
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-md">
+                                <div>
+                                    <label className="block text-label-md font-semibold text-on-surface mb-2">Token Name / Service</label>
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. CI/CD Deployment Pipeline"
+                                        className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
+                                        value={newTokenName}
+                                        onChange={(e) => setNewTokenName(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter") {
+                                                e.preventDefault()
+                                                handleCreateToken()
+                                            }
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-end gap-md pt-sm border-t border-outline-variant">
+                                    <button
+                                        onClick={() => {
+                                            setShowTokenModal(false)
+                                            setNewTokenName("")
+                                        }}
+                                        className="px-md py-2 bg-surface-container-highest text-on-surface font-body-sm font-semibold rounded-xl hover:bg-surface-variant transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleCreateToken}
+                                        disabled={!newTokenName.trim()}
+                                        className="px-md py-2 bg-primary-container text-on-primary-container font-body-sm font-semibold rounded-xl hover:scale-[0.98] transition-all disabled:opacity-50"
+                                    >
+                                        Generate Token
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -1211,7 +1471,7 @@ export default function Settings() {
             {showTwoFactorModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
                     <div className="glass-card rounded-2xl p-lg max-w-xl w-full space-y-lg border border-outline-variant shadow-2xl animate-scaleIn">
-                        
+
                         {/* Modal Header */}
                         <div className="flex items-center justify-between border-b border-outline-variant pb-sm">
                             <h3 className="text-headline-md font-bold text-on-surface flex items-center gap-2">
@@ -1233,7 +1493,7 @@ export default function Settings() {
                                 <p className="text-body-sm text-on-surface-variant">
                                     Enhance your account security by requiring a verification code from a mobile authenticator app when signing in.
                                 </p>
-                                
+
                                 <div className="flex flex-col md:flex-row items-center gap-lg py-sm">
                                     {/* SVG QR Code Illustration with Laser Scan */}
                                     <div className="relative w-40 h-40 bg-white p-3 rounded-2xl flex items-center justify-center border-2 border-primary-fixed shrink-0 overflow-hidden shadow-inner">
@@ -1265,7 +1525,7 @@ export default function Settings() {
                                             <rect x="45" y="80" width="15" height="5" fill="currentColor" />
                                             <rect x="40" y="90" width="5" height="10" fill="currentColor" />
                                         </svg>
-                                        
+
                                         {/* Animated green laser scanner line */}
                                         <div className="absolute left-0 w-full h-[3px] bg-primary-fixed/80 shadow-[0_0_8px_var(--primary-color)] animate-[scan_2s_ease-in-out_infinite]"></div>
                                         <style>{`
@@ -1377,7 +1637,7 @@ export default function Settings() {
                                     <button
                                         onClick={() => {
                                             const element = document.createElement("a");
-                                            const file = new Blob([recoveryCodes.join("\r\n")], {type: 'text/plain'});
+                                            const file = new Blob([recoveryCodes.join("\r\n")], { type: 'text/plain' });
                                             element.href = URL.createObjectURL(file);
                                             element.download = "spacers-backup-recovery-codes.txt";
                                             document.body.appendChild(element);

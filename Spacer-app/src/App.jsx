@@ -13,6 +13,8 @@ import CalendarView from './CalendarView'
 import Settings from './Settings'
 import Tasks from './Tasks'
 import AcceptInvite from './AcceptInvite'
+import ForgotPassword from './ForgotPassword'
+import ResetPassword from './ResetPassword'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 import { RoleProvider } from './RoleContext'
@@ -101,6 +103,8 @@ function App() {
             <Route path="/" element={session ? <Home /> : <Navigate to="/login" replace />} />
             <Route path="/login" element={!session ? <Login /> : <Navigate to="/" replace />} />
             <Route path="/signup" element={!session ? <Signup /> : <Navigate to="/" replace />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {/* Always reachable: the invite magic-link itself establishes a session
                 before a password is set, so this can't be gated behind `session`
                 the way other routes are. */}

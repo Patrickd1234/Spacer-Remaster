@@ -91,10 +91,25 @@ export default function CalendarView() {
 
         let subtasksList = [];
         if (task.sub_tasks) {
-            try {
-                subtasksList = JSON.parse(task.sub_tasks);
-                if (!Array.isArray(subtasksList)) subtasksList = [];
-            } catch (err) {}
+            if (Array.isArray(task.sub_tasks)) {
+                subtasksList = task.sub_tasks;
+            } else if (typeof task.sub_tasks === "string") {
+                const trimmed = task.sub_tasks.trim();
+                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) {
+                            subtasksList = parsed;
+                        } else {
+                            console.warn("Malformed sub_tasks (expected array) for task", task.id, parsed);
+                            subtasksList = [];
+                        }
+                    } catch (err) {
+                        console.warn("Malformed sub_tasks for task", task.id, err);
+                        subtasksList = [];
+                    }
+                }
+            }
         }
         
         const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
@@ -163,13 +178,28 @@ export default function CalendarView() {
                 const corrected = (userTasks || []).map(t => {
                     let subtasksList = [];
                     if (t.sub_tasks) {
-                        try {
-                            subtasksList = JSON.parse(t.sub_tasks);
-                            if (!Array.isArray(subtasksList)) subtasksList = [];
-                        } catch (e) {}
+                        if (Array.isArray(t.sub_tasks)) {
+                            subtasksList = t.sub_tasks;
+                        } else if (typeof t.sub_tasks === "string") {
+                            const trimmed = t.sub_tasks.trim();
+                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                try {
+                                    const parsed = JSON.parse(trimmed);
+                                    if (Array.isArray(parsed)) {
+                                        subtasksList = parsed;
+                                    } else {
+                                        console.warn("Malformed sub_tasks (expected array) for task", t.id, parsed);
+                                        subtasksList = [];
+                                    }
+                                } catch (e) {
+                                    console.warn("Malformed sub_tasks for task", t.id, e);
+                                    subtasksList = [];
+                                }
+                            }
+                        }
                     }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-                    const anyDone = subtasksList.some(st => st.done);
+                    const allDone = subtasksList.length > 0 && subtasksList.every(st => Boolean(st?.done));
+                    const anyDone = subtasksList.some(st => Boolean(st?.done));
 
                     let expectedStatus = t.status;
                     if (allDone) {
@@ -451,10 +481,25 @@ export default function CalendarView() {
                                             {item.isTask && (() => {
                                                 let subtasksList = [];
                                                 if (item.sub_tasks) {
-                                                    try {
-                                                        subtasksList = JSON.parse(item.sub_tasks);
-                                                        if (!Array.isArray(subtasksList)) subtasksList = [];
-                                                    } catch (e) {}
+                                                    if (Array.isArray(item.sub_tasks)) {
+                                                        subtasksList = item.sub_tasks;
+                                                    } else if (typeof item.sub_tasks === "string") {
+                                                        const trimmed = item.sub_tasks.trim();
+                                                        if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                                            try {
+                                                                const parsed = JSON.parse(trimmed);
+                                                                if (Array.isArray(parsed)) {
+                                                                    subtasksList = parsed;
+                                                                } else {
+                                                                    console.warn("Malformed sub_tasks (expected array) for task", item.id, parsed);
+                                                                    subtasksList = [];
+                                                                }
+                                                            } catch (e) {
+                                                                console.warn("Malformed sub_tasks for task", item.id, e);
+                                                                subtasksList = [];
+                                                            }
+                                                        }
+                                                    }
                                                 }
                                                 if (subtasksList.length === 0) return null;
 
@@ -512,11 +557,24 @@ export default function CalendarView() {
                                         {(() => {
                                             let subtasksList = [];
                                             if (selectedTask.sub_tasks) {
-                                                try {
-                                                    subtasksList = JSON.parse(selectedTask.sub_tasks);
-                                                    if (!Array.isArray(subtasksList)) subtasksList = [];
-                                                } catch (e) {
-                                                    console.error("Failed to parse sub_tasks:", e);
+                                                if (Array.isArray(selectedTask.sub_tasks)) {
+                                                    subtasksList = selectedTask.sub_tasks;
+                                                } else if (typeof selectedTask.sub_tasks === "string") {
+                                                    const trimmed = selectedTask.sub_tasks.trim();
+                                                    if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                                        try {
+                                                            const parsed = JSON.parse(trimmed);
+                                                            if (Array.isArray(parsed)) {
+                                                                subtasksList = parsed;
+                                                            } else {
+                                                                console.warn("Malformed sub_tasks (expected array) for task", selectedTask.id, parsed);
+                                                                subtasksList = [];
+                                                            }
+                                                        } catch (e) {
+                                                            console.warn("Malformed sub_tasks for task", selectedTask.id, e);
+                                                            subtasksList = [];
+                                                        }
+                                                    }
                                                 }
                                             }
 

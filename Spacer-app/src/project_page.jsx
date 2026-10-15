@@ -356,13 +356,25 @@ function ProjectPage() {
         let allSubtasksDone = true;
         let hasSubtasks = false;
         if (task.sub_tasks) {
-            try {
-                const parsed = JSON.parse(task.sub_tasks);
-                if (Array.isArray(parsed) && parsed.length > 0) {
+            if (Array.isArray(task.sub_tasks)) {
+                if (task.sub_tasks.length > 0) {
                     hasSubtasks = true;
-                    allSubtasksDone = parsed.every(st => st.done);
+                    allSubtasksDone = task.sub_tasks.every(st => Boolean(st?.done));
                 }
-            } catch (e) {}
+            } else if (typeof task.sub_tasks === "string") {
+                const trimmed = task.sub_tasks.trim();
+                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed) && parsed.length > 0) {
+                            hasSubtasks = true;
+                            allSubtasksDone = parsed.every(st => Boolean(st?.done));
+                        }
+                    } catch (e) {
+                        console.warn("Malformed sub_tasks for task", task.id, e);
+                    }
+                }
+            }
         }
         const isLocked = isTimerRunning && isSelected && hasSubtasks && !allSubtasksDone;
 
@@ -475,10 +487,25 @@ function ProjectPage() {
 
         let subtasksList = [];
         if (task.sub_tasks) {
-            try {
-                subtasksList = JSON.parse(task.sub_tasks);
-                if (!Array.isArray(subtasksList)) subtasksList = [];
-            } catch (err) { }
+            if (Array.isArray(task.sub_tasks)) {
+                subtasksList = task.sub_tasks;
+            } else if (typeof task.sub_tasks === "string") {
+                const trimmed = task.sub_tasks.trim();
+                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) {
+                            subtasksList = parsed;
+                        } else {
+                            console.warn("Malformed sub_tasks (expected array) for task", task.id, parsed);
+                            subtasksList = [];
+                        }
+                    } catch (err) {
+                        console.warn("Malformed sub_tasks for task", task.id, err);
+                        subtasksList = [];
+                    }
+                }
+            }
         }
 
         const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
@@ -557,7 +584,9 @@ function ProjectPage() {
     const fetchFiles = useCallback(async () => {
         if (!project_id) return
         const { data, error } = await supabase
-            .from("project_files").select("*").eq("project_id", project_id)
+            .from("project_files")
+            .select("id, project_id, name, type, size, path, url, uploaded_by, created_at")
+            .eq("project_id", project_id)
             .order("created_at", { ascending: false })
         if (!error) setProjectFiles(data || [])
     }, [project_id])
@@ -599,7 +628,7 @@ function ProjectPage() {
             if (!orgId) return
             const { data, error } = await supabase
                 .from("users")
-                .select("*")
+                .select("id, name, email, organization_id")
                 .eq("organization_id", orgId)
             if (error) {
                 console.error("Error fetching org users:", error)
@@ -610,16 +639,35 @@ function ProjectPage() {
 
         const fetchTasks = async () => {
             if (!project_id) return
-            const { data, error } = await supabase.from("tasks").select("*").eq("project_id", project_id).order("created_at", { ascending: false })
+            const { data, error } = await supabase
+                .from("tasks")
+                .select("id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by")
+                .eq("project_id", project_id)
+                .order("created_at", { ascending: false })
             if (error) { console.error("Error fetching tasks:", error) }
             else {
                 const corrected = data.map(t => {
                     let subtasksList = [];
                     if (t.sub_tasks) {
-                        try {
-                            subtasksList = JSON.parse(t.sub_tasks);
-                            if (!Array.isArray(subtasksList)) subtasksList = [];
-                        } catch (e) { }
+                        if (Array.isArray(t.sub_tasks)) {
+                            subtasksList = t.sub_tasks;
+                        } else if (typeof t.sub_tasks === "string") {
+                            const trimmed = t.sub_tasks.trim();
+                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                try {
+                                    const parsed = JSON.parse(trimmed);
+                                    if (Array.isArray(parsed)) {
+                                        subtasksList = parsed;
+                                    } else {
+                                        console.warn("Malformed sub_tasks (expected array) for task", t.id, parsed);
+                                        subtasksList = [];
+                                    }
+                                } catch (e) {
+                                    console.warn("Malformed sub_tasks for task", t.id, e);
+                                    subtasksList = [];
+                                }
+                            }
+                        }
                     }
                     const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
                     const anyDone = subtasksList.some(st => st.done);
@@ -1039,13 +1087,25 @@ function ProjectPage() {
                                                         let allSubtasksDone = true;
                                                         let hasSubtasks = false;
                                                         if (task.sub_tasks) {
-                                                            try {
-                                                                const parsed = JSON.parse(task.sub_tasks);
-                                                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                                            if (Array.isArray(task.sub_tasks)) {
+                                                                if (task.sub_tasks.length > 0) {
                                                                     hasSubtasks = true;
-                                                                    allSubtasksDone = parsed.every(st => st.done);
+                                                                    allSubtasksDone = task.sub_tasks.every(st => Boolean(st?.done));
                                                                 }
-                                                            } catch (e) {}
+                                                            } else if (typeof task.sub_tasks === "string") {
+                                                                const trimmed = task.sub_tasks.trim();
+                                                                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                                                    try {
+                                                                        const parsed = JSON.parse(trimmed);
+                                                                        if (Array.isArray(parsed) && parsed.length > 0) {
+                                                                            hasSubtasks = true;
+                                                                            allSubtasksDone = parsed.every(st => Boolean(st?.done));
+                                                                        }
+                                                                    } catch (e) {
+                                                                        console.warn("Malformed sub_tasks for task", task.id, e);
+                                                                    }
+                                                                }
+                                                            }
                                                         }
 
                                                         const sprintHasStarted = isTimerRunning || sprintTimeRemaining < sprintTotalTime;
@@ -1390,10 +1450,25 @@ function ProjectPage() {
                                                         {(() => {
                                                             let subtasksList = [];
                                                             if (task.sub_tasks) {
-                                                                try {
-                                                                    subtasksList = JSON.parse(task.sub_tasks);
-                                                                    if (!Array.isArray(subtasksList)) subtasksList = [];
-                                                                } catch (e) { }
+                                                                if (Array.isArray(task.sub_tasks)) {
+                                                                    subtasksList = task.sub_tasks;
+                                                                } else if (typeof task.sub_tasks === "string") {
+                                                                    const trimmed = task.sub_tasks.trim();
+                                                                    if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                                                        try {
+                                                                            const parsed = JSON.parse(trimmed);
+                                                                            if (Array.isArray(parsed)) {
+                                                                                subtasksList = parsed;
+                                                                            } else {
+                                                                                console.warn("Malformed sub_tasks (expected array) for task", task.id, parsed);
+                                                                                subtasksList = [];
+                                                                            }
+                                                                        } catch (e) {
+                                                                            console.warn("Malformed sub_tasks for task", task.id, e);
+                                                                            subtasksList = [];
+                                                                        }
+                                                                    }
+                                                                }
                                                             }
                                                             if (subtasksList.length === 0) return null;
 
@@ -2030,11 +2105,24 @@ function ProjectPage() {
                                     const canEditSubtasks = canEditTaskDetails;
                                     let subtasksList = [];
                                     if (selectedTask.sub_tasks) {
-                                        try {
-                                            subtasksList = JSON.parse(selectedTask.sub_tasks);
-                                            if (!Array.isArray(subtasksList)) subtasksList = [];
-                                        } catch (e) {
-                                            console.error("Failed to parse sub_tasks:", e);
+                                        if (Array.isArray(selectedTask.sub_tasks)) {
+                                            subtasksList = selectedTask.sub_tasks;
+                                        } else if (typeof selectedTask.sub_tasks === "string") {
+                                            const trimmed = selectedTask.sub_tasks.trim();
+                                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
+                                                try {
+                                                    const parsed = JSON.parse(trimmed);
+                                                    if (Array.isArray(parsed)) {
+                                                        subtasksList = parsed;
+                                                    } else {
+                                                        console.warn("Malformed sub_tasks (expected array) for task", selectedTask.id, parsed);
+                                                        subtasksList = [];
+                                                    }
+                                                } catch (e) {
+                                                    console.warn("Malformed sub_tasks for task", selectedTask.id, e);
+                                                    subtasksList = [];
+                                                }
+                                            }
                                         }
                                     }
 

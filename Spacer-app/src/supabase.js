@@ -100,6 +100,25 @@ const mockAuth = {
         return { error: null };
     },
 
+    async resetPasswordForEmail(email, options) {
+        console.log("[Mock] resetPasswordForEmail called for:", email, options);
+        return { data: {}, error: null };
+    },
+
+    async updateUser(attributes) {
+        console.log("[Mock] updateUser called:", attributes);
+        const session = JSON.parse(localStorage.getItem("mock_session") || "null");
+        if (session?.user && attributes?.password) {
+            const users = JSON.parse(localStorage.getItem("mock_users") || "[]");
+            const userIndex = users.findIndex(u => u.email === session.user.email);
+            if (userIndex !== -1) {
+                users[userIndex].password = attributes.password;
+                localStorage.setItem("mock_users", JSON.stringify(users));
+            }
+        }
+        return { data: { user: session?.user || null }, error: null };
+    },
+
     onAuthStateChange(callback) {
         authCallbacks.push(callback);
         const session = JSON.parse(localStorage.getItem("mock_session") || "null");
