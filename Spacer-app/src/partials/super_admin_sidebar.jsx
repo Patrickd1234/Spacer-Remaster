@@ -10,7 +10,6 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
-    const [orgName, setOrgName] = useState("Spacer");
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -146,30 +145,6 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
         };
         fetchDbUser();
 
-        const fetchOrg = async () => {
-            const { data: authData } = await supabase.auth.getUser();
-            const userId = authData?.user?.id;
-            if (userId) {
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", userId)
-                    .maybeSingle();
-                const orgId = userProfile?.organization_id;
-                if (orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", orgId)
-                        .maybeSingle();
-                    if (org?.name) {
-                        const resolvedName = org.name.toLowerCase().includes("redtech") ? "Spacer" : org.name;
-                        setOrgName(resolvedName);
-                    }
-                }
-            }
-        };
-        fetchOrg();
     }, []);
 
     const selectedTeamSpace = teamSpaces.find(ts => ts.id === selectedTeamSpaceId);
@@ -190,7 +165,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                         {expanded && (
                             <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary-accent font-bold text-[20px]">token</span>
-                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
+                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">Spacers</h1>
                             </div>
                         )}
                         <button

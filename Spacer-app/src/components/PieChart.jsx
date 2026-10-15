@@ -5,7 +5,7 @@
  *   slices  : [{ label, value, color }]
  *   size    : number (diameter in px, default 180)
  */
-export default function PieChart({ slices = [], size = 180 }) {
+export default function PieChart({ slices = [], size = 180, showLegend = true }) {
   const r = size / 2;
   const cx = r;
   const cy = r;
@@ -103,18 +103,20 @@ export default function PieChart({ slices = [], size = 180 }) {
       </svg>
 
       {/* Legend */}
-      <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
-        {slices.map((s, i) => (
-          <div key={i} className="flex items-center gap-1.5 text-xs">
-            <span
-              className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-              style={{ background: s.color }}
-            />
-            <span className="text-on-surface-variant">{s.label}</span>
-            <span className="font-semibold text-on-surface">{s.value}</span>
-          </div>
-        ))}
-      </div>
+      {showLegend && (
+        <div className="flex flex-wrap justify-center gap-x-4 gap-y-1">
+          {slices.map((s, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-xs">
+              <span
+                className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                style={{ background: s.color }}
+              />
+              <span className="text-on-surface-variant">{s.label}</span>
+              <span className="font-semibold text-on-surface">{s.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

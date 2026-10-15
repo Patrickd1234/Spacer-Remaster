@@ -1,19 +1,48 @@
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import PieChart from "./components/PieChart"
+import AnimatedNumber from "./components/AnimatedNumber"
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
+import { useRole } from "./RoleContext"
 
 const STATUS_COLORS = {
-  todo:        "#818cf8",
+  todo: "#818cf8",
   in_progress: "#E8A838",
-  done:        "#33B26C",
-  overdue:     "#ef4444",
+  done: "#33B26C",
+  overdue: "#ef4444",
 }
+
+const PROJECTS_COLLAPSED_KEY = "reports:projectsCollapsed"
+const STAGGER_MS = 60
+const MAX_STAGGER_MS = 480
+
+const readProjectsCollapsed = () => {
+  try {
+    return localStorage.getItem(PROJECTS_COLLAPSED_KEY) === "true"
+  } catch {
+    return false
+  }
+}
+
+const writeProjectsCollapsed = (collapsed) => {
+  try {
+    localStorage.setItem(PROJECTS_COLLAPSED_KEY, String(collapsed))
+  } catch {
+    // Storage unavailable (private mode / blocked) — state just won't persist.
+  }
+}
+
+const staggerStyle = (index) => ({
+  animationDelay: `${Math.min(index * STAGGER_MS, MAX_STAGGER_MS)}ms`,
+})
 
 export default function Reports() {
   const navigate = useNavigate()
+  const { isSuperAdmin, isAdmin } = useRole()
+  const isAdminLevel = Boolean(isSuperAdmin || isAdmin)
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -22,31 +51,31 @@ export default function Reports() {
   // Current session & profile
   const [currentUserId, setCurrentUserId] = useState(null)
   const [organizationId, setOrganizationId] = useState(null)
+  const [userAssignedProjectIds, setUserAssignedProjectIds] = useState(new Set())
+  const [interactionNotice, setInteractionNotice] = useState(null)
 
   // Raw data from DB
   const [allTasks, setAllTasks] = useState([])
   const [allProjects, setAllProjects] = useState([])
 
-  // Filters
+  // Top Filter Controls
   const [scope, setScope] = useState("workspace") // "workspace" | "personal"
   const [selectedProjectId, setSelectedProjectId] = useState("all") // "all" | project_id
 
-  // Collapsible Ongoing Projects State (persisted for great UX)
-  const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(() => {
-    return localStorage.getItem("reports_projects_collapsed") === "true"
-  })
+  // Project Grid Filter & Search
+  const [projectSearchQuery, setProjectSearchQuery] = useState("")
+  const [projectStatusFilter, setProjectStatusFilter] = useState("all") // "all" | "in_progress" | "done" | "attention"
+  const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(readProjectsCollapsed)
 
   const toggleProjectsCollapsed = () => {
-    setIsProjectsCollapsed((prev) => {
-      const next = !prev
-      localStorage.setItem("reports_projects_collapsed", String(next))
-      return next
-    })
+    const next = !isProjectsCollapsed
+    setIsProjectsCollapsed(next)
+    writeProjectsCollapsed(next)
   }
 
-  // Custom Dropdown State & Ref
+  // Custom Dropdown State & Ref for Header Filter
   const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false)
-  const [projectSearchQuery, setProjectSearchQuery] = useState("")
+  const [dropdownSearch, setDropdownSearch] = useState("")
   const projectDropdownRef = useRef(null)
 
   // Close dropdown on click outside or escape key
@@ -84,7 +113,7 @@ export default function Reports() {
     const subtasks = parseSubtasks(task.sub_tasks)
     if (subtasks.length > 0) {
       if (subtasks.every((st) => st.done)) return "done"
-      if (subtasks.some((st => st.done))) return "in_progress"
+      if (subtasks.some((st) => st.done)) return "in_progress"
       return "todo"
     }
     return task.status || "todo"
@@ -159,7 +188,15 @@ export default function Reports() {
 
       setAllProjects(projectsList)
 
-      // 4. Fetch tasks
+      // 4. Fetch project memberships for current user
+      const { data: memberRows } = await supabase
+        .from("project_members")
+        .select("project_id")
+        .eq("user_id", userId)
+
+      const assignedProjectSet = new Set((memberRows || []).map((m) => String(m.project_id)))
+
+      // 5. Fetch tasks strictly for the user's workspace or assigned
       let taskQuery = supabase
         .from("tasks")
         .select("*, project:project_spaces(id, name, status)")
@@ -173,10 +210,12 @@ export default function Reports() {
       const { data: tasksData, error: taskErr } = await taskQuery.order("created_at", { ascending: false })
 
       if (!taskErr && tasksData) {
-        // Compute and normalize status for every task
         const processedTasks = tasksData.map((t) => {
           const effectiveStatus = getEffectiveStatus(t)
           const overdue = isTaskOverdue(t, effectiveStatus)
+          if (String(t.assignee_id) === String(userId) && t.project_id) {
+            assignedProjectSet.add(String(t.project_id))
+          }
           return {
             ...t,
             effectiveStatus,
@@ -186,7 +225,10 @@ export default function Reports() {
           }
         })
 
+        setUserAssignedProjectIds(assignedProjectSet)
         setAllTasks(processedTasks)
+      } else {
+        setUserAssignedProjectIds(assignedProjectSet)
       }
 
       setLastUpdated(new Date())
@@ -198,33 +240,43 @@ export default function Reports() {
     }
   }, [getEffectiveStatus, isTaskOverdue])
 
+  // ── Project interaction permission check ─────────────────────────────────
+  const isAssignedToProject = useCallback((projectId) => {
+    if (isAdminLevel) return true
+    return userAssignedProjectIds.has(String(projectId))
+  }, [isAdminLevel, userAssignedProjectIds])
+
+  const handleProjectClick = (proj) => {
+    if (isAdminLevel || isAssignedToProject(proj.id)) {
+      navigate(`/project_page/${proj.id}`)
+    } else {
+      setInteractionNotice({
+        title: "Workspace Observer Mode",
+        project: proj.name,
+        message: "You can view this project's status in the report, but only assigned team members and workspace administrators can enter and manage tasks within it."
+      })
+    }
+  }
+
   // ── Initial load & live subscriptions ──────────────────────────────────
   useEffect(() => {
     fetchReportData()
 
-    // 1. Supabase Realtime channel on both tasks and project_spaces
+    // 1. Supabase Realtime channel on tasks and project_spaces
     const channel = supabase
       .channel("reports-realtime-feed")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "tasks" },
-        () => {
-          fetchReportData(true)
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "project_spaces" },
-        () => {
-          fetchReportData(true)
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, () => {
+        fetchReportData(true)
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_spaces" }, () => {
+        fetchReportData(true)
+      })
       .subscribe()
 
-    // 2. Background polling fallback (every 10 seconds)
+    // 2. Background polling fallback (every 12 seconds)
     const pollingInterval = setInterval(() => {
       fetchReportData(true)
-    }, 10000)
+    }, 12000)
 
     // 3. Tab focus & visibility change listener
     const handleVisibilityChange = () => {
@@ -250,17 +302,20 @@ export default function Reports() {
   // ── Filtered tasks according to active scope & project ───────────────────
   const filteredTasks = useMemo(() => {
     return allTasks.filter((t) => {
-      // Scope filter
-      if (scope === "personal" && t.assignee_id !== currentUserId) {
+      if (scope === "workspace") {
+        if (organizationId && t.organization_id && String(t.organization_id) !== String(organizationId)) {
+          return false
+        }
+      }
+      if (scope === "personal" && String(t.assignee_id) !== String(currentUserId)) {
         return false
       }
-      // Project filter
       if (selectedProjectId !== "all" && String(t.project_id) !== String(selectedProjectId)) {
         return false
       }
       return true
     })
-  }, [allTasks, scope, currentUserId, selectedProjectId])
+  }, [allTasks, scope, currentUserId, organizationId, selectedProjectId])
 
   // ── Metrics computation ──────────────────────────────────────────────────
   const metrics = useMemo(() => {
@@ -292,6 +347,13 @@ export default function Reports() {
       const overdue = projTasks.filter((t) => t.isOverdue).length
       const progressPct = total > 0 ? Math.round((done / total) * 100) : 0
 
+      let calculatedStatus = "in_progress"
+      if (total > 0 && done === total) {
+        calculatedStatus = "done"
+      } else if (overdue > 0) {
+        calculatedStatus = "attention"
+      }
+
       return {
         ...proj,
         totalTasks: total,
@@ -299,415 +361,416 @@ export default function Reports() {
         inProgressTasks: inProgress,
         overdueTasks: overdue,
         progressPct,
+        calculatedStatus,
       }
     })
   }, [allProjects, allTasks])
 
-  // Summary statistics for when the project section is collapsed
-  const collapsedProjectSummary = useMemo(() => {
-    const completedCount = projectStats.filter((p) => p.progressPct === 100 && p.totalTasks > 0).length
-    const totalOngoingTasks = projectStats.reduce((acc, p) => acc + p.inProgressTasks, 0)
-    const totalOverdueTasks = projectStats.reduce((acc, p) => acc + p.overdueTasks, 0)
-    const totalDoneTasks = projectStats.reduce((acc, p) => acc + p.doneTasks, 0)
-    const totalAllTasks = projectStats.reduce((acc, p) => acc + p.totalTasks, 0)
-    const avgCompletion = totalAllTasks > 0 ? Math.round((totalDoneTasks / totalAllTasks) * 100) : 0
+  // Projects filtered for the Grid Section
+  const filteredProjectGrid = useMemo(() => {
+    return projectStats.filter((proj) => {
+      if (selectedProjectId !== "all" && String(proj.id) !== String(selectedProjectId)) {
+        return false
+      }
+      if (projectStatusFilter === "in_progress" && proj.calculatedStatus !== "in_progress") {
+        return false
+      }
+      if (projectStatusFilter === "done" && proj.calculatedStatus !== "done") {
+        return false
+      }
+      if (projectStatusFilter === "attention" && proj.calculatedStatus !== "attention") {
+        return false
+      }
+      if (projectSearchQuery.trim()) {
+        const query = projectSearchQuery.toLowerCase()
+        const matchesName = proj.name.toLowerCase().includes(query)
+        const matchesTeam = proj.team_space_name && proj.team_space_name.toLowerCase().includes(query)
+        if (!matchesName && !matchesTeam) return false
+      }
+      return true
+    })
+  }, [projectStats, selectedProjectId, projectStatusFilter, projectSearchQuery])
 
-    return {
-      completedCount,
-      totalOngoingTasks,
-      totalOverdueTasks,
-      avgCompletion,
-    }
-  }, [projectStats])
-
-  // Current selected project object for dropdown trigger label
+  // Current selected project object for header dropdown
   const selectedProjectObj = useMemo(() => {
     if (selectedProjectId === "all") return null
     return allProjects.find((p) => String(p.id) === String(selectedProjectId)) || null
   }, [allProjects, selectedProjectId])
 
-  // Filtered project list for the custom dropdown search
-  const filteredDropdownProjects = useMemo(() => {
-    if (!projectSearchQuery.trim()) return allProjects
-    const query = projectSearchQuery.toLowerCase()
+  // Projects list for Header Dropdown
+  const dropdownFilteredProjects = useMemo(() => {
+    if (!dropdownSearch.trim()) return allProjects
+    const q = dropdownSearch.toLowerCase()
     return allProjects.filter(
       (p) =>
-        p.name.toLowerCase().includes(query) ||
-        (p.team_space_name && p.team_space_name.toLowerCase().includes(query))
+        p.name.toLowerCase().includes(q) ||
+        (p.team_space_name && p.team_space_name.toLowerCase().includes(q))
     )
-  }, [allProjects, projectSearchQuery])
+  }, [allProjects, dropdownSearch])
 
   return (
-    <div className="flex bg-[#0F1115] text-[#e0e5d0] min-h-screen">
+    <div className="bg-[#0F1115] text-[#e0e5d0] min-h-screen font-sans flex antialiased">
       <Sidebar onCollapsedChange={setSidebarCollapsed} />
+
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
+
         <main
           className={`${
             sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"
           } flex-1 flex flex-col pt-16 transition-all duration-300 ease-out`}
         >
-          <div className="p-6 md:p-8 space-y-6 max-w-7xl w-full mx-auto">
-            
-            {/* ── Page Header & Controls ─────────────────────────────────────── */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-[#2D3139]/50">
-              <div>
-                <div className="flex items-center gap-3">
-                  <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-                    Ongoing Status & Reports
-                  </h1>
-                  {isRefreshing && (
-                    <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[var(--primary-color)]/10 text-[var(--primary-color)] border border-[var(--primary-color)]/20 animate-pulse">
-                      <span className="material-symbols-outlined text-[13px] animate-spin">refresh</span>
-                      Syncing...
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-[#8c947b] mt-1">
-                  Live real-time breakdown of ongoing projects, task lifecycles, and workspace progress.
-                </p>
-              </div>
+          <div className="p-6 md:p-8 space-y-7 max-w-[1400px] w-full mx-auto">
 
-              {/* Scope toggle & Action controls */}
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Scope selector */}
-                <div className="bg-[#1C1F26] p-1 rounded-xl border border-[#2D3139] flex items-center shadow-sm">
-                  <button
-                    onClick={() => setScope("workspace")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      scope === "workspace"
-                        ? "bg-[#aff82a] text-[#0F1115] shadow-sm font-bold"
-                        : "text-[#8c947b] hover:text-white"
-                    }`}
-                  >
-                    Entire Workspace
-                  </button>
-                  <button
-                    onClick={() => setScope("personal")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                      scope === "personal"
-                        ? "bg-[#aff82a] text-[#0F1115] shadow-sm font-bold"
-                        : "text-[#8c947b] hover:text-white"
-                    }`}
-                  >
-                    Assigned to Me
-                  </button>
-                </div>
-
-                {/* ── Optimal, Sleek Custom Project Dropdown ──────────────────────── */}
-                {allProjects.length > 0 && (
-                  <div className="relative" ref={projectDropdownRef}>
-                    <button
-                      type="button"
-                      onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
-                      className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer bg-[#1C1F26] shadow-sm ${
-                        isProjectDropdownOpen
-                          ? "border-[#aff82a] text-white ring-2 ring-[#aff82a]/20 shadow-lg"
-                          : selectedProjectId !== "all"
-                          ? "border-[#aff82a]/60 text-white bg-[#1C1F26]"
-                          : "border-[#2D3139] text-[#e0e5d0] hover:border-[#424934] hover:text-white"
+            {/* ══════════════════════════════════════════════════════════════════════
+                1. UNIFIED HEADER & TOP CONTROLS BAR
+                ══════════════════════════════════════════════════════════════════════ */}
+            <div className="reports-rise relative z-20 bg-[#16191F] border border-[#2D3139] rounded-2xl p-5 md:p-6 shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                
+                {/* Title & Live Status */}
+                <div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                      Reports & Analytics
+                    </h1>
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
+                        isRefreshing
+                          ? "bg-[var(--primary-color)]/10 text-[var(--primary-color)] border-[var(--primary-color)]/30 animate-pulse"
+                          : "bg-[#33B26C]/10 text-[#33B26C] border-[#33B26C]/25"
                       }`}
                     >
-                      <span className="material-symbols-outlined text-[17px] text-[#aff82a]">
-                        {selectedProjectId === "all" ? "dataset" : "folder_open"}
-                      </span>
-                      <span className="truncate max-w-[130px] sm:max-w-[170px] text-left">
-                        {selectedProjectObj ? selectedProjectObj.name : `All Projects (${allProjects.length})`}
-                      </span>
                       <span
-                        className={`material-symbols-outlined text-[16px] text-[#8c947b] transition-transform duration-200 ${
-                          isProjectDropdownOpen ? "rotate-180 text-white" : ""
+                        className={`w-2 h-2 rounded-full ${
+                          isRefreshing ? "bg-[var(--primary-color)] animate-spin" : "bg-[#33B26C]"
+                        }`}
+                      />
+                      {isRefreshing ? "Syncing..." : "Live Data"}
+                    </span>
+                    {!isAdminLevel && (
+                      <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white/5 border border-[#2D3139] text-[#8c947b] text-xs">
+                        <span className="material-symbols-outlined text-[14px] text-amber-400">shield_person</span>
+                        Member Mode
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs md:text-sm text-[#8c947b] mt-1.5">
+                    Real-time performance metrics, team workload distribution, and milestone tracking.
+                  </p>
+                </div>
+
+                {/* Filter Controls Toolbar */}
+                <div className="flex flex-wrap lg:flex-nowrap items-center gap-3 shrink-0">
+                  
+                  {/* Scope Switcher Segmented Control */}
+                  <div className="bg-[#0F1115] p-1 rounded-xl border border-[#2D3139] flex items-center shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => setScope("workspace")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        scope === "workspace"
+                          ? "bg-[#aff82a] text-[#0F1115] shadow font-bold"
+                          : "text-[#8c947b] hover:text-white"
+                      }`}
+                    >
+                      Entire Workspace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScope("personal")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        scope === "personal"
+                          ? "bg-[#aff82a] text-[#0F1115] shadow font-bold"
+                          : "text-[#8c947b] hover:text-white"
+                      }`}
+                    >
+                      Assigned to Me
+                    </button>
+                  </div>
+
+                  {/* Project Selector Dropdown */}
+                  {allProjects.length > 0 && (
+                    <div className="relative" ref={projectDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer bg-[#0F1115] shadow-sm ${
+                          isProjectDropdownOpen
+                            ? "border-[#aff82a] text-white ring-2 ring-[#aff82a]/20"
+                            : selectedProjectId !== "all"
+                            ? "border-[#aff82a]/70 text-[#aff82a]"
+                            : "border-[#2D3139] text-[#e0e5d0] hover:border-[#424934] hover:text-white"
                         }`}
                       >
-                        expand_more
-                      </span>
-                    </button>
+                        <span className="material-symbols-outlined text-[17px] text-[#aff82a]">
+                          {selectedProjectId === "all" ? "dataset" : "folder_open"}
+                        </span>
+                        <span className="truncate max-w-[120px] sm:max-w-[160px] text-left">
+                          {selectedProjectObj ? selectedProjectObj.name : `All Projects (${allProjects.length})`}
+                        </span>
+                        <span
+                          className={`material-symbols-outlined text-[16px] text-[#8c947b] transition-transform duration-200 ${
+                            isProjectDropdownOpen ? "rotate-180 text-white" : ""
+                          }`}
+                        >
+                          expand_more
+                        </span>
+                      </button>
 
-                    {/* Dropdown Menu Popup */}
-                    {isProjectDropdownOpen && (
-                      <div className="absolute right-0 mt-2 w-72 max-w-[90vw] rounded-2xl bg-[#16191F] border border-[#2D3139] shadow-2xl z-50 overflow-hidden backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
-                        {/* Search input (shown if multiple projects) */}
-                        {allProjects.length > 3 && (
-                          <div className="p-2.5 border-b border-[#2D3139]/70 bg-black/20">
-                            <div className="relative">
-                              <span className="material-symbols-outlined text-[16px] text-[#8c947b] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
-                                search
-                              </span>
-                              <input
-                                type="text"
-                                placeholder="Search projects..."
-                                value={projectSearchQuery}
-                                onChange={(e) => setProjectSearchQuery(e.target.value)}
-                                className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#8c947b]/60 outline-none focus:border-[#aff82a]/60 focus:ring-1 focus:ring-[#aff82a]/30 transition-all"
-                                autoFocus
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Options List */}
-                        <div className="max-h-64 overflow-y-auto p-1.5 space-y-0.5 scrollbar-thin">
-                          {/* "All Projects" Option */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedProjectId("all")
-                              setIsProjectDropdownOpen(false)
-                              setProjectSearchQuery("")
-                            }}
-                            className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                              selectedProjectId === "all"
-                                ? "bg-[#aff82a]/15 text-white font-bold"
-                                : "hover:bg-white/5 text-[#e0e5d0]"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 overflow-hidden">
-                              <div
-                                className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                                  selectedProjectId === "all"
-                                    ? "bg-[#aff82a] text-[#0F1115]"
-                                    : "bg-[#2D3139] text-[#8c947b]"
-                                }`}
-                              >
-                                <span className="material-symbols-outlined text-[15px]">apps</span>
-                              </div>
-                              <div className="truncate">
-                                <div className="text-xs font-semibold truncate">All Projects</div>
-                                <div className="text-[10px] text-[#8c947b]">
-                                  Organization portfolio ({allProjects.length})
-                                </div>
+                      {isProjectDropdownOpen && (
+                        <div className="reports-fade absolute right-0 mt-2 w-72 rounded-xl bg-[#16191F] border border-[#2D3139] shadow-2xl z-50 overflow-hidden">
+                          {allProjects.length > 3 && (
+                            <div className="p-2.5 border-b border-[#2D3139] bg-black/20">
+                              <div className="relative">
+                                <span className="material-symbols-outlined text-[16px] text-[#8c947b] absolute left-2.5 top-1/2 -translate-y-1/2">
+                                  search
+                                </span>
+                                <input
+                                  type="text"
+                                  placeholder="Filter projects..."
+                                  value={dropdownSearch}
+                                  onChange={(e) => setDropdownSearch(e.target.value)}
+                                  className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#8c947b]/60 outline-none focus:border-[#aff82a]"
+                                  autoFocus
+                                />
                               </div>
                             </div>
-
-                            {selectedProjectId === "all" && (
-                              <span className="material-symbols-outlined text-[16px] text-[#aff82a] shrink-0 ml-2">
-                                check
-                              </span>
-                            )}
-                          </button>
-
-                          <div className="h-px bg-[#2D3139]/50 my-1" />
-
-                          {/* Individual Projects */}
-                          {filteredDropdownProjects.length === 0 ? (
-                            <div className="py-4 text-center text-xs text-[#8c947b] italic">
-                              No matching projects found
-                            </div>
-                          ) : (
-                            filteredDropdownProjects.map((proj) => {
-                              const isSelected = String(selectedProjectId) === String(proj.id)
-                              const projTasksCount = allTasks.filter(
-                                (t) => String(t.project_id) === String(proj.id)
-                              ).length
-
-                              return (
-                                <button
-                                  key={proj.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedProjectId(proj.id)
-                                    setIsProjectDropdownOpen(false)
-                                    setProjectSearchQuery("")
-                                  }}
-                                  className={`w-full px-3 py-2 rounded-xl flex items-center justify-between text-left transition-all cursor-pointer ${
-                                    isSelected
-                                      ? "bg-[#aff82a]/15 text-white font-bold"
-                                      : "hover:bg-white/5 text-[#e0e5d0]"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2.5 overflow-hidden">
-                                    <div
-                                      className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
-                                        isSelected
-                                          ? "bg-[#aff82a] text-[#0F1115]"
-                                          : "bg-[#2D3139] text-[#aff82a]"
-                                      }`}
-                                    >
-                                      <span className="material-symbols-outlined text-[15px]">
-                                        folder
-                                      </span>
-                                    </div>
-                                    <div className="truncate">
-                                      <div className="text-xs font-semibold truncate text-white">
-                                        {proj.name}
-                                      </div>
-                                      <div className="text-[10px] text-[#8c947b] truncate flex items-center gap-1.5">
-                                        <span>{proj.team_space_name}</span>
-                                        <span>•</span>
-                                        <span>{projTasksCount} tasks</span>
-                                      </div>
-                                    </div>
-                                  </div>
-
-                                  {isSelected && (
-                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a] shrink-0 ml-2">
-                                      check
-                                    </span>
-                                  )}
-                                </button>
-                              )
-                            })
                           )}
-                        </div>
 
-                        {/* Footer Clear / Reset Link */}
-                        {selectedProjectId !== "all" && (
-                          <div className="p-2 border-t border-[#2D3139]/60 bg-black/10 flex justify-end">
+                          <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
                             <button
                               type="button"
                               onClick={() => {
                                 setSelectedProjectId("all")
                                 setIsProjectDropdownOpen(false)
-                                setProjectSearchQuery("")
+                                setDropdownSearch("")
                               }}
-                              className="text-[11px] text-[#aff82a] hover:underline font-medium px-2 py-0.5 cursor-pointer"
+                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left transition-colors cursor-pointer ${
+                                selectedProjectId === "all"
+                                  ? "bg-[#aff82a]/15 text-[#aff82a] font-bold"
+                                  : "hover:bg-white/5 text-[#e0e5d0]"
+                              }`}
                             >
-                              Reset to All Projects
+                              <div className="flex items-center gap-2 truncate">
+                                <span className="material-symbols-outlined text-[16px]">apps</span>
+                                <span className="text-xs truncate">All Projects ({allProjects.length})</span>
+                              </div>
+                              {selectedProjectId === "all" && (
+                                <span className="material-symbols-outlined text-[16px]">check</span>
+                              )}
                             </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
 
-                {/* Manual refresh button */}
-                <button
-                  onClick={() => fetchReportData(true)}
-                  disabled={isRefreshing}
-                  title="Force refresh now"
-                  className="bg-[#1C1F26] hover:bg-[#252932] border border-[#2D3139] text-[#8c947b] hover:text-white p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center disabled:opacity-50 shadow-sm"
-                >
-                  <span
-                    className={`material-symbols-outlined text-[18px] ${
-                      isRefreshing ? "animate-spin text-[#aff82a]" : ""
-                    }`}
+                            <div className="h-px bg-[#2D3139]/60 my-1" />
+
+                            {dropdownFilteredProjects.map((p) => {
+                              const isSelected = String(selectedProjectId) === String(p.id)
+                              return (
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedProjectId(p.id)
+                                    setIsProjectDropdownOpen(false)
+                                    setDropdownSearch("")
+                                  }}
+                                  className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left transition-colors cursor-pointer ${
+                                    isSelected
+                                      ? "bg-[#aff82a]/15 text-[#aff82a] font-bold"
+                                      : "hover:bg-white/5 text-[#e0e5d0]"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a]">
+                                      folder
+                                    </span>
+                                    <span className="text-xs truncate">{p.name}</span>
+                                  </div>
+                                  {isSelected && (
+                                    <span className="material-symbols-outlined text-[16px]">check</span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Manual Refresh Button */}
+                  <button
+                    type="button"
+                    onClick={() => fetchReportData(true)}
+                    disabled={isRefreshing}
+                    title="Force refresh data"
+                    className="shrink-0 bg-[#0F1115] hover:bg-[#1C1F26] border border-[#2D3139] hover:border-[#424934] text-[#8c947b] hover:text-white p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center disabled:opacity-50 shadow-sm"
                   >
-                    sync
-                  </span>
-                </button>
+                    <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? "animate-spin text-[#aff82a]" : ""}`}>
+                      refresh
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* ── Key Performance Cards ───────────────────────────────────────── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* ══════════════════════════════════════════════════════════════════════
+                2. KEY PERFORMANCE INDICATORS (KPI CARDS ROW)
+                ══════════════════════════════════════════════════════════════════════ */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              
               {/* Total Tasks */}
-              <div className="glass-card rounded-2xl p-5 border border-[#2D3139] flex flex-col justify-between">
+              <div
+                style={staggerStyle(1)}
+                className="reports-rise bg-[#16191F] border border-[#2D3139] hover:border-[#424934] rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-black/30 group"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#8c947b] uppercase tracking-wider">
                     Total Tasks
                   </span>
-                  <span className="p-2 rounded-xl bg-white/5 text-[#8c947b]">
+                  <div className="w-9 h-9 rounded-xl bg-white/5 border border-[#2D3139] flex items-center justify-center text-[#818cf8] transition-transform duration-300 group-hover:scale-110">
                     <span className="material-symbols-outlined text-[18px]">checklist</span>
-                  </span>
+                  </div>
                 </div>
-                <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-white">{metrics.total}</div>
-                  <div className="text-[11px] text-[#8c947b] mt-1">
-                    {scope === "workspace" ? "Across organization" : "Assigned to your profile"}
+                <div className="mt-4">
+                  <AnimatedNumber value={metrics.total} className="block text-3xl font-extrabold text-white tracking-tight" />
+                  <div className="text-[11px] text-[#8c947b] mt-1 flex items-center gap-1">
+                    <span>{scope === "workspace" ? "Across organization" : "Assigned to your profile"}</span>
                   </div>
                 </div>
               </div>
 
-              {/* In Progress / Ongoing */}
-              <div className="glass-card rounded-2xl p-5 border border-[#2D3139] flex flex-col justify-between">
+              {/* In Progress */}
+              <div
+                style={staggerStyle(2)}
+                className="reports-rise bg-[#16191F] border border-[#2D3139] hover:border-[#E8A838]/40 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#E8A838]/5 group"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#E8A838] uppercase tracking-wider">
-                    Ongoing
+                    In Progress
                   </span>
-                  <span className="p-2 rounded-xl bg-[#E8A838]/10 text-[#E8A838]">
+                  <div className="w-9 h-9 rounded-xl bg-[#E8A838]/10 border border-[#E8A838]/20 flex items-center justify-center text-[#E8A838] transition-transform duration-300 group-hover:scale-110">
                     <span className="material-symbols-outlined text-[18px]">pending_actions</span>
-                  </span>
+                  </div>
                 </div>
-                <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-[#E8A838]">{metrics.in_progress}</div>
-                  <div className="text-[11px] text-[#8c947b] mt-1">Currently in progress</div>
+                <div className="mt-4">
+                  <AnimatedNumber value={metrics.in_progress} className="block text-3xl font-extrabold text-[#E8A838] tracking-tight" />
+                  <div className="text-[11px] text-[#8c947b] mt-1">
+                    Currently under active execution
+                  </div>
                 </div>
               </div>
 
-              {/* Completed Rate */}
-              <div className="glass-card rounded-2xl p-5 border border-[#2D3139] flex flex-col justify-between">
+              {/* Completed */}
+              <div
+                style={staggerStyle(3)}
+                className="reports-rise bg-[#16191F] border border-[#2D3139] hover:border-[#33B26C]/40 rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg hover:shadow-[#33B26C]/5 group"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#33B26C] uppercase tracking-wider">
                     Completed
                   </span>
-                  <span className="p-2 rounded-xl bg-[#33B26C]/10 text-[#33B26C]">
+                  <div className="w-9 h-9 rounded-xl bg-[#33B26C]/10 border border-[#33B26C]/20 flex items-center justify-center text-[#33B26C] transition-transform duration-300 group-hover:scale-110">
                     <span className="material-symbols-outlined text-[18px]">task_alt</span>
-                  </span>
-                </div>
-                <div className="mt-3">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-3xl font-extrabold text-[#33B26C]">{metrics.done}</span>
-                    <span className="text-xs font-semibold text-[#8c947b]">({metrics.completionRate}%)</span>
                   </div>
-                  <div className="text-[11px] text-[#8c947b] mt-1">Successfully finished</div>
+                </div>
+                <div className="mt-4">
+                  <div className="flex items-baseline gap-2">
+                    <AnimatedNumber value={metrics.done} className="text-3xl font-extrabold text-[#33B26C] tracking-tight" />
+                    <span className="text-xs font-bold text-[#33B26C]/90 bg-[#33B26C]/15 px-2 py-0.5 rounded-md">
+                      {metrics.completionRate}%
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#8c947b] mt-1">
+                    Successfully finished deliverables
+                  </div>
                 </div>
               </div>
 
               {/* Overdue */}
-              <div className={`glass-card rounded-2xl p-5 border flex flex-col justify-between ${
-                metrics.overdue > 0 ? "border-red-500/30 bg-red-500/[0.03]" : "border-[#2D3139]"
-              }`}>
+              <div
+                style={staggerStyle(4)}
+                className={`reports-rise rounded-2xl p-5 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 hover:shadow-lg group border ${
+                  metrics.overdue > 0
+                    ? "bg-[#16191F] border-red-500/40 shadow-sm shadow-red-500/10"
+                    : "bg-[#16191F] border-[#2D3139] hover:border-[#424934]"
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
                     Overdue
                   </span>
-                  <span className="p-2 rounded-xl bg-red-500/10 text-red-400">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110 ${
+                      metrics.overdue > 0
+                        ? "bg-red-500/15 text-red-400 border border-red-500/30"
+                        : "bg-white/5 text-[#8c947b] border border-[#2D3139]"
+                    }`}
+                  >
                     <span className="material-symbols-outlined text-[18px]">warning</span>
-                  </span>
+                  </div>
                 </div>
-                <div className="mt-3">
-                  <div className="text-3xl font-extrabold text-red-400">{metrics.overdue}</div>
+                <div className="mt-4">
+                  <AnimatedNumber
+                    value={metrics.overdue}
+                    className={`block text-3xl font-extrabold tracking-tight transition-colors duration-300 ${metrics.overdue > 0 ? "text-red-400" : "text-white"}`}
+                  />
                   <div className="text-[11px] text-[#8c947b] mt-1">
-                    {metrics.overdue > 0 ? "Requires urgent attention" : "No overdue items"}
+                    {metrics.overdue > 0 ? "Requires urgent attention" : "All deliverables on schedule"}
                   </div>
                 </div>
               </div>
+
             </div>
 
-            {/* ── Main Section: Task Status Distribution & Charts ─────────────── */}
-            <div className="glass-card rounded-2xl p-6 md:p-8 border border-[#2D3139]">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-lg font-bold text-white">Task Status Overview</h2>
-                  <p className="text-xs text-[#8c947b] mt-0.5">
-                    Categorized distribution of active workloads and completion ratios
-                  </p>
+            {/* ══════════════════════════════════════════════════════════════════════
+                3. WORKLOAD DISTRIBUTION & TASK STATUS
+                ══════════════════════════════════════════════════════════════════════ */}
+            <div style={staggerStyle(5)} className="reports-rise bg-[#16191F] border border-[#2D3139] rounded-2xl p-6 md:p-8 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-5 border-b border-[#2D3139]/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-[#aff82a]/10 text-[#aff82a] flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[19px]">pie_chart</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Workload Distribution</h2>
+                    <p className="text-xs text-[#8c947b] mt-0.5">
+                      Categorized breakdown of task statuses across the selected workspace filter
+                    </p>
+                  </div>
                 </div>
 
                 {lastUpdated && (
-                  <div className="flex items-center gap-2 text-xs text-[#8c947b] bg-[#16191F] px-3 py-1.5 rounded-full border border-[#2D3139]/60">
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#33B26C] opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[#33B26C]" />
-                    </span>
-                    <span>Live · Updated {lastUpdated.toLocaleTimeString()}</span>
+                  <div className="flex items-center gap-2 text-xs text-[#8c947b] bg-[#0F1115] px-3 py-1.5 rounded-full border border-[#2D3139]/60 self-start sm:self-auto">
+                    <span className="w-2 h-2 rounded-full bg-[#33B26C] animate-pulse" />
+                    <span>Live · Updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                   </div>
                 )}
               </div>
 
               {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-3">
-                  <span className="material-symbols-outlined animate-spin text-4xl text-[#aff82a]">
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <span className="material-symbols-outlined animate-spin text-3xl text-[#aff82a]">
                     progress_activity
                   </span>
-                  <p className="text-xs text-[#8c947b]">Calculating latest workspace metrics...</p>
+                  <p className="text-xs text-[#8c947b]">Calculating workspace metrics...</p>
                 </div>
               ) : (
-                <div className="flex flex-col lg:flex-row items-center gap-10">
+                <div className="reports-fade mt-6 flex flex-col md:flex-row items-center gap-8 lg:gap-14">
                   {/* Donut chart */}
-                  <div className="shrink-0 flex justify-center py-2">
-                    <PieChart slices={pieSlices} size={230} />
+                  <div className="shrink-0 flex justify-center">
+                    <PieChart slices={pieSlices} size={210} showLegend={false} />
                   </div>
 
-                  {/* Status Breakdown Grid */}
+                  {/* 4 Status Breakdown Bars in clean 2x2 grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 w-full">
-                    {pieSlices.map(({ label, value, color }) => {
+                    {pieSlices.map(({ label, value, color }, index) => {
                       const pct = metrics.total === 0 ? 0 : Math.round((value / metrics.total) * 100)
                       return (
                         <div
                           key={label}
-                          className="bg-[#16191F] rounded-xl p-4 border border-[#2D3139]/80 flex flex-col justify-between gap-3 hover:border-[#424934] transition-all"
+                          style={staggerStyle(index + 1)}
+                          className="reports-rise bg-[#0F1115] border border-[#2D3139] rounded-xl p-4 flex flex-col justify-between gap-3 hover:border-[#424934] hover:-translate-y-0.5 transition-all duration-300"
                         >
                           <div className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-white flex items-center gap-2">
@@ -718,7 +781,7 @@ export default function Reports() {
                               {label}
                             </span>
                             <span
-                              className="text-xs font-bold px-2 py-0.5 rounded-full"
+                              className="text-xs font-bold px-2 py-0.5 rounded-md"
                               style={{ backgroundColor: `${color}18`, color }}
                             >
                               {pct}%
@@ -726,19 +789,16 @@ export default function Reports() {
                           </div>
 
                           <div className="flex items-baseline justify-between">
-                            <span className="text-2xl font-bold" style={{ color }}>
-                              {value}
-                            </span>
+                            <AnimatedNumber value={value} className="text-2xl font-bold" style={{ color }} />
                             <span className="text-xs text-[#8c947b]">
                               of {metrics.total} tasks
                             </span>
                           </div>
 
-                          {/* Progress bar */}
-                          <div className="h-1.5 w-full bg-[#2D3139] rounded-full overflow-hidden">
+                          <div className="h-1.5 w-full bg-[#1C1F26] rounded-full overflow-hidden">
                             <div
-                              className="h-full rounded-full transition-all duration-700 ease-out"
-                              style={{ width: `${pct}%`, backgroundColor: color }}
+                              className="reports-grow h-full rounded-full transition-all duration-700 ease-out"
+                              style={{ width: `${pct}%`, backgroundColor: color, ...staggerStyle(index + 3) }}
                             />
                           </div>
                         </div>
@@ -749,224 +809,284 @@ export default function Reports() {
               )}
             </div>
 
-            {/* ── Collapsible Ongoing Projects Status Breakdown ───────────────── */}
-            <div className="glass-card rounded-2xl p-6 md:p-8 border border-[#2D3139] transition-all duration-300">
-              {/* Header with Title and Collapse/Expand Toggle */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div
-                  className="cursor-pointer select-none group"
-                  onClick={toggleProjectsCollapsed}
-                >
-                  <h2 className="text-lg font-bold text-white flex items-center gap-2 group-hover:text-[#aff82a] transition-colors">
-                    <span className="material-symbols-outlined text-[20px] text-[#aff82a]">
-                      rocket_launch
+            {/* ══════════════════════════════════════════════════════════════════════
+                4. PROJECTS PERFORMANCE SECTION (STRUCTURED & INTUITIVE)
+                ══════════════════════════════════════════════════════════════════════ */}
+            <div style={staggerStyle(6)} className="reports-rise bg-[#16191F] border border-[#2D3139] rounded-2xl p-6 shadow-sm">
+
+              {/* Section Header with Search & Filter Pills */}
+              <div
+                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 border-b transition-all duration-300 ${
+                  isProjectsCollapsed ? "pb-0 border-transparent" : "pb-4 border-[#2D3139]/60"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={toggleProjectsCollapsed}
+                      aria-expanded={!isProjectsCollapsed}
+                      title={isProjectsCollapsed ? "Expand project workspaces" : "Collapse project workspaces"}
+                      className="w-7 h-7 rounded-lg bg-[#0F1115] border border-[#2D3139] hover:border-[#424934] text-[#8c947b] hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                    >
+                      <span
+                        className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${
+                          isProjectsCollapsed ? "-rotate-90" : ""
+                        }`}
+                      >
+                        expand_more
+                      </span>
+                    </button>
+                    <h2 className="text-lg font-bold text-white">Project Workspaces</h2>
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#0F1115] text-[#aff82a] border border-[#2D3139]">
+                      {filteredProjectGrid.length} of {allProjects.length}
                     </span>
-                    Ongoing Projects Status
-                  </h2>
+                  </div>
                   <p className="text-xs text-[#8c947b] mt-0.5">
-                    Real-time execution status and completion progress per project
+                    Individual project progress, milestone velocity, and member access.
                   </p>
                 </div>
 
-                {/* Action badges and Collapse/Expand Button */}
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="text-xs font-semibold px-2.5 py-1.5 rounded-xl bg-[#1C1F26] border border-[#2D3139] text-[#8c947b]">
-                    {projectStats.length} Projects Tracked
-                  </span>
+                {/* Search & Status Filters */}
+                {!isProjectsCollapsed && (
+                <div className="reports-fade flex flex-wrap items-center gap-2.5">
+                  
+                  {/* Inline Project Search */}
+                  <div className="relative">
+                    <span className="material-symbols-outlined text-[16px] text-[#8c947b] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+                      search
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="Search projects..."
+                      value={projectSearchQuery}
+                      onChange={(e) => setProjectSearchQuery(e.target.value)}
+                      className="bg-[#0F1115] border border-[#2D3139] focus:border-[#aff82a] text-xs text-white placeholder-[#8c947b]/60 pl-8 pr-3 py-1.5 rounded-xl outline-none transition-all w-36 sm:w-48"
+                    />
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={toggleProjectsCollapsed}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer shadow-sm ${
-                      isProjectsCollapsed
-                        ? "bg-[#aff82a]/10 border-[#aff82a]/40 text-[#aff82a] hover:bg-[#aff82a]/20"
-                        : "bg-[#1C1F26] hover:bg-[#252932] border-[#2D3139] text-[#8c947b] hover:text-white"
-                    }`}
-                    title={isProjectsCollapsed ? "Expand ongoing projects grid" : "Collapse section to reduce page length"}
-                  >
-                    <span>{isProjectsCollapsed ? "Expand" : "Collapse"}</span>
-                    <span
-                      className={`material-symbols-outlined text-[16px] transition-transform duration-300 ${
-                        isProjectsCollapsed ? "rotate-180" : ""
+                  {/* Filter Pills */}
+                  <div className="bg-[#0F1115] p-1 rounded-xl border border-[#2D3139] flex items-center text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setProjectStatusFilter("all")}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        projectStatusFilter === "all" ? "bg-[#1C1F26] text-white" : "text-[#8c947b] hover:text-white"
                       }`}
                     >
-                      expand_less
-                    </span>
-                  </button>
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProjectStatusFilter("in_progress")}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        projectStatusFilter === "in_progress" ? "bg-[#1C1F26] text-[#E8A838]" : "text-[#8c947b] hover:text-white"
+                      }`}
+                    >
+                      In Progress
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProjectStatusFilter("done")}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        projectStatusFilter === "done" ? "bg-[#1C1F26] text-[#33B26C]" : "text-[#8c947b] hover:text-white"
+                      }`}
+                    >
+                      Done
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProjectStatusFilter("attention")}
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
+                        projectStatusFilter === "attention" ? "bg-[#1C1F26] text-red-400" : "text-[#8c947b] hover:text-white"
+                      }`}
+                    >
+                      Attention
+                    </button>
+                  </div>
+
                 </div>
+                )}
               </div>
 
-              {/* Collapsed State: Compact Neat Summary Bar */}
-              {isProjectsCollapsed ? (
-                <div
-                  onClick={toggleProjectsCollapsed}
-                  className="mt-5 p-4 bg-[#16191F]/70 hover:bg-[#16191F] border border-[#2D3139] hover:border-[#aff82a]/40 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer transition-all duration-200 group shadow-inner"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#aff82a]/15 text-[#aff82a] flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-[19px]">unfold_more</span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-white group-hover:text-[#aff82a] transition-colors">
-                          {projectStats.length} Project Workspaces Collapsed
-                        </span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[#8c947b]">
-                          Click to expand
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-[#8c947b] mt-0.5">
-                        Overview kept compact for a clean, concise page view.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Summary Metric Pills */}
-                  <div className="flex flex-wrap items-center gap-2.5 text-xs">
-                    <span className="px-3 py-1 rounded-lg bg-white/5 text-[#e0e5d0] border border-[#2D3139]/60">
-                      Avg Progress: <strong className="text-white font-bold ml-1">{collapsedProjectSummary.avgCompletion}%</strong>
-                    </span>
-                    <span className="px-3 py-1 rounded-lg bg-[#E8A838]/10 text-[#E8A838] border border-[#E8A838]/20 font-medium">
-                      {collapsedProjectSummary.totalOngoingTasks} tasks ongoing
-                    </span>
-                    {collapsedProjectSummary.totalOverdueTasks > 0 ? (
-                      <span className="px-3 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 font-semibold">
-                        {collapsedProjectSummary.totalOverdueTasks} overdue
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 rounded-lg bg-[#33B26C]/10 text-[#33B26C] border border-[#33B26C]/20 font-medium">
-                        0 overdue
-                      </span>
-                    )}
-                    <span className="text-[#aff82a] text-xs font-bold flex items-center gap-0.5 ml-1 group-hover:translate-x-1 transition-transform">
-                      View all <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                    </span>
-                  </div>
+              {/* Projects Grid — animates height via grid rows so collapse/expand glides */}
+              <div
+                inert={isProjectsCollapsed}
+                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
+                  isProjectsCollapsed ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100"
+                }`}
+              >
+              {/* Negative margins give hover lift + shadow room inside the clipping wrapper */}
+              <div className="min-h-0 overflow-hidden -mx-2 px-2 -mb-2 pb-2">
+              <div className="pt-5">
+              {loading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-8">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="bg-[#0F1115] border border-[#2D3139] rounded-xl p-5 h-44 animate-pulse" />
+                  ))}
                 </div>
-              ) : (
-                /* Expanded State: Full Project Cards Grid */
-                <div className="mt-6">
-                  {projectStats.length === 0 ? (
-                    <div className="text-center py-12 bg-[#16191F]/50 rounded-xl border border-dashed border-[#2D3139]">
-                      <span className="material-symbols-outlined text-4xl text-[#8c947b]/40 mb-2">
-                        folder_off
-                      </span>
-                      <p className="text-sm text-white font-medium">No projects available yet</p>
-                      <p className="text-xs text-[#8c947b] mt-1">
-                        Create a project to start tracking ongoing milestones and performance.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {projectStats.map((proj) => {
-                        const isCompleted = proj.progressPct === 100 && proj.totalTasks > 0
-                        const hasOverdue = proj.overdueTasks > 0
-
-                        return (
-                          <div
-                            key={proj.id}
-                            onClick={() => navigate(`/project_page/${proj.id}`)}
-                            className="bg-[#16191F] hover:bg-[#1A1D24] border border-[#2D3139] hover:border-[#aff82a]/40 rounded-xl p-5 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-200 group shadow-sm hover:shadow-lg hover:shadow-black/40"
-                          >
-                            {/* Project Header */}
-                            <div>
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b] truncate">
-                                  {proj.team_space_name}
-                                </span>
-                                <span
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                    isCompleted
-                                      ? "bg-[#33B26C]/15 text-[#33B26C]"
-                                      : hasOverdue
-                                      ? "bg-red-500/15 text-red-400"
-                                      : "bg-[#E8A838]/15 text-[#E8A838]"
-                                  }`}
-                                >
-                                  {isCompleted
-                                    ? "Completed"
-                                    : hasOverdue
-                                    ? "Needs Attention"
-                                    : proj.status || "In Progress"}
-                                </span>
-                              </div>
-
-                              <h3 className="text-base font-bold text-white group-hover:text-[#aff82a] transition-colors mt-1.5 truncate">
-                                {proj.name}
-                              </h3>
-                            </div>
-
-                            {/* Progress Bar & Stats */}
-                            <div className="space-y-2">
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-[#8c947b]">
-                                  {proj.doneTasks} of {proj.totalTasks} tasks done
-                                </span>
-                                <span className="font-bold text-white">{proj.progressPct}%</span>
-                              </div>
-
-                              <div className="h-2 w-full bg-[#2D3139] rounded-full overflow-hidden">
-                                <div
-                                  className={`h-full rounded-full transition-all duration-700 ${
-                                    isCompleted
-                                      ? "bg-[#33B26C]"
-                                      : hasOverdue
-                                      ? "bg-gradient-to-r from-[#E8A838] to-red-500"
-                                      : "bg-gradient-to-r from-[#818cf8] to-[#aff82a]"
-                                  }`}
-                                  style={{ width: `${proj.progressPct}%` }}
-                                />
-                              </div>
-                            </div>
-
-                            {/* Badges footer */}
-                            <div className="flex items-center justify-between pt-2 border-t border-[#2D3139]/40 text-xs text-[#8c947b]">
-                              <div className="flex items-center gap-3">
-                                <span className="flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-[#E8A838]" />
-                                  {proj.inProgressTasks} ongoing
-                                </span>
-                                {hasOverdue && (
-                                  <span className="flex items-center gap-1 text-red-400 font-semibold">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                                    {proj.overdueTasks} overdue
-                                  </span>
-                                )}
-                              </div>
-
-                              <span className="material-symbols-outlined text-[16px] text-[#8c947b] group-hover:translate-x-1 group-hover:text-white transition-all">
-                                arrow_forward
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
+              ) : filteredProjectGrid.length === 0 ? (
+                <div className="reports-fade text-center py-14 bg-[#0F1115] rounded-xl border border-dashed border-[#2D3139]">
+                  <span className="material-symbols-outlined text-4xl text-[#8c947b]/40 mb-2">
+                    folder_off
+                  </span>
+                  <p className="text-sm text-white font-medium">No matching projects found</p>
+                  <p className="text-xs text-[#8c947b] mt-1 max-w-sm mx-auto">
+                    Try adjusting your search query or status filter to see other workspace projects.
+                  </p>
+                  {(projectSearchQuery || projectStatusFilter !== "all" || selectedProjectId !== "all") && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProjectSearchQuery("")
+                        setProjectStatusFilter("all")
+                        setSelectedProjectId("all")
+                      }}
+                      className="mt-3.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-[#aff82a] border border-[#2D3139] cursor-pointer transition-colors"
+                    >
+                      Clear All Filters
+                    </button>
                   )}
                 </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredProjectGrid.map((proj, index) => {
+                    const isCompleted = proj.calculatedStatus === "done"
+                    const hasOverdue = proj.calculatedStatus === "attention"
+                    const isAssigned = isAssignedToProject(proj.id)
+                    const canInteract = isAdminLevel || isAssigned
+
+                    return (
+                      <div
+                        key={proj.id}
+                        onClick={() => handleProjectClick(proj)}
+                        style={staggerStyle(index)}
+                        className={`reports-rise bg-[#0F1115] border rounded-xl p-5 flex flex-col justify-between gap-4 cursor-pointer transition-all duration-300 group shadow-sm hover:shadow-lg hover:shadow-black/40 hover:-translate-y-1 ${
+                          canInteract
+                            ? "hover:bg-[#14171E] border-[#2D3139] hover:border-[#aff82a]/50"
+                            : "hover:bg-[#14171E] border-[#2D3139] hover:border-amber-500/40"
+                        }`}
+                      >
+                        {/* Project Header Row */}
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b] truncate">
+                              {proj.team_space_name}
+                            </span>
+                            
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                                isCompleted
+                                  ? "bg-[#33B26C]/15 text-[#33B26C]"
+                                  : hasOverdue
+                                  ? "bg-red-500/15 text-red-400"
+                                  : "bg-[#E8A838]/15 text-[#E8A838]"
+                              }`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                              {isCompleted ? "Completed" : hasOverdue ? "Needs Attention" : "In Progress"}
+                            </span>
+                          </div>
+
+                          <h3 className="text-base font-bold text-white group-hover:text-[#aff82a] transition-colors mt-2 truncate">
+                            {proj.name}
+                          </h3>
+                        </div>
+
+                        {/* Progress Bar & Numerical Stats */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-[#8c947b]">
+                              {proj.doneTasks} of {proj.totalTasks} tasks done
+                            </span>
+                            <span className="font-bold text-white">{proj.progressPct}%</span>
+                          </div>
+
+                          <div className="h-2 w-full bg-[#1C1F26] rounded-full overflow-hidden border border-[#2D3139]/40">
+                            <div
+                              className={`reports-grow h-full rounded-full transition-all duration-700 ${
+                                isCompleted
+                                  ? "bg-[#33B26C]"
+                                  : hasOverdue
+                                  ? "bg-gradient-to-r from-[#E8A838] to-red-500"
+                                  : "bg-gradient-to-r from-[#818cf8] to-[#aff82a]"
+                              }`}
+                              style={{ width: `${proj.progressPct}%`, ...staggerStyle(index + 2) }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Footer Badges & Action Link */}
+                        <div className="flex items-center justify-between pt-3 border-t border-[#2D3139]/50 text-xs text-[#8c947b]">
+                          <div className="flex items-center gap-2.5">
+                            <span className="flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#E8A838]" />
+                              {proj.inProgressTasks} ongoing
+                            </span>
+                            {hasOverdue && (
+                              <span className="flex items-center gap-1 text-red-400 font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                                {proj.overdueTasks} overdue
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 font-medium group-hover:text-white transition-colors">
+                            {canInteract ? (
+                              <span className="flex items-center text-xs text-[#8c947b] group-hover:text-[#aff82a] transition-colors">
+                                <span>Open</span>
+                                <span className="material-symbols-outlined text-[15px] group-hover:translate-x-0.5 transition-transform">
+                                  arrow_forward
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-[11px] text-amber-400/80">
+                                <span>Observer</span>
+                                <span className="material-symbols-outlined text-[13px]">lock</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
+                    )
+                  })}
+                </div>
               )}
+              </div>
+              </div>
+              </div>
+
             </div>
 
-            {/* ── Status Explanation Footer ────────────────────────────────────── */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[#8c947b] px-1">
-              <p>
-                Tasks and project statuses automatically refresh via Supabase Realtime and background synchronization.
-              </p>
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#33B26C]" /> Done
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#E8A838]" /> Ongoing / In Progress
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-red-400" /> Overdue
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#818cf8]" /> To Do
-                </span>
+            {/* ══════════════════════════════════════════════════════════════════════
+                5. TOAST NOTIFICATION FOR OBSERVER MODE
+                ══════════════════════════════════════════════════════════════════════ */}
+            {interactionNotice && (
+              <div className="fixed bottom-6 right-6 z-50 max-w-sm sm:max-w-md bg-[#16191F]/95 border border-amber-500/40 text-white p-4 rounded-2xl shadow-2xl flex items-start gap-3 backdrop-blur-xl reports-rise">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="material-symbols-outlined text-[18px]">lock</span>
+                </div>
+                <div className="flex-1 text-xs">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-amber-300 text-xs sm:text-sm">{interactionNotice.title}</h4>
+                    <button
+                      type="button"
+                      onClick={() => setInteractionNotice(null)}
+                      className="text-[#8c947b] hover:text-white p-0.5 rounded cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                  </div>
+                  <p className="text-white/90 font-medium mt-1">
+                    Project: <span className="text-[#aff82a]">{interactionNotice.project}</span>
+                  </p>
+                  <p className="text-[#8c947b] mt-1 leading-relaxed">
+                    {interactionNotice.message}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
           </div>
         </main>
