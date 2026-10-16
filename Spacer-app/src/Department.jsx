@@ -8,6 +8,7 @@ import GroupChat from "./components/GroupChat";
 function Department() {
     const [userId, setUserId] = useState(null)
     const [userTeamId, setUserTeamId] = useState(null)
+    const [userTeamName, setUserTeamName] = useState("")
     const [allTeams, setAllTeams] = useState([])
     const [activeTeam, setActiveTeam] = useState(null)
     const [mem_info, setMem_info] = useState([])
@@ -60,8 +61,18 @@ function Department() {
                 if (isSuperAdmin) {
                     await fetchAllTeams(orgId)
                 } else {
-                    setUserTeamId(membershipData?.team_space_id)
-                    await fetchTeamMembers(membershipData?.team_space_id)
+                    const teamId = membershipData?.team_space_id
+                    setUserTeamId(teamId)
+                    if (teamId) {
+                        const { data: team, error: teamErr } = await supabase
+                            .from("team_spaces")
+                            .select("name")
+                            .eq("id", teamId)
+                            .maybeSingle()
+                        if (teamErr) console.warn("team_spaces name error:", teamErr)
+                        setUserTeamName(team?.name || "")
+                    }
+                    await fetchTeamMembers(teamId)
                 }
             } catch (err) {
                 console.error("Department init error:", err)
@@ -345,7 +356,7 @@ const filteredMembers = mem_info.filter(m =>
 
 const pageTitle = isSuperAdmin
     ? (activeTeam ? activeTeam.name : "All Teams")
-    : "Department Directory"
+    : (userTeamName || "Department Directory")
 
 return (
     <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex flex-col">
