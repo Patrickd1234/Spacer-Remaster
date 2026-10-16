@@ -2,7 +2,7 @@ import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import PieChart from "./components/PieChart"
 import AnimatedNumber from "./components/AnimatedNumber"
-import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 import { useRole } from "./RoleContext"
@@ -52,6 +52,8 @@ export default function Reports() {
   const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem("userId") || null)
   const [organizationId, setOrganizationId] = useState(null)
   const [userAssignedProjectIds, setUserAssignedProjectIds] = useState(new Set())
+  const [adminTeamSpaceIds, setAdminTeamSpaceIds] = useState(new Set())
+  const [userTeamSpaceIds, setUserTeamSpaceIds] = useState(new Set())
   const [interactionNotice, setInteractionNotice] = useState(null)
 
   // Raw data from DB
@@ -60,7 +62,6 @@ export default function Reports() {
 
   // Top Filter Controls
   const [scope, setScope] = useState("workspace") // "workspace" | "personal"
-  const [selectedProjectId, setSelectedProjectId] = useState("all") // "all" | project_id
 
   // Project Grid Filter & Search
   const [projectSearchQuery, setProjectSearchQuery] = useState("")
@@ -72,31 +73,6 @@ export default function Reports() {
     setIsProjectsCollapsed(next)
     writeProjectsCollapsed(next)
   }
-
-  // Custom Dropdown State & Ref for Header Filter
-  const [isProjectDropdownOpen, setIsProjectDropdownOpen] = useState(false)
-  const [dropdownSearch, setDropdownSearch] = useState("")
-  const projectDropdownRef = useRef(null)
-
-  // Close dropdown on click outside or escape key
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target)) {
-        setIsProjectDropdownOpen(false)
-      }
-    }
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape") {
-        setIsProjectDropdownOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    document.addEventListener("keydown", handleKeyDown)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-      document.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [])
 
   // ── Helper: parse subtasks and calculate accurate status ────────────────
   const parseSubtasks = useCallback((raw) => {
@@ -193,8 +169,6 @@ export default function Reports() {
         }
       }
 
-      setAllProjects(projectsList)
-
       // 4. Fetch project memberships for current user
       const { data: memberRows } = await supabase
         .from("project_members")
@@ -232,11 +206,65 @@ export default function Reports() {
           }
         })
 
-        setUserAssignedProjectIds(assignedProjectSet)
         setAllTasks(processedTasks)
-      } else {
-        setUserAssignedProjectIds(assignedProjectSet)
       }
+      setUserAssignedProjectIds(assignedProjectSet)
+
+      // 6. Departments (team spaces) the user belongs to, and those they administer
+      const { data: membershipRows, error: membershipErr } = await supabase
+        .from("memberships")
+        .select("team_space_id, role")
+        .eq("user_id", userId)
+      if (membershipErr) console.error("Error fetching departments:", membershipErr)
+      const memberships = (membershipRows || []).filter((m) => m.team_space_id)
+      setUserTeamSpaceIds(new Set(memberships.map((m) => String(m.team_space_id))))
+      const adminTeamIds = memberships.filter((m) => m.role === "admin").map((m) => String(m.team_space_id))
+      setAdminTeamSpaceIds(new Set(adminTeamIds))
+
+      // Department projects not already loaded (e.g. user has no organisation)
+      const loadedTeamIds = new Set(projectsList.map((p) => String(p.team_space_id)))
+      const missingTeamIds = adminTeamIds.filter((id) => !loadedTeamIds.has(id))
+      if (missingTeamIds.length > 0) {
+        const { data: deptProjs, error: deptErr } = await supabase
+          .from("project_spaces")
+          .select("id, name, status, team_space_id, created_at, team_space:team_spaces(name)")
+          .in("team_space_id", missingTeamIds)
+          .order("created_at", { ascending: false })
+        if (deptErr) {
+          console.error("Error fetching department projects:", deptErr)
+        } else {
+          projectsList = [
+            ...projectsList,
+            ...(deptProjs || []).map(({ team_space, ...p }) => ({
+              ...p,
+              team_space_name: team_space?.name || "General Team",
+            })),
+          ]
+        }
+      }
+
+      // 7. Include assigned projects outside the organisation's team spaces,
+      //    so the user's workspace list is complete
+      const knownIds = new Set(projectsList.map((p) => String(p.id)))
+      const missingIds = [...assignedProjectSet].filter((id) => !knownIds.has(id))
+      if (missingIds.length > 0) {
+        const { data: extraProjs, error: extraErr } = await supabase
+          .from("project_spaces")
+          .select("id, name, status, team_space_id, created_at, team_space:team_spaces(name)")
+          .in("id", missingIds)
+        if (extraErr) {
+          console.error("Error fetching assigned projects:", extraErr)
+        } else {
+          projectsList = [
+            ...projectsList,
+            ...(extraProjs || []).map(({ team_space, ...p }) => ({
+              ...p,
+              team_space_name: team_space?.name || "General Team",
+            })),
+          ]
+        }
+      }
+      setAllProjects(projectsList)
 
       setLastUpdated(new Date())
     } catch (err) {
@@ -331,22 +359,30 @@ export default function Reports() {
   }, [fetchReportData, scope, currentUserId, organizationId])
 
   // ── Filtered tasks according to active scope & project ───────────────────
+  // project id -> department (team space) id
+  const projectTeamSpace = useMemo(
+    () => new Map(allProjects.map((p) => [String(p.id), String(p.team_space_id)])),
+    [allProjects]
+  )
+
+  // "Entire Workspace": super admins see the whole organisation; admins and
+  // members see the departments they belong to.
   const filteredTasks = useMemo(() => {
     return allTasks.filter((t) => {
       if (scope === "workspace") {
         if (organizationId && t.organization_id && String(t.organization_id) !== String(organizationId)) {
           return false
         }
+        if (!isSuperAdmin && !userTeamSpaceIds.has(projectTeamSpace.get(String(t.project_id)))) {
+          return false
+        }
       }
       if (scope === "personal" && String(t.assignee_id) !== String(currentUserId)) {
         return false
       }
-      if (selectedProjectId !== "all" && String(t.project_id) !== String(selectedProjectId)) {
-        return false
-      }
       return true
     })
-  }, [allTasks, scope, currentUserId, organizationId, selectedProjectId])
+  }, [allTasks, scope, currentUserId, organizationId, isSuperAdmin, userTeamSpaceIds, projectTeamSpace])
 
   // ── Metrics computation ──────────────────────────────────────────────────
   const metrics = useMemo(() => {
@@ -369,9 +405,14 @@ export default function Reports() {
   ], [metrics])
 
   // ── Ongoing Projects breakdown ──────────────────────────────────────────
+  // Project cards follow the scope switch: "Assigned to Me" counts only the
+  // user's own tasks, "Entire Workspace" counts every task in the project.
   const projectStats = useMemo(() => {
+    const scopedTasks = scope === "personal"
+      ? allTasks.filter((t) => String(t.assignee_id) === String(currentUserId))
+      : allTasks
     return allProjects.map((proj) => {
-      const projTasks = allTasks.filter((t) => String(t.project_id) === String(proj.id))
+      const projTasks = scopedTasks.filter((t) => String(t.project_id) === String(proj.id))
       const total = projTasks.length
       const done = projTasks.filter((t) => t.effectiveStatus === "done").length
       const inProgress = projTasks.filter((t) => t.effectiveStatus === "in_progress").length
@@ -395,14 +436,22 @@ export default function Reports() {
         calculatedStatus,
       }
     })
-  }, [allProjects, allTasks])
+  }, [allProjects, allTasks, scope, currentUserId])
 
   // Projects filtered for the Grid Section
+  // Project Workspaces lists the projects the signed-in user is assigned to
+  // (project member or assignee of a task in it). Admins also see every
+  // project in the departments they administer.
+  const assignedProjectStats = useMemo(
+    () => projectStats.filter((proj) =>
+      userAssignedProjectIds.has(String(proj.id)) ||
+      (isAdmin && adminTeamSpaceIds.has(String(proj.team_space_id)))
+    ),
+    [projectStats, userAssignedProjectIds, isAdmin, adminTeamSpaceIds]
+  )
+
   const filteredProjectGrid = useMemo(() => {
-    return projectStats.filter((proj) => {
-      if (selectedProjectId !== "all" && String(proj.id) !== String(selectedProjectId)) {
-        return false
-      }
+    return assignedProjectStats.filter((proj) => {
       if (projectStatusFilter === "in_progress" && proj.calculatedStatus !== "in_progress") {
         return false
       }
@@ -420,24 +469,7 @@ export default function Reports() {
       }
       return true
     })
-  }, [projectStats, selectedProjectId, projectStatusFilter, projectSearchQuery])
-
-  // Current selected project object for header dropdown
-  const selectedProjectObj = useMemo(() => {
-    if (selectedProjectId === "all") return null
-    return allProjects.find((p) => String(p.id) === String(selectedProjectId)) || null
-  }, [allProjects, selectedProjectId])
-
-  // Projects list for Header Dropdown
-  const dropdownFilteredProjects = useMemo(() => {
-    if (!dropdownSearch.trim()) return allProjects
-    const q = dropdownSearch.toLowerCase()
-    return allProjects.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.team_space_name && p.team_space_name.toLowerCase().includes(q))
-    )
-  }, [allProjects, dropdownSearch])
+  }, [assignedProjectStats, projectStatusFilter, projectSearchQuery])
 
   return (
     <div className="bg-[#0F1115] text-[#e0e5d0] min-h-screen font-sans flex antialiased">
@@ -520,115 +552,6 @@ export default function Reports() {
                     </button>
                   </div>
 
-                  {/* Project Selector Dropdown */}
-                  {allProjects.length > 0 && (
-                    <div className="relative" ref={projectDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setIsProjectDropdownOpen((prev) => !prev)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer bg-[#0F1115] shadow-sm ${
-                          isProjectDropdownOpen
-                            ? "border-[#aff82a] text-white ring-2 ring-[#aff82a]/20"
-                            : selectedProjectId !== "all"
-                            ? "border-[#aff82a]/70 text-[#aff82a]"
-                            : "border-[#2D3139] text-[#e0e5d0] hover:border-[#424934] hover:text-white"
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-[17px] text-[#aff82a]">
-                          {selectedProjectId === "all" ? "dataset" : "folder_open"}
-                        </span>
-                        <span className="truncate max-w-[120px] sm:max-w-[160px] text-left">
-                          {selectedProjectObj ? selectedProjectObj.name : `All Projects (${allProjects.length})`}
-                        </span>
-                        <span
-                          className={`material-symbols-outlined text-[16px] text-[#8c947b] transition-transform duration-200 ${
-                            isProjectDropdownOpen ? "rotate-180 text-white" : ""
-                          }`}
-                        >
-                          expand_more
-                        </span>
-                      </button>
-
-                      {isProjectDropdownOpen && (
-                        <div className="reports-fade absolute right-0 mt-2 w-72 rounded-xl bg-[#16191F] border border-[#2D3139] shadow-2xl z-50 overflow-hidden">
-                          {allProjects.length > 3 && (
-                            <div className="p-2.5 border-b border-[#2D3139] bg-black/20">
-                              <div className="relative">
-                                <span className="material-symbols-outlined text-[16px] text-[#8c947b] absolute left-2.5 top-1/2 -translate-y-1/2">
-                                  search
-                                </span>
-                                <input
-                                  type="text"
-                                  placeholder="Filter projects..."
-                                  value={dropdownSearch}
-                                  onChange={(e) => setDropdownSearch(e.target.value)}
-                                  className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-[#8c947b]/60 outline-none focus:border-[#aff82a]"
-                                  autoFocus
-                                />
-                              </div>
-                            </div>
-                          )}
-
-                          <div className="max-h-60 overflow-y-auto p-1.5 space-y-0.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedProjectId("all")
-                                setIsProjectDropdownOpen(false)
-                                setDropdownSearch("")
-                              }}
-                              className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left transition-colors cursor-pointer ${
-                                selectedProjectId === "all"
-                                  ? "bg-[#aff82a]/15 text-[#aff82a] font-bold"
-                                  : "hover:bg-white/5 text-[#e0e5d0]"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 truncate">
-                                <span className="material-symbols-outlined text-[16px]">apps</span>
-                                <span className="text-xs truncate">All Projects ({allProjects.length})</span>
-                              </div>
-                              {selectedProjectId === "all" && (
-                                <span className="material-symbols-outlined text-[16px]">check</span>
-                              )}
-                            </button>
-
-                            <div className="h-px bg-[#2D3139]/60 my-1" />
-
-                            {dropdownFilteredProjects.map((p) => {
-                              const isSelected = String(selectedProjectId) === String(p.id)
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedProjectId(p.id)
-                                    setIsProjectDropdownOpen(false)
-                                    setDropdownSearch("")
-                                  }}
-                                  className={`w-full px-3 py-2 rounded-lg flex items-center justify-between text-left transition-colors cursor-pointer ${
-                                    isSelected
-                                      ? "bg-[#aff82a]/15 text-[#aff82a] font-bold"
-                                      : "hover:bg-white/5 text-[#e0e5d0]"
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2 truncate">
-                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a]">
-                                      folder
-                                    </span>
-                                    <span className="text-xs truncate">{p.name}</span>
-                                  </div>
-                                  {isSelected && (
-                                    <span className="material-symbols-outlined text-[16px]">check</span>
-                                  )}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* Manual Refresh Button */}
                   <button
                     type="button"
@@ -666,7 +589,7 @@ export default function Reports() {
                 <div className="mt-4">
                   <AnimatedNumber value={metrics.total} className="block text-3xl font-extrabold text-white tracking-tight" />
                   <div className="text-[11px] text-[#8c947b] mt-1 flex items-center gap-1">
-                    <span>{scope === "workspace" ? "Across organization" : "Assigned to your profile"}</span>
+                    <span>{scope === "workspace" ? (isSuperAdmin ? "Across organization" : "Across your department") : "Assigned to your profile"}</span>
                   </div>
                 </div>
               </div>
@@ -870,7 +793,7 @@ export default function Reports() {
                     </button>
                     <h2 className="text-lg font-bold text-white">Project Workspaces</h2>
                     <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-[#0F1115] text-[#aff82a] border border-[#2D3139]">
-                      {filteredProjectGrid.length} of {allProjects.length}
+                      {filteredProjectGrid.length} of {assignedProjectStats.length}
                     </span>
                   </div>
                   <p className="text-xs text-[#8c947b] mt-0.5">
@@ -961,17 +884,20 @@ export default function Reports() {
                   <span className="material-symbols-outlined text-4xl text-[#8c947b]/40 mb-2">
                     folder_off
                   </span>
-                  <p className="text-sm text-white font-medium">No matching projects found</p>
-                  <p className="text-xs text-[#8c947b] mt-1 max-w-sm mx-auto">
-                    Try adjusting your search query or status filter to see other workspace projects.
+                  <p className="text-sm text-white font-medium">
+                    {assignedProjectStats.length === 0 ? "No projects assigned to you yet" : "No matching projects found"}
                   </p>
-                  {(projectSearchQuery || projectStatusFilter !== "all" || selectedProjectId !== "all") && (
+                  <p className="text-xs text-[#8c947b] mt-1 max-w-sm mx-auto">
+                    {assignedProjectStats.length === 0
+                      ? "Projects appear here once you're added as a member or assigned a task."
+                      : "Try adjusting your search query or status filter to see your other projects."}
+                  </p>
+                  {(projectSearchQuery || projectStatusFilter !== "all") && (
                     <button
                       type="button"
                       onClick={() => {
                         setProjectSearchQuery("")
                         setProjectStatusFilter("all")
-                        setSelectedProjectId("all")
                       }}
                       className="mt-3.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white/5 hover:bg-white/10 text-[#aff82a] border border-[#2D3139] cursor-pointer transition-colors"
                     >
