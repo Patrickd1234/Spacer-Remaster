@@ -27,11 +27,11 @@ const TEAM_STATUS_COLOR = {
 // ─── StatCard ────────────────────────────────────────────────────────────────
 function StatCard({ value, label, sub, subIcon, subColor }) {
     return (
-        <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-outline transition-all duration-300">
+        <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-[#aff82a]/30 transition-all duration-300">
             <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
                 style={{ background: "radial-gradient(circle, rgba(var(--primary-color-rgb), 0.1) 0%, transparent 70%)" }} />
             <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
-            <p className="text-outline text-[13px] font-medium">{label}</p>
+            <p className="text-[#8c947b] text-[13px] font-medium">{label}</p>
             {sub && (
                 <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider mt-auto"
                     style={{ color: subColor || "#aff82a" }}>
@@ -50,40 +50,90 @@ function TeamCard({ team }) {
     const statusColor = TEAM_STATUS_COLOR[statusLabel] || TEAM_STATUS_COLOR["ON TRACK"]
 
     return (
-        <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-outline transition-all duration-300">
+        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-[#aff82a]/30 transition-all duration-300">
             <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-surface-container-highest border border-outline-variant">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#252a33] border border-[#2D3139]">
                         <span className="material-symbols-outlined text-[20px] text-primary-fixed">{icon}</span>
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-outline">Team</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b]">Team</p>
                         <p className="font-semibold text-white text-sm">{team.name}</p>
                     </div>
                 </div>
-                <span className="material-symbols-outlined text-outline text-base cursor-pointer hover:text-white transition-colors">more_horiz</span>
+                <span className="material-symbols-outlined text-[#8c947b] text-base cursor-pointer hover:text-white transition-colors">more_horiz</span>
             </div>
             <div className="space-y-1.5 mt-1">
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-outline text-xs">
+                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
                         <span className="material-symbols-outlined text-[14px]">person</span>Members
                     </span>
                     <span className="font-semibold text-white text-sm">{team.member_count ?? "—"}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-outline text-xs">
+                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
                         <span className="material-symbols-outlined text-[14px]">grid_view</span>Projects
                     </span>
                     <span className="font-semibold text-white text-sm">{team.project_count ?? "—"}</span>
                 </div>
             </div>
-            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-outline-variant">
+            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-[#2D3139]">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
                 <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>Status</span>
                 <span className="ml-auto text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
             </div>
         </div>
     )
+}
+
+const formatActivityItem = (act) => {
+    const actorName = act.actor?.name || act.actor?.email?.split('@')[0] || act.new_state?.full_name || "User"
+    const initials = (actorName || "SA")
+        .split(" ")
+        .map(n => n[0])
+        .filter(Boolean)
+        .join("")
+        .toUpperCase()
+        .slice(0, 2) || "SA"
+
+    let title = ""
+    let sub = ""
+
+    if (act.action === "login") {
+        title = `${actorName} logged in`
+        sub = act.new_state?.email ? `Session started (${act.new_state.email})` : "Active session"
+    } else if (act.action === "signup") {
+        title = `${actorName} joined the organization`
+        sub = "New team member onboarded"
+    } else if (act.action === "created") {
+        const entity = act.entity_type || (act.new_state?.title ? "task" : "item")
+        title = `${actorName} created ${entity}: ${act.new_state?.title || act.new_state?.name || "New entry"}`
+        sub = act.new_state?.description || "Created recently"
+    } else if (act.action === "updated") {
+        title = `${actorName} updated ${act.entity_type || "item"}`
+        sub = act.new_state?.title || (act.new_state?.status ? `Status: ${act.new_state.status}` : "Modified recently")
+    } else {
+        title = `${actorName} performed ${act.action || "action"}`
+        sub = act.new_state?.title || act.entity_type || "Activity recorded"
+    }
+
+    if (act.created_at) {
+        try {
+            const date = new Date(act.created_at)
+            const diffMin = Math.floor((Date.now() - date.getTime()) / (1000 * 60))
+            if (diffMin < 1) sub = `${sub} • Just now`
+            else if (diffMin < 60) sub = `${sub} • ${diffMin}m ago`
+            else if (diffMin < 1440) sub = `${sub} • ${Math.floor(diffMin / 60)}h ago`
+            else sub = `${sub} • ${date.toLocaleDateString()}`
+        } catch (e) {}
+    }
+
+    return {
+        id: act.id,
+        initials,
+        title,
+        sub,
+    }
 }
 
 function Home() {
@@ -108,6 +158,29 @@ function Home() {
     // User tasks (non-superadmin only)
     const [userTasks, setUserTasks] = useState([])
     const [tasksLoading, setTasksLoading] = useState(false)
+    const [activities, setActivities] = useState([])
+    const [activitiesLoading, setActivitiesLoading] = useState(false)
+
+    const fetchActivities = async () => {
+        setActivitiesLoading(true)
+        try {
+            const { data, error } = await supabase
+                .from("activity_log")
+                .select("*, actor:users(name, email)")
+                .order("created_at", { ascending: false })
+                .limit(10)
+
+            if (error) {
+                console.warn("activity_log fetch error:", error)
+            } else if (data && data.length > 0) {
+                setActivities(data.map(formatActivityItem))
+            }
+        } catch (err) {
+            console.error("fetchActivities error:", err)
+        } finally {
+            setActivitiesLoading(false)
+        }
+    }
 
     const fetchOrgData = async (orgId) => {
         try {
@@ -118,35 +191,31 @@ function Home() {
             const teamCount = teamSpaces?.length ?? 0
             const teamIds = teamSpaces?.map(ts => ts.id) || []
 
-            let memberCount = 0
+            let allMembers = []
+            let activeProjects = []
+
             if (teamIds.length > 0) {
-                const { data: allMembers } = await supabase.from("memberships").select("id").in("team_space_id", teamIds)
-                memberCount = allMembers?.length ?? 0
+                const [{ data: memsData }, { data: projsData }] = await Promise.all([
+                    supabase.from("memberships").select("id, team_space_id").in("team_space_id", teamIds),
+                    supabase.from("project_spaces").select("id, team_space_id").in("team_space_id", teamIds),
+                ])
+                allMembers = memsData || []
+                activeProjects = projsData || []
             }
 
-            let projectCount = 0
-            if (teamIds.length > 0) {
-                const { data: activeProjects } = await supabase.from("project_spaces").select("id").in("team_space_id", teamIds)
-                projectCount = activeProjects?.length ?? 0
-            }
-
-            setOrgStats({ members: memberCount, teams: teamCount, activeProjects: projectCount })
+            setOrgStats({
+                members: allMembers.length,
+                teams: teamCount,
+                activeProjects: activeProjects.length
+            })
 
             if (teamSpaces && teamSpaces.length > 0) {
-                const enriched = await Promise.all(
-                    teamSpaces.map(async (ts) => {
-                        const { data: mems } = await supabase
-                            .from("memberships").select("id").eq("team_space_id", ts.id)
-                        const { data: projs } = await supabase
-                            .from("project_spaces").select("id").eq("team_space_id", ts.id)
-                        return {
-                            ...ts,
-                            member_count: mems?.length ?? 0,
-                            project_count: projs?.length ?? 0,
-                            status: ts.status || "ON TRACK",
-                        }
-                    })
-                )
+                const enriched = teamSpaces.map((ts) => ({
+                    ...ts,
+                    member_count: allMembers.filter(m => m.team_space_id === ts.id).length,
+                    project_count: activeProjects.filter(p => p.team_space_id === ts.id).length,
+                    status: ts.status || "ON TRACK",
+                }))
                 setTeams(enriched)
             }
         } catch (err) {
@@ -249,6 +318,7 @@ function Home() {
                 } else {
                     await fetchUserTasks(userId)
                 }
+                await fetchActivities()
             } catch (err) {
                 console.error("Home init error:", err)
             }
@@ -266,20 +336,16 @@ function Home() {
     const doneTasks = userTasks.filter(t => t.status === "done")
     const openCount = todoTasks.length + inProgressTasks.length
 
-    
-    const mockActivities = [
-        { id: 1, initials: "SA", title: "Organization space updated", sub: "System activity log ready" },
-        { id: 2, initials: "JS", title: "John Smith joined the organization", sub: "Added to Frontend Team" },
-        { id: 3, initials: "PR", title: "Project 'Q3 Redesign' created", sub: "Assigned to Design Team" },
-        { id: 4, initials: "TK", title: "Task completed: Review mocks", sub: "Completed by Jane Doe" },
-        { id: 5, initials: "SY", title: "System security scan completed", sub: "No vulnerabilities found" },
+    const fallbackActivities = [
+        { id: "fb-1", initials: "SA", title: "Organization workspace initialized", sub: "Activity logging is live" }
     ];
-    const visibleActivities = showAllActivity ? mockActivities : mockActivities.slice(0, 1);
+    const displayActivities = activities.length > 0 ? activities : fallbackActivities;
+    const visibleActivities = showAllActivity ? displayActivities : displayActivities.slice(0, 3);
 
     const displayName = userData?.full_name || userData?.name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
 
     return (
-        <div className="bg-background min-h-screen text-white font-sans antialiased flex">
+        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex">
             <Sidebar onCollapsedChange={setSidebarCollapsed} userData={userData} userEmail={userEmail} />
             <div className="flex-1 flex flex-col min-w-0">
                 <Header />
@@ -292,13 +358,13 @@ function Home() {
                                 <h1 className="text-2xl font-bold text-white flex items-center gap-2">
                                     Hello, {displayName} 👋
                                 </h1>
-                                <p className="text-outline text-sm mt-1">
+                                <p className="text-[#8c947b] text-sm mt-1">
                                     {isSuperAdmin
                                         ? "Organization's overview and activity."
                                         : "Here's what's on your plate in this workspace."}
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2 text-outline text-xs">
+                            <div className="flex items-center gap-2 text-[#8c947b] text-xs">
                                 <span className="material-symbols-outlined text-[16px]">home</span>
                                 <span>/</span>
                                 <span className="text-white font-medium">Home</span>
@@ -352,21 +418,21 @@ function Home() {
                         {/* ── NON-SUPERADMIN: PERSONAL TASK METRICS ─────────── */}
                         {!isSuperAdmin && !roleLoading && (
                             <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
+                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
                                     <p className="text-3xl font-bold text-white">{tasksLoading ? "—" : todoTasks.length}</p>
-                                    <p className="text-outline text-xs font-medium mt-1">To do</p>
+                                    <p className="text-[#8c947b] text-xs font-medium mt-1">To do</p>
                                 </div>
-                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
+                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
                                     <p className="text-3xl font-bold text-primary-fixed">{tasksLoading ? "—" : inProgressTasks.length}</p>
-                                    <p className="text-outline text-xs font-medium mt-1">In progress</p>
+                                    <p className="text-[#8c947b] text-xs font-medium mt-1">In progress</p>
                                 </div>
-                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
+                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
                                     <p className="text-3xl font-bold text-green-400">{tasksLoading ? "—" : doneTasks.length}</p>
-                                    <p className="text-outline text-xs font-medium mt-1">Done</p>
+                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Done</p>
                                 </div>
-                                <div className="bg-surface-container border border-outline-variant p-5 rounded-xl flex flex-col">
+                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
                                     <p className="text-3xl font-bold text-red-400">{tasksLoading ? "—" : userTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done").length}</p>
-                                    <p className="text-outline text-xs font-medium mt-1">Overdue</p>
+                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Overdue</p>
                                 </div>
                             </section>
                         )}
@@ -421,13 +487,13 @@ function Home() {
                                         <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
                                         <button onClick={() => setShowAllActivity(!showAllActivity)} className="text-xs text-primary-fixed hover:underline">{showAllActivity ? 'Show less' : 'See all'}</button>
                                     </div>
-                                    <div className="bg-surface-container border border-outline-variant rounded-xl p-4 space-y-4 min-h-[200px]">
+                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-4 min-h-[200px]">
                                         {visibleActivities.map(act => (
                                             <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
-                                                <div className="w-8 h-8 rounded bg-surface-container-highest border border-outline-variant flex items-center justify-center shrink-0 font-bold text-[10px] text-primary-fixed">{act.initials}</div>
+                                                <div className="w-8 h-8 rounded-lg bg-[#252a33] border border-[#2D3139] flex items-center justify-center shrink-0 font-bold text-[10px] text-primary-fixed">{act.initials}</div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-xs font-medium text-white">{act.title}</p>
-                                                    <p className="text-[11px] text-outline mt-0.5">{act.sub}</p>
+                                                    <p className="text-[11px] text-[#8c947b] mt-0.5">{act.sub}</p>
                                                 </div>
                                             </div>
                                         ))}
@@ -451,32 +517,32 @@ function Home() {
                                     {tasksLoading ? (
                                         <div className="grid grid-cols-3 gap-4">
                                             {[...Array(3)].map((_, i) => (
-                                                <div key={i} className="bg-surface-container border border-outline-variant rounded-xl p-4 space-y-2 animate-pulse">
-                                                    <div className="h-3 w-16 bg-surface-container-highest rounded" />
-                                                    <div className="h-10 w-full bg-surface-container-highest rounded-lg" />
+                                                <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-2 animate-pulse">
+                                                    <div className="h-3 w-16 bg-[#252a33] rounded" />
+                                                    <div className="h-10 w-full bg-[#252a33] rounded-lg" />
                                                 </div>
                                             ))}
                                         </div>
                                     ) : openCount === 0 && doneTasks.length === 0 ? (
-                                        <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
+                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
                                             <div className="text-5xl mb-4">🎉</div>
                                             <h4 className="text-lg font-semibold text-white">You're all caught up</h4>
-                                            <p className="text-outline text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
+                                            <p className="text-[#8c947b] text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             {/* To-Do column */}
-                                            <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-outline-variant flex items-center justify-between">
+                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
+                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-[#8c947b]" />
                                                         <span className="font-semibold text-white text-xs uppercase tracking-wider">To‑Do</span>
                                                     </div>
-                                                    <span className="text-xs text-outline font-bold">{todoTasks.length}</span>
+                                                    <span className="text-xs text-[#8c947b] font-bold">{todoTasks.length}</span>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                     {todoTasks.length === 0 ? (
-                                                        <p className="text-xs text-outline text-center py-6">No tasks here</p>
+                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                     ) : todoTasks.map(task => (
                                                         <div
                                                             key={task.id}
@@ -484,7 +550,7 @@ function Home() {
                                                             className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#aff82a]/50 transition-all cursor-pointer group"
                                                         >
                                                             <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-outline mt-1 line-clamp-2">{task.description}</p>}
+                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                             {task.due_date && (
                                                                 <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
                                                                     <span className="material-symbols-outlined text-[12px]">calendar_today</span>
@@ -497,17 +563,17 @@ function Home() {
                                             </div>
 
                                             {/* In Progress column */}
-                                            <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-outline-variant flex items-center justify-between">
+                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
+                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-primary-fixed" />
                                                         <span className="font-semibold text-white text-xs uppercase tracking-wider">In Progress</span>
                                                     </div>
-                                                    <span className="text-xs text-outline font-bold">{inProgressTasks.length}</span>
+                                                    <span className="text-xs text-[#8c947b] font-bold">{inProgressTasks.length}</span>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                     {inProgressTasks.length === 0 ? (
-                                                        <p className="text-xs text-outline text-center py-6">No tasks here</p>
+                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                     ) : inProgressTasks.map(task => (
                                                         <div
                                                             key={task.id}
@@ -515,7 +581,7 @@ function Home() {
                                                             className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#aff82a]/50 transition-all cursor-pointer"
                                                         >
                                                             <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-outline mt-1 line-clamp-2">{task.description}</p>}
+                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
                                                             {task.due_date && (
                                                                 <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
                                                                     <span className="material-symbols-outlined text-[12px]">calendar_today</span>
@@ -528,17 +594,17 @@ function Home() {
                                             </div>
 
                                             {/* Done column */}
-                                            <div className="bg-surface-container border border-outline-variant rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-outline-variant flex items-center justify-between">
+                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
+                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-green-400" />
                                                         <span className="font-semibold text-white text-xs uppercase tracking-wider">Done</span>
                                                     </div>
-                                                    <span className="text-xs text-outline font-bold">{doneTasks.length}</span>
+                                                    <span className="text-xs text-[#8c947b] font-bold">{doneTasks.length}</span>
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
                                                     {doneTasks.length === 0 ? (
-                                                        <p className="text-xs text-outline text-center py-6">No tasks here</p>
+                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
                                                     ) : doneTasks.map(task => (
                                                         <div
                                                             key={task.id}
@@ -557,18 +623,20 @@ function Home() {
 
                                 {/* Activity / Meetings panel */}
                                 <div className="col-span-12 lg:col-span-4 space-y-4">
-                                    <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col min-h-[420px]">
-                                        <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-outline-variant">Recent Activity</h3>
+                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col min-h-[420px]">
+                                        <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-[#2D3139]">Recent Activity</h3>
                                         <div className="space-y-4 overflow-y-auto flex-1">
-                                            <div className="flex gap-3 items-start">
-                                                <div className="w-8 h-8 rounded-full bg-[#5b644d]/20 text-primary-fixed border border-[#5b644d]/40 flex items-center justify-center shrink-0 font-bold text-xs">
-                                                    SP
+                                            {displayActivities.slice(0, 5).map(act => (
+                                                <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
+                                                    <div className="w-8 h-8 rounded-full bg-[#252a33] text-[#aff82a] border border-[#2D3139] flex items-center justify-center shrink-0 font-bold text-xs">
+                                                        {act.initials}
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs text-white font-medium">{act.title}</p>
+                                                        <p className="text-[10px] text-[#8c947b] mt-1">{act.sub}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs text-white">System dashboard initialized</p>
-                                                    <p className="text-[10px] text-outline mt-1">Just now</p>
-                                                </div>
-                                            </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
@@ -576,17 +644,17 @@ function Home() {
                         )}
 
                         {/* MEETINGS SECTION */}
-                        <div className="space-y-4 pt-4 border-t border-outline-variant">
+                        <div className="space-y-4 pt-4 border-t border-[#2D3139]">
                             <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-semibold text-white">Upcoming Meetings</h3>
                                 <Link to="/calendar" className="text-primary-fixed text-xs hover:underline">View all calendar</Link>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-surface-container border border-outline-variant rounded-xl p-5 hover:border-outline transition-colors">
+                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 hover:border-[#aff82a]/30 transition-colors">
                                     <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3 text-xs text-outline">
+                                        <div className="flex items-center gap-3 text-xs text-[#8c947b]">
                                             <span className="font-semibold text-white">9:00 - 9:30 AM</span>
-                                            <span className="w-1 h-1 rounded-full bg-[#424934]"></span>
+                                            <span className="w-1 h-1 rounded-full bg-[#2D3139]"></span>
                                             <span>30 mins</span>
                                         </div>
                                     </div>
@@ -595,7 +663,7 @@ function Home() {
                                         <p className="text-primary-fixed text-xs">Spacer Core Development</p>
                                     </div>
                                     <div className="flex gap-3">
-                                        <button className="flex-1 flex items-center justify-center gap-2 bg-background border border-outline-variant hover:bg-surface-container-highest text-white py-2 rounded-lg text-xs font-medium transition-colors">
+                                        <button className="flex-1 flex items-center justify-center gap-2 bg-[#14161b] border border-[#2D3139] hover:bg-[#252a33] text-white py-2 rounded-lg text-xs font-medium transition-colors">
                                             <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
                                         </button>
                                     </div>
