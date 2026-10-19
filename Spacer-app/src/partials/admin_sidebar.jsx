@@ -3,6 +3,7 @@ import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
 import { useRole } from "../RoleContext";
+import DepartmentSwitcher from "./DepartmentSwitcher";
 
 export default function AdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -11,7 +12,7 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
-    const { departments, activeDepartment, setActiveDepartment } = useRole();
+    const { activeDepartment } = useRole();
     const activeTeamSpaceId = activeDepartment?.team_space_id ?? null;
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
@@ -189,22 +190,9 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                                 </button>
                             </div>
                         )}
-                        {expanded && departments.length > 1 && (
+                        {expanded && (
                             <div className="px-3 mb-2">
-                                <label className="sr-only" htmlFor="admin-department-switcher">Department</label>
-                                <select
-                                    id="admin-department-switcher"
-                                    value={activeTeamSpaceId ? String(activeTeamSpaceId) : ""}
-                                    onChange={(e) => setActiveDepartment(e.target.value)}
-                                    title="Switch department"
-                                    className="w-full bg-[#0F1115] border border-[#2D3139] hover:border-[#424934] focus:border-[var(--primary-color)] rounded-lg px-2 py-1.5 text-[12px] text-white outline-none cursor-pointer"
-                                >
-                                    {departments.map((d) => (
-                                        <option key={d.team_space_id} value={String(d.team_space_id)}>
-                                            {d.name}{d.role === "admin" ? " (admin)" : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                                <DepartmentSwitcher variant="sidebar" />
                             </div>
                         )}
                         <div className="space-y-1">
