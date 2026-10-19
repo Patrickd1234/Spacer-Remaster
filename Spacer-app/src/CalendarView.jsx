@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 
 export default function CalendarView() {
     const [userData, setUserData] = useState(null)
@@ -58,7 +58,21 @@ export default function CalendarView() {
         }
 
         const { error } = await supabase.from('tasks').update(updatePayload).eq('id', taskId)
-        if (error) console.error("Error updating subtasks", error)
+        if (error) {
+            console.error("Error updating subtasks", error)
+        } else if (statusChanged) {
+            // Log the status change like the project page does, so it reaches
+            // notifications and activity feeds
+            const userData = { user: await getSessionUser() }
+            const { error: logError } = await supabase.from("activity_log").insert({
+                entity_type: "task",
+                entity_id: taskId,
+                actor_id: userData?.user?.id,
+                action: "status_changed",
+                new_state: { project_id: task.project_id, title: task.title, status: newStatus }
+            })
+            if (logError) console.error("Error logging status change", logError)
+        }
     }
 
     const updateTaskPriority = async (taskId, newPriority) => {
@@ -73,7 +87,7 @@ export default function CalendarView() {
         if (error) {
             console.error("Error updating priority", error)
         } else if (task) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task",
                 entity_id: taskId,
@@ -137,7 +151,7 @@ export default function CalendarView() {
         if (error) {
             console.error("Error updating status", error)
         } else {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task",
                 entity_id: taskId,

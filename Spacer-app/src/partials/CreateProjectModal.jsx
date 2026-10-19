@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 
 export default function CreateProjectModal({ onClose, onCreated }) {
     const [teamSpaces, setTeamSpaces] = useState([]);
@@ -13,7 +13,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
 
     useEffect(() => {
         const fetchTeams = async () => {
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             const userId = authData?.user?.id;
             if (!userId) return;
 
@@ -51,7 +51,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 setTeamLeadId("");
                 return;
             }
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             const userId = authData?.user?.id;
 
             const { data: membersData, error: membersError } = await supabase
@@ -113,14 +113,15 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         }
 
         try {
-            const { data: userData } = await supabase.auth.getUser();
-            await supabase.from('activity_log').insert({
+            const userData = { user: await getSessionUser() };
+            const { error: insertError } = await supabase.from('activity_log').insert({
                 entity_type: 'project',
                 entity_id: data.id,
                 actor_id: userData?.user?.id || null,
                 action: 'created',
                 new_state: { project_name: data.name, team_space_id: data.team_space_id }
             });
+            if (insertError) console.error('Error logging project creation:', insertError);
         } catch (logError) {
             console.error('Error logging project creation:', logError);
         }

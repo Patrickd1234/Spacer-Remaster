@@ -3,9 +3,11 @@ import Header from "./partials/header"
 import ProjectPanel from "./components/ProjectPanel"
 import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import { Link, useNavigate } from "react-router-dom"
 import { useRole } from "./RoleContext"
+
+const RECENT_ACTIVITY_LIMIT = 10
 import CreateTaskModal from "./partials/CreateTaskModal"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
@@ -161,19 +163,24 @@ function Home() {
     const [activities, setActivities] = useState([])
     const [activitiesLoading, setActivitiesLoading] = useState(false)
 
-    const fetchActivities = async () => {
+    // Recent Activity is the signed-in user's own actions, for every role.
+    // Logins/sign-ups are left out so they don't crowd out real work.
+    const fetchActivities = async (sessionUser) => {
+        if (!sessionUser?.id) return
         setActivitiesLoading(true)
         try {
             const { data, error } = await supabase
                 .from("activity_log")
                 .select("id, action, entity_type, new_state, created_at, actor:users(name, email)")
+                .eq("actor_id", sessionUser.id)
+                .not("action", "in", "(login,signup)")
                 .order("created_at", { ascending: false })
-                .limit(10)
+                .limit(RECENT_ACTIVITY_LIMIT)
 
             if (error) {
                 console.warn("activity_log fetch error:", error)
-            } else if (data && data.length > 0) {
-                setActivities(data.map(formatActivityItem))
+            } else {
+                setActivities((data || []).map(formatActivityItem))
             }
         } catch (err) {
             console.error("fetchActivities error:", err)
@@ -292,7 +299,7 @@ function Home() {
 
         const init = async () => {
             try {
-                const { data: authData } = await supabase.auth.getUser()
+                const authData = { user: await getSessionUser() }
                 const userId = authData?.user?.id
 
                 if (!userId) return
@@ -318,7 +325,7 @@ function Home() {
                 } else {
                     await fetchUserTasks(userId)
                 }
-                await fetchActivities()
+                await fetchActivities(authData?.user)
             } catch (err) {
                 console.error("Home init error:", err)
             }

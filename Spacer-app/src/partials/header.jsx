@@ -1,11 +1,18 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
+import {
+    fetchNotificationActivities,
+    loadReadState,
+    isActivityRead,
+    markActivityRead,
+    markAllActivitiesRead,
+} from "../notifications";
 import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
 
 function Header({ onSearch = () => {} }) {
-    const { isSuperAdmin } = useRole();
+    const { isSuperAdmin, isAdmin, roleLoading } = useRole();
     const navigate = useNavigate();
     const [showNotifications, setShowNotifications] = useState(() => {
         if (typeof window === "undefined") return false;
@@ -18,7 +25,9 @@ function Header({ onSearch = () => {} }) {
     });
     const [searchQuery, setSearchQuery] = useState("");
     const [searchIndex, setSearchIndex] = useState(-1);
-    const [notifications, setNotifications] = useState([]);
+    const [activities, setActivities] = useState([]);
+    const [notifyUserId, setNotifyUserId] = useState(null);
+    const [readState, setReadState] = useState({ lastReadAt: null, ids: [] });
     const [notificationsLoading, setNotificationsLoading] = useState(false);
     
     // Search dropdown state
@@ -172,95 +181,68 @@ function Header({ onSearch = () => {} }) {
         }
     };
 
+    const inAppEnabled = preferences?.notifications?.inApp !== false;
+
+    // Activity scoped to this user: members see what concerns them, admins also
+    // see their departments, super admins see everything (see notifications.js).
+    // Loads once the role is known, and refreshes whenever the panel opens.
+    const hasLoadedNotificationsRef = useRef(false);
     useEffect(() => {
-        const inAppEnabled = preferences?.notifications?.inApp !== false;
-        if (!inAppEnabled) {
-            return;
-        }
+        if (!inAppEnabled || roleLoading) return;
+        if (hasLoadedNotificationsRef.current && !showNotifications) return;
+        hasLoadedNotificationsRef.current = true;
 
+        let cancelled = false;
         const loadNotifications = async () => {
-            setNotificationsLoading(true);
-            const { data, error } = await supabase
-                .from("activity_log")
-                .select("id, action, new_state, created_at, actor:users(name, email)")
-                .order("created_at", { ascending: false })
-                .limit(10);
-
-            if (error) {
-                console.warn("Unable to load activity notifications", error);
-                setNotifications([
-                    {
-                        id: "welcome",
-                        title: "Welcome back",
-                        message: "Your workspace is ready for the next update.",
-                        time: "Just now",
-                        unread: true,
-                        type: "info",
-                    },
-                ]);
-                setNotificationsLoading(false);
+            const sessionUser = await getSessionUser();
+            if (cancelled) return;
+            if (!sessionUser) {
+                setActivities([]);
                 return;
             }
-
-            const rawActivities = data || [];
-            const filteredActivities = isSuperAdmin ? rawActivities : rawActivities.filter(a => a.action !== "login");
-
-            const nextNotifications = filteredActivities.length
-                ? filteredActivities.map((activity) => ({
-                    id: activity.id,
-                    title: formatActivityTitle(activity),
-                    message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
-                    time: formatTime(activity.created_at),
-                    type: activity.action === "deleted" ? "error" : activity.action === "created" ? "success" : "info",
-                    unread: true,
-                }))
-                : [
-                    {
-                        id: "empty",
-                        title: "Nothing new yet",
-                        message: "You’re all caught up for now.",
-                        time: "Just now",
-                        unread: false,
-                        type: "info",
-                    },
-                ];
-
-            setNotifications(nextNotifications);
-            setNotificationsLoading(false);
-        };
-
-        loadNotifications();
-    }, [preferences?.notifications?.inApp, isSuperAdmin]);
-
-    useEffect(() => {
-        if (showNotifications) {
-            const loadNotifications = async () => {
-                setNotificationsLoading(true);
-                const { data, error } = await supabase
-                    .from("activity_log")
-                    .select("id, action, new_state, created_at, actor:users(name, email)")
-                    .order("created_at", { ascending: false })
-                    .limit(10);
-
-                if (!error && data) {
-                    const rawActivities = data || [];
-                    const filteredActivities = isSuperAdmin ? rawActivities : rawActivities.filter(a => a.action !== "login");
-
-                    setNotifications(filteredActivities.map((activity) => ({
-                        id: activity.id,
-                        title: formatActivityTitle(activity),
-                        message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
-                        time: formatTime(activity.created_at),
-                        type: activity.action === "deleted" ? "error" : activity.action === "created" ? "success" : "info",
-                        unread: true,
-                    })));
+            setNotificationsLoading(true);
+            setNotifyUserId(sessionUser.id);
+            setReadState(loadReadState(sessionUser.id));
+            try {
+                const { data, error } = await fetchNotificationActivities({
+                    userId: sessionUser.id,
+                    email: sessionUser.email,
+                    isSuperAdmin,
+                    isAdmin,
+                });
+                if (cancelled) return;
+                if (error) {
+                    console.warn("Unable to load activity notifications", error);
+                    return;
                 }
-                setNotificationsLoading(false);
-            };
+                // Relative times ("5m ago") are computed at load, not during render
+                setActivities(data.map((activity) => ({ ...activity, timeLabel: formatTime(activity.created_at) })));
+            } finally {
+                if (!cancelled) setNotificationsLoading(false);
+            }
+        };
+        loadNotifications();
+        return () => { cancelled = true; };
+    }, [showNotifications, inAppEnabled, roleLoading, isSuperAdmin, isAdmin]);
 
-            loadNotifications();
-        }
-    }, [showNotifications, isSuperAdmin]);
+    const notifications = useMemo(() => activities.map((activity) => ({
+        id: activity.id,
+        title: formatActivityTitle(activity),
+        message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
+        time: activity.timeLabel,
+        type: activity.action === "deleted" ? "error" : activity.action === "created" ? "success" : "info",
+        unread: !isActivityRead(readState, activity),
+    })), [activities, readState]);
+
+    const handleMarkAllRead = () => {
+        if (!notifyUserId) return;
+        setReadState(markAllActivitiesRead(notifyUserId, activities[0]?.created_at));
+    };
+
+    const handleNotificationClick = (notificationId) => {
+        if (!notifyUserId) return;
+        setReadState((prev) => markActivityRead(notifyUserId, prev, notificationId));
+    };
 
     const hasResults = searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0;
     const unreadCount = notifications.filter((notification) => notification.unread).length;
@@ -393,7 +375,7 @@ function Header({ onSearch = () => {} }) {
                                         {unreadCount > 0 && (
                                             <button
                                                 className="text-xs text-[var(--primary-color)] hover:underline"
-                                                onClick={() => setNotifications((prev) => prev.map((item) => ({ ...item, unread: false })))}
+                                                onClick={handleMarkAllRead}
                                             >
                                                 Mark all read
                                             </button>
@@ -413,7 +395,13 @@ function Header({ onSearch = () => {} }) {
                                 ) : (
                                     <div className="space-y-2 max-h-72 overflow-y-auto pr-1 custom-scrollbar">
                                         {notifications.map((notification) => (
-                                            <div key={notification.id} className="rounded-lg bg-[#252a33] p-3 border border-[#2D3139] flex gap-2">
+                                            <button
+                                                type="button"
+                                                key={notification.id}
+                                                onClick={() => handleNotificationClick(notification.id)}
+                                                aria-label={notification.unread ? `Mark as read: ${notification.title}` : notification.title}
+                                                className={`w-full text-left rounded-lg p-3 border flex gap-2 transition-colors cursor-pointer ${notification.unread ? "bg-[#252a33] border-[#2D3139] hover:border-[#424934]" : "bg-[#1C1F26] border-[#2D3139]/60 opacity-75 hover:opacity-100"}`}
+                                            >
                                                 <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : "text-[#8c947b]"}`}>
                                                     {notification.type === "success" ? "check_circle" : "notifications_active"}
                                                 </span>
@@ -425,7 +413,7 @@ function Header({ onSearch = () => {} }) {
                                                     <p className="text-xs text-[#8c947b] mt-1">{notification.message}</p>
                                                     <p className="text-[11px] text-[#6b7280] mt-2">{notification.time}</p>
                                                 </div>
-                                            </div>
+                                            </button>
                                         ))}
                                     </div>
                                 )}
