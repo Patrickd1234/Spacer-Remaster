@@ -15,7 +15,7 @@ function Department() {
     const [mem_info, setMem_info] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment } = useRole()
+    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment } = useRole()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [organizationId, setOrganizationId] = useState(null)
     const [showCreateDeptModal, setShowCreateDeptModal] = useState(false)
@@ -29,6 +29,10 @@ function Department() {
     const [inviteError, setInviteError] = useState("")
     const [inviteSuccess, setInviteSuccess] = useState("")
     const [actionSaving, setActionSaving] = useState(false)
+    // Department awaiting delete confirmation ({ id, name } or null)
+    const [deptToDelete, setDeptToDelete] = useState(null)
+    const [deletingDept, setDeletingDept] = useState(false)
+    const [deleteDeptError, setDeleteDeptError] = useState("")
     const [activeTab, setActiveTab] = useState("directory")
 
     useEffect(() => {
@@ -84,6 +88,24 @@ function Department() {
     }, [isSuperAdmin, roleLoading, membershipData])
 
 
+    // Super admins: follow a department change made in the sidebar
+    useEffect(() => {
+        if (!isSuperAdmin || !orgDepartmentId) return undefined
+        const team = allTeams.find(t => String(t.id) === orgDepartmentId)
+        if (!team || String(activeTeam?.id) === orgDepartmentId) return undefined
+        let cancelled = false
+        const followSidebar = async () => {
+            await null
+            if (cancelled) return
+            setActiveTeam(team)
+            setLoading(true)
+            await fetchTeamMembers(team.id)
+            if (!cancelled) setLoading(false)
+        }
+        followSidebar()
+        return () => { cancelled = true }
+    }, [isSuperAdmin, orgDepartmentId, allTeams])
+
     const fetchAllTeams = async (orgId) => {
         let teamQuery = supabase.from("team_spaces").select("id, name")
         if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
@@ -94,8 +116,11 @@ function Department() {
 
         setAllTeams(teams || [])
         if (teams && teams.length > 0) {
-            setActiveTeam(teams[0])
-            await fetchTeamMembers(teams[0].id)
+            // Open the department chosen in the super admin sidebar, if any
+            const team = teams.find(t => String(t.id) === orgDepartmentId) || teams[0]
+            setActiveTeam(team)
+            setOrgDepartment(team.id)
+            await fetchTeamMembers(team.id)
         }
     }
 
@@ -143,6 +168,7 @@ function Department() {
 
     const switchTeam = async (team) => {
         setActiveTeam(team)
+        setOrgDepartment(team.id) // keeps the super admin sidebar in step
         setLoading(true)
         await fetchTeamMembers(team.id)
         setLoading(false)
@@ -179,39 +205,49 @@ function Department() {
         }
     };
 
-    const handleDeleteDept = async (teamId) => {
-        if (!teamId) return;
-        if (!canManage) {
-            alert("Only admins or super admins can delete departments.");
-            return;
-        }
-        const deptName = allTeams.find(t => t.id === teamId)?.name || "this department";
-        if (!window.confirm(
-            `Delete "${deptName}"?\n\nThis permanently deletes every project in it, with all their tasks, files and chat channels, ` +
-            `and removes everyone's membership of the department. This cannot be undone.`
-        )) return;
-        setActionSaving(true);
+    // Opens the confirmation modal; the delete itself runs in confirmDeleteDept
+    const handleDeleteDept = (teamId) => {
+        if (!teamId || !canManage) return;
+        const name = allTeams.find(t => t.id === teamId)?.name || "this department";
+        setDeleteDeptError("");
+        setDeptToDelete({ id: teamId, name });
+    };
+
+    const closeDeleteDept = () => {
+        if (deletingDept) return;
+        setDeptToDelete(null);
+        setDeleteDeptError("");
+    };
+
+    const confirmDeleteDept = async () => {
+        if (!deptToDelete) return;
+        const teamId = deptToDelete.id;
+        setDeletingDept(true);
+        setDeleteDeptError("");
         try {
             // Server-side delete: also removes stored files and chat channels
             const { error } = await deleteWorkspaceItem("department", teamId);
-
             if (error) {
-                alert("Couldn't delete the department: " + error);
+                setDeleteDeptError(`Couldn't delete the department: ${error}`);
+                return;
+            }
+            const updated = allTeams.filter(t => t.id !== teamId);
+            setAllTeams(updated);
+            setDeptToDelete(null);
+            if (updated.length > 0) {
+                setActiveTeam(updated[0]);
+                setOrgDepartment(updated[0].id);
+                await fetchTeamMembers(updated[0].id);
             } else {
-                const updated = allTeams.filter(t => t.id !== teamId);
-                setAllTeams(updated);
-                if (updated.length > 0) {
-                    setActiveTeam(updated[0]);
-                    await fetchTeamMembers(updated[0].id);
-                } else {
-                    setActiveTeam(null);
-                    setMem_info([]);
-                }
+                setActiveTeam(null);
+                setOrgDepartment(null);
+                setMem_info([]);
             }
         } catch (err) {
             console.error("Delete department error:", err);
+            setDeleteDeptError("Couldn't delete the department. Please try again.");
         } finally {
-            setActionSaving(false);
+            setDeletingDept(false);
         }
     };
 
@@ -562,6 +598,60 @@ return (
         </main>
 
         {/* Create Department Modal */}
+        {/* ── Delete department confirmation modal ── */}
+        {deptToDelete && (
+            <div
+                className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+                style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+                onClick={closeDeleteDept}
+            >
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="delete-dept-title"
+                    className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
+                        <span className="material-symbols-outlined text-red-400 text-[32px]" aria-hidden="true">delete_forever</span>
+                    </div>
+
+                    <h2 id="delete-dept-title" className="text-white font-bold text-[18px] text-center mb-2">Delete this department?</h2>
+                    <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
+                    <p className="text-white font-bold text-[15px] text-center mb-3">"{deptToDelete.name}"</p>
+                    <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                        Every project in it, with all their tasks, files and chat channels, will also be removed, and everyone's membership of the department ends. This cannot be undone.
+                    </p>
+                    {deleteDeptError && (
+                        <p role="alert" className="text-red-400 text-[12px] text-center -mt-3 mb-4">{deleteDeptError}</p>
+                    )}
+
+                    <div className="flex gap-3">
+                        <button
+                            type="button"
+                            onClick={closeDeleteDept}
+                            disabled={deletingDept}
+                            className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                            No, keep it
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmDeleteDept}
+                            disabled={deletingDept}
+                            className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                        >
+                            {deletingDept ? (
+                                <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Deleting…</>
+                            ) : (
+                                <><span className="material-symbols-outlined text-[16px]" aria-hidden="true">delete</span>Yes, delete</>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {showCreateDeptModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
                 <div className="bg-[#191c21] rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#2D3139] shadow-2xl animate-scaleIn">

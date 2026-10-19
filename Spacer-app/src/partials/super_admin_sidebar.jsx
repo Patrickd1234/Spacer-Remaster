@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { useRole } from "../RoleContext";
 
 export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -29,7 +30,8 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
     // Team space selector state
     const [teamSpaces, setTeamSpaces] = useState([]);
-    const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState(null);
+    // Shared with the Department page (RoleContext), so both always show the same department
+    const { orgDepartmentId: selectedTeamSpaceId, setOrgDepartment, roleLoading } = useRole();
     const [teamDropdownOpen, setTeamDropdownOpen] = useState(false);
     const teamDropdownRef = useRef(null);
 
@@ -105,14 +107,16 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
             if (!error && data) {
                 setTeamSpaces(data);
-                // Auto-select the first team space if none selected
-                if (data.length > 0 && !selectedTeamSpaceId) {
-                    setSelectedTeamSpaceId(data[0].id);
-                }
             }
         };
         fetchTeamSpaces();
     }, [dbUser?.organization_id]);
+
+    // Default to the first department once the remembered choice has loaded
+    useEffect(() => {
+        if (roleLoading || teamSpaces.length === 0) return;
+        if (!teamSpaces.some(ts => String(ts.id) === selectedTeamSpaceId)) setOrgDepartment(teamSpaces[0].id);
+    }, [roleLoading, teamSpaces, selectedTeamSpaceId, setOrgDepartment]);
 
     // Fetch projects filtered by selected team space
     useEffect(() => {
@@ -147,7 +151,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
     }, []);
 
-    const selectedTeamSpace = teamSpaces.find(ts => ts.id === selectedTeamSpaceId);
+    const selectedTeamSpace = teamSpaces.find(ts => String(ts.id) === selectedTeamSpaceId);
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
     const displayEmail = dbUser?.email || userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
 
@@ -206,25 +210,25 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                                             <div
                                                 key={ts.id}
                                                 className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-colors ${
-                                                    ts.id === selectedTeamSpaceId
+                                                    String(ts.id) === selectedTeamSpaceId
                                                         ? "nav-item-active"
                                                         : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
                                                 }`}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSelectedTeamSpaceId(ts.id);
+                                                    setOrgDepartment(ts.id);
                                                     setTeamDropdownOpen(false);
                                                 }}
                                             >
                                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
-                                                    ts.id === selectedTeamSpaceId
+                                                    String(ts.id) === selectedTeamSpaceId
                                                         ? "bg-primary-accent-dim text-primary-accent"
                                                         : "bg-[#2D3139] text-[#8c947b]"
                                                 }`}>
                                                     {ts.name?.charAt(0)?.toUpperCase() || "?"}
                                                 </div>
                                                 <span className="text-[13px] font-medium truncate">{ts.name}</span>
-                                                {ts.id === selectedTeamSpaceId && (
+                                                {String(ts.id) === selectedTeamSpaceId && (
                                                     <span className="material-symbols-outlined text-primary-accent text-[16px] ml-auto">check</span>
                                                 )}
                                             </div>

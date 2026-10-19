@@ -9,16 +9,17 @@ const roleRank = (role) => ROLE_RANK[role] ?? 1;
 
 // The user's chosen department is remembered per user in this browser
 const departmentKey = (userId) => `activeDepartment:${userId}`;
-const readStoredDepartment = (userId) => {
+const orgDepartmentKey = (userId) => `orgDepartment:${userId}`;
+const readStoredDepartment = (key) => {
     try {
-        return localStorage.getItem(departmentKey(userId));
+        return localStorage.getItem(key);
     } catch {
         return null;
     }
 };
-const storeDepartment = (userId, teamSpaceId) => {
+const storeDepartment = (key, teamSpaceId) => {
     try {
-        localStorage.setItem(departmentKey(userId), teamSpaceId);
+        localStorage.setItem(key, teamSpaceId);
     } catch (err) {
         console.warn("Unable to remember department choice", err);
     }
@@ -52,6 +53,8 @@ export function RoleProvider({ children }) {
     const [superAdminMembership, setSuperAdminMembership] = useState(null);
     const [departments, setDepartments] = useState([]);
     const [activeDepartmentId, setActiveDepartmentId] = useState(null);
+    // Super admins: the department picked in their sidebar / on the Department page
+    const [orgDepartmentId, setOrgDepartmentId] = useState(null);
     const [roleUserId, setRoleUserId] = useState(null);
     const [simulatedRole, setSimulatedRole] = useState(null);
 
@@ -75,13 +78,14 @@ export function RoleProvider({ children }) {
                     .eq("user_id", userId);
 
                 setRoleUserId(userId);
+                setOrgDepartmentId(readStoredDepartment(orgDepartmentKey(userId)));
                 if (error) {
                     console.warn("Error fetching role:", error);
                     setUserRole("member");
                 } else if (memberships && memberships.length > 0) {
                     const depts = toDepartments(memberships);
                     setDepartments(depts);
-                    const stored = readStoredDepartment(userId);
+                    const stored = readStoredDepartment(departmentKey(userId));
                     const storedIsValid = depts.some((d) => String(d.team_space_id) === stored);
                     setActiveDepartmentId(storedIsValid ? stored : defaultDepartmentId(depts));
                     // An org-level admin (admin with no department) manages the whole
@@ -126,6 +130,7 @@ export function RoleProvider({ children }) {
                 setDepartments([]);
                 setActiveDepartmentId(null);
                 setRoleUserId(null);
+                setOrgDepartmentId(null);
                 setRoleLoading(false);
             }
         });
@@ -152,11 +157,17 @@ export function RoleProvider({ children }) {
     const setActiveDepartment = useCallback((teamSpaceId) => {
         const id = String(teamSpaceId);
         setActiveDepartmentId(id);
-        if (roleUserId) storeDepartment(roleUserId, id);
+        if (roleUserId) storeDepartment(departmentKey(roleUserId), id);
+    }, [roleUserId]);
+
+    const setOrgDepartment = useCallback((teamSpaceId) => {
+        const id = teamSpaceId ? String(teamSpaceId) : null;
+        setOrgDepartmentId(id);
+        if (roleUserId && id) storeDepartment(orgDepartmentKey(roleUserId), id);
     }, [roleUserId]);
 
     return (
-        <RoleContext.Provider value={{ userRole: activeRole, realUserRole, roleLoading, isSuperAdmin, isAdmin, membershipData, departments, activeDepartment, setActiveDepartment, simulatedRole, setSimulatedRole, canSimulate }}>
+        <RoleContext.Provider value={{ userRole: activeRole, realUserRole, roleLoading, isSuperAdmin, isAdmin, membershipData, departments, activeDepartment, setActiveDepartment, orgDepartmentId, setOrgDepartment, simulatedRole, setSimulatedRole, canSimulate }}>
             {children}
         </RoleContext.Provider>
     );
