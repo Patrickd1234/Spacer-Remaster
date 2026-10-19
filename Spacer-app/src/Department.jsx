@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 import { useEffect, useState, useRef } from 'react';
 import { useRole } from "./RoleContext";
 import GroupChat from "./components/GroupChat";
+import { deleteWorkspaceItem } from "./workspaceDelete";
 
 function Department() {
     const [userId, setUserId] = useState(null)
@@ -177,16 +178,18 @@ function Department() {
             alert("Only admins or super admins can delete departments.");
             return;
         }
-        if (!window.confirm("Are you sure you want to delete this department? This will delete all team memberships as well.")) return;
+        const deptName = allTeams.find(t => t.id === teamId)?.name || "this department";
+        if (!window.confirm(
+            `Delete "${deptName}"?\n\nThis permanently deletes every project in it, with all their tasks, files and chat channels, ` +
+            `and removes everyone's membership of the department. This cannot be undone.`
+        )) return;
         setActionSaving(true);
         try {
-            const { error } = await supabase
-                .from("team_spaces")
-                .delete()
-                .eq("id", teamId);
+            // Server-side delete: also removes stored files and chat channels
+            const { error } = await deleteWorkspaceItem("department", teamId);
 
             if (error) {
-                alert("Error deleting department: " + error.message);
+                alert("Couldn't delete the department: " + error);
             } else {
                 const updated = allTeams.filter(t => t.id !== teamId);
                 setAllTeams(updated);

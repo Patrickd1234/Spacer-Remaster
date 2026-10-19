@@ -16,57 +16,35 @@ import AcceptInvite from './AcceptInvite'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 import { RoleProvider } from './RoleContext'
+import MfaChallenge from './components/MfaChallenge'
 
-const syncUserProfile = async (user) => {
-  if (!user?.id || !user?.email) return
-
-  const fallbackName = user.user_metadata?.full_name || user.user_metadata?.name || user.email.split('@')[0] || 'User'
-
+// True when the account has two-factor on but this session has only passed the
+// password step. Read from the session itself (no API call), because calling
+// Supabase inside onAuthStateChange can deadlock.
+function needsSecondFactor(session) {
+  const hasVerifiedFactor = session?.user?.factors?.some(f => f.status === 'verified')
+  if (!hasVerifiedFactor) return false
   try {
-    const { error } = await supabase.from('users').insert({
-      id: user.id,
-      email: user.email,
-      name: fallbackName
-    })
-
-    if (error) {
-      const message = error.message?.toLowerCase() || ''
-      const isDuplicate = message.includes('duplicate') || message.includes('already exists')
-      if (!isDuplicate) {
-        console.error('Error inserting user profile:', error)
-      }
-    }
-  } catch (error) {
-    console.error('Error syncing user profile:', error)
-  }
-}
-
-const logLoginActivity = async (user) => {
-  try {
-    await supabase.from('activity_log').insert({
-      entity_type: 'user',
-      entity_id: user.id,
-      actor_id: user.id,
-      action: 'login',
-      new_state: { email: user.email }
-    })
-  } catch (error) {
-    console.error('Error logging login activity:', error)
+    const payload = session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(payload)).aal !== 'aal2'
+  } catch {
+    return true
   }
 }
 
 function App() {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
+  const mfaPending = needsSecondFactor(session)
 
   useEffect(() => {
+    // The users profile row is created by the on_auth_user_created database trigger
     const handleSession = async (activeSession) => {
       setSession(activeSession)
 
       if (activeSession?.user) {
         localStorage.setItem('userId', activeSession.user.id)
         localStorage.setItem('userEmail', activeSession.user.email)
-        await syncUserProfile(activeSession.user)
       } else {
         localStorage.removeItem('userId')
         localStorage.removeItem('userEmail')
@@ -91,6 +69,13 @@ function App() {
         <span className="material-symbols-outlined animate-spin text-4xl text-primary-fixed">progress_activity</span>
       </div>
     )
+  }
+
+  // Signed in with the password (or Google) but the account requires its
+  // authenticator code: nothing else is shown until it's entered.
+  // Verifying fires onAuthStateChange with an upgraded session, which clears this.
+  if (session && mfaPending) {
+    return <MfaChallenge onVerified={() => supabase.auth.getSession().then(({ data }) => setSession(data.session))} />
   }
 
   return (

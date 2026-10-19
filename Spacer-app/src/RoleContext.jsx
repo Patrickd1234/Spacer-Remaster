@@ -33,13 +33,18 @@ export function RoleProvider({ children }) {
                     console.warn("Error fetching role:", error);
                     setUserRole("member");
                 } else if (memberships && memberships.length > 0) {
-                    const hasSuperAdmin = memberships.some(m => m.role === "super_admin" || m.role === "superadmin");
+                    // An org-level admin (admin with no department) manages the whole
+                    // organization, same as is_org_admin() in the database
+                    const isOrgWide = m =>
+                        m.role === "super_admin" || m.role === "superadmin" ||
+                        (m.role === "admin" && !m.team_space_id);
+                    const hasSuperAdmin = memberships.some(isOrgWide);
                     const hasAdmin = memberships.some(m => m.role === "admin");
-                    
+
                     if (hasSuperAdmin) {
                         setUserRole("superadmin");
                         setRealUserRole("superadmin");
-                        setMembershipData(memberships.find(m => m.role === "super_admin" || m.role === "superadmin"));
+                        setMembershipData(memberships.find(isOrgWide));
                     } else if (hasAdmin) {
                         setUserRole("admin");
                         setRealUserRole("admin");

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import ChatMessage from './ChatMessage';
+import { createSignedLinks } from '../storageLinks';
+
+const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 
 export default function GroupChat({ projectId, departmentId, currentUserId, members = [], fabMode = false, activeChannelFromFab = null }) {
     const [channels, setChannels] = useState([]);
@@ -132,7 +135,20 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 .order('created_at', { ascending: true });
 
             if (error) throw error;
-            setMessages(data || []);
+
+            // Attachments store a storage path; sign them so they can be opened
+            const rows = data || [];
+            const linkByPath = await createSignedLinks(
+                CHAT_ATTACHMENTS_BUCKET,
+                rows.flatMap(m => (m.message_attachments || []).map(att => att.file_url))
+            );
+            setMessages(rows.map(m => ({
+                ...m,
+                message_attachments: (m.message_attachments || []).map(att => ({
+                    ...att,
+                    signed_url: linkByPath.get(att.file_url) || null,
+                })),
+            })));
         } catch (error) {
             console.error('Error fetching messages:', error);
         }
@@ -204,16 +220,31 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
 
             if (msgError) throw msgError;
 
-            // 2. Insert attachments
+            // 2. Upload attachments to private storage, then record their paths
             if (currentAttachments.length > 0) {
-                const attInserts = currentAttachments.map(att => ({
-                    message_id: msgData.id,
-                    file_url: att.url,
-                    file_name: att.name,
-                    file_type: att.type
-                }));
-                
-                await supabase.from('message_attachments').insert(attInserts);
+                const attInserts = [];
+                for (const att of currentAttachments) {
+                    const path = `${activeChannel.id}/${msgData.id}/${Date.now()}-${att.name}`;
+                    const { error: uploadError } = await supabase.storage
+                        .from(CHAT_ATTACHMENTS_BUCKET)
+                        .upload(path, att.file, { contentType: att.type, upsert: false });
+                    if (uploadError) {
+                        console.error('Error uploading attachment:', uploadError);
+                        setFileError(`Could not upload ${att.name}. Please try again.`);
+                        continue;
+                    }
+                    attInserts.push({
+                        message_id: msgData.id,
+                        file_url: path,
+                        file_name: att.name,
+                        file_type: att.type
+                    });
+                }
+
+                if (attInserts.length > 0) {
+                    const { error: attError } = await supabase.from('message_attachments').insert(attInserts);
+                    if (attError) console.error('Error saving attachments:', attError);
+                }
             }
 
             // Manually update UI if realtime is mocked
@@ -248,8 +279,6 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             file,
             name: file.name,
             type: file.type,
-            // For mock demo purposes, create local object URL
-            url: URL.createObjectURL(file) 
         }));
         setAttachments(prev => [...prev, ...newAtts]);
         // Reset input

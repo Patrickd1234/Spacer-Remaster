@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom"
 import { supabase } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { fetchDirectProjects, mergeProjects } from "./projectMemberships";
 
 export default function AdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -76,36 +77,35 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
             const userId = localStorage.getItem("userId");
             if (!userId) return;
 
-            // Fetch all memberships for this user with their roles
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id, role")
-                .eq("user_id", userId);
-
-            if (memberError || !memberData || memberData.length === 0) {
-                // No memberships found — show nothing, not everything
-                setProjects([]);
-                return;
-            }
+            // Fetch all memberships for this user with their roles, plus projects they were added to directly
+            const [{ data: memberData }, directProjects] = await Promise.all([
+                supabase
+                    .from("memberships")
+                    .select("team_space_id, role")
+                    .eq("user_id", userId),
+                fetchDirectProjects(userId),
+            ]);
 
             // Pick the team space where this user is admin.
             // If they somehow belong to multiple departments, prioritise
             // the one where their role is explicitly "admin".
             const adminMembership =
-                memberData.find(m => m.role === "admin") ||
-                memberData.find(m => m.role === "super_admin") ||
-                memberData[0];
+                (memberData || []).find(m => m.role === "admin") ||
+                (memberData || []).find(m => m.role === "super_admin") ||
+                (memberData || [])[0];
 
+            // Projects inside that one department
+            let departmentProjects = [];
             const teamSpaceId = adminMembership?.team_space_id;
-            if (!teamSpaceId) { setProjects([]); return; }
+            if (teamSpaceId) {
+                const { data, error } = await supabase
+                    .from("project_spaces")
+                    .select("*")
+                    .eq("team_space_id", teamSpaceId);
+                if (!error) departmentProjects = data || [];
+            }
 
-            // Show only projects inside that one department
-            const { data, error } = await supabase
-                .from("project_spaces")
-                .select("*")
-                .eq("team_space_id", teamSpaceId);
-
-            if (!error) setProjects(data || []);
+            setProjects(mergeProjects(departmentProjects, directProjects));
         };
         fetchProjects();
 

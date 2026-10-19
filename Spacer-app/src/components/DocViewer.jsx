@@ -11,6 +11,8 @@
  *   onClose : () => void
  */
 
+import { safeHttpsUrl } from "../safeUrl";
+
 const ICON_MAP = {
   "application/pdf": "picture_as_pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "description",
@@ -30,7 +32,10 @@ function fileIcon(type = "") {
 export default function DocViewer({ file, onClose }) {
   if (!file) return null;
 
-  const { name, type = "", url } = file;
+  const name = file.name || "File";
+  const type = file.type || "";
+  // Only https links are previewed or downloaded; anything else (javascript:, data:) is dropped
+  const url = safeHttpsUrl(file.url);
   const isImage = type.startsWith("image/");
   const isPDF = type === "application/pdf";
   const isOffice =
@@ -59,16 +64,18 @@ export default function DocViewer({ file, onClose }) {
             {fileIcon(type)}
           </span>
           <p className="text-on-surface font-semibold text-sm flex-1 truncate">{name}</p>
-          <a
-            href={url}
-            download={name}
-            target="_blank"
-            rel="noreferrer"
-            className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors"
-            title="Download"
-          >
-            download
-          </a>
+          {url && (
+            <a
+              href={url}
+              download={name}
+              target="_blank"
+              rel="noreferrer"
+              className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors"
+              title="Download"
+            >
+              download
+            </a>
+          )}
           <button
             onClick={onClose}
             className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors"
@@ -79,28 +86,31 @@ export default function DocViewer({ file, onClose }) {
 
         {/* Preview area */}
         <div className="flex-1 overflow-hidden flex items-center justify-center bg-surface-container-lowest">
-          {isImage && (
+          {!url && (
+            <p className="text-on-surface-variant text-sm p-8 text-center">This file can't be opened right now. Close and reopen the project to refresh its link.</p>
+          )}
+          {url && isImage && (
             <img
               src={url}
               alt={name}
               className="max-w-full max-h-full object-contain"
             />
           )}
-          {isPDF && (
+          {url && isPDF && (
             <iframe
               src={url}
               title={name}
               className="w-full h-full border-0"
             />
           )}
-          {isOffice && (
+          {url && isOffice && (
             <iframe
               src={gdocsUrl}
               title={name}
               className="w-full h-full border-0"
             />
           )}
-          {!isImage && !isPDF && !isOffice && (
+          {url && !isImage && !isPDF && !isOffice && (
             <div className="flex flex-col items-center gap-4 text-center p-8">
               <span
                 className="material-symbols-outlined text-primary-container"

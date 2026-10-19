@@ -10,28 +10,10 @@ function Signup() {
     const [showPassword, setShowPassword] = useState(false)
     const [errorMsg, setErrorMsg] = useState("")
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+    const [resendState, setResendState] = useState("idle")
     const navigate = useNavigate()
 
-    const [isDemoMode, setIsDemoMode] = useState(localStorage.getItem("use_mock_supabase") === "true")
     const googleAuthReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-
-    const toggleDemoMode = () => {
-        const newValue = !isDemoMode
-        localStorage.setItem("use_mock_supabase", String(newValue))
-        setIsDemoMode(newValue)
-        if (newValue) {
-            localStorage.removeItem("sb-vrzepdjjjpodztqkfsbh-auth-token")
-        } else {
-            localStorage.removeItem("mock_session")
-        }
-        window.location.reload()
-    }
-
-    const enableDemoMode = () => {
-        localStorage.setItem("use_mock_supabase", "true")
-        localStorage.removeItem("sb-vrzepdjjjpodztqkfsbh-auth-token")
-        window.location.reload()
-    }
 
     const handleGoogleSignUp = async () => {
         if (!googleAuthReady) {
@@ -69,7 +51,8 @@ function Signup() {
                 options: {
                     data: {
                         full_name: fullName,
-                    }
+                    },
+                    emailRedirectTo: `${window.location.origin}/login`
                 }
             })
 
@@ -77,28 +60,8 @@ function Signup() {
                 throw error
             }
 
-            try {
-                await supabase.functions.invoke('invite-team-post-launch', {
-                    body: {
-                        organization_id: data?.user?.user_metadata?.organization_id || '',
-                        new_team_space_name: 'General',
-                        invites: []
-                    }
-                })
-            } catch (funcError) {
-                console.error("Error calling invite-team-post-launch:", funcError)
-            }
-
+            // The users profile row is created by the on_auth_user_created database trigger
             if (data?.user) {
-                const { error: insertError } = await supabase.from("users").insert({
-                    id: data.user.id,
-                    email: email,
-                    name: fullName,
-                })
-                if (insertError) {
-                    console.error("Error inserting user profile:", insertError)
-                }
-
                 try {
                     await supabase.from('activity_log').insert({
                         entity_type: 'user',
@@ -112,6 +75,12 @@ function Signup() {
                 }
             }
 
+            // With email confirmation on, no session is returned until the user clicks the link
+            if (!data?.session) {
+                setStatus("check_email")
+                return
+            }
+
             setStatus("success")
             setTimeout(() => {
                 setStatus("idle")
@@ -120,40 +89,76 @@ function Signup() {
         } catch (err) {
             console.error("Signup error:", err)
 
-            let displayMessage = err.message || ""
-            if (displayMessage === "{}" || !displayMessage) {
-                displayMessage = "Internal Server Error (Failed to send signup email)"
-            }
-
-            const isEmailIssue =
-                err.code === "over_email_send_rate_limit" ||
+            const isRateLimited = err.code === "over_email_send_rate_limit" || err.status === 429
+            const isEmailSendFailure =
                 err.code === "unexpected_failure" ||
-                err.name === "AuthRetryableFetchError" ||
-                err.status === 500 ||
-                displayMessage.toLowerCase().includes("rate limit") ||
-                displayMessage.toLowerCase().includes("confirmation email") ||
-                displayMessage.toLowerCase().includes("email") ||
-                displayMessage.toLowerCase().includes("server error")
+                err.status >= 500 ||
+                err.name === "AuthRetryableFetchError"
 
-            if (isEmailIssue) {
-                setErrorMsg(
-                    <span>
-                        Email delivery issue encountered ({displayMessage}).{" "}
-                        <button
-                            type="button"
-                            onClick={enableDemoMode}
-                            className="underline text-[#aff82a] hover:brightness-110 font-bold ml-1 cursor-pointer"
-                        >
-                            Click here to activate Demo/Mock Mode
-                        </button>{" "}
-                        to run the app entirely in your browser.
-                    </span>
-                )
+            if (isRateLimited) {
+                setErrorMsg("Too many signup attempts. Please wait a few minutes and try again.")
+            } else if (isEmailSendFailure) {
+                setErrorMsg("We couldn't send your confirmation email right now. Please try again in a few minutes.")
             } else {
-                setErrorMsg(displayMessage || "Something went wrong during signup.")
+                setErrorMsg(err.message && err.message !== "{}" ? err.message : "Something went wrong during signup.")
             }
             setStatus("idle")
         }
+    }
+
+    const handleResend = async () => {
+        setErrorMsg("")
+        setResendState("sending")
+
+        const { error } = await supabase.auth.resend({
+            type: "signup",
+            email: email,
+            options: { emailRedirectTo: `${window.location.origin}/login` }
+        })
+
+        if (error) {
+            console.error("Resend confirmation error:", error)
+            setErrorMsg(error.message || "Could not resend the email. Please try again shortly.")
+            setResendState("idle")
+            return
+        }
+
+        setResendState("sent")
+    }
+
+    if (status === "check_email") {
+        return (
+            <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-8">
+                {errorMsg && (
+                    <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm">
+                        <span className="material-symbols-outlined text-white text-[18px]">error</span>
+                        <div className="text-white text-[14px] leading-tight">{errorMsg}</div>
+                    </div>
+                )}
+                <div className="w-full max-w-[420px] text-center">
+                    <span className="material-symbols-outlined text-[#aff82a] text-[48px] mb-4">mark_email_unread</span>
+                    <h2 className="text-[32px] font-bold text-white mb-3 tracking-tight">Check your inbox</h2>
+                    <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
+                        We sent a confirmation link to <span className="text-white font-semibold">{email}</span>.
+                        Click it to activate your account, then sign in.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleResend}
+                        disabled={resendState !== "idle"}
+                        className="w-full border border-[#2D3139] bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                        {resendState === "sending" ? "Sending..." : resendState === "sent" ? "Email sent — check your inbox" : "Resend confirmation email"}
+                    </button>
+                    <p className="text-[#8c947b] text-[13px] mt-4">
+                        Didn't get it? Check your spam folder.
+                    </p>
+                    <p className="text-[#8c947b] text-[14px] mt-6">
+                        Already confirmed? <Link to="/login" className="text-[#aff82a] font-semibold hover:underline">Sign In</Link>
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     const isEmailError = typeof errorMsg === "string" && errorMsg.toLowerCase().includes("email")
@@ -172,13 +177,6 @@ function Signup() {
                     </div>
                 </div>
             )}
-
-            {/* Demo Mode Toggle */}
-            <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
-                <button onClick={toggleDemoMode} className="text-xs bg-[#2D3139] text-white px-2 py-1 rounded">
-                    Demo: {isDemoMode ? "ON" : "OFF"}
-                </button>
-            </div>
 
             {/* Left Side: Visual/Brand (Hidden on mobile) */}
             <div className="hidden lg:flex w-[55%] relative flex-col px-16 py-12 border-r border-[#2D3139]/30">

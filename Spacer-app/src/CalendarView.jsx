@@ -3,6 +3,7 @@ import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import { supabase } from "./supabase"
+import { statusFromSubtasks } from "./taskStatus"
 
 export default function CalendarView() {
     const [userData, setUserData] = useState(null)
@@ -18,30 +19,12 @@ export default function CalendarView() {
     const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
 
     const updateTaskSubtasks = async (taskId, newSubtasks) => {
-        const allDone = newSubtasks.length > 0 && newSubtasks.every(st => st.done)
-        const anyDone = newSubtasks.some(st => st.done)
         const task = tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        let newStatus = task.status
-        let statusChanged = false
-
-        if (allDone) {
-            if (task.status !== 'done') {
-                newStatus = 'done'
-                statusChanged = true
-            }
-        } else if (newSubtasks.length === 0 || !anyDone) {
-            if (task.status !== 'todo') {
-                newStatus = 'todo'
-                statusChanged = true
-            }
-        } else {
-            if (task.status !== 'in_progress') {
-                newStatus = 'in_progress'
-                statusChanged = true
-            }
-        }
+        // Subtasks drive the status; with none left the task keeps its current status
+        const newStatus = statusFromSubtasks(newSubtasks) ?? task.status
+        const statusChanged = newStatus !== task.status
 
         const serialized = JSON.stringify(newSubtasks)
 
@@ -89,27 +72,7 @@ export default function CalendarView() {
         const task = tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        let subtasksList = [];
-        if (task.sub_tasks) {
-            try {
-                subtasksList = JSON.parse(task.sub_tasks);
-                if (!Array.isArray(subtasksList)) subtasksList = [];
-            } catch (err) {}
-        }
-        
-        const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-        const anyDone = subtasksList.some(st => st.done);
-
-        let allowedStatus = task.status;
-        if (allDone) {
-            allowedStatus = 'done';
-        } else if (subtasksList.length === 0 || !anyDone) {
-            allowedStatus = 'todo';
-        } else {
-            allowedStatus = 'in_progress';
-        }
-
-        if (newStatus !== allowedStatus) return;
+        // Any task can be set to any status; ticking subtasks still updates it automatically
         if (task.status === newStatus) return
 
         setSelectedTask(prev => prev ? { ...prev, status: newStatus } : null)
@@ -160,35 +123,8 @@ export default function CalendarView() {
             if (tasksError) {
                 console.error("Error fetching tasks", tasksError)
             } else {
-                const corrected = (userTasks || []).map(t => {
-                    let subtasksList = [];
-                    if (t.sub_tasks) {
-                        try {
-                            subtasksList = JSON.parse(t.sub_tasks);
-                            if (!Array.isArray(subtasksList)) subtasksList = [];
-                        } catch (e) {}
-                    }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-                    const anyDone = subtasksList.some(st => st.done);
-
-                    let expectedStatus = t.status;
-                    if (allDone) {
-                        expectedStatus = 'done';
-                    } else if (subtasksList.length === 0 || !anyDone) {
-                        expectedStatus = 'todo';
-                    } else {
-                        expectedStatus = 'in_progress';
-                    }
-
-                    if (t.status !== expectedStatus) {
-                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
-                            if (error) console.error("Error auto-correcting task status", error);
-                        });
-                        return { ...t, status: expectedStatus };
-                    }
-                    return t;
-                });
-                setTasks(corrected)
+                // Show statuses as stored; they're only derived when subtasks are edited
+                setTasks(userTasks || [])
             }
 
             if (user.organization_id) {

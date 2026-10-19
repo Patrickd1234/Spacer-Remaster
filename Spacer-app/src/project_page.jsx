@@ -7,6 +7,9 @@ import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
 import { useRole } from "./RoleContext"
+import { withSignedUrls } from "./projectFiles"
+import { statusFromSubtasks } from "./taskStatus"
+import { deleteWorkspaceItem } from "./workspaceDelete"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -15,6 +18,12 @@ const ACCEPTED = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/zip", "application/x-zip-compressed", "text/plain", "text/csv",
 ].join(",")
+
+// How long a Kanban board message stays visible
+const BOARD_NOTICE_MS = 5000
+
+// Board column names for each task status
+const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
 
 const MAX_FILE_SIZE_MB = 50
 const MAX_FILE_SIZE    = MAX_FILE_SIZE_MB * 1024 * 1024   // 50 MB in bytes
@@ -181,6 +190,7 @@ function ProjectPage() {
     // ── Delete project
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [deletingProject, setDeletingProject] = useState(false)
+    const [deleteProjectError, setDeleteProjectError] = useState("")
     const [showActionBlocked, setShowActionBlocked] = useState(false)
 
     // ── Members
@@ -193,6 +203,7 @@ function ProjectPage() {
     const [uploading, setUploading] = useState(false)
     const [uploadError, setUploadError] = useState("")
     const [dragOver, setDragOver] = useState(false)
+    const [boardNotice, setBoardNotice] = useState("")
     const [pendingFile, setPendingFile] = useState(null)
     const [pendingUrl, setPendingUrl] = useState(null)
     const [reviewFile, setReviewFile] = useState(null)
@@ -407,30 +418,12 @@ function ProjectPage() {
     }
 
     const updateTaskSubtasks = async (taskId, newSubtasks) => {
-        const allDone = newSubtasks.length > 0 && newSubtasks.every(st => st.done)
-        const anyDone = newSubtasks.some(st => st.done)
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        let newStatus = task.status
-        let statusChanged = false
-
-        if (allDone) {
-            if (task.status !== 'done') {
-                newStatus = 'done'
-                statusChanged = true
-            }
-        } else if (newSubtasks.length === 0 || !anyDone) {
-            if (task.status !== 'todo') {
-                newStatus = 'todo'
-                statusChanged = true
-            }
-        } else {
-            if (task.status !== 'in_progress') {
-                newStatus = 'in_progress'
-                statusChanged = true
-            }
-        }
+        // Subtasks drive the status; with none left the task keeps its current status
+        const newStatus = statusFromSubtasks(newSubtasks) ?? task.status
+        const statusChanged = newStatus !== task.status
 
         const serialized = JSON.stringify(newSubtasks)
 
@@ -466,50 +459,50 @@ function ProjectPage() {
         e.dataTransfer.setData("taskId", taskId)
     }
 
+    const showBoardNotice = (message) => {
+        setBoardNotice(message)
+        setTimeout(() => setBoardNotice(""), BOARD_NOTICE_MS)
+    }
+
     const handleDrop = async (e, newStatus) => {
         e.preventDefault()
+        setDragOverColumn(null)
         const taskId = e.dataTransfer.getData("taskId")
         if (!taskId) return
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        let subtasksList = [];
-        if (task.sub_tasks) {
-            try {
-                subtasksList = JSON.parse(task.sub_tasks);
-                if (!Array.isArray(subtasksList)) subtasksList = [];
-            } catch (err) { }
+        // Any task can be moved to any status; ticking subtasks still updates it automatically
+        const isOverdue = newStatus !== "done" && task.due_date && new Date(task.due_date) < new Date()
+        if (task.status === newStatus) {
+            if (isOverdue) showBoardNotice(`"${task.title}" is already ${STATUS_LABELS[newStatus]} — it shows under Overdue until it's done or its due date changes.`)
+            return
         }
 
-        const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-        const anyDone = subtasksList.some(st => st.done);
-
-        let allowedStatus = task.status;
-        if (allDone) {
-            allowedStatus = 'done';
-        } else if (subtasksList.length === 0 || !anyDone) {
-            allowedStatus = 'todo';
-        } else {
-            allowedStatus = 'in_progress';
-        }
-
-        if (newStatus !== allowedStatus) return;
-        if (task.status === newStatus) return
-
+        const previousStatus = task.status
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
                 String(t.id) === String(taskId) ? { ...t, status: newStatus } : t
             )
         )
 
-        const { error } = await supabase
+        // .select() confirms a row actually changed (permissions can silently update 0 rows)
+        const { data: updated, error } = await supabase
             .from("tasks")
             .update({ status: newStatus })
             .eq("id", taskId)
+            .select("id")
 
-        if (error) {
-            console.error("Error updating overdue task:", error)
+        if (error || !updated?.length) {
+            console.error("Error moving task:", error)
+            setProjectTasks(prevTasks =>
+                prevTasks.map(t =>
+                    String(t.id) === String(taskId) ? { ...t, status: previousStatus } : t
+                )
+            )
+            showBoardNotice(`Couldn't move "${task.title}". You may not have permission to edit this project.`)
         } else {
+            if (isOverdue) showBoardNotice(`"${task.title}" moved to ${STATUS_LABELS[newStatus]}. It stays under Overdue until it's done or its due date changes.`)
             const { data: userData } = await supabase.auth.getUser()
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
@@ -559,7 +552,7 @@ function ProjectPage() {
         const { data, error } = await supabase
             .from("project_files").select("*").eq("project_id", project_id)
             .order("created_at", { ascending: false })
-        if (!error) setProjectFiles(data || [])
+        if (!error) setProjectFiles(await withSignedUrls(data || []))
     }, [project_id])
 
     // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
@@ -613,34 +606,8 @@ function ProjectPage() {
             const { data, error } = await supabase.from("tasks").select("*").eq("project_id", project_id).order("created_at", { ascending: false })
             if (error) { console.error("Error fetching tasks:", error) }
             else {
-                const corrected = data.map(t => {
-                    let subtasksList = [];
-                    if (t.sub_tasks) {
-                        try {
-                            subtasksList = JSON.parse(t.sub_tasks);
-                            if (!Array.isArray(subtasksList)) subtasksList = [];
-                        } catch (e) { }
-                    }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-                    const anyDone = subtasksList.some(st => st.done);
-
-                    let expectedStatus = t.status;
-                    if (allDone) {
-                        expectedStatus = 'done';
-                    } else if (subtasksList.length === 0 || !anyDone) {
-                        expectedStatus = 'todo';
-                    } else {
-                        expectedStatus = 'in_progress';
-                    }
-
-                    if (t.status !== expectedStatus) {
-                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
-                            if (error) console.error("Error auto-correcting task status", error);
-                        });
-                        return { ...t, status: expectedStatus };
-                    }
-                    return t;
-                });
+                // Show statuses as stored; they're only derived when subtasks are edited
+                const corrected = data || [];
                 setProjectTasks(corrected);
                 const urlParams = new URLSearchParams(window.location.search);
                 const taskIdParam = urlParams.get("task_id");
@@ -688,9 +655,11 @@ function ProjectPage() {
     // ── Delete this project
     const handleDeleteProject = async () => {
         setDeletingProject(true)
-        const { error } = await supabase.from("project_spaces").delete().eq("id", project_id)
+        setDeleteProjectError("")
+        // Server-side delete: also removes stored files and the project's chat channels
+        const { error } = await deleteWorkspaceItem("project", project_id)
         if (error) {
-            console.error("Error deleting project:", error)
+            setDeleteProjectError(error)
             setDeletingProject(false)
             return
         }
@@ -724,12 +693,12 @@ function ProjectPage() {
         const { error: storageError } = await supabase.storage
             .from("project-files").upload(path, pendingFile, { contentType: pendingFile.type, upsert: false })
         if (storageError) { setUploadError("Upload failed: " + storageError.message); setUploading(false); return }
-        const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
         const { data: userData } = await supabase.auth.getUser()
         const uploaderName = userData?.user?.email?.split("@")[0] || "You"
+        // No stored URL: the bucket is private, links are signed when the list loads
         const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
             project_id, name: pendingFile.name, type: pendingFile.type,
-            size: pendingFile.size, path, url: urlData?.publicUrl || "",
+            size: pendingFile.size, path, url: "",
             uploaded_by: uploaderName,
         }).select().single()
 
@@ -788,7 +757,6 @@ function ProjectPage() {
                 setTaskUploading(false)
                 return
             }
-            const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
             const { data: userData } = await supabase.auth.getUser()
             const uploaderName = userData?.user?.email?.split("@")[0] || "You"
             const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
@@ -798,7 +766,7 @@ function ProjectPage() {
                 type: file.type,
                 size: file.size,
                 path,
-                url: urlData?.publicUrl || "",
+                url: "",
                 uploaded_by: uploaderName,
             }).select().single()
 
@@ -1324,6 +1292,11 @@ function ProjectPage() {
                     {/* Tasks Tab — Kanban Board */}
                     {activeTab === "tasks" && (
                         <div className="tab-pane block" id="section-tasks">
+                            {boardNotice && (
+                                <div role="status" className="mt-md px-md py-sm rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#f59e0b] text-body-sm">
+                                    {boardNotice}
+                                </div>
+                            )}
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[
                                     { key: "todo", label: "Backlog", dotColor: "bg-[#2D3139]" },
@@ -1337,10 +1310,16 @@ function ProjectPage() {
                                         if (isOverdue) return column.key === "overdue";
                                         return column.key === t.status;
                                     });
+                                    // "Overdue" is derived from the due date, not a status you can drop into
+                                    const acceptsDrop = column.key !== "overdue";
+                                    const isDropTarget = acceptsDrop && dragOverColumn === column.key;
                                     return (
                                         <div
                                             key={column.key}
-                                            className="flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border border-[#2D3139]/30"
+                                            onDragOver={acceptsDrop ? (e) => { e.preventDefault(); setDragOverColumn(column.key) } : undefined}
+                                            onDragLeave={acceptsDrop ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColumn(null) } : undefined}
+                                            onDrop={acceptsDrop ? (e) => handleDrop(e, column.key) : undefined}
+                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border ${isDropTarget ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5' : 'border-[#2D3139]/30'}`}
                                         >
                                             {/* Column Header */}
                                             <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
@@ -1356,8 +1335,11 @@ function ProjectPage() {
                                                 {columnTasks.map(task => (
                                                     <div
                                                         key={task.id}
+                                                        draggable
+                                                        onDragStart={(e) => handleDragStart(e, task.id)}
+                                                        onDragEnd={() => setDragOverColumn(null)}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[var(--primary-color)]/50 transition-all group"
+                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-[var(--primary-color)]/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
@@ -1373,6 +1355,12 @@ function ProjectPage() {
                                                                     }`}></span>
                                                                 {task.priority || 'Normal'}
                                                             </span>
+                                                            {/* In the Overdue column, show the task's real status */}
+                                                            {column.key === "overdue" && STATUS_LABELS[task.status] && (
+                                                                <span className="ml-xs inline-flex items-center px-sm py-[2px] rounded text-[10px] font-bold uppercase bg-[#2D3139] text-[#c2cab0]">
+                                                                    {STATUS_LABELS[task.status]}
+                                                                </span>
+                                                            )}
                                                         </div>
 
                                                         {/* Project Name */}
@@ -2337,14 +2325,17 @@ function ProjectPage() {
                         <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
                         <p className="text-white font-bold text-[15px] text-center mb-3">"{project_name}"</p>
                         <p className="text-[#8c947b] text-[12px] text-center mb-6">
-                            All tasks, files, and activity linked to this project will also be removed. This cannot be undone.
+                            All tasks, files, and chat channels in this project will also be removed. This cannot be undone.
                         </p>
+                        {deleteProjectError && (
+                            <p role="alert" className="text-red-400 text-[12px] text-center -mt-3 mb-4">{deleteProjectError}</p>
+                        )}
 
                         {/* Buttons */}
                         <div className="flex gap-3">
                             <button
                                 type="button"
-                                onClick={() => setShowDeleteConfirm(false)}
+                                onClick={() => { setShowDeleteConfirm(false); setDeleteProjectError("") }}
                                 disabled={deletingProject}
                                 className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                             >
