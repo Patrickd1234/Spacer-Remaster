@@ -1,7 +1,7 @@
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import { useState, useEffect } from "react"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 
 function initials(name, email) {
@@ -65,11 +65,11 @@ function Profile() {
 
     useEffect(() => {
         const fetchUser = async () => {
-            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+            const authUser = await getSessionUser()
 
-            if (authError || !authUser) {
+            if (!authUser) {
                 if (import.meta.env.DEV) {
-                    console.error("No authenticated user found:", authError)
+                    console.error("No authenticated user found")
                 }
                 setLoading(false)
                 return

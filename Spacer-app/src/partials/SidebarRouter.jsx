@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 import Sidebar from "./sidebar";
 import AdminSidebar from "./admin_sidebar";
 import SuperAdminSidebar from "./super_admin_sidebar";
@@ -38,106 +38,110 @@ export default function SidebarRouter(props) {
     useEffect(() => {
         const initRouterAndChat = async () => {
             try {
-                const { data: authData } = await supabase.auth.getUser();
-                const authUser = authData?.user;
+                const authUser = await getSessionUser();
                 if (!authUser) {
                     setRoleLoaded(true);
                     return;
                 }
                 setUserId(authUser.id);
 
-                // Fetch role
-                const { data: membership } = await supabase
-                    .from("memberships")
-                    .select("role")
-                    .eq("user_id", authUser.id)
-                    .maybeSingle();
+                // Role decides which sidebar renders, so show it as soon as the
+                // role is known; chat data below loads in the background.
+                const roleWork = (async () => {
+                    const { data: membership } = await supabase
+                        .from("memberships")
+                        .select("role")
+                        .eq("user_id", authUser.id)
+                        .maybeSingle();
+                    setUserRole(membership?.role ?? null);
+                    setRoleLoaded(true);
+                })();
 
-                setUserRole(membership?.role ?? null);
+                // Coworkers for the Message Hub
+                const coworkerWork = (async () => {
+                    const { data: userProfile } = await supabase
+                        .from("users")
+                        .select("organization_id")
+                        .eq("id", authUser.id)
+                        .maybeSingle();
+                    if (!userProfile?.organization_id) return;
 
-                // Fetch coworkers for Message Hub
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", authUser.id)
-                    .maybeSingle();
-
-                if (userProfile?.organization_id) {
                     const { data: coworkers } = await supabase
                         .from("users")
                         .select("id, name, email")
                         .eq("organization_id", userProfile.organization_id);
-
                     if (coworkers) {
-                        const mapped = coworkers
+                        setOrgUsers(coworkers
                             .filter(u => u.id !== authUser.id)
-                            .map(u => ({ ...u, user_id: u.id }));
-                        setOrgUsers(mapped);
+                            .map(u => ({ ...u, user_id: u.id })));
                     }
-                }
-                
-                // Fetch all DMs for this user to determine latest message and unread counts
-                const { data: allDms } = await supabase
-                    .from("direct_messages")
-                    .select("id, sender_id, receiver_id, created_at, content")
-                    .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
-                    .order("created_at", { ascending: false });
+                })();
 
-                const dmsMap = {};
-                if (allDms) {
-                    allDms.forEach(msg => {
+                // All DMs for this user, to find the latest message per contact
+                const dmWork = (async () => {
+                    const { data: allDms } = await supabase
+                        .from("direct_messages")
+                        .select("id, sender_id, receiver_id, created_at, content")
+                        .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
+                        .order("created_at", { ascending: false });
+
+                    const dmsMap = {};
+                    (allDms || []).forEach(msg => {
                         const otherId = msg.sender_id === authUser.id ? msg.receiver_id : msg.sender_id;
-                        if (!dmsMap[otherId]) {
-                            dmsMap[otherId] = msg;
-                        }
+                        if (!dmsMap[otherId]) dmsMap[otherId] = msg;
                     });
-                }
-                setDmLatestMessages(dmsMap);
+                    setDmLatestMessages(dmsMap);
+                })();
 
-                // Fetch user groups
-                const { data: memberChannels } = await supabase
-                    .from("chat_channel_members")
-                    .select("channel_id")
-                    .eq("user_id", authUser.id);
-                
-                const channelIds = (memberChannels || []).map(mc => mc.channel_id);
-                
-                let groupQuery = supabase.from("chat_channels").select("id, name, is_private, created_at");
-                if (channelIds.length > 0) {
-                    groupQuery = groupQuery.or(`is_private.eq.false,id.in.(${channelIds.join(',')})`);
-                } else {
-                    groupQuery = groupQuery.eq('is_private', false);
-                }
-                
-                const { data: groups } = await groupQuery;
-                if (groups) {
+                // Groups, then the latest message of every group in parallel
+                const groupWork = (async () => {
+                    const { data: memberChannels } = await supabase
+                        .from("chat_channel_members")
+                        .select("channel_id")
+                        .eq("user_id", authUser.id);
+
+                    const channelIds = (memberChannels || []).map(mc => mc.channel_id);
+
+                    let groupQuery = supabase.from("chat_channels").select("id, name, is_private, created_at");
+                    if (channelIds.length > 0) {
+                        groupQuery = groupQuery.or(`is_private.eq.false,id.in.(${channelIds.join(',')})`);
+                    } else {
+                        groupQuery = groupQuery.eq('is_private', false);
+                    }
+
+                    const { data: groups } = await groupQuery;
+                    if (!groups) return;
                     setUserGroups(groups);
-                    
-                    // Fetch latest message for each group to determine unread status
-                    const unreadMap = {};
-                    for (const group of groups) {
-                        const { data: latestMsg } = await supabase
+
+                    const latestMessages = await Promise.all(groups.map(group =>
+                        supabase
                             .from('messages')
                             .select('created_at')
                             .eq('channel_id', group.id)
                             .order('created_at', { ascending: false })
                             .limit(1)
-                            .maybeSingle();
-                        
-                        if (latestMsg) {
-                            group.latest_message_at = latestMsg.created_at;
-                            const lastRead = localStorage.getItem(`group_last_read_${group.id}`);
-                            if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
-                                unreadMap[group.id] = true;
-                            }
-                        } else {
-                            group.latest_message_at = group.created_at; // Fallback
-                        }
-                    }
-                    setUserGroups(groups);
-                    setGroupUnreadCounts(unreadMap);
-                }
+                            .maybeSingle()
+                            .then(({ data }) => data)
+                    ));
 
+                    const unreadMap = {};
+                    const groupsWithLatest = groups.map((group, i) => {
+                        const latestMsg = latestMessages[i];
+                        if (!latestMsg) return { ...group, latest_message_at: group.created_at }; // Fallback
+                        const lastRead = localStorage.getItem(`group_last_read_${group.id}`);
+                        if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
+                            unreadMap[group.id] = true;
+                        }
+                        return { ...group, latest_message_at: latestMsg.created_at };
+                    });
+                    setUserGroups(groupsWithLatest);
+                    setGroupUnreadCounts(unreadMap);
+                })();
+
+                const results = await Promise.allSettled([roleWork, coworkerWork, dmWork, groupWork]);
+                results
+                    .filter(r => r.status === "rejected")
+                    .forEach(r => console.error("SidebarRouter init error:", r.reason));
             } catch (err) {
                 console.error("SidebarRouter init error:", err);
             } finally {

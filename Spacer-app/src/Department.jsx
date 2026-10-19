@@ -1,6 +1,6 @@
 import Sidebar from "./partials/SidebarRouter";
 import Header from "./partials/header";
-import { supabase } from "./supabase";
+import { supabase, getSessionUser } from "./supabase";
 import { useEffect, useState, useRef } from 'react';
 import { useRole } from "./RoleContext";
 import GroupChat from "./components/GroupChat";
@@ -8,7 +8,6 @@ import GroupChat from "./components/GroupChat";
 function Department() {
     const [userId, setUserId] = useState(null)
     const [userTeamId, setUserTeamId] = useState(null)
-    const [userTeamName, setUserTeamName] = useState("")
     const [allTeams, setAllTeams] = useState([])
     const [activeTeam, setActiveTeam] = useState(null)
     const [mem_info, setMem_info] = useState([])
@@ -33,47 +32,43 @@ function Department() {
     useEffect(() => {
         const init = async () => {
             try {
-                const { data: authData } = await supabase.auth.getUser()
-                const uid = authData?.user?.id
+                const sessionUser = await getSessionUser()
+                const uid = sessionUser?.id
                 if (!uid) { setLoading(false); return }
                 setUserId(uid)
 
-                // Query DB user to get organization_id
-                const { data: dbUser } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", uid)
-                    .maybeSingle();
+                const teamId = membershipData?.team_space_id
 
-                let orgId = dbUser?.organization_id || authData?.user?.user_metadata?.organization_id;
-                
-                if (!orgId && membershipData?.team_space_id) {
-                    const { data: tsData } = await supabase
-                        .from("team_spaces")
+                // The department (name + members) only needs the membership, so it
+                // loads alongside the organisation lookup instead of after it.
+                // fetchTeamMembers also sets activeTeam, which titles the page.
+                if (!isSuperAdmin) setUserTeamId(teamId)
+                const departmentWork = isSuperAdmin ? [] : [fetchTeamMembers(teamId)]
+
+                const orgWork = (async () => {
+                    // Query DB user to get organization_id
+                    const { data: dbUser } = await supabase
+                        .from("users")
                         .select("organization_id")
-                        .eq("id", membershipData.team_space_id)
+                        .eq("id", uid)
                         .maybeSingle();
-                    orgId = tsData?.organization_id;
-                }
 
-                setOrganizationId(orgId);
+                    let orgId = dbUser?.organization_id || sessionUser?.user_metadata?.organization_id;
 
-                if (isSuperAdmin) {
-                    await fetchAllTeams(orgId)
-                } else {
-                    const teamId = membershipData?.team_space_id
-                    setUserTeamId(teamId)
-                    if (teamId) {
-                        const { data: team, error: teamErr } = await supabase
+                    if (!orgId && teamId) {
+                        const { data: tsData } = await supabase
                             .from("team_spaces")
-                            .select("name")
+                            .select("organization_id")
                             .eq("id", teamId)
-                            .maybeSingle()
-                        if (teamErr) console.warn("team_spaces name error:", teamErr)
-                        setUserTeamName(team?.name || "")
+                            .maybeSingle();
+                        orgId = tsData?.organization_id;
                     }
-                    await fetchTeamMembers(teamId)
-                }
+
+                    setOrganizationId(orgId);
+                    if (isSuperAdmin) await fetchAllTeams(orgId)
+                })()
+
+                await Promise.all([orgWork, ...departmentWork])
             } catch (err) {
                 console.error("Department init error:", err)
             } finally {
@@ -356,7 +351,9 @@ const filteredMembers = mem_info.filter(m =>
 
 const pageTitle = isSuperAdmin
     ? (activeTeam ? activeTeam.name : "All Teams")
-    : (userTeamName || "Department Directory")
+    : (activeTeam?.name || "Department Directory")
+// Until the department is known, show a placeholder rather than a fallback title
+const isTitleLoading = roleLoading || (loading && !activeTeam)
 
 return (
     <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex flex-col">
@@ -385,9 +382,13 @@ return (
                         <div className="flex items-center gap-2 text-[#8c947b] text-xs mb-1">
                             <span className="material-symbols-outlined text-[16px]">groups</span>
                             <span>/</span>
-                            <span className="text-white font-medium">{pageTitle}</span>
+                            {isTitleLoading
+                                ? <span className="inline-block h-3 w-24 rounded bg-[#2D3139] animate-pulse" aria-hidden="true" />
+                                : <span className="text-white font-medium">{pageTitle}</span>}
                         </div>
-                        <h1 className="text-2xl font-bold text-white">{pageTitle}</h1>
+                        {isTitleLoading
+                            ? <h1 className="h-8 w-56 rounded-lg bg-[#2D3139] animate-pulse" aria-label="Loading department" />
+                            : <h1 className="text-2xl font-bold text-white">{pageTitle}</h1>}
                         <p className="text-[#8c947b] text-sm mt-1">
                             {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""} {isSuperAdmin && activeTeam ? `assigned to ${activeTeam.name}` : "in your department team"}
                         </p>

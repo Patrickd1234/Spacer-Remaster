@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams } from "react-router-dom"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
@@ -291,7 +291,7 @@ function ProjectPage() {
         setCurrentSprintReport(report);
         setSprintPhase('summary');
 
-        const { data: userData } = await supabase.auth.getUser();
+        const userData = { user: await getSessionUser() };
         const logEntry = {
             entity_type: "sprint",
             entity_id: report.id,
@@ -405,7 +405,7 @@ function ProjectPage() {
         if (error) {
             console.error("Error updating priority", error)
         } else if (task) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task",
                 entity_id: taskId,
@@ -462,7 +462,7 @@ function ProjectPage() {
         if (error) {
             console.error("Error updating subtasks", error)
         } else if (statusChanged) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "status_changed",
@@ -537,7 +537,7 @@ function ProjectPage() {
         if (error) {
             console.error("Error updating overdue task:", error)
         } else {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "status_changed",
@@ -563,7 +563,7 @@ function ProjectPage() {
             console.error("Error deleting task:", error);
             // Revert state if needed, but keeping it simple here
         } else {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "deleted",
@@ -710,7 +710,7 @@ function ProjectPage() {
         }
 
         const fetchUserRole = async () => {
-            const { data: authData } = await supabase.auth.getUser()
+            const authData = { user: await getSessionUser() }
             const userId = authData?.user?.id
             if (!userId) return
             setCurrentUserId(userId)
@@ -773,7 +773,7 @@ function ProjectPage() {
             .from("project-files").upload(path, pendingFile, { contentType: pendingFile.type, upsert: false })
         if (storageError) { setUploadError("Upload failed: " + storageError.message); setUploading(false); return }
         const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
-        const { data: userData } = await supabase.auth.getUser()
+        const userData = { user: await getSessionUser() }
         const uploaderName = userData?.user?.email?.split("@")[0] || "You"
         const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
             project_id, name: pendingFile.name, type: pendingFile.type,
@@ -801,7 +801,7 @@ function ProjectPage() {
         await supabase.storage.from("project-files").remove([f.path])
         const { error } = await supabase.from("project_files").delete().eq("id", f.id)
         if (!error) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "file",
                 entity_id: f.id,
@@ -837,7 +837,7 @@ function ProjectPage() {
                 return
             }
             const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const uploaderName = userData?.user?.email?.split("@")[0] || "You"
             const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
                 project_id,
@@ -2470,7 +2470,7 @@ function ProjectPage() {
                     })
                     if (!error) {
                         fetchProjectMembers()
-                        const { data: userData } = await supabase.auth.getUser()
+                        const userData = { user: await getSessionUser() }
                         await supabase.from("activity_log").insert({
                             entity_type: "member", entity_id: user.id,
                             actor_id: userData?.user?.id, action: "member_added",

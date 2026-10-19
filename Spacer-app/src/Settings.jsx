@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import { usePreferences } from "./PreferencesContext"
 import { useRole } from "./RoleContext"
 import { getOrCreateMasterKey, encryptText, decryptText } from "./utils/crypto"
@@ -91,7 +91,7 @@ export default function Settings() {
     useEffect(() => {
         const fetchUserData = async () => {
             try {
-                const { data: authData } = await supabase.auth.getUser()
+                const authData = { user: await getSessionUser() }
                 const authUser = authData?.user
 
                 let fetchedOrgName = ""
@@ -259,7 +259,7 @@ export default function Settings() {
     const handleSaveWorkspace = async () => {
         setSaving(true)
         try {
-            const { data: authData } = await supabase.auth.getUser()
+            const authData = { user: await getSessionUser() }
             const authUser = authData?.user
             if (authUser) {
                 const { data: userProfile } = await supabase

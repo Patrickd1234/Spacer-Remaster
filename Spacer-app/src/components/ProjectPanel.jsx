@@ -12,7 +12,7 @@
  *   onPreview: (file) => void   — open DocViewer
  */
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 
 const ACCEPTED = [
   "image/*",
@@ -108,7 +108,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
     if (dbError) {
       setUploadError("Could not save file record: " + dbError.message);
     } else if (fileData) {
-      const { data: userData } = await supabase.auth.getUser();
+      const userData = { user: await getSessionUser() };
       const logEntry = {
         entity_type: "file",
         entity_id: fileData.id,
@@ -128,7 +128,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
     await supabase.storage.from("project-files").remove([f.path]);
     const { error } = await supabase.from("project_files").delete().eq("id", f.id);
     if (!error) {
-      const { data: userData } = await supabase.auth.getUser();
+      const userData = { user: await getSessionUser() };
       const logEntry = {
         entity_type: "file",
         entity_id: f.id,

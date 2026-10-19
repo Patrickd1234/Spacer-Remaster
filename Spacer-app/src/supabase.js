@@ -308,3 +308,15 @@ const mockSupabase = {
 
 // Export client directly so it only uses the live database
 export const supabase = realSupabase;
+
+// Signed-in user from the locally stored session — no network round trip,
+// unlike supabase.auth.getUser(). Use it for the user's id/email/metadata in
+// the UI; the database still enforces access with the session token (RLS).
+export const getSessionUser = async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+        console.warn("Unable to read session:", error);
+        return null;
+    }
+    return data?.session?.user ?? null;
+};

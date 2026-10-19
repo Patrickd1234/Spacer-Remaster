@@ -4,7 +4,7 @@ import PieChart from "./components/PieChart"
 import AnimatedNumber from "./components/AnimatedNumber"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 
 const STATUS_COLORS = {
@@ -118,7 +118,7 @@ export default function Reports() {
       // 1. Get authenticated user
       let userId = localStorage.getItem("userId")
       if (!userId) {
-        const { data: authData } = await supabase.auth.getUser()
+        const authData = { user: await getSessionUser() }
         userId = authData?.user?.id
         if (userId) localStorage.setItem("userId", userId)
       }

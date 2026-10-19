@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { supabase, getSessionUser } from './supabase';
 
 const RoleContext = createContext();
 
@@ -14,7 +14,7 @@ export function RoleProvider({ children }) {
         const fetchRole = async () => {
             setRoleLoading(true);
             try {
-                const { data: authData } = await supabase.auth.getUser();
+                const authData = { user: await getSessionUser() };
                 const userId = authData?.user?.id;
                 
                 if (!userId) {

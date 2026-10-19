@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { useNavigate, Link } from "react-router-dom"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 
 function Onboarding() {
     const navigate = useNavigate()
@@ -36,7 +36,7 @@ function Onboarding() {
 
         setStatus("submitting")
         try {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             if (userData?.user) {
                 const user = userData.user
                 let orgId = user.user_metadata?.organization_id

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 
 const CustomDropdown = ({ options, value, onChange, placeholder, direction = "down" }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -160,7 +160,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
         }
 
         setSaving(true);
-        const { data: userData } = await supabase.auth.getUser();
+        const userData = { user: await getSessionUser() };
         
         const { data, error } = await supabase
             .from("tasks")

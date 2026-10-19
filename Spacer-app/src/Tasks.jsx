@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import { useRole } from "./RoleContext"
@@ -67,7 +67,7 @@ export default function Tasks() {
         const fetchTasks = async () => {
             setLoading(true)
             try {
-                const { data: authData } = await supabase.auth.getUser()
+                const authData = { user: await getSessionUser() }
                 const userId = authData?.user?.id
                 if (!userId) return
 
@@ -203,7 +203,7 @@ export default function Tasks() {
         setStandupSaving(true)
 
         try {
-            const { data: authData } = await supabase.auth.getUser()
+            const authData = { user: await getSessionUser() }
             const uid = authData?.user?.id
             
             if (isLocalFallback) {

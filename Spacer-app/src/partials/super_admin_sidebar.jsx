@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
 
@@ -133,7 +133,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
     useEffect(() => {
         const fetchDbUser = async () => {
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             if (authData?.user) {
                 const { data } = await supabase
                     .from("users")
