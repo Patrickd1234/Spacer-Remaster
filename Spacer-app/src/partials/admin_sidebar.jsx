@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { useRole } from "../RoleContext";
 
 export default function AdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -10,6 +11,8 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
+    const { departments, activeDepartment, setActiveDepartment } = useRole();
+    const activeTeamSpaceId = activeDepartment?.team_space_id ?? null;
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -70,44 +73,28 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
 
+    // Projects of the department chosen in the shared switcher (RoleContext)
     useEffect(() => {
+        if (!activeTeamSpaceId) return;
+        let cancelled = false;
         const fetchProjects = async () => {
-            const userId = localStorage.getItem("userId");
-            if (!userId) return;
-
-            // Fetch all memberships for this user with their roles
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id, role")
-                .eq("user_id", userId);
-
-            if (memberError || !memberData || memberData.length === 0) {
-                // No memberships found — show nothing, not everything
-                setProjects([]);
-                return;
-            }
-
-            // Pick the team space where this user is admin.
-            // If they somehow belong to multiple departments, prioritise
-            // the one where their role is explicitly "admin".
-            const adminMembership =
-                memberData.find(m => m.role === "admin") ||
-                memberData.find(m => m.role === "super_admin") ||
-                memberData[0];
-
-            const teamSpaceId = adminMembership?.team_space_id;
-            if (!teamSpaceId) { setProjects([]); return; }
-
-            // Show only projects inside that one department
             const { data, error } = await supabase
                 .from("project_spaces")
                 .select("id, name")
-                .eq("team_space_id", teamSpaceId);
-
-            if (!error) setProjects(data || []);
+                .eq("team_space_id", activeTeamSpaceId);
+            if (cancelled) return;
+            if (error) {
+                console.error("Error fetching department projects:", error);
+                setProjects([]);
+                return;
+            }
+            setProjects(data || []);
         };
         fetchProjects();
+        return () => { cancelled = true; };
+    }, [activeTeamSpaceId]);
 
+    useEffect(() => {
         const fetchDbUser = async () => {
             const authData = { user: await getSessionUser() };
             if (authData?.user) {
@@ -200,6 +187,24 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                                 >
                                     add
                                 </button>
+                            </div>
+                        )}
+                        {expanded && departments.length > 1 && (
+                            <div className="px-3 mb-2">
+                                <label className="sr-only" htmlFor="admin-department-switcher">Department</label>
+                                <select
+                                    id="admin-department-switcher"
+                                    value={activeTeamSpaceId ? String(activeTeamSpaceId) : ""}
+                                    onChange={(e) => setActiveDepartment(e.target.value)}
+                                    title="Switch department"
+                                    className="w-full bg-[#0F1115] border border-[#2D3139] hover:border-[#424934] focus:border-[var(--primary-color)] rounded-lg px-2 py-1.5 text-[12px] text-white outline-none cursor-pointer"
+                                >
+                                    {departments.map((d) => (
+                                        <option key={d.team_space_id} value={String(d.team_space_id)}>
+                                            {d.name}{d.role === "admin" ? " (admin)" : ""}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
                         )}
                         <div className="space-y-1">

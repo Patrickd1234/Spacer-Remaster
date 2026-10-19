@@ -13,7 +13,7 @@ function Department() {
     const [mem_info, setMem_info] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const { isSuperAdmin, isAdmin, roleLoading, membershipData } = useRole()
+    const { isSuperAdmin, isAdmin, roleLoading, membershipData, departments, activeDepartment, setActiveDepartment } = useRole()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [organizationId, setOrganizationId] = useState(null)
     const [showCreateDeptModal, setShowCreateDeptModal] = useState(false)
@@ -341,7 +341,9 @@ function Department() {
         window.dispatchEvent(event);
     };
 
-    const canManage = isSuperAdmin || isAdmin
+    // Admins manage only departments where they are an admin (not ones they merely belong to)
+    const isAdminOfActiveDepartment = ["admin", "super_admin", "superadmin"].includes(activeDepartment?.role)
+    const canManage = isSuperAdmin || (isAdmin && isAdminOfActiveDepartment)
 
 const filteredMembers = mem_info.filter(m =>
     !searchQuery ||
@@ -392,6 +394,23 @@ return (
                         <p className="text-[#8c947b] text-sm mt-1">
                             {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""} {isSuperAdmin && activeTeam ? `assigned to ${activeTeam.name}` : "in your department team"}
                         </p>
+                        {!isSuperAdmin && departments.length > 1 && (
+                            <label className="mt-3 flex items-center gap-2 text-xs text-[#8c947b]">
+                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">swap_horiz</span>
+                                <span>Department</span>
+                                <select
+                                    value={activeDepartment ? String(activeDepartment.team_space_id) : ""}
+                                    onChange={(e) => setActiveDepartment(e.target.value)}
+                                    className="bg-[#0F1115] border border-[#2D3139] hover:border-[#424934] focus:border-[var(--primary-color)] rounded-lg px-2.5 py-1.5 text-xs text-white outline-none cursor-pointer"
+                                >
+                                    {departments.map((d) => (
+                                        <option key={d.team_space_id} value={String(d.team_space_id)}>
+                                            {d.name}{d.role === "admin" ? " (admin)" : ""}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        )}
                     </div>
 
                     {canManage && (
