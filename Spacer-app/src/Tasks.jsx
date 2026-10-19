@@ -101,42 +101,11 @@ export default function Tasks() {
                     return
                 }
 
-                const corrected = (data || []).map(t => {
-                    let subtasksList = []
-                    if (t.sub_tasks) {
-                        if (Array.isArray(t.sub_tasks)) {
-                            subtasksList = t.sub_tasks
-                        } else if (typeof t.sub_tasks === "string") {
-                            const trimmed = t.sub_tasks.trim()
-                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                try {
-                                    const parsed = JSON.parse(trimmed)
-                                    if (Array.isArray(parsed)) {
-                                        subtasksList = parsed
-                                    } else {
-                                        console.warn("Malformed sub_tasks (expected array) for task", t.id, parsed)
-                                        subtasksList = []
-                                    }
-                                } catch (e) {
-                                    console.warn("Malformed sub_tasks for task", t.id, e)
-                                    subtasksList = []
-                                }
-                            }
-                        }
-                    }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => Boolean(st?.done))
-                    const anyDone = subtasksList.some(st => Boolean(st?.done))
-                    let expectedStatus = t.status
-                    if (allDone) expectedStatus = "done"
-                    else if (subtasksList.length === 0 || !anyDone) expectedStatus = "todo"
-                    else expectedStatus = "in_progress"
-                    return {
-                        ...t,
-                        status: expectedStatus,
-                        project_name: t.project?.name || null,
-                    }
-                })
-                setTasks(corrected)
+                // Show statuses as stored; they're only derived when subtasks are edited
+                setTasks((data || []).map(t => ({
+                    ...t,
+                    project_name: t.project?.name || null,
+                })))
             } catch (err) {
                 console.error("Error fetching tasks:", err)
             } finally {

@@ -5,7 +5,8 @@ import Header from "./partials/header"
 import { supabase, getSessionUser } from "./supabase"
 import { usePreferences } from "./PreferencesContext"
 import { useRole } from "./RoleContext"
-import { getOrCreateMasterKey, encryptText, decryptText } from "./utils/crypto"
+import TwoFactorSettings from "./components/TwoFactorSettings"
+import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
 
 export default function Settings() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -24,20 +25,6 @@ export default function Settings() {
     // Password form state
     const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" })
     const [passwordMsg, setPasswordMsg] = useState(null)
-
-    // 2FA Dialog and Cryptography States
-    const [showTwoFactorModal, setShowTwoFactorModal] = useState(false)
-    const [twoFactorStep, setTwoFactorStep] = useState("setup") // setup, verify, success, view
-    const [rawSecret, setRawSecret] = useState("")
-    const [encryptedSecret, setEncryptedSecret] = useState("")
-    const [verificationCode, setVerificationCode] = useState("")
-    const [recoveryCodes, setRecoveryCodes] = useState([])
-    const [masterKey, setMasterKey] = useState("")
-    const [twoFactorVerifyError, setTwoFactorVerifyError] = useState("")
-    const [decryptingSecret, setDecryptingSecret] = useState(false)
-    const [decryptedSecret, setDecryptedSecret] = useState("")
-    const [passwordConfirm, setPasswordConfirm] = useState("")
-    const [passwordConfirmError, setPasswordConfirmError] = useState("")
 
     // GitHub Link & Repositories Selector States
     const [githubRepos, setGithubRepos] = useState(() => {
@@ -178,19 +165,6 @@ export default function Settings() {
         fetchUserData()
     }, [isSuperAdmin, isAdmin, membershipData])
 
-    // Load master key for local encryption/decryption
-    useEffect(() => {
-        const initVault = async () => {
-            try {
-                const key = await getOrCreateMasterKey()
-                setMasterKey(key)
-            } catch (err) {
-                console.error("Failed to initialize cryptographic vault key:", err)
-            }
-        }
-        initVault()
-    }, [])
-
     // Setup listener for the pop-up OAuth simulator window
     useEffect(() => {
         const handleOAuthMessage = async (event) => {
@@ -317,19 +291,20 @@ export default function Settings() {
             setPasswordMsg({ type: "error", text: "New passwords do not match." })
             return
         }
-        if (passwordForm.next.length < 6) {
-            setPasswordMsg({ type: "error", text: "Password must be at least 6 characters." })
+        if (passwordForm.next.length < MIN_PASSWORD_LENGTH) {
+            setPasswordMsg({ type: "error", text: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` })
             return
         }
 
         setSaving(true)
-        const { error } = await supabase.auth.updateUser({ password: passwordForm.next })
+        // Server checks the current password, then signs out other devices
+        const { error } = await changePassword(passwordForm.current, passwordForm.next)
         setSaving(false)
 
         if (error) {
-            setPasswordMsg({ type: "error", text: error.message })
+            setPasswordMsg({ type: "error", text: error })
         } else {
-            setPasswordMsg({ type: "success", text: "Password updated successfully!" })
+            setPasswordMsg({ type: "success", text: "Password updated. You've been signed out on your other devices." })
             setPasswordForm({ current: "", next: "", confirm: "" })
             showToast("Password updated successfully!")
         }
@@ -454,121 +429,6 @@ export default function Settings() {
         await updatePreferences("integrations", updated)
         showToast(`Linked repository updated to: ${repoName}`)
     }
-
-    const handleOpen2FASetup = async () => {
-        try {
-            // Generate standard TOTP base32 raw secret mockup
-            const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-            let secret = "";
-            for (let i = 0; i < 16; i++) {
-                secret += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-            }
-
-            // Encrypt secret
-            const enc = await encryptText(secret, masterKey);
-
-            // Generate recovery codes
-            const codes = [];
-            for (let i = 0; i < 8; i++) {
-                let code = "";
-                for (let j = 0; j < 8; j++) {
-                    code += Math.floor(Math.random() * 10);
-                }
-                // format as xxxx-xxxx
-                codes.push(`${code.slice(0, 4)}-${code.slice(4)}`);
-            }
-
-            setRawSecret(secret);
-            setEncryptedSecret(enc);
-            setRecoveryCodes(codes);
-            setTwoFactorVerifyError("");
-            setVerificationCode("");
-            setTwoFactorStep("setup");
-            setShowTwoFactorModal(true);
-        } catch (err) {
-            console.error("2FA setup error:", err);
-            showToast("Failed to initialize 2FA cryptography", "error");
-        }
-    };
-
-    const handleConfirm2FASetup = async () => {
-        if (verificationCode.length !== 6 || isNaN(verificationCode)) {
-            setTwoFactorVerifyError("Please enter a valid 6-digit verification code.");
-            return;
-        }
-        setTwoFactorStep("success");
-    };
-
-    const handleSave2FAPreferences = async () => {
-        const encCodes = await encryptText(JSON.stringify(recoveryCodes), masterKey);
-        const next = {
-            ...security,
-            twoFactor: true,
-            twoFactorSecretEncrypted: encryptedSecret,
-            twoFactorRecoveryCodesEncrypted: encCodes
-        };
-        await handleSaveSecurity(next);
-        setShowTwoFactorModal(false);
-        showToast("Two-Factor Authentication is now enabled!", "success");
-    };
-
-    const handleOpen2FAView = async () => {
-        setTwoFactorStep("view");
-        setDecryptedSecret("");
-        setPasswordConfirm("");
-        setPasswordConfirmError("");
-        setTwoFactorVerifyError("");
-        setShowTwoFactorModal(true);
-    };
-
-    const handleDecrypt2FASecret = async () => {
-        if (!passwordConfirm) {
-            setPasswordConfirmError("Password confirmation is required.");
-            return;
-        }
-        setDecryptingSecret(true);
-        setPasswordConfirmError("");
-
-        setTimeout(async () => {
-            try {
-                const encrypted = security.twoFactorSecretEncrypted;
-                if (!encrypted) {
-                    setDecryptedSecret("JBSWY3DPEHPK3PXP");
-                } else {
-                    const decrypted = await decryptText(encrypted, masterKey);
-                    setDecryptedSecret(decrypted || "Error decrypting token");
-                }
-
-                if (security.twoFactorRecoveryCodesEncrypted) {
-                    const decCodes = await decryptText(security.twoFactorRecoveryCodesEncrypted, masterKey);
-                    if (decCodes) {
-                        setRecoveryCodes(JSON.parse(decCodes));
-                    }
-                } else {
-                    // Fallback recovery codes
-                    setRecoveryCodes(["1234-5678", "8765-4321", "2345-6789", "9876-5432"]);
-                }
-                setTwoFactorStep("view_decrypted");
-            } catch (err) {
-                console.error(err);
-                setPasswordConfirmError("Vault decryption failed. Check password.");
-            } finally {
-                setDecryptingSecret(false);
-            }
-        }, 800);
-    };
-
-    const handleDisable2FA = async () => {
-        const next = {
-            ...security,
-            twoFactor: false,
-            twoFactorSecretEncrypted: "",
-            twoFactorRecoveryCodesEncrypted: ""
-        };
-        await handleSaveSecurity(next);
-        setShowTwoFactorModal(false);
-        showToast("Two-Factor Authentication has been disabled.", "info");
-    };
 
     const tabs = [
         { id: "workspace", label: "General & Workspace", icon: "domain" },
@@ -1079,39 +939,8 @@ export default function Settings() {
                                         </p>
                                     </div>
 
-                                    {/* Local Cryptographic Vault Status Dashboard */}
-                                    <div className="p-md rounded-xl bg-primary-container/5 border border-primary-fixed/20 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                        <div className="flex items-start sm:items-center gap-3">
-                                            <span className="material-symbols-outlined text-primary-fixed text-2xl animate-pulse">lock</span>
-                                            <div>
-                                                <h4 className="font-body-md font-bold text-on-surface text-sm">Local Cryptographic Vault</h4>
-                                                <p className="text-xs text-on-surface-variant">All critical secrets (2FA, Access Tokens) are encrypted locally using AES-GCM-256 before leaving your browser.</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-left sm:text-right shrink-0">
-                                            <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-950 text-emerald-400 border border-emerald-500/30">SECURE VAULT ACTIVE</span>
-                                            <p className="font-mono text-[9px] text-on-surface-variant mt-1">Key ID: {masterKey ? `${masterKey.slice(0, 16)}...` : "Loading Vault Key..."}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* 2FA Toggle Row */}
-                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-md rounded-xl bg-surface-container-low border border-outline-variant gap-4">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-body-md font-semibold text-on-surface">Two-Factor Authentication (2FA)</p>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${security.twoFactor ? "bg-primary-container/30 text-primary-fixed" : "bg-surface-container-highest text-on-surface-variant"}`}>
-                                                    {security.twoFactor ? "ENABLED" : "DISABLED"}
-                                                </span>
-                                            </div>
-                                            <p className="text-body-sm text-on-surface-variant mt-0.5">Secure your account with TOTP authenticator app verification.</p>
-                                        </div>
-                                        <button
-                                            onClick={security.twoFactor ? handleOpen2FAView : handleOpen2FASetup}
-                                            className="px-md py-2 bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-surface-variant font-body-sm font-semibold rounded-xl transition-colors shrink-0"
-                                        >
-                                            {security.twoFactor ? "Configure 2FA" : "Enable 2FA"}
-                                        </button>
-                                    </div>
+                                    {/* Two-factor authentication (Supabase MFA) */}
+                                    <TwoFactorSettings onNotify={showToast} />
 
                                     {/* Password Change Section */}
                                     <div className="space-y-md pt-md border-t border-outline-variant">
@@ -1122,6 +951,17 @@ export default function Settings() {
                                             </div>
                                         )}
                                         <form onSubmit={handlePasswordChange} className="space-y-md max-w-md">
+                                            <div>
+                                                <label className="block text-body-sm text-on-surface-variant mb-1">Current Password</label>
+                                                <input
+                                                    type="password"
+                                                    required
+                                                    autoComplete="current-password"
+                                                    className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
+                                                    value={passwordForm.current}
+                                                    onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                                                />
+                                            </div>
                                             <div>
                                                 <label className="block text-body-sm text-on-surface-variant mb-1">New Password</label>
                                                 <input
@@ -1467,324 +1307,6 @@ export default function Settings() {
                 </div>
             )}
 
-            {/* 2FA Configuration / View Modal */}
-            {showTwoFactorModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
-                    <div className="glass-card rounded-2xl p-lg max-w-xl w-full space-y-lg border border-outline-variant shadow-2xl animate-scaleIn">
-
-                        {/* Modal Header */}
-                        <div className="flex items-center justify-between border-b border-outline-variant pb-sm">
-                            <h3 className="text-headline-md font-bold text-on-surface flex items-center gap-2">
-                                <span className="material-symbols-outlined text-primary-fixed">security</span>
-                                {twoFactorStep === "setup" && "Set Up Two-Factor Authentication"}
-                                {twoFactorStep === "verify" && "Confirm 2FA Configuration"}
-                                {twoFactorStep === "success" && "Backup Recovery Codes"}
-                                {twoFactorStep === "view" && "Configure 2FA Settings"}
-                                {twoFactorStep === "view_decrypted" && "Decrypted 2FA Credentials"}
-                            </h3>
-                            <button onClick={() => setShowTwoFactorModal(false)} className="text-on-surface-variant hover:text-on-surface">
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-
-                        {/* Step 1: Generate & Scan QR */}
-                        {twoFactorStep === "setup" && (
-                            <div className="space-y-md">
-                                <p className="text-body-sm text-on-surface-variant">
-                                    Enhance your account security by requiring a verification code from a mobile authenticator app when signing in.
-                                </p>
-
-                                <div className="flex flex-col md:flex-row items-center gap-lg py-sm">
-                                    {/* SVG QR Code Illustration with Laser Scan */}
-                                    <div className="relative w-40 h-40 bg-white p-3 rounded-2xl flex items-center justify-center border-2 border-primary-fixed shrink-0 overflow-hidden shadow-inner">
-                                        <svg viewBox="0 0 100 100" className="w-full h-full text-neutral-900" fill="currentColor">
-                                            {/* Outer bounding blocks */}
-                                            <rect x="0" y="0" width="30" height="30" fill="currentColor" />
-                                            <rect x="3" y="3" width="24" height="24" fill="white" />
-                                            <rect x="9" y="9" width="12" height="12" fill="currentColor" />
-
-                                            <rect x="70" y="0" width="30" height="30" fill="currentColor" />
-                                            <rect x="73" y="3" width="24" height="24" fill="white" />
-                                            <rect x="79" y="9" width="12" height="12" fill="currentColor" />
-
-                                            <rect x="0" y="70" width="30" height="30" fill="currentColor" />
-                                            <rect x="3" y="73" width="24" height="24" fill="white" />
-                                            <rect x="9" y="79" width="12" height="12" fill="currentColor" />
-
-                                            {/* Mock QR data pixels */}
-                                            <rect x="40" y="10" width="10" height="10" fill="currentColor" />
-                                            <rect x="55" y="15" width="5" height="15" fill="currentColor" />
-                                            <rect x="40" y="35" width="15" height="5" fill="currentColor" />
-                                            <rect x="5" y="45" width="15" height="10" fill="currentColor" />
-                                            <rect x="35" y="55" width="10" height="10" fill="currentColor" />
-                                            <rect x="55" y="45" width="10" height="10" fill="currentColor" />
-                                            <rect x="80" y="40" width="15" height="5" fill="currentColor" />
-                                            <rect x="90" y="55" width="10" height="10" fill="currentColor" />
-                                            <rect x="85" y="85" width="10" height="10" fill="currentColor" />
-                                            <rect x="65" y="75" width="5" height="10" fill="currentColor" />
-                                            <rect x="45" y="80" width="15" height="5" fill="currentColor" />
-                                            <rect x="40" y="90" width="5" height="10" fill="currentColor" />
-                                        </svg>
-
-                                        {/* Animated green laser scanner line */}
-                                        <div className="absolute left-0 w-full h-[3px] bg-primary-fixed/80 shadow-[0_0_8px_var(--primary-color)] animate-[scan_2s_ease-in-out_infinite]"></div>
-                                        <style>{`
-                                            @keyframes scan {
-                                                0%, 100% { top: 10%; }
-                                                50% { top: 90%; }
-                                            }
-                                        `}</style>
-                                    </div>
-
-                                    <div className="space-y-sm w-full">
-                                        <h4 className="font-body-md font-semibold text-on-surface text-sm">Scan QR Code</h4>
-                                        <p className="text-xs text-on-surface-variant leading-relaxed">
-                                            Scan the code using Google Authenticator, Authy, Microsoft Authenticator, or compatible app.
-                                        </p>
-                                        <div className="bg-surface-container-highest/60 border border-outline-variant p-sm rounded-xl space-y-1">
-                                            <p className="text-[10px] text-on-surface-variant font-semibold uppercase tracking-wider">Secret Key</p>
-                                            <div className="flex items-center justify-between gap-sm">
-                                                <code className="font-mono text-xs text-primary-fixed font-bold tracking-widest">{rawSecret}</code>
-                                                <button
-                                                    onClick={() => {
-                                                        navigator.clipboard.writeText(rawSecret);
-                                                        showToast("Secret key copied to clipboard!");
-                                                    }}
-                                                    className="text-on-surface-variant hover:text-on-surface px-2 py-0.5 rounded border border-outline-variant text-[10px]"
-                                                >
-                                                    Copy
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Cryptographic encrypted value proof */}
-                                <div className="p-sm rounded-xl bg-primary-container/5 border border-primary-fixed/20 space-y-1">
-                                    <div className="flex items-center gap-1.5 text-xs text-primary-fixed font-semibold">
-                                        <span className="material-symbols-outlined text-sm">lock</span>
-                                        <span>Cryptographic Encryption Vault Storage Output</span>
-                                    </div>
-                                    <p className="text-[10px] text-on-surface-variant leading-relaxed">
-                                        The value shown below is the real ciphertext representation saved to the database:
-                                    </p>
-                                    <div className="bg-surface-container-lowest/80 border border-outline-variant p-sm rounded-lg">
-                                        <code className="font-mono text-[10px] text-on-surface break-all block max-h-16 overflow-y-auto">{encryptedSecret}</code>
-                                    </div>
-                                </div>
-
-                                {/* Code Verification form */}
-                                <div className="space-y-sm pt-sm border-t border-outline-variant">
-                                    <label className="block text-xs font-semibold text-on-surface uppercase tracking-wider">Enter Verification Code</label>
-                                    <div className="flex gap-md items-center">
-                                        <input
-                                            type="text"
-                                            maxLength="6"
-                                            placeholder="000000"
-                                            value={verificationCode}
-                                            onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
-                                            className="bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-center text-headline-sm font-mono tracking-widest w-40 focus:ring-2 focus:ring-primary-fixed focus:outline-none"
-                                        />
-                                        <button
-                                            onClick={handleConfirm2FASetup}
-                                            className="px-lg py-2.5 bg-primary-container text-on-primary-container font-semibold rounded-xl hover:scale-[0.98] transition-all"
-                                        >
-                                            Verify Code
-                                        </button>
-                                    </div>
-                                    {twoFactorVerifyError && (
-                                        <p className="text-xs text-error font-medium">{twoFactorVerifyError}</p>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 2: Verification Success & Recovery Keys */}
-                        {twoFactorStep === "success" && (
-                            <div className="space-y-md">
-                                <div className="flex items-center gap-3 p-md rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-emerald-200">
-                                    <span className="material-symbols-outlined text-2xl">check_circle</span>
-                                    <div>
-                                        <h4 className="font-body-md font-bold text-sm">Authenticator Verified Successfully!</h4>
-                                        <p className="text-xs text-neutral-400">Two-factor auth has been configured. Write down these backup codes to prevent lockouts.</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-1">
-                                    <label className="block text-xs font-semibold text-on-surface uppercase tracking-wider">Backup Recovery Codes</label>
-                                    <p className="text-xs text-on-surface-variant">Each code can only be used once. Store these securely in a password manager.</p>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-sm bg-surface-container-highest/50 border border-outline-variant p-md rounded-xl font-mono text-center text-sm font-semibold tracking-wider text-on-surface">
-                                    {recoveryCodes.map((code, index) => (
-                                        <div key={index} className="p-2 bg-surface-container-lowest/80 border border-outline-variant/65 rounded-lg select-all">
-                                            {code}
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <div className="flex gap-sm">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(recoveryCodes.join("\n"));
-                                            showToast("Recovery codes copied to clipboard!");
-                                        }}
-                                        className="flex-1 py-2 bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-surface-variant font-body-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <span className="material-symbols-outlined text-base">content_copy</span>
-                                        Copy Codes
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            const element = document.createElement("a");
-                                            const file = new Blob([recoveryCodes.join("\r\n")], { type: 'text/plain' });
-                                            element.href = URL.createObjectURL(file);
-                                            element.download = "spacers-backup-recovery-codes.txt";
-                                            document.body.appendChild(element);
-                                            element.click();
-                                            document.body.removeChild(element);
-                                            showToast("Backup codes downloaded!");
-                                        }}
-                                        className="flex-1 py-2 bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-surface-variant font-body-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <span className="material-symbols-outlined text-base">download</span>
-                                        Download (.txt)
-                                    </button>
-                                </div>
-
-                                <div className="pt-sm border-t border-outline-variant flex items-center justify-end">
-                                    <button
-                                        onClick={handleSave2FAPreferences}
-                                        className="px-lg py-2.5 bg-primary-container text-on-primary-container font-semibold rounded-xl hover:scale-[0.98] transition-all"
-                                    >
-                                        Enable Two-Factor Auth
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 3: Locked Settings Details */}
-                        {twoFactorStep === "view" && (
-                            <div className="space-y-md">
-                                <div className="p-md rounded-xl bg-amber-950/20 border border-amber-500/20 flex gap-sm items-start text-amber-200">
-                                    <span className="material-symbols-outlined text-xl">lock_open</span>
-                                    <div>
-                                        <h4 className="font-body-md font-bold text-sm">Decryption Authentication Required</h4>
-                                        <p className="text-xs text-neutral-400">To inspect vault records or disable 2FA, please verify your credentials to decrypt the keys.</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-md">
-                                    <div>
-                                        <label className="block text-body-sm text-on-surface-variant mb-1">Confirm Account Password</label>
-                                        <input
-                                            type="password"
-                                            placeholder="••••••••••••"
-                                            value={passwordConfirm}
-                                            onChange={(e) => setPasswordConfirm(e.target.value)}
-                                            className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
-                                        />
-                                        {passwordConfirmError && (
-                                            <p className="text-xs text-error font-medium mt-1">{passwordConfirmError}</p>
-                                        )}
-                                    </div>
-
-                                    <div className="flex gap-md pt-sm border-t border-outline-variant justify-between items-center">
-                                        <button
-                                            onClick={handleDisable2FA}
-                                            className="text-xs text-error hover:bg-error/10 px-md py-2 rounded-xl transition-colors border border-error/20 font-semibold"
-                                        >
-                                            Disable 2FA
-                                        </button>
-                                        <div className="flex gap-sm">
-                                            <button
-                                                onClick={() => setShowTwoFactorModal(false)}
-                                                className="px-md py-2 bg-surface-container-highest text-on-surface font-body-sm font-semibold rounded-xl hover:bg-surface-variant transition-colors"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                onClick={handleDecrypt2FASecret}
-                                                disabled={decryptingSecret}
-                                                className="px-lg py-2 bg-primary-container text-on-primary-container font-body-sm font-semibold rounded-xl hover:scale-[0.98] transition-all flex items-center gap-sm disabled:opacity-50"
-                                            >
-                                                {decryptingSecret ? (
-                                                    <>
-                                                        <span className="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-                                                        Decrypting...
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span className="material-symbols-outlined text-sm">vpn_key</span>
-                                                        Unlock Secret
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 4: Display Decrypted Details */}
-                        {twoFactorStep === "view_decrypted" && (
-                            <div className="space-y-md">
-                                <div className="p-sm rounded-xl bg-emerald-950/20 border border-emerald-500/20 flex gap-sm items-center text-emerald-200">
-                                    <span className="material-symbols-outlined text-base">verified</span>
-                                    <p className="text-xs">Secure decryption completed locally on client.</p>
-                                </div>
-
-                                <div className="space-y-sm">
-                                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider">TOTP Authenticator Secret</label>
-                                    <div className="flex items-center gap-2 bg-surface-container-highest border border-outline-variant p-md rounded-xl">
-                                        <code className="font-mono text-sm text-primary-fixed font-bold tracking-widest flex-1">{decryptedSecret}</code>
-                                        <button
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(decryptedSecret);
-                                                showToast("Secret key copied!");
-                                            }}
-                                            className="px-2 py-1 rounded bg-surface-container-lowest border border-outline-variant text-[10px] text-on-surface hover:bg-surface-variant transition-colors"
-                                        >
-                                            Copy Key
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-sm">
-                                    <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Backup Recovery Codes</label>
-                                    <div className="grid grid-cols-2 gap-sm bg-surface-container-highest/50 border border-outline-variant p-md rounded-xl font-mono text-center text-sm font-semibold tracking-wider text-on-surface">
-                                        {recoveryCodes.map((code, index) => (
-                                            <div key={index} className="p-2 bg-surface-container-lowest/80 border border-outline-variant/65 rounded-lg select-all">
-                                                {code}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-sm">
-                                    <button
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(recoveryCodes.join("\n"));
-                                            showToast("Recovery codes copied!");
-                                        }}
-                                        className="flex-1 py-2 bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-surface-variant font-body-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors text-xs"
-                                    >
-                                        Copy Codes
-                                    </button>
-                                    <button
-                                        onClick={handleDisable2FA}
-                                        className="flex-1 py-2 border border-error/30 text-error hover:bg-error/5 font-body-sm font-semibold rounded-xl flex items-center justify-center gap-2 transition-all text-xs"
-                                    >
-                                        <span className="material-symbols-outlined text-xs">delete_forever</span>
-                                        Disable 2FA
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-
-                    </div>
-                </div>
-            )}
         </>
     )
 }

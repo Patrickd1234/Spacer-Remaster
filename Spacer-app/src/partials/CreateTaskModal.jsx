@@ -132,14 +132,26 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 return;
             }
 
-            const { data } = await supabase
-                .from("memberships")
-                .select("user:users(id, name)")
-                .eq("team_space_id", activeTeamSpaceId);
-            if (data) {
-                const members = data.map(m => m.user).filter(Boolean);
-                setUsers(members);
-            }
+            // Assignable = the project's department members + people added to this project directly
+            const [{ data: deptMembers }, { data: projectMembers }] = await Promise.all([
+                supabase
+                    .from("memberships")
+                    .select("user:users(id, name)")
+                    .eq("team_space_id", activeTeamSpaceId),
+                selectedProjectId
+                    ? supabase
+                        .from("project_members")
+                        .select("user:users(id, name)")
+                        .eq("project_id", selectedProjectId)
+                    : Promise.resolve({ data: [] }),
+            ]);
+
+            const byId = new Map();
+            [...(deptMembers || []), ...(projectMembers || [])]
+                .map(m => m.user)
+                .filter(Boolean)
+                .forEach(u => byId.set(u.id, u));
+            setUsers([...byId.values()]);
         };
         fetchTeamMembers();
     }, [teamSpaceId, selectedProjectId, organizationId]);

@@ -13,6 +13,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
+import { withSignedUrls } from "../projectFiles";
 
 const ACCEPTED = [
   "image/*",
@@ -66,7 +67,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
     if (error) {
       console.error("Error fetching files:", error);
     } else {
-      setFiles(data || []);
+      setFiles(await withSignedUrls(data || []));
     }
   }
 
@@ -88,21 +89,15 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
       return;
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from("project-files")
-      .getPublicUrl(path);
-
-    const publicUrl = urlData?.publicUrl || "";
-
-    // Save metadata to project_files table
+    // Save metadata to project_files table. No stored URL: the bucket is
+    // private and links are signed when the list loads.
     const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
       project_id: project.id,
       name: file.name,
       type: file.type,
       size: file.size,
       path,
-      url: publicUrl,
+      url: "",
     }).select().single();
 
     if (dbError) {

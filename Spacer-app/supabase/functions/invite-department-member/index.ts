@@ -26,10 +26,12 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 // @ts-ignore – Deno URL imports, resolved at runtime by the Deno runtime.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 import { corsHeaders } from "../_shared/cors.ts"
+import { escapeHtml } from "../_shared/html.ts"
+import { requireMfa } from "../_shared/mfa.ts"
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") // optional
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") || "Spacer <notifications@yourdomain.com>"
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173"
@@ -56,6 +58,8 @@ serve(async (req: Request) => {
         })
         const { data: callerData, error: callerErr } = await callerClient.auth.getUser()
         if (callerErr || !callerData?.user) return json({ error: "Not authenticated" }, 401)
+        const mfaBlocked = await requireMfa(callerClient)
+        if (mfaBlocked) return mfaBlocked
         const callerId = callerData.user.id
 
         const body = await req.json().catch(() => ({}))
@@ -189,7 +193,8 @@ serve(async (req: Request) => {
         const newUserId = inviteResult?.user?.id
         if (!newUserId) return json({ error: "Invite email sent, but no user id was returned." }, 500)
 
-        const { error: profileErr } = await admin.from("users").insert({
+        // The on_auth_user_created trigger already made the profile row; upsert sets the org on it
+        const { error: profileErr } = await admin.from("users").upsert({
             id: newUserId,
             email,
             name: email.split("@")[0],
@@ -268,9 +273,9 @@ function addedToTeamEmailHtml({ recipientName, teamName, role, inviterName, logi
 }) {
     return `
     <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
-      <h2>You're in ${teamName} \u{1F389}</h2>
-      <p>Hi ${recipientName || "there"},</p>
-      <p><strong>${inviterName}</strong> just added you to <strong>${teamName}</strong> on Spacer as a <strong>${role}</strong>.</p>
+      <h2>You're in ${escapeHtml(teamName)} \u{1F389}</h2>
+      <p>Hi ${escapeHtml(recipientName || "there")},</p>
+      <p><strong>${escapeHtml(inviterName)}</strong> just added you to <strong>${escapeHtml(teamName)}</strong> on Spacer as a <strong>${escapeHtml(role)}</strong>.</p>
       <p>You already have an account, so just log in and you'll see it in your Departments list.</p>
       <p><a href="${loginUrl}" style="display:inline-block;background:#aff82a;color:#1C1F26;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">Log in to Spacer</a></p>
     </div>

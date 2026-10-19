@@ -2,6 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { fetchDirectProjects, mergeProjects } from "./projectMemberships";
 
 export default function Sidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -73,29 +74,26 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
             const userId = authData?.user?.id || localStorage.getItem("userId");
             if (!userId) { setProjects([]); return; }
 
-            // Get only the team spaces this specific user belongs to
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id, role")
-                .eq("user_id", userId);
+            // Projects from the user's departments, plus projects they were added to directly
+            const [{ data: memberData }, directProjects] = await Promise.all([
+                supabase
+                    .from("memberships")
+                    .select("team_space_id, role")
+                    .eq("user_id", userId),
+                fetchDirectProjects(userId),
+            ]);
 
-            if (memberError || !memberData || memberData.length === 0) {
-                // No memberships — show nothing
-                setProjects([]);
-                return;
+            const teamIds = (memberData || []).map(m => m.team_space_id).filter(Boolean);
+            let departmentProjects = [];
+            if (teamIds.length > 0) {
+                const { data, error } = await supabase
+                    .from("project_spaces")
+                    .select("*")
+                    .in("team_space_id", teamIds);
+                if (!error) departmentProjects = data || [];
             }
 
-            // For a regular member there will usually be one team space.
-            // Use only the team spaces they explicitly belong to.
-            const teamIds = memberData.map(m => m.team_space_id).filter(Boolean);
-            if (teamIds.length === 0) { setProjects([]); return; }
-
-            const { data, error } = await supabase
-                .from("project_spaces")
-                .select("id, name")
-                .in("team_space_id", teamIds);
-
-            if (!error) setProjects(data || []);
+            setProjects(mergeProjects(departmentProjects, directProjects));
         };
         fetchProjects();
 

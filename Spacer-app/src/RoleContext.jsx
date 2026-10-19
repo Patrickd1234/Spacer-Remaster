@@ -84,8 +84,11 @@ export function RoleProvider({ children }) {
                     const stored = readStoredDepartment(userId);
                     const storedIsValid = depts.some((d) => String(d.team_space_id) === stored);
                     setActiveDepartmentId(storedIsValid ? stored : defaultDepartmentId(depts));
-
-                    const superMembership = memberships.find(m => isSuperAdminRole(m.role));
+                    // An org-level admin (admin with no department) manages the whole
+                    // organization, same as is_org_admin() in the database
+                    const isOrgWide = m =>
+                        isSuperAdminRole(m.role) || (m.role === "admin" && !m.team_space_id);
+                    const superMembership = memberships.find(isOrgWide);
                     const hasAdmin = memberships.some(m => m.role === "admin");
                     setSuperAdminMembership(superMembership || null);
 

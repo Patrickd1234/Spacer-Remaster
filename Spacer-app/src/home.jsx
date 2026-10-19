@@ -241,50 +241,8 @@ function Home() {
             if (error) {
                 console.warn("tasks fetch error:", error)
             } else {
-                const corrected = (data || []).map(t => {
-                    let subtasksList = [];
-                    if (t.sub_tasks) {
-                        if (Array.isArray(t.sub_tasks)) {
-                            subtasksList = t.sub_tasks;
-                        } else if (typeof t.sub_tasks === "string") {
-                            const trimmed = t.sub_tasks.trim();
-                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                try {
-                                    const parsed = JSON.parse(trimmed);
-                                    if (Array.isArray(parsed)) {
-                                        subtasksList = parsed;
-                                    } else {
-                                        console.warn("Malformed sub_tasks (expected array) for task", t.id, parsed);
-                                        subtasksList = [];
-                                    }
-                                } catch (e) {
-                                    console.warn("Malformed sub_tasks for task", t.id, e);
-                                    subtasksList = [];
-                                }
-                            }
-                        }
-                    }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => Boolean(st?.done));
-                    const anyDone = subtasksList.some(st => Boolean(st?.done));
-
-                    let expectedStatus = t.status;
-                    if (allDone) {
-                        expectedStatus = 'done';
-                    } else if (subtasksList.length === 0 || !anyDone) {
-                        expectedStatus = 'todo';
-                    } else {
-                        expectedStatus = 'in_progress';
-                    }
-
-                    if (t.status !== expectedStatus) {
-                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
-                            if (error) console.error("Error auto-correcting task status", error);
-                        });
-                        return { ...t, status: expectedStatus };
-                    }
-                    return t;
-                });
-                setUserTasks(corrected)
+                // Show statuses as stored; they're only derived when subtasks are edited
+                setUserTasks(data || [])
             }
         } catch (err) {
             console.error("fetchUserTasks error:", err)

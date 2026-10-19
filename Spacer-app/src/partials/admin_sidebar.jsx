@@ -3,7 +3,7 @@ import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
 import { useRole } from "../RoleContext";
-import DepartmentSwitcher from "./DepartmentSwitcher";
+import { fetchDirectProjects, mergeProjects } from "./projectMemberships";
 
 export default function AdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -74,22 +74,22 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
 
-    // Projects of the department chosen in the shared switcher (RoleContext)
+    // Projects of the department chosen on the Department page (RoleContext)
     useEffect(() => {
         if (!activeTeamSpaceId) return;
         let cancelled = false;
         const fetchProjects = async () => {
-            const { data, error } = await supabase
-                .from("project_spaces")
-                .select("id, name")
-                .eq("team_space_id", activeTeamSpaceId);
+            const userId = localStorage.getItem("userId");
+            const [{ data, error }, directProjects] = await Promise.all([
+                supabase
+                    .from("project_spaces")
+                    .select("id, name")
+                    .eq("team_space_id", activeTeamSpaceId),
+                userId ? fetchDirectProjects(userId) : Promise.resolve([]),
+            ]);
             if (cancelled) return;
-            if (error) {
-                console.error("Error fetching department projects:", error);
-                setProjects([]);
-                return;
-            }
-            setProjects(data || []);
+            if (error) console.error("Error fetching department projects:", error);
+            setProjects(mergeProjects(error ? [] : (data || []), directProjects));
         };
         fetchProjects();
         return () => { cancelled = true; };
@@ -188,11 +188,6 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                                 >
                                     add
                                 </button>
-                            </div>
-                        )}
-                        {expanded && (
-                            <div className="px-3 mb-2">
-                                <DepartmentSwitcher variant="sidebar" />
                             </div>
                         )}
                         <div className="space-y-1">

@@ -9,38 +9,20 @@ function Login() {
     const [showPassword, setShowPassword] = useState(false)
     const [errorMsg, setErrorMsg] = useState("")
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+    const [isUnconfirmed, setIsUnconfirmed] = useState(false)
+    const [resendState, setResendState] = useState("idle")
     const navigate = useNavigate()
     const location = useLocation()
     const [successMsg, setSuccessMsg] = useState(
         location.state?.resetSuccess ? "Your password has been reset successfully. Please sign in with your new password." : ""
     )
 
-    const [isDemoMode, setIsDemoMode] = useState(localStorage.getItem("use_mock_supabase") === "true")
     const isFormFilled = email.trim() !== "" && password.trim() !== ""
     const googleAuthReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-
-    const toggleDemoMode = () => {
-        const newValue = !isDemoMode
-        localStorage.setItem("use_mock_supabase", String(newValue))
-        setIsDemoMode(newValue)
-        if (newValue) {
-            localStorage.removeItem("sb-vrzepdjjjpodztqkfsbh-auth-token")
-        } else {
-            localStorage.removeItem("mock_session")
-        }
-        window.location.reload()
-    }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setErrorMsg("")
-
-        if (isDemoMode && email === "test@example.com" && password === "password") {
-            localStorage.setItem("userId", "demo-user")
-            localStorage.setItem("userEmail", "test@example.com")
-            navigate("/")
-            return
-        }
 
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email,
@@ -49,7 +31,14 @@ function Login() {
 
         if (error) {
             console.error(error)
-            setErrorMsg(error.message)
+            if (error.code === "email_not_confirmed") {
+                setIsUnconfirmed(true)
+                setResendState("idle")
+                setErrorMsg("Please confirm your email before signing in. Check your inbox for the confirmation link.")
+            } else {
+                setIsUnconfirmed(false)
+                setErrorMsg(error.message)
+            }
         } else {
             if (data && data.user) {
                 localStorage.setItem("userId", data.user.id)
@@ -69,6 +58,25 @@ function Login() {
             }
             navigate("/")
         }
+    }
+
+    const handleResendConfirmation = async () => {
+        setResendState("sending")
+
+        const { error } = await supabase.auth.resend({
+            type: "signup",
+            email: email,
+            options: { emailRedirectTo: `${window.location.origin}/login` }
+        })
+
+        if (error) {
+            console.error("Resend confirmation error:", error)
+            setErrorMsg(error.message || "Could not resend the email. Please try again shortly.")
+            setResendState("idle")
+            return
+        }
+
+        setResendState("sent")
     }
 
     const handleGoogleSignIn = async () => {
@@ -126,20 +134,25 @@ function Login() {
                     <div className="w-8 h-8 rounded border border-white/20 flex items-center justify-center shrink-0">
                         <span className="material-symbols-outlined text-white text-[18px]">error</span>
                     </div>
-                    <p className="text-white text-[14px] leading-tight">
-                        {errorMsg === "Invalid login credentials"
-                            ? "Your email doesn't exist in our system, try creating an account or check your password."
-                            : errorMsg}
-                    </p>
+                    <div className="text-white text-[14px] leading-tight">
+                        <p>
+                            {errorMsg === "Invalid login credentials"
+                                ? "Your email doesn't exist in our system, try creating an account or check your password."
+                                : errorMsg}
+                        </p>
+                        {isUnconfirmed && (
+                            <button
+                                type="button"
+                                onClick={handleResendConfirmation}
+                                disabled={resendState !== "idle"}
+                                className="underline text-[#aff82a] hover:brightness-110 font-bold mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {resendState === "sending" ? "Sending..." : resendState === "sent" ? "Confirmation email sent" : "Resend confirmation email"}
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
-
-            {/* Demo Mode Toggle */}
-            <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
-                <button onClick={toggleDemoMode} className="text-xs bg-[var(--bg-border)] text-white px-2 py-1 rounded">
-                    Demo: {isDemoMode ? "ON" : "OFF"}
-                </button>
-            </div>
 
             {/* Left Side: Visual/Brand (Hidden on mobile) */}
             <AuthBrandPanel
