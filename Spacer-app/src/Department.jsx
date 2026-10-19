@@ -33,6 +33,11 @@ function Department() {
     const [deptToDelete, setDeptToDelete] = useState(null)
     const [deletingDept, setDeletingDept] = useState(false)
     const [deleteDeptError, setDeleteDeptError] = useState("")
+    const [createDeptError, setCreateDeptError] = useState("")
+    // Member awaiting removal confirmation ({ userId, name } or null)
+    const [memberToRemove, setMemberToRemove] = useState(null)
+    const [removingMember, setRemovingMember] = useState(false)
+    const [removeMemberError, setRemoveMemberError] = useState("")
     const [activeTab, setActiveTab] = useState("directory")
 
     useEffect(() => {
@@ -176,8 +181,9 @@ function Department() {
 
     const handleCreateDept = async (e) => {
         e.preventDefault();
+        setCreateDeptError("");
         if (!canManage) {
-            alert("Only admins or super admins can create departments.");
+            setCreateDeptError("Only admins or super admins can create departments.");
             return;
         }
         if (!newDeptName.trim() || !organizationId) return;
@@ -190,7 +196,7 @@ function Department() {
                 .single();
 
             if (error) {
-                alert("Error creating department: " + error.message);
+                setCreateDeptError("Couldn't create the department: " + error.message);
             } else {
                 setAllTeams(prev => [...prev, data]);
                 setActiveTeam(data);
@@ -200,6 +206,7 @@ function Department() {
             }
         } catch (err) {
             console.error("Create department error:", err);
+            setCreateDeptError("Couldn't create the department. Please try again.");
         } finally {
             setActionSaving(false);
         }
@@ -298,7 +305,7 @@ function Department() {
         setInviteSuccess("");
 
         if (!canManage) {
-            alert("Only admins or super admins can add members.");
+            setInviteError("Only admins or super admins can add members.");
             return;
         }
         if (!activeTeam?.id) return;
@@ -351,29 +358,43 @@ function Department() {
         }
     };
 
-  const handleRemoveMember = async (targetUserId) => {
-      if (!targetUserId || !activeTeam?.id) return;
-      if (!canManage) {
-          alert("Only admins or super admins can remove members.");
-          return;
-      }
-      if (!window.confirm("Are you sure you want to remove this member from the department?")) return;
-      try {
-          const { error } = await supabase
-              .from("memberships")
-              .delete()
-              .eq("user_id", targetUserId)
-              .eq("team_space_id", activeTeam.id);
+    // Opens the confirmation window; the removal itself runs in confirmRemoveMember
+    const handleRemoveMember = (targetUserId, name) => {
+        if (!targetUserId || !activeTeam?.id || !canManage) return;
+        setRemoveMemberError("");
+        setMemberToRemove({ userId: targetUserId, name: name || "this member" });
+    };
 
-          if (error) {
-              alert("Error removing member: " + error.message);
-          } else {
-              await fetchTeamMembers(activeTeam.id);
-          }
-      } catch (err) {
-          console.error("Remove member error:", err);
-      }
-  };
+    const closeRemoveMember = () => {
+        if (removingMember) return;
+        setMemberToRemove(null);
+        setRemoveMemberError("");
+    };
+
+    const confirmRemoveMember = async () => {
+        if (!memberToRemove || !activeTeam?.id) return;
+        setRemovingMember(true);
+        setRemoveMemberError("");
+        try {
+            const { error } = await supabase
+                .from("memberships")
+                .delete()
+                .eq("user_id", memberToRemove.userId)
+                .eq("team_space_id", activeTeam.id);
+
+            if (error) {
+                setRemoveMemberError("Couldn't remove the member: " + error.message);
+                return;
+            }
+            setMemberToRemove(null);
+            await fetchTeamMembers(activeTeam.id);
+        } catch (err) {
+            console.error("Remove member error:", err);
+            setRemoveMemberError("Couldn't remove the member. Please try again.");
+        } finally {
+            setRemovingMember(false);
+        }
+    };
 
     const handleOpenChat = (recipient) => {
         // Dispatch custom event to notify SidebarRouter's global chat widget
@@ -568,7 +589,7 @@ return (
                                     <div className="flex items-center gap-3">
                                         {canManage && (
                                             <button 
-                                                onClick={() => handleRemoveMember(member.user_id)}
+                                                onClick={() => handleRemoveMember(member.user_id, member.name || member.email)}
                                                 className="text-red-400 hover:text-red-300 text-xs font-medium flex items-center gap-0.5 cursor-pointer"
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">person_remove</span> Remove
@@ -598,6 +619,60 @@ return (
         </main>
 
         {/* Create Department Modal */}
+        {/* ── Remove member confirmation modal ── */}
+        {memberToRemove && (
+            <div
+                className="fixed inset-0 z-[150] flex items-center justify-center p-4"
+                style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
+                onClick={closeRemoveMember}
+            >
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="remove-member-title"
+                    className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
+                        <span className="material-symbols-outlined text-red-400 text-[32px]" aria-hidden="true">person_remove</span>
+                    </div>
+
+                    <h2 id="remove-member-title" className="text-white font-bold text-[18px] text-center mb-2">Remove this member?</h2>
+                    <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to remove</p>
+                    <p className="text-white font-bold text-[15px] text-center mb-3">"{memberToRemove.name}"</p>
+                    <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                        They will lose access to {activeTeam?.name || "this department"} and its projects, unless they were added to a project directly. You can add them back later.
+                    </p>
+                    {removeMemberError && (
+                        <p role="alert" className="text-red-400 text-[12px] text-center -mt-3 mb-4">{removeMemberError}</p>
+                    )}
+
+                    <div className="flex gap-3">
+                        <button
+                            type="button"
+                            onClick={closeRemoveMember}
+                            disabled={removingMember}
+                            className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        >
+                            No, keep them
+                        </button>
+                        <button
+                            type="button"
+                            onClick={confirmRemoveMember}
+                            disabled={removingMember}
+                            className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                        >
+                            {removingMember ? (
+                                <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Removing…</>
+                            ) : (
+                                <><span className="material-symbols-outlined text-[16px]" aria-hidden="true">person_remove</span>Yes, remove</>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {/* ── Delete department confirmation modal ── */}
         {deptToDelete && (
             <div
@@ -657,7 +732,7 @@ return (
                 <div className="bg-[#191c21] rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#2D3139] shadow-2xl animate-scaleIn">
                     <div className="flex items-center justify-between border-b border-[#2D3139]/30 pb-3">
                         <h3 className="text-lg font-bold text-[#aff82a]">Create New Department</h3>
-                        <button onClick={() => setShowCreateDeptModal(false)} className="text-[#8c947b] hover:text-white cursor-pointer">
+                        <button onClick={() => { setShowCreateDeptModal(false); setCreateDeptError(""); }} className="text-[#8c947b] hover:text-white cursor-pointer">
                             <span className="material-symbols-outlined">close</span>
                         </button>
                     </div>
@@ -673,10 +748,13 @@ return (
                                 onChange={(e) => setNewDeptName(e.target.value)}
                             />
                         </div>
+                        {createDeptError && (
+                            <p role="alert" className="text-red-400 text-[12px]">{createDeptError}</p>
+                        )}
                         <div className="flex items-center justify-end gap-3 pt-2">
                             <button
                                 type="button"
-                                onClick={() => setShowCreateDeptModal(false)}
+                                onClick={() => { setShowCreateDeptModal(false); setCreateDeptError(""); }}
                                 className="px-4 py-2 border border-[#2D3139] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
                             >
                                 Cancel
