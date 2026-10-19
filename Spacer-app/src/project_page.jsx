@@ -191,7 +191,28 @@ function ProjectPage() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [deletingProject, setDeletingProject] = useState(false)
     const [deleteProjectError, setDeleteProjectError] = useState("")
-    const [showActionBlocked, setShowActionBlocked] = useState(false)
+    // null while checking; then whether the server's can_manage_project allows a delete
+    const [canDeleteProject, setCanDeleteProject] = useState(null)
+    const [projectDepartmentName, setProjectDepartmentName] = useState(null)
+
+    // Same rule the delete-workspace-item function enforces: team lead or higher in
+    // the project's own department, or an org admin. Being a direct member is not enough.
+    useEffect(() => {
+        if (!project_id) return undefined
+        let cancelled = false
+        const checkDeletePermission = async () => {
+            const [{ data: allowed, error: rpcError }, { data: project }] = await Promise.all([
+                supabase.rpc("can_manage_project", { p_project_id: project_id }),
+                supabase.from("project_spaces").select("team_space:team_spaces(name)").eq("id", project_id).maybeSingle(),
+            ])
+            if (cancelled) return
+            if (rpcError) console.error("Error checking project permissions:", rpcError)
+            setCanDeleteProject(Boolean(allowed) && !rpcError)
+            setProjectDepartmentName(project?.team_space?.name || null)
+        }
+        checkDeletePermission()
+        return () => { cancelled = true }
+    }, [project_id])
 
     // ── Members
     const [projectMembers, setProjectMembers] = useState([])
@@ -881,20 +902,29 @@ function ProjectPage() {
                             </button>
                         ))}
 
-                        {/* Trash — delete current project */}
-                        <button
-                            type="button"
-                            title="Delete this project"
-                            onClick={() => {
-                                const canDelete = isSuperAdmin || isAdmin
-                                if (canDelete) setShowDeleteConfirm(true)
-                                else setShowActionBlocked(true)
-                            }}
-                            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
-                        >
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                            Delete project
-                        </button>
+                        {/* Trash — only when the server allows deleting this project */}
+                        {canDeleteProject === true && (
+                            <button
+                                type="button"
+                                title="Delete this project"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                                Delete project
+                            </button>
+                        )}
+                        {canDeleteProject === false && (
+                            <span
+                                className="ml-auto flex items-center gap-1.5 px-3 py-2 text-[12px] text-[#8c947b]"
+                                title="Deleting a project requires team lead or admin in its department"
+                            >
+                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">lock</span>
+                                {projectDepartmentName
+                                    ? <>Only admins of <span className="text-white font-medium">{projectDepartmentName}</span> can delete this project</>
+                                    : "This project has no department, so it can't be deleted here"}
+                            </span>
+                        )}
                     </div>
                 </div>
                 {/* Tab Contents */}
@@ -2324,42 +2354,6 @@ function ProjectPage() {
             {/* Post-upload file review modal */}
             {reviewFile && (
                 <DocViewer file={reviewFile} onClose={() => setReviewFile(null)} />
-            )}
-
-            {/* ── Action Blocked modal (non-admin clicked delete) ── */}
-            {showActionBlocked && (
-                <div
-                    className="fixed inset-0 z-[150] flex items-center justify-center p-4"
-                    style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
-                    onClick={() => setShowActionBlocked(false)}
-                >
-                    <div
-                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Icon */}
-                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto mb-4">
-                            <span className="material-symbols-outlined text-amber-400 text-[32px]">lock</span>
-                        </div>
-
-                        {/* Text */}
-                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Action Blocked</h2>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-1">
-                            You don't have permission to delete this project.
-                        </p>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-6">
-                            Only <span className="text-amber-400 font-semibold">Admins</span> and <span className="text-amber-400 font-semibold">Super Admins</span> can perform this action. Contact your workspace admin if you need this project removed.
-                        </p>
-
-                        <button
-                            type="button"
-                            onClick={() => setShowActionBlocked(false)}
-                            className="w-full py-2.5 rounded-xl bg-[#2D3139] hover:bg-[#3a3f4a] text-white text-[13px] font-semibold transition-colors cursor-pointer"
-                        >
-                            Got it
-                        </button>
-                    </div>
-                </div>
             )}
 
             {/* ── Delete project confirmation modal ── */}
