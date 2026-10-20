@@ -22,13 +22,11 @@ const defaultPreferences = {
     desktopPush: true,
     frequency: "realtime"
   },
+  // Two-factor lives in Supabase Auth MFA (components/TwoFactorSettings.jsx), not in preferences
   security: {
-    twoFactor: false,
     shareStatus: true,
     analyticsOptIn: false,
-    sessionTimeout: "30_mins",
-    twoFactorSecretEncrypted: "",
-    twoFactorRecoveryCodesEncrypted: ""
+    sessionTimeout: "30_mins"
   },
   integrations: {
     github: { connected: false, repo: "" },

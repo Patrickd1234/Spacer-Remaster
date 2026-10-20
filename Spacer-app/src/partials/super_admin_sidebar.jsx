@@ -1,7 +1,8 @@
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { useRole } from "../RoleContext";
 
 export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -10,7 +11,6 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
-    const [orgName, setOrgName] = useState("Spacer");
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -30,7 +30,8 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
     // Team space selector state
     const [teamSpaces, setTeamSpaces] = useState([]);
-    const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState(null);
+    // Shared with the Department page (RoleContext), so both always show the same department
+    const { orgDepartmentId: selectedTeamSpaceId, setOrgDepartment, roleLoading } = useRole();
     const [teamDropdownOpen, setTeamDropdownOpen] = useState(false);
     const teamDropdownRef = useRef(null);
 
@@ -106,14 +107,16 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
             if (!error && data) {
                 setTeamSpaces(data);
-                // Auto-select the first team space if none selected
-                if (data.length > 0 && !selectedTeamSpaceId) {
-                    setSelectedTeamSpaceId(data[0].id);
-                }
             }
         };
         fetchTeamSpaces();
     }, [dbUser?.organization_id]);
+
+    // Default to the first department once the remembered choice has loaded
+    useEffect(() => {
+        if (roleLoading || teamSpaces.length === 0) return;
+        if (!teamSpaces.some(ts => String(ts.id) === selectedTeamSpaceId)) setOrgDepartment(teamSpaces[0].id);
+    }, [roleLoading, teamSpaces, selectedTeamSpaceId, setOrgDepartment]);
 
     // Fetch projects filtered by selected team space
     useEffect(() => {
@@ -124,7 +127,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
             }
             const { data, error } = await supabase
                 .from("project_spaces")
-                .select("*")
+                .select("id, name")
                 .eq("team_space_id", selectedTeamSpaceId);
             if (!error) setProjects(data || []);
             else console.log(error);
@@ -134,7 +137,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
 
     useEffect(() => {
         const fetchDbUser = async () => {
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             if (authData?.user) {
                 const { data } = await supabase
                     .from("users")
@@ -146,33 +149,9 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
         };
         fetchDbUser();
 
-        const fetchOrg = async () => {
-            const { data: authData } = await supabase.auth.getUser();
-            const userId = authData?.user?.id;
-            if (userId) {
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", userId)
-                    .maybeSingle();
-                const orgId = userProfile?.organization_id;
-                if (orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", orgId)
-                        .maybeSingle();
-                    if (org?.name) {
-                        const resolvedName = org.name.toLowerCase().includes("redtech") ? "Spacer" : org.name;
-                        setOrgName(resolvedName);
-                    }
-                }
-            }
-        };
-        fetchOrg();
     }, []);
 
-    const selectedTeamSpace = teamSpaces.find(ts => ts.id === selectedTeamSpaceId);
+    const selectedTeamSpace = teamSpaces.find(ts => String(ts.id) === selectedTeamSpaceId);
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
     const displayEmail = dbUser?.email || userData?.email || localStorage.getItem("userEmail") || userEmail || "user@spacers.com";
 
@@ -190,7 +169,7 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                         {expanded && (
                             <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary-accent font-bold text-[20px]">token</span>
-                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
+                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">Spacers</h1>
                             </div>
                         )}
                         <button
@@ -231,25 +210,25 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                                             <div
                                                 key={ts.id}
                                                 className={`flex items-center gap-2.5 px-3 py-2.5 cursor-pointer transition-colors ${
-                                                    ts.id === selectedTeamSpaceId
+                                                    String(ts.id) === selectedTeamSpaceId
                                                         ? "nav-item-active"
                                                         : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
                                                 }`}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    setSelectedTeamSpaceId(ts.id);
+                                                    setOrgDepartment(ts.id);
                                                     setTeamDropdownOpen(false);
                                                 }}
                                             >
                                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] ${
-                                                    ts.id === selectedTeamSpaceId
+                                                    String(ts.id) === selectedTeamSpaceId
                                                         ? "bg-primary-accent-dim text-primary-accent"
                                                         : "bg-[#2D3139] text-[#8c947b]"
                                                 }`}>
                                                     {ts.name?.charAt(0)?.toUpperCase() || "?"}
                                                 </div>
                                                 <span className="text-[13px] font-medium truncate">{ts.name}</span>
-                                                {ts.id === selectedTeamSpaceId && (
+                                                {String(ts.id) === selectedTeamSpaceId && (
                                                     <span className="material-symbols-outlined text-primary-accent text-[16px] ml-auto">check</span>
                                                 )}
                                             </div>
@@ -261,18 +240,6 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                             )}
                         </div>
                     )}
-                </div>
-
-                {/* NEW PROJECT BUTTON */}
-                <div className="px-4 mb-6">
-                    <button
-                        className={`w-full py-2.5 px-3 btn-primary-accent rounded-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
-                        onClick={() => setShowCreateModal(true)}
-                        title="New Project"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                        {expanded && <span className="font-bold text-[14px]">New Project</span>}
-                    </button>
                 </div>
 
                 {/* NAVIGATION ITEMS */}
@@ -315,7 +282,15 @@ export default function SuperAdminSidebar({ searchQuery = "", userEmail = "", us
                         {expanded && (
                             <div className="flex items-center justify-between px-3 mb-2">
                                 <span className="text-[11px] font-bold tracking-wider text-[#8c947b] uppercase">Projects</span>
-                                <span className="material-symbols-outlined text-[#8c947b] text-[16px] cursor-pointer hover:text-white" onClick={() => setShowCreateModal(true)}>add</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(true)}
+                                    title="New project"
+                                    aria-label="Create new project"
+                                    className="material-symbols-outlined text-[#8c947b] text-[18px] leading-none rounded-md p-0.5 cursor-pointer hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    add
+                                </button>
                             </div>
                         )}
                         <div className="space-y-1">

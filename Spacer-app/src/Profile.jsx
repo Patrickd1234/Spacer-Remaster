@@ -1,8 +1,9 @@
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import { useState, useEffect } from "react"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
+import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
 
 function initials(name, email) {
     const source = (name || email || "").trim()
@@ -65,11 +66,11 @@ function Profile() {
 
     useEffect(() => {
         const fetchUser = async () => {
-            const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
+            const authUser = await getSessionUser()
 
-            if (authError || !authUser) {
+            if (!authUser) {
                 if (import.meta.env.DEV) {
-                    console.error("No authenticated user found:", authError)
+                    console.error("No authenticated user found")
                 }
                 setLoading(false)
                 return
@@ -178,8 +179,13 @@ function Profile() {
         e.preventDefault()
         setPasswordMsg(null)
 
-        if (!passwordForm.next || passwordForm.next.length < 6) {
-            setPasswordMsg({ type: "error", text: "New password must be at least 6 characters." })
+        if (!passwordForm.current) {
+            setPasswordMsg({ type: "error", text: "Enter your current password." })
+            return
+        }
+
+        if (!passwordForm.next || passwordForm.next.length < MIN_PASSWORD_LENGTH) {
+            setPasswordMsg({ type: "error", text: `New password must be at least ${MIN_PASSWORD_LENGTH} characters.` })
             return
         }
 
@@ -189,16 +195,14 @@ function Profile() {
         }
 
         setPasswordSaving(true)
-        const { error } = await supabase.auth.updateUser({ password: passwordForm.next })
+        // Server checks the current password, then signs out other devices
+        const { error } = await changePassword(passwordForm.current, passwordForm.next)
         setPasswordSaving(false)
 
         if (error) {
-            if (import.meta.env.DEV) {
-                console.error("Password update error:", error)
-            }
-            setPasswordMsg({ type: "error", text: error.message })
+            setPasswordMsg({ type: "error", text: error })
         } else {
-            setPasswordMsg({ type: "success", text: "Password updated successfully." })
+            setPasswordMsg({ type: "success", text: "Password updated. You've been signed out on your other devices." })
             setPasswordForm({ current: "", next: "", confirm: "" })
             setTimeout(() => setShowPasswordForm(false), 2000)
             showToast("Password updated successfully!", "success")

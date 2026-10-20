@@ -1,7 +1,9 @@
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { useRole } from "../RoleContext";
+import { fetchDirectProjects, mergeProjects } from "./projectMemberships";
 
 export default function AdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -10,7 +12,8 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
-    const [orgName, setOrgName] = useState("Spacer");
+    const { activeDepartment } = useRole();
+    const activeTeamSpaceId = activeDepartment?.team_space_id ?? null;
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -71,46 +74,30 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
 
+    // Projects of the department chosen on the Department page (RoleContext)
     useEffect(() => {
+        if (!activeTeamSpaceId) return;
+        let cancelled = false;
         const fetchProjects = async () => {
             const userId = localStorage.getItem("userId");
-            if (!userId) return;
-
-            // Fetch all memberships for this user with their roles
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id, role")
-                .eq("user_id", userId);
-
-            if (memberError || !memberData || memberData.length === 0) {
-                // No memberships found — show nothing, not everything
-                setProjects([]);
-                return;
-            }
-
-            // Pick the team space where this user is admin.
-            // If they somehow belong to multiple departments, prioritise
-            // the one where their role is explicitly "admin".
-            const adminMembership =
-                memberData.find(m => m.role === "admin") ||
-                memberData.find(m => m.role === "super_admin") ||
-                memberData[0];
-
-            const teamSpaceId = adminMembership?.team_space_id;
-            if (!teamSpaceId) { setProjects([]); return; }
-
-            // Show only projects inside that one department
-            const { data, error } = await supabase
-                .from("project_spaces")
-                .select("*")
-                .eq("team_space_id", teamSpaceId);
-
-            if (!error) setProjects(data || []);
+            const [{ data, error }, directProjects] = await Promise.all([
+                supabase
+                    .from("project_spaces")
+                    .select("id, name")
+                    .eq("team_space_id", activeTeamSpaceId),
+                userId ? fetchDirectProjects(userId) : Promise.resolve([]),
+            ]);
+            if (cancelled) return;
+            if (error) console.error("Error fetching department projects:", error);
+            setProjects(mergeProjects(error ? [] : (data || []), directProjects));
         };
         fetchProjects();
+        return () => { cancelled = true; };
+    }, [activeTeamSpaceId]);
 
+    useEffect(() => {
         const fetchDbUser = async () => {
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             if (authData?.user) {
                 const { data } = await supabase.from("users").select("name, email").eq("id", authData.user.id).single();
                 if (data) setDbUser(data);
@@ -118,30 +105,6 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
         };
         fetchDbUser();
 
-        const fetchOrg = async () => {
-            const { data: authData } = await supabase.auth.getUser();
-            const userId = authData?.user?.id;
-            if (userId) {
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", userId)
-                    .maybeSingle();
-                const orgId = userProfile?.organization_id;
-                if (orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", orgId)
-                        .maybeSingle();
-                    if (org?.name) {
-                        const resolvedName = org.name.toLowerCase().includes("redtech") ? "Spacer" : org.name;
-                        setOrgName(resolvedName);
-                    }
-                }
-            }
-        };
-        fetchOrg();
     }, []);
 
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
@@ -161,7 +124,7 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                         {expanded && (
                             <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary-accent font-bold text-[20px]">token</span>
-                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
+                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">Spacers</h1>
                             </div>
                         )}
                         <button
@@ -174,18 +137,6 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                         </button>
                     </div>
 
-                </div>
-
-                {/* NEW PROJECT BUTTON */}
-                <div className="px-4 mb-6">
-                    <button
-                        className={`w-full py-2.5 px-3 btn-primary-accent rounded-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
-                        onClick={() => setShowCreateModal(true)}
-                        title="New Project"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                        {expanded && <span className="font-bold text-[14px]">New Project</span>}
-                    </button>
                 </div>
 
                 {/* NAVIGATION ITEMS */}
@@ -228,7 +179,15 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
                         {expanded && (
                             <div className="flex items-center justify-between px-3 mb-2">
                                 <span className="text-[11px] font-bold tracking-wider text-[#8c947b] uppercase">Projects</span>
-                                <span className="material-symbols-outlined text-[#8c947b] text-[16px] cursor-pointer hover:text-white" onClick={() => setShowCreateModal(true)}>add</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(true)}
+                                    title="New project"
+                                    aria-label="Create new project"
+                                    className="material-symbols-outlined text-[#8c947b] text-[18px] leading-none rounded-md p-0.5 cursor-pointer hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    add
+                                </button>
                             </div>
                         )}
                         <div className="space-y-1">

@@ -1,13 +1,27 @@
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 import Sidebar from "./sidebar";
 import AdminSidebar from "./admin_sidebar";
 import SuperAdminSidebar from "./super_admin_sidebar";
 import GroupChat from "../components/GroupChat";
+import { useRole } from "../RoleContext";
+import { safeDownloadDataUrl, safeImageDataUrl } from "../safeUrl";
+
+// How close (px) to the bottom of the DM list still counts as "at the bottom"
+const NEAR_BOTTOM_PX = 120;
+
+// direct_message_reactions rows -> [{ emoji, users: [userId, ...] }] as the chat UI expects
+function groupReactions(rows) {
+    const usersByEmoji = new Map();
+    (rows || []).forEach(({ emoji, user_id }) => {
+        usersByEmoji.set(emoji, [...(usersByEmoji.get(emoji) || []), user_id]);
+    });
+    return [...usersByEmoji.entries()].map(([emoji, users]) => ({ emoji, users }));
+}
 
 export default function SidebarRouter(props) {
-    const [userRole, setUserRole] = useState(null);
-    const [roleLoaded, setRoleLoaded] = useState(false);
+    // Role comes from RoleContext, which handles users with several memberships
+    const { userRole, roleLoading } = useRole();
     const [userId, setUserId] = useState(null);
     const [orgUsers, setOrgUsers] = useState([]);
 
@@ -32,116 +46,106 @@ export default function SidebarRouter(props) {
     const imageInputRef = useRef(null);
     const docInputRef = useRef(null);
     const messagesEndRef = useRef(null);
+    const isNearBottomRef = useRef(true);
+    const lastMessageCountRef = useRef(0);
+    const lastScrolledChatRef = useRef(null);
 
 
     // Initial role and coworkers load
     useEffect(() => {
         const initRouterAndChat = async () => {
             try {
-                const { data: authData } = await supabase.auth.getUser();
-                const authUser = authData?.user;
-                if (!authUser) {
-                    setRoleLoaded(true);
-                    return;
-                }
+                const authUser = await getSessionUser();
+                if (!authUser) return;
                 setUserId(authUser.id);
 
-                // Fetch role
-                const { data: membership } = await supabase
-                    .from("memberships")
-                    .select("role")
-                    .eq("user_id", authUser.id)
-                    .maybeSingle();
+                // Coworkers for the Message Hub
+                const coworkerWork = (async () => {
+                    const { data: userProfile } = await supabase
+                        .from("users")
+                        .select("organization_id")
+                        .eq("id", authUser.id)
+                        .maybeSingle();
+                    if (!userProfile?.organization_id) return;
 
-                setUserRole(membership?.role ?? null);
-
-                // Fetch coworkers for Message Hub
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", authUser.id)
-                    .maybeSingle();
-
-                if (userProfile?.organization_id) {
                     const { data: coworkers } = await supabase
                         .from("users")
                         .select("id, name, email")
                         .eq("organization_id", userProfile.organization_id);
-
                     if (coworkers) {
-                        const mapped = coworkers
+                        setOrgUsers(coworkers
                             .filter(u => u.id !== authUser.id)
-                            .map(u => ({ ...u, user_id: u.id }));
-                        setOrgUsers(mapped);
+                            .map(u => ({ ...u, user_id: u.id })));
                     }
-                }
-                
-                // Fetch all DMs for this user to determine latest message and unread counts
-                const { data: allDms } = await supabase
-                    .from("direct_messages")
-                    .select("id, sender_id, receiver_id, created_at, content")
-                    .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
-                    .order("created_at", { ascending: false });
+                })();
 
-                const dmsMap = {};
-                if (allDms) {
-                    allDms.forEach(msg => {
+                // All DMs for this user, to find the latest message per contact
+                const dmWork = (async () => {
+                    const { data: allDms } = await supabase
+                        .from("direct_messages")
+                        .select("id, sender_id, receiver_id, created_at, content")
+                        .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
+                        .order("created_at", { ascending: false });
+
+                    const dmsMap = {};
+                    (allDms || []).forEach(msg => {
                         const otherId = msg.sender_id === authUser.id ? msg.receiver_id : msg.sender_id;
-                        if (!dmsMap[otherId]) {
-                            dmsMap[otherId] = msg;
-                        }
+                        if (!dmsMap[otherId]) dmsMap[otherId] = msg;
                     });
-                }
-                setDmLatestMessages(dmsMap);
+                    setDmLatestMessages(dmsMap);
+                })();
 
-                // Fetch user groups
-                const { data: memberChannels } = await supabase
-                    .from("chat_channel_members")
-                    .select("channel_id")
-                    .eq("user_id", authUser.id);
-                
-                const channelIds = (memberChannels || []).map(mc => mc.channel_id);
-                
-                let groupQuery = supabase.from("chat_channels").select("*");
-                if (channelIds.length > 0) {
-                    groupQuery = groupQuery.or(`is_private.eq.false,id.in.(${channelIds.join(',')})`);
-                } else {
-                    groupQuery = groupQuery.eq('is_private', false);
-                }
-                
-                const { data: groups } = await groupQuery;
-                if (groups) {
+                // Groups, then the latest message of every group in parallel
+                const groupWork = (async () => {
+                    const { data: memberChannels } = await supabase
+                        .from("chat_channel_members")
+                        .select("channel_id")
+                        .eq("user_id", authUser.id);
+
+                    const channelIds = (memberChannels || []).map(mc => mc.channel_id);
+
+                    let groupQuery = supabase.from("chat_channels").select("id, name, is_private, created_at");
+                    if (channelIds.length > 0) {
+                        groupQuery = groupQuery.or(`is_private.eq.false,id.in.(${channelIds.join(',')})`);
+                    } else {
+                        groupQuery = groupQuery.eq('is_private', false);
+                    }
+
+                    const { data: groups } = await groupQuery;
+                    if (!groups) return;
                     setUserGroups(groups);
-                    
-                    // Fetch latest message for each group to determine unread status
-                    const unreadMap = {};
-                    for (const group of groups) {
-                        const { data: latestMsg } = await supabase
+
+                    const latestMessages = await Promise.all(groups.map(group =>
+                        supabase
                             .from('messages')
                             .select('created_at')
                             .eq('channel_id', group.id)
                             .order('created_at', { ascending: false })
                             .limit(1)
-                            .maybeSingle();
-                        
-                        if (latestMsg) {
-                            group.latest_message_at = latestMsg.created_at;
-                            const lastRead = localStorage.getItem(`group_last_read_${group.id}`);
-                            if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
-                                unreadMap[group.id] = true;
-                            }
-                        } else {
-                            group.latest_message_at = group.created_at; // Fallback
-                        }
-                    }
-                    setUserGroups(groups);
-                    setGroupUnreadCounts(unreadMap);
-                }
+                            .maybeSingle()
+                            .then(({ data }) => data)
+                    ));
 
+                    const unreadMap = {};
+                    const groupsWithLatest = groups.map((group, i) => {
+                        const latestMsg = latestMessages[i];
+                        if (!latestMsg) return { ...group, latest_message_at: group.created_at }; // Fallback
+                        const lastRead = localStorage.getItem(`group_last_read_${group.id}`);
+                        if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
+                            unreadMap[group.id] = true;
+                        }
+                        return { ...group, latest_message_at: latestMsg.created_at };
+                    });
+                    setUserGroups(groupsWithLatest);
+                    setGroupUnreadCounts(unreadMap);
+                })();
+
+                const results = await Promise.allSettled([coworkerWork, dmWork, groupWork]);
+                results
+                    .filter(r => r.status === "rejected")
+                    .forEach(r => console.error("SidebarRouter init error:", r.reason));
             } catch (err) {
                 console.error("SidebarRouter init error:", err);
-            } finally {
-                setRoleLoaded(true);
             }
         };
         initRouterAndChat();
@@ -205,14 +209,36 @@ export default function SidebarRouter(props) {
         };
     }, [showChatModal, chatRecipient, userId]);
 
-    // Auto-scroll to bottom of chat when messages change or chat is opened
+    // Auto-scroll to the bottom when a chat opens, or when a new message arrives
+    // while the user is already at the bottom (or sent it). Messages are re-fetched
+    // every few seconds, so scrolling on every change would yank the user down
+    // while they read older messages.
     useEffect(() => {
-        if (showChatModal && chatRecipient) {
+        if (!showChatModal || !chatRecipient) {
+            lastScrolledChatRef.current = null;
+            return;
+        }
+
+        const isNewChat = lastScrolledChatRef.current !== chatRecipient.user_id;
+        if (isNewChat) isNearBottomRef.current = true;
+        const lastMessage = chatMessages[chatMessages.length - 1];
+        const hasNewMessage = chatMessages.length > lastMessageCountRef.current;
+        const sentByMe = lastMessage?.sender_id === userId;
+
+        lastScrolledChatRef.current = chatRecipient.user_id;
+        lastMessageCountRef.current = chatMessages.length;
+
+        if (isNewChat || (hasNewMessage && (isNearBottomRef.current || sentByMe))) {
             setTimeout(() => {
-                messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+                messagesEndRef.current?.scrollIntoView({ behavior: isNewChat ? "auto" : "smooth" });
             }, 80);
         }
-    }, [chatMessages, showChatModal, chatRecipient]);
+    }, [chatMessages, showChatModal, chatRecipient, userId]);
+
+    const handleMessagesScroll = (e) => {
+        const el = e.currentTarget;
+        isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+    };
 
     // Global real-time listener for incoming messages to update unread badge counts in real time
     useEffect(() => {
@@ -294,10 +320,11 @@ export default function SidebarRouter(props) {
         try {
             const { data, error } = await supabase
                 .from("direct_messages")
-                .select("*")
+                .select("*, direct_message_reactions(emoji, user_id)")
                 .or(`and(sender_id.eq.${userId},receiver_id.eq.${recipientId}),and(sender_id.eq.${recipientId},receiver_id.eq.${userId})`)
                 .order("created_at", { ascending: true });
 
+            if (error) console.error("Fetch direct messages error:", error);
             if (!error && data) {
                 const mappedData = data.map(m => ({
                     id: m.id,
@@ -308,7 +335,7 @@ export default function SidebarRouter(props) {
                     replyToId: m.reply_to_id,
                     fileAttachment: m.file_attachment,
                     pinned: m.pinned || false,
-                    reactions: m.reactions || []
+                    reactions: groupReactions(m.direct_message_reactions)
                 }));
                 setChatMessages(mappedData);
             }
@@ -418,11 +445,12 @@ export default function SidebarRouter(props) {
             });
             setChatMessages(updatedMessages);
 
-            // Attempt database update
-            await supabase
-                .from("direct_messages")
-                .update({ pinned: nextPinnedState })
-                .eq("id", msgId);
+            // Either participant may pin; the database function changes only the pin
+            const { error } = await supabase.rpc("toggle_dm_pin", { p_message_id: msgId });
+            if (error) {
+                console.error("Toggle pin message error:", error);
+                fetchChatMessages(chatRecipient.user_id);
+            }
         } catch (err) {
             console.warn("Toggle pin message error:", err);
         }
@@ -457,12 +485,26 @@ export default function SidebarRouter(props) {
             });
             setChatMessages(updatedMessages);
 
-            const targetMsg = updatedMessages.find(m => m.id === msgId);
-            if (targetMsg) {
-                await supabase
-                    .from("direct_messages")
-                    .update({ reactions: targetMsg.reactions })
-                    .eq("id", msgId);
+            // One reaction per person per message: clear mine, then add the new one
+            // unless the same emoji was clicked again (which just removes it)
+            const original = chatMessages.find(m => m.id === msgId);
+            const isRemovingSameEmoji = (original?.reactions || [])
+                .some(r => r.emoji === emoji && r.users.includes(userId));
+
+            const { error: deleteError } = await supabase
+                .from("direct_message_reactions")
+                .delete()
+                .eq("message_id", msgId)
+                .eq("user_id", userId);
+            const { error: insertError } = isRemovingSameEmoji
+                ? { error: null }
+                : await supabase
+                    .from("direct_message_reactions")
+                    .insert({ message_id: msgId, user_id: userId, emoji });
+
+            if (deleteError || insertError) {
+                console.error("Add reaction error:", deleteError || insertError);
+                fetchChatMessages(chatRecipient.user_id);
             }
         } catch (err) {
             console.warn("Add reaction error:", err);
@@ -508,7 +550,8 @@ export default function SidebarRouter(props) {
         return count;
     };
 
-    if (!roleLoaded) return null;
+    // The role (from RoleContext) decides which sidebar renders
+    if (roleLoading) return null;
 
     const sidebarElement = (() => {
         if (userRole === "super_admin" || userRole === "superadmin") {
@@ -746,7 +789,7 @@ export default function SidebarRouter(props) {
                                 <div className="flex-1 flex flex-col overflow-hidden">
 
                                     {/* Chat Messages Log */}
-                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin" onScroll={handleMessagesScroll}>
                                         {chatMessages.length === 0 ? (
                                             <div className="h-full flex flex-col items-center justify-center text-center p-4">
                                                 <span className="material-symbols-outlined text-[#8c947b] text-3xl mb-1">forum</span>
@@ -844,9 +887,10 @@ export default function SidebarRouter(props) {
                                                             {/* Attached File */}
                                                             {msg.fileAttachment && (
                                                                 <div className="mb-2 p-1.5 rounded-lg bg-black/20 border border-white/5 max-w-[240px]">
-                                                                    {msg.fileAttachment.type.startsWith("image/") ? (
+                                                                    {/* Stored data URLs are checked before use; unsafe ones aren't rendered as links/images */}
+                                                                    {safeImageDataUrl(msg.fileAttachment.dataUrl) ? (
                                                                         <img 
-                                                                            src={msg.fileAttachment.dataUrl} 
+                                                                            src={safeImageDataUrl(msg.fileAttachment.dataUrl)}
                                                                             alt={msg.fileAttachment.name} 
                                                                             className="max-h-[140px] rounded object-cover max-w-full"
                                                                         />
@@ -857,13 +901,15 @@ export default function SidebarRouter(props) {
                                                                                 <p className="truncate font-semibold text-[10px]">{msg.fileAttachment.name}</p>
                                                                                 <p className="text-[8px] opacity-75">{msg.fileAttachment.size}</p>
                                                                             </div>
-                                                                            <a 
-                                                                                href={msg.fileAttachment.dataUrl} 
-                                                                                download={msg.fileAttachment.name}
-                                                                                className="ml-auto text-primary-accent hover:underline flex items-center justify-center p-1"
-                                                                            >
-                                                                                <span className="material-symbols-outlined text-base">download</span>
-                                                                            </a>
+                                                                            {safeDownloadDataUrl(msg.fileAttachment.dataUrl) && (
+                                                                                <a
+                                                                                    href={safeDownloadDataUrl(msg.fileAttachment.dataUrl)}
+                                                                                    download={msg.fileAttachment.name || "attachment"}
+                                                                                    className="ml-auto text-primary-accent hover:underline flex items-center justify-center p-1"
+                                                                                >
+                                                                                    <span className="material-symbols-outlined text-base">download</span>
+                                                                                </a>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                 </div>

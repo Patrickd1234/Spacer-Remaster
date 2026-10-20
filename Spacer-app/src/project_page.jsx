@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams } from "react-router-dom"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
 import { useRole } from "./RoleContext"
+import { withSignedUrls } from "./projectFiles"
+import { statusFromSubtasks } from "./taskStatus"
+import { deleteWorkspaceItem } from "./workspaceDelete"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -15,6 +18,12 @@ const ACCEPTED = [
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/zip", "application/x-zip-compressed", "text/plain", "text/csv",
 ].join(",")
+
+// How long a Kanban board message stays visible
+const BOARD_NOTICE_MS = 5000
+
+// Board column names for each task status
+const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
 
 const MAX_FILE_SIZE_MB = 50
 const MAX_FILE_SIZE    = MAX_FILE_SIZE_MB * 1024 * 1024   // 50 MB in bytes
@@ -181,7 +190,29 @@ function ProjectPage() {
     // ── Delete project
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const [deletingProject, setDeletingProject] = useState(false)
-    const [showActionBlocked, setShowActionBlocked] = useState(false)
+    const [deleteProjectError, setDeleteProjectError] = useState("")
+    // null while checking; then whether the server's can_manage_project allows a delete
+    const [canDeleteProject, setCanDeleteProject] = useState(null)
+    const [projectDepartmentName, setProjectDepartmentName] = useState(null)
+
+    // Same rule the delete-workspace-item function enforces: team lead or higher in
+    // the project's own department, or an org admin. Being a direct member is not enough.
+    useEffect(() => {
+        if (!project_id) return undefined
+        let cancelled = false
+        const checkDeletePermission = async () => {
+            const [{ data: allowed, error: rpcError }, { data: project }] = await Promise.all([
+                supabase.rpc("can_manage_project", { p_project_id: project_id }),
+                supabase.from("project_spaces").select("team_space:team_spaces(name)").eq("id", project_id).maybeSingle(),
+            ])
+            if (cancelled) return
+            if (rpcError) console.error("Error checking project permissions:", rpcError)
+            setCanDeleteProject(Boolean(allowed) && !rpcError)
+            setProjectDepartmentName(project?.team_space?.name || null)
+        }
+        checkDeletePermission()
+        return () => { cancelled = true }
+    }, [project_id])
 
     // ── Members
     const [projectMembers, setProjectMembers] = useState([])
@@ -193,6 +224,7 @@ function ProjectPage() {
     const [uploading, setUploading] = useState(false)
     const [uploadError, setUploadError] = useState("")
     const [dragOver, setDragOver] = useState(false)
+    const [boardNotice, setBoardNotice] = useState("")
     const [pendingFile, setPendingFile] = useState(null)
     const [pendingUrl, setPendingUrl] = useState(null)
     const [reviewFile, setReviewFile] = useState(null)
@@ -291,7 +323,7 @@ function ProjectPage() {
         setCurrentSprintReport(report);
         setSprintPhase('summary');
 
-        const { data: userData } = await supabase.auth.getUser();
+        const userData = { user: await getSessionUser() };
         const logEntry = {
             entity_type: "sprint",
             entity_id: report.id,
@@ -405,7 +437,7 @@ function ProjectPage() {
         if (error) {
             console.error("Error updating priority", error)
         } else if (task) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task",
                 entity_id: taskId,
@@ -419,30 +451,12 @@ function ProjectPage() {
     }
 
     const updateTaskSubtasks = async (taskId, newSubtasks) => {
-        const allDone = newSubtasks.length > 0 && newSubtasks.every(st => st.done)
-        const anyDone = newSubtasks.some(st => st.done)
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        let newStatus = task.status
-        let statusChanged = false
-
-        if (allDone) {
-            if (task.status !== 'done') {
-                newStatus = 'done'
-                statusChanged = true
-            }
-        } else if (newSubtasks.length === 0 || !anyDone) {
-            if (task.status !== 'todo') {
-                newStatus = 'todo'
-                statusChanged = true
-            }
-        } else {
-            if (task.status !== 'in_progress') {
-                newStatus = 'in_progress'
-                statusChanged = true
-            }
-        }
+        // Subtasks drive the status; with none left the task keeps its current status
+        const newStatus = statusFromSubtasks(newSubtasks) ?? task.status
+        const statusChanged = newStatus !== task.status
 
         const serialized = JSON.stringify(newSubtasks)
 
@@ -462,7 +476,7 @@ function ProjectPage() {
         if (error) {
             console.error("Error updating subtasks", error)
         } else if (statusChanged) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "status_changed",
@@ -478,66 +492,51 @@ function ProjectPage() {
         e.dataTransfer.setData("taskId", taskId)
     }
 
+    const showBoardNotice = (message) => {
+        setBoardNotice(message)
+        setTimeout(() => setBoardNotice(""), BOARD_NOTICE_MS)
+    }
+
     const handleDrop = async (e, newStatus) => {
         e.preventDefault()
+        setDragOverColumn(null)
         const taskId = e.dataTransfer.getData("taskId")
         if (!taskId) return
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        let subtasksList = [];
-        if (task.sub_tasks) {
-            if (Array.isArray(task.sub_tasks)) {
-                subtasksList = task.sub_tasks;
-            } else if (typeof task.sub_tasks === "string") {
-                const trimmed = task.sub_tasks.trim();
-                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                    try {
-                        const parsed = JSON.parse(trimmed);
-                        if (Array.isArray(parsed)) {
-                            subtasksList = parsed;
-                        } else {
-                            console.warn("Malformed sub_tasks (expected array) for task", task.id, parsed);
-                            subtasksList = [];
-                        }
-                    } catch (err) {
-                        console.warn("Malformed sub_tasks for task", task.id, err);
-                        subtasksList = [];
-                    }
-                }
-            }
+        // Any task can be moved to any status; ticking subtasks still updates it automatically
+        const isOverdue = newStatus !== "done" && task.due_date && new Date(task.due_date) < new Date()
+        if (task.status === newStatus) {
+            if (isOverdue) showBoardNotice(`"${task.title}" is already ${STATUS_LABELS[newStatus]} — it shows under Overdue until it's done or its due date changes.`)
+            return
         }
 
-        const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-        const anyDone = subtasksList.some(st => st.done);
-
-        let allowedStatus = task.status;
-        if (allDone) {
-            allowedStatus = 'done';
-        } else if (subtasksList.length === 0 || !anyDone) {
-            allowedStatus = 'todo';
-        } else {
-            allowedStatus = 'in_progress';
-        }
-
-        if (newStatus !== allowedStatus) return;
-        if (task.status === newStatus) return
-
+        const previousStatus = task.status
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
                 String(t.id) === String(taskId) ? { ...t, status: newStatus } : t
             )
         )
 
-        const { error } = await supabase
+        // .select() confirms a row actually changed (permissions can silently update 0 rows)
+        const { data: updated, error } = await supabase
             .from("tasks")
             .update({ status: newStatus })
             .eq("id", taskId)
+            .select("id")
 
-        if (error) {
-            console.error("Error updating overdue task:", error)
+        if (error || !updated?.length) {
+            console.error("Error moving task:", error)
+            setProjectTasks(prevTasks =>
+                prevTasks.map(t =>
+                    String(t.id) === String(taskId) ? { ...t, status: previousStatus } : t
+                )
+            )
+            showBoardNotice(`Couldn't move "${task.title}". You may not have permission to edit this project.`)
         } else {
-            const { data: userData } = await supabase.auth.getUser()
+            if (isOverdue) showBoardNotice(`"${task.title}" moved to ${STATUS_LABELS[newStatus]}. It stays under Overdue until it's done or its due date changes.`)
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "status_changed",
@@ -563,7 +562,7 @@ function ProjectPage() {
             console.error("Error deleting task:", error);
             // Revert state if needed, but keeping it simple here
         } else {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
                 action: "deleted",
@@ -588,7 +587,7 @@ function ProjectPage() {
             .select("id, project_id, name, type, size, path, url, uploaded_by, created_at")
             .eq("project_id", project_id)
             .order("created_at", { ascending: false })
-        if (!error) setProjectFiles(data || [])
+        if (!error) setProjectFiles(await withSignedUrls(data || []))
     }, [project_id])
 
     // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
@@ -646,49 +645,8 @@ function ProjectPage() {
                 .order("created_at", { ascending: false })
             if (error) { console.error("Error fetching tasks:", error) }
             else {
-                const corrected = data.map(t => {
-                    let subtasksList = [];
-                    if (t.sub_tasks) {
-                        if (Array.isArray(t.sub_tasks)) {
-                            subtasksList = t.sub_tasks;
-                        } else if (typeof t.sub_tasks === "string") {
-                            const trimmed = t.sub_tasks.trim();
-                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                try {
-                                    const parsed = JSON.parse(trimmed);
-                                    if (Array.isArray(parsed)) {
-                                        subtasksList = parsed;
-                                    } else {
-                                        console.warn("Malformed sub_tasks (expected array) for task", t.id, parsed);
-                                        subtasksList = [];
-                                    }
-                                } catch (e) {
-                                    console.warn("Malformed sub_tasks for task", t.id, e);
-                                    subtasksList = [];
-                                }
-                            }
-                        }
-                    }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => st.done);
-                    const anyDone = subtasksList.some(st => st.done);
-
-                    let expectedStatus = t.status;
-                    if (allDone) {
-                        expectedStatus = 'done';
-                    } else if (subtasksList.length === 0 || !anyDone) {
-                        expectedStatus = 'todo';
-                    } else {
-                        expectedStatus = 'in_progress';
-                    }
-
-                    if (t.status !== expectedStatus) {
-                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
-                            if (error) console.error("Error auto-correcting task status", error);
-                        });
-                        return { ...t, status: expectedStatus };
-                    }
-                    return t;
-                });
+                // Show statuses as stored; they're only derived when subtasks are edited
+                const corrected = data || [];
                 setProjectTasks(corrected);
                 const urlParams = new URLSearchParams(window.location.search);
                 const taskIdParam = urlParams.get("task_id");
@@ -704,13 +662,13 @@ function ProjectPage() {
 
         const fetchActivity = async () => {
             if (!project_id) return
-            const { data, error } = await supabase.from("activity_log").select("*, actor:users(name, email)").eq("new_state->>project_id", project_id).order("created_at", { ascending: false }).limit(20)
+            const { data, error } = await supabase.from("activity_log").select("id, action, new_state, created_at, actor:users(name, email)").eq("new_state->>project_id", project_id).order("created_at", { ascending: false }).limit(20)
             if (error) { console.error("Error fetching activity:", error) }
             else { setActivityLog(data || []) }
         }
 
         const fetchUserRole = async () => {
-            const { data: authData } = await supabase.auth.getUser()
+            const authData = { user: await getSessionUser() }
             const userId = authData?.user?.id
             if (!userId) return
             setCurrentUserId(userId)
@@ -736,9 +694,11 @@ function ProjectPage() {
     // ── Delete this project
     const handleDeleteProject = async () => {
         setDeletingProject(true)
-        const { error } = await supabase.from("project_spaces").delete().eq("id", project_id)
+        setDeleteProjectError("")
+        // Server-side delete: also removes stored files and the project's chat channels
+        const { error } = await deleteWorkspaceItem("project", project_id)
         if (error) {
-            console.error("Error deleting project:", error)
+            setDeleteProjectError(error)
             setDeletingProject(false)
             return
         }
@@ -772,12 +732,12 @@ function ProjectPage() {
         const { error: storageError } = await supabase.storage
             .from("project-files").upload(path, pendingFile, { contentType: pendingFile.type, upsert: false })
         if (storageError) { setUploadError("Upload failed: " + storageError.message); setUploading(false); return }
-        const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
-        const { data: userData } = await supabase.auth.getUser()
+        const userData = { user: await getSessionUser() }
         const uploaderName = userData?.user?.email?.split("@")[0] || "You"
+        // No stored URL: the bucket is private, links are signed when the list loads
         const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
             project_id, name: pendingFile.name, type: pendingFile.type,
-            size: pendingFile.size, path, url: urlData?.publicUrl || "",
+            size: pendingFile.size, path, url: "",
             uploaded_by: uploaderName,
         }).select().single()
 
@@ -801,7 +761,7 @@ function ProjectPage() {
         await supabase.storage.from("project-files").remove([f.path])
         const { error } = await supabase.from("project_files").delete().eq("id", f.id)
         if (!error) {
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "file",
                 entity_id: f.id,
@@ -836,8 +796,7 @@ function ProjectPage() {
                 setTaskUploading(false)
                 return
             }
-            const { data: urlData } = supabase.storage.from("project-files").getPublicUrl(path)
-            const { data: userData } = await supabase.auth.getUser()
+            const userData = { user: await getSessionUser() }
             const uploaderName = userData?.user?.email?.split("@")[0] || "You"
             const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
                 project_id,
@@ -846,7 +805,7 @@ function ProjectPage() {
                 type: file.type,
                 size: file.size,
                 path,
-                url: urlData?.publicUrl || "",
+                url: "",
                 uploaded_by: uploaderName,
             }).select().single()
 
@@ -943,20 +902,29 @@ function ProjectPage() {
                             </button>
                         ))}
 
-                        {/* Trash — delete current project */}
-                        <button
-                            type="button"
-                            title="Delete this project"
-                            onClick={() => {
-                                const canDelete = isSuperAdmin || isAdmin
-                                if (canDelete) setShowDeleteConfirm(true)
-                                else setShowActionBlocked(true)
-                            }}
-                            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
-                        >
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                            Delete project
-                        </button>
+                        {/* Trash — only when the server allows deleting this project */}
+                        {canDeleteProject === true && (
+                            <button
+                                type="button"
+                                title="Delete this project"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
+                            >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                                Delete project
+                            </button>
+                        )}
+                        {canDeleteProject === false && (
+                            <span
+                                className="ml-auto flex items-center gap-1.5 px-3 py-2 text-[12px] text-[#8c947b]"
+                                title="Deleting a project requires team lead or admin in its department"
+                            >
+                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">lock</span>
+                                {projectDepartmentName
+                                    ? <>Only admins of <span className="text-white font-medium">{projectDepartmentName}</span> can delete this project</>
+                                    : "This project has no department, so it can't be deleted here"}
+                            </span>
+                        )}
                     </div>
                 </div>
                 {/* Tab Contents */}
@@ -1384,6 +1352,11 @@ function ProjectPage() {
                     {/* Tasks Tab — Kanban Board */}
                     {activeTab === "tasks" && (
                         <div className="tab-pane block" id="section-tasks">
+                            {boardNotice && (
+                                <div role="status" className="mt-md px-md py-sm rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#f59e0b] text-body-sm">
+                                    {boardNotice}
+                                </div>
+                            )}
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[
                                     { key: "todo", label: "Backlog", dotColor: "bg-[#2D3139]" },
@@ -1397,10 +1370,16 @@ function ProjectPage() {
                                         if (isOverdue) return column.key === "overdue";
                                         return column.key === t.status;
                                     });
+                                    // "Overdue" is derived from the due date, not a status you can drop into
+                                    const acceptsDrop = column.key !== "overdue";
+                                    const isDropTarget = acceptsDrop && dragOverColumn === column.key;
                                     return (
                                         <div
                                             key={column.key}
-                                            className="flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border border-[#2D3139]/30"
+                                            onDragOver={acceptsDrop ? (e) => { e.preventDefault(); setDragOverColumn(column.key) } : undefined}
+                                            onDragLeave={acceptsDrop ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColumn(null) } : undefined}
+                                            onDrop={acceptsDrop ? (e) => handleDrop(e, column.key) : undefined}
+                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border ${isDropTarget ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5' : 'border-[#2D3139]/30'}`}
                                         >
                                             {/* Column Header */}
                                             <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
@@ -1416,8 +1395,11 @@ function ProjectPage() {
                                                 {columnTasks.map(task => (
                                                     <div
                                                         key={task.id}
+                                                        draggable
+                                                        onDragStart={(e) => handleDragStart(e, task.id)}
+                                                        onDragEnd={() => setDragOverColumn(null)}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-pointer hover:border-[var(--primary-color)]/50 transition-all group"
+                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-[var(--primary-color)]/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
@@ -1433,6 +1415,12 @@ function ProjectPage() {
                                                                     }`}></span>
                                                                 {task.priority || 'Normal'}
                                                             </span>
+                                                            {/* In the Overdue column, show the task's real status */}
+                                                            {column.key === "overdue" && STATUS_LABELS[task.status] && (
+                                                                <span className="ml-xs inline-flex items-center px-sm py-[2px] rounded text-[10px] font-bold uppercase bg-[#2D3139] text-[#c2cab0]">
+                                                                    {STATUS_LABELS[task.status]}
+                                                                </span>
+                                                            )}
                                                         </div>
 
                                                         {/* Project Name */}
@@ -2368,42 +2356,6 @@ function ProjectPage() {
                 <DocViewer file={reviewFile} onClose={() => setReviewFile(null)} />
             )}
 
-            {/* ── Action Blocked modal (non-admin clicked delete) ── */}
-            {showActionBlocked && (
-                <div
-                    className="fixed inset-0 z-[150] flex items-center justify-center p-4"
-                    style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}
-                    onClick={() => setShowActionBlocked(false)}
-                >
-                    <div
-                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        {/* Icon */}
-                        <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/20 mx-auto mb-4">
-                            <span className="material-symbols-outlined text-amber-400 text-[32px]">lock</span>
-                        </div>
-
-                        {/* Text */}
-                        <h2 className="text-white font-bold text-[18px] text-center mb-2">Action Blocked</h2>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-1">
-                            You don't have permission to delete this project.
-                        </p>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-6">
-                            Only <span className="text-amber-400 font-semibold">Admins</span> and <span className="text-amber-400 font-semibold">Super Admins</span> can perform this action. Contact your workspace admin if you need this project removed.
-                        </p>
-
-                        <button
-                            type="button"
-                            onClick={() => setShowActionBlocked(false)}
-                            className="w-full py-2.5 rounded-xl bg-[#2D3139] hover:bg-[#3a3f4a] text-white text-[13px] font-semibold transition-colors cursor-pointer"
-                        >
-                            Got it
-                        </button>
-                    </div>
-                </div>
-            )}
-
             {/* ── Delete project confirmation modal ── */}
             {showDeleteConfirm && (
                 <div
@@ -2425,14 +2377,17 @@ function ProjectPage() {
                         <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
                         <p className="text-white font-bold text-[15px] text-center mb-3">"{project_name}"</p>
                         <p className="text-[#8c947b] text-[12px] text-center mb-6">
-                            All tasks, files, and activity linked to this project will also be removed. This cannot be undone.
+                            All tasks, files, and chat channels in this project will also be removed. This cannot be undone.
                         </p>
+                        {deleteProjectError && (
+                            <p role="alert" className="text-red-400 text-[12px] text-center -mt-3 mb-4">{deleteProjectError}</p>
+                        )}
 
                         {/* Buttons */}
                         <div className="flex gap-3">
                             <button
                                 type="button"
-                                onClick={() => setShowDeleteConfirm(false)}
+                                onClick={() => { setShowDeleteConfirm(false); setDeleteProjectError("") }}
                                 disabled={deletingProject}
                                 className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                             >
@@ -2470,7 +2425,7 @@ function ProjectPage() {
                     })
                     if (!error) {
                         fetchProjectMembers()
-                        const { data: userData } = await supabase.auth.getUser()
+                        const userData = { user: await getSessionUser() }
                         await supabase.from("activity_log").insert({
                             entity_type: "member", entity_id: user.id,
                             actor_id: userData?.user?.id, action: "member_added",

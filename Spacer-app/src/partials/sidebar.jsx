@@ -1,16 +1,18 @@
 import { Link, useNavigate, useLocation } from "react-router-dom"
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
+import { fetchDirectProjects, mergeProjects } from "./projectMemberships";
 
 export default function Sidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [projects, setProjects] = useState([]);
+    // Departments the member belongs to: [{ id, name }], sorted by name
+    const [departments, setDepartments] = useState([]);
     const [collapsed, setCollapsed] = useState(false);
     const [hovered, setHovered] = useState(false);
     const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
     const [dbUser, setDbUser] = useState(null);
-    const [orgName, setOrgName] = useState("Spacer");
     const dropdownRef = useRef(null);
     const expanded = !collapsed || hovered;
 
@@ -67,41 +69,61 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
     const normalizedQuery = searchQuery.trim().toLowerCase();
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
+    // Group visible projects by department; projects outside them are "Shared with you"
+    const departmentIds = new Set(departments.map((dept) => dept.id));
+    const projectGroups = [
+        ...departments.map((dept) => ({
+            key: dept.id,
+            label: dept.name,
+            projects: visibleProjects.filter((p) => String(p.team_space_id) === dept.id),
+        })),
+        {
+            key: "shared",
+            label: "Shared with you",
+            projects: visibleProjects.filter((p) => !departmentIds.has(String(p.team_space_id))),
+        },
+    ].filter((group) => group.projects.length > 0);
+    // Headings only help when projects come from more than one place
+    const showGroupHeadings = projectGroups.length > 1;
 
     useEffect(() => {
         const fetchProjects = async () => {
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             const userId = authData?.user?.id || localStorage.getItem("userId");
             if (!userId) { setProjects([]); return; }
 
-            // Get only the team spaces this specific user belongs to
-            const { data: memberData, error: memberError } = await supabase
-                .from("memberships")
-                .select("team_space_id, role")
-                .eq("user_id", userId);
+            // Projects from the user's departments, plus projects they were added to directly
+            const [{ data: memberData }, directProjects] = await Promise.all([
+                supabase
+                    .from("memberships")
+                    .select("team_space_id, role, team_space:team_spaces(name)")
+                    .eq("user_id", userId),
+                fetchDirectProjects(userId),
+            ]);
 
-            if (memberError || !memberData || memberData.length === 0) {
-                // No memberships — show nothing
-                setProjects([]);
-                return;
+            const teamIds = (memberData || []).map(m => m.team_space_id).filter(Boolean);
+            const deptById = new Map();
+            (memberData || []).forEach((m) => {
+                if (m.team_space_id) deptById.set(String(m.team_space_id), m.team_space?.name || "Department");
+            });
+            setDepartments([...deptById.entries()]
+                .map(([id, name]) => ({ id, name }))
+                .sort((a, b) => a.name.localeCompare(b.name)));
+            let departmentProjects = [];
+            if (teamIds.length > 0) {
+                const { data, error } = await supabase
+                    .from("project_spaces")
+                    .select("*")
+                    .in("team_space_id", teamIds);
+                if (!error) departmentProjects = data || [];
             }
 
-            // For a regular member there will usually be one team space.
-            // Use only the team spaces they explicitly belong to.
-            const teamIds = memberData.map(m => m.team_space_id).filter(Boolean);
-            if (teamIds.length === 0) { setProjects([]); return; }
-
-            const { data, error } = await supabase
-                .from("project_spaces")
-                .select("*")
-                .in("team_space_id", teamIds);
-
-            if (!error) setProjects(data || []);
+            setProjects(mergeProjects(departmentProjects, directProjects));
         };
         fetchProjects();
 
         const fetchDbUser = async () => {
-            const { data: authData } = await supabase.auth.getUser();
+            const authData = { user: await getSessionUser() };
             if (authData?.user) {
                 const { data } = await supabase.from("users").select("name, email").eq("id", authData.user.id).single();
                 if (data) setDbUser(data);
@@ -109,30 +131,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
         };
         fetchDbUser();
 
-        const fetchOrg = async () => {
-            const { data: authData } = await supabase.auth.getUser();
-            const userId = authData?.user?.id;
-            if (userId) {
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", userId)
-                    .maybeSingle();
-                const orgId = userProfile?.organization_id;
-                if (orgId) {
-                    const { data: org } = await supabase
-                        .from("organizations")
-                        .select("name")
-                        .eq("id", orgId)
-                        .maybeSingle();
-                    if (org?.name) {
-                        const resolvedName = org.name.toLowerCase().includes("redtech") ? "Spacer" : org.name;
-                        setOrgName(resolvedName);
-                    }
-                }
-            }
-        };
-        fetchOrg();
     }, []);
 
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
@@ -152,7 +150,7 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         {expanded && (
                             <div className="flex items-center gap-2">
                                 <span className="material-symbols-outlined text-primary-accent font-bold text-[20px]">token</span>
-                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">{orgName}</h1>
+                                <h1 className="font-bold text-[14px] text-white tracking-wider uppercase truncate max-w-[150px]">Spacers</h1>
                             </div>
                         )}
                         <button
@@ -164,18 +162,6 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                             <span className="material-symbols-outlined text-[18px]">{collapsed ? "chevron_right" : "chevron_left"}</span>
                         </button>
                     </div>
-                </div>
-
-                {/* NEW PROJECT BUTTON */}
-                <div className="px-4 mb-6">
-                    <button
-                        className={`w-full py-2.5 px-3 btn-primary-accent rounded-lg flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-sm ${expanded ? "" : "px-0"}`}
-                        onClick={() => setShowCreateModal(true)}
-                        title="New Project"
-                    >
-                        <span className="material-symbols-outlined text-[20px]">add</span>
-                        {expanded && <span className="font-bold text-[14px]">New Project</span>}
-                    </button>
                 </div>
 
                 {/* NAVIGATION ITEMS */}
@@ -218,34 +204,56 @@ export default function Sidebar({ searchQuery = "", userEmail = "", userData = n
                         {expanded && (
                             <div className="flex items-center justify-between px-3 mb-2">
                                 <span className="text-[11px] font-bold tracking-wider text-[#8c947b] uppercase">Projects</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowCreateModal(true)}
+                                    title="New project"
+                                    aria-label="Create new project"
+                                    className="material-symbols-outlined text-[#8c947b] text-[18px] leading-none rounded-md p-0.5 cursor-pointer hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    add
+                                </button>
                             </div>
                         )}
                         <div className="space-y-1">
-                            {visibleProjects.length > 0 ? (
-                                visibleProjects.map((project, idx) => {
-                                    const colors = ["text-green-500", "text-pink-500", "text-red-500", "text-blue-500", "text-amber-500"];
-                                    const iconColor = colors[idx % colors.length];
-                                    const projectActive = location.pathname === `/project_page/${project.id}`;
-                                    return (
-                                        <Link
-                                            key={project.id}
-                                            to={`/project_page/${project.id}`}
-                                            className={`rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors group ${
-                                                projectActive
-                                                    ? "nav-item-active"
-                                                    : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
-                                            }`}
-                                        >
-                                            {expanded && (
-                                                <>
-                                                    <span className={`material-symbols-outlined text-[20px] ${projectActive ? "text-primary-accent" : iconColor}`}>book</span>
-                                                    <span className="font-medium text-[14px] whitespace-nowrap overflow-hidden text-ellipsis flex-1">{project.name}</span>
-                                                    <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
-                                                </>
-                                            )}
-                                        </Link>
-                                    );
-                                })
+                            {projectGroups.length > 0 ? (
+                                projectGroups.map((group, groupIndex) => (
+                                    <div key={group.key} className={`space-y-1 ${showGroupHeadings && groupIndex > 0 ? "pt-3" : ""}`}>
+                                        {expanded && showGroupHeadings && (
+                                            <div className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#6c765c]">
+                                                <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
+                                                    {group.key === "shared" ? "group" : "corporate_fare"}
+                                                </span>
+                                                <span className="truncate">{group.label}</span>
+                                                <span className="ml-auto font-semibold normal-case tracking-normal">{group.projects.length}</span>
+                                            </div>
+                                        )}
+                                        {group.projects.map((project, idx) => {
+                                        const colors = ["text-green-500", "text-pink-500", "text-red-500", "text-blue-500", "text-amber-500"];
+                                        const iconColor = colors[idx % colors.length];
+                                        const projectActive = location.pathname === `/project_page/${project.id}`;
+                                        return (
+                                            <Link
+                                                key={project.id}
+                                                to={`/project_page/${project.id}`}
+                                                className={`rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors group ${
+                                                    projectActive
+                                                        ? "nav-item-active"
+                                                        : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+                                                }`}
+                                            >
+                                                {expanded && (
+                                                    <>
+                                                        <span className={`material-symbols-outlined text-[20px] ${projectActive ? "text-primary-accent" : iconColor}`}>book</span>
+                                                        <span className="font-medium text-[14px] whitespace-nowrap overflow-hidden text-ellipsis flex-1">{project.name}</span>
+                                                        <span className="material-symbols-outlined text-[18px] opacity-0 group-hover:opacity-100 transition-opacity">chevron_right</span>
+                                                    </>
+                                                )}
+                                            </Link>
+                                            );
+                                        })}
+                                    </div>
+                                ))
                             ) : (
                                 expanded && (
                                     <div className="text-[#8c947b] text-[13px] px-3 py-1 italic">No projects found</div>

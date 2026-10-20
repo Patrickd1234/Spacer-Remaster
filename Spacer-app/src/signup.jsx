@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
+import AuthBrandPanel from "./partials/AuthBrandPanel"
 
 function Signup() {
     const [status, setStatus] = useState("idle")
@@ -10,28 +11,10 @@ function Signup() {
     const [showPassword, setShowPassword] = useState(false)
     const [errorMsg, setErrorMsg] = useState("")
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+    const [resendState, setResendState] = useState("idle")
     const navigate = useNavigate()
 
-    const [isDemoMode, setIsDemoMode] = useState(localStorage.getItem("use_mock_supabase") === "true")
     const googleAuthReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-
-    const toggleDemoMode = () => {
-        const newValue = !isDemoMode
-        localStorage.setItem("use_mock_supabase", String(newValue))
-        setIsDemoMode(newValue)
-        if (newValue) {
-            localStorage.removeItem("sb-vrzepdjjjpodztqkfsbh-auth-token")
-        } else {
-            localStorage.removeItem("mock_session")
-        }
-        window.location.reload()
-    }
-
-    const enableDemoMode = () => {
-        localStorage.setItem("use_mock_supabase", "true")
-        localStorage.removeItem("sb-vrzepdjjjpodztqkfsbh-auth-token")
-        window.location.reload()
-    }
 
     const handleGoogleSignUp = async () => {
         if (!googleAuthReady) {
@@ -69,7 +52,8 @@ function Signup() {
                 options: {
                     data: {
                         full_name: fullName,
-                    }
+                    },
+                    emailRedirectTo: `${window.location.origin}/login`
                 }
             })
 
@@ -77,28 +61,8 @@ function Signup() {
                 throw error
             }
 
-            try {
-                await supabase.functions.invoke('invite-team-post-launch', {
-                    body: {
-                        organization_id: data?.user?.user_metadata?.organization_id || '',
-                        new_team_space_name: 'General',
-                        invites: []
-                    }
-                })
-            } catch (funcError) {
-                console.error("Error calling invite-team-post-launch:", funcError)
-            }
-
+            // The users profile row is created by the on_auth_user_created database trigger
             if (data?.user) {
-                const { error: insertError } = await supabase.from("users").insert({
-                    id: data.user.id,
-                    email: email,
-                    name: fullName,
-                })
-                if (insertError) {
-                    console.error("Error inserting user profile:", insertError)
-                }
-
                 try {
                     await supabase.from('activity_log').insert({
                         entity_type: 'user',
@@ -112,6 +76,12 @@ function Signup() {
                 }
             }
 
+            // With email confirmation on, no session is returned until the user clicks the link
+            if (!data?.session) {
+                setStatus("check_email")
+                return
+            }
+
             setStatus("success")
             setTimeout(() => {
                 setStatus("idle")
@@ -120,47 +90,83 @@ function Signup() {
         } catch (err) {
             console.error("Signup error:", err)
 
-            let displayMessage = err.message || ""
-            if (displayMessage === "{}" || !displayMessage) {
-                displayMessage = "Internal Server Error (Failed to send signup email)"
-            }
-
-            const isEmailIssue =
-                err.code === "over_email_send_rate_limit" ||
+            const isRateLimited = err.code === "over_email_send_rate_limit" || err.status === 429
+            const isEmailSendFailure =
                 err.code === "unexpected_failure" ||
-                err.name === "AuthRetryableFetchError" ||
-                err.status === 500 ||
-                displayMessage.toLowerCase().includes("rate limit") ||
-                displayMessage.toLowerCase().includes("confirmation email") ||
-                displayMessage.toLowerCase().includes("email") ||
-                displayMessage.toLowerCase().includes("server error")
+                err.status >= 500 ||
+                err.name === "AuthRetryableFetchError"
 
-            if (isEmailIssue) {
-                setErrorMsg(
-                    <span>
-                        Email delivery issue encountered ({displayMessage}).{" "}
-                        <button
-                            type="button"
-                            onClick={enableDemoMode}
-                            className="underline text-[#aff82a] hover:brightness-110 font-bold ml-1 cursor-pointer"
-                        >
-                            Click here to activate Demo/Mock Mode
-                        </button>{" "}
-                        to run the app entirely in your browser.
-                    </span>
-                )
+            if (isRateLimited) {
+                setErrorMsg("Too many signup attempts. Please wait a few minutes and try again.")
+            } else if (isEmailSendFailure) {
+                setErrorMsg("We couldn't send your confirmation email right now. Please try again in a few minutes.")
             } else {
-                setErrorMsg(displayMessage || "Something went wrong during signup.")
+                setErrorMsg(err.message && err.message !== "{}" ? err.message : "Something went wrong during signup.")
             }
             setStatus("idle")
         }
+    }
+
+    const handleResend = async () => {
+        setErrorMsg("")
+        setResendState("sending")
+
+        const { error } = await supabase.auth.resend({
+            type: "signup",
+            email: email,
+            options: { emailRedirectTo: `${window.location.origin}/login` }
+        })
+
+        if (error) {
+            console.error("Resend confirmation error:", error)
+            setErrorMsg(error.message || "Could not resend the email. Please try again shortly.")
+            setResendState("idle")
+            return
+        }
+
+        setResendState("sent")
+    }
+
+    if (status === "check_email") {
+        return (
+            <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-8">
+                {errorMsg && (
+                    <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm">
+                        <span className="material-symbols-outlined text-white text-[18px]">error</span>
+                        <div className="text-white text-[14px] leading-tight">{errorMsg}</div>
+                    </div>
+                )}
+                <div className="w-full max-w-[420px] text-center">
+                    <span className="material-symbols-outlined text-[#aff82a] text-[48px] mb-4">mark_email_unread</span>
+                    <h2 className="text-[32px] font-bold text-white mb-3 tracking-tight">Check your inbox</h2>
+                    <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
+                        We sent a confirmation link to <span className="text-white font-semibold">{email}</span>.
+                        Click it to activate your account, then sign in.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleResend}
+                        disabled={resendState !== "idle"}
+                        className="w-full border border-[#2D3139] bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                        {resendState === "sending" ? "Sending..." : resendState === "sent" ? "Email sent — check your inbox" : "Resend confirmation email"}
+                    </button>
+                    <p className="text-[#8c947b] text-[13px] mt-4">
+                        Didn't get it? Check your spam folder.
+                    </p>
+                    <p className="text-[#8c947b] text-[14px] mt-6">
+                        Already confirmed? <Link to="/login" className="text-[#aff82a] font-semibold hover:underline">Sign In</Link>
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     const isEmailError = typeof errorMsg === "string" && errorMsg.toLowerCase().includes("email")
     const isPasswordError = typeof errorMsg === "string" && errorMsg.toLowerCase().includes("password")
 
     return (
-        <div className="min-h-screen bg-[#181a20] flex overflow-hidden">
+        <div className="min-h-screen bg-[var(--bg-surface)] flex overflow-hidden">
             {/* Top Error Toast */}
             {errorMsg && (
                 <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
@@ -173,46 +179,27 @@ function Signup() {
                 </div>
             )}
 
-            {/* Demo Mode Toggle */}
-            <div className="absolute top-4 left-4 z-50 opacity-10 hover:opacity-100 transition-opacity">
-                <button onClick={toggleDemoMode} className="text-xs bg-[#2D3139] text-white px-2 py-1 rounded">
-                    Demo: {isDemoMode ? "ON" : "OFF"}
-                </button>
-            </div>
-
             {/* Left Side: Visual/Brand (Hidden on mobile) */}
-            <div className="hidden lg:flex w-[55%] relative flex-col px-16 py-12 border-r border-[#2D3139]/30">
-                {/* Abstract Glowing Backgrounds */}
-                <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-[#2A3A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
-                <div className="absolute bottom-[-10%] right-[10%] w-[400px] h-[400px] bg-[#3B2A4A] rounded-full blur-[120px] opacity-40 mix-blend-screen pointer-events-none" />
-
-                {/* Branding */}
-                <div className="relative z-10 mb-12">
-                    <div className="flex items-center gap-2 mb-8">
-                        <span className="material-symbols-outlined text-[#aff82a] font-bold text-[24px]">token</span>
-                        <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
-                    </div>
-                    <h2 className="text-4xl font-bold leading-tight mb-4 text-white">
-                        One workspace for <br />
-                        <span className="text-[#aff82a]">every team.</span>
-                    </h2>
-                    <p className="text-[#8c947b] text-base mb-8 max-w-md">
-                        HR, Design, Development, and Marketing — bring all company operations into one unified platform.
-                    </p>
-                </div>
-
-                <div className="relative z-10 mt-auto border-l-2 border-[#aff82a] pl-4">
-                    <p className="text-sm text-[#8c947b] italic">
-                        "Set up your organization in minutes and invite team leads seamlessly."
-                    </p>
-                </div>
-            </div>
+            <AuthBrandPanel
+                quote="Set up your organization in minutes and invite team leads seamlessly."
+                tagline={
+                    <>
+                        <h2 className="text-4xl font-bold leading-tight mb-4 text-white">
+                            One workspace for <br />
+                            <span className="text-[var(--primary-color)]">every team.</span>
+                        </h2>
+                        <p className="text-[#8c947b] text-base mb-8 max-w-md">
+                            HR, Design, Development, and Marketing — bring all company operations into one unified platform.
+                        </p>
+                    </>
+                }
+            />
 
             {/* Right Side: Sign Up Form */}
-            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[#181a20] relative z-10 overflow-y-auto py-12">
+            <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[var(--bg-surface)] relative z-10 overflow-y-auto py-12">
                 <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
+                        <span className="material-symbols-outlined text-[var(--primary-color)] text-[36px]">token</span>
                     </div>
 
                     <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Create Account</h2>
@@ -227,7 +214,7 @@ function Signup() {
                                 type="text" 
                                 id="fullname"
                                 placeholder="Full Name" 
-                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                className="w-full bg-[var(--bg-surface-low)] border border-[var(--bg-border)] focus:border-[var(--primary-color)] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
                                 value={fullName} 
                                 onChange={(e) => setFullName(e.target.value)} 
                                 required 
@@ -240,7 +227,7 @@ function Signup() {
                                 type="email" 
                                 id="email"
                                 placeholder="Email address" 
-                                className={`w-full bg-[#111318] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[var(--bg-surface-low)] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-[var(--primary-color)]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
                                 value={email} 
                                 onChange={(e) => setEmail(e.target.value)} 
                                 required 
@@ -253,7 +240,7 @@ function Signup() {
                                 type={showPassword ? "text" : "password"} 
                                 id="password"
                                 placeholder="Password" 
-                                className={`w-full bg-[#111318] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[#2D3139] focus:border-[#aff82a]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[var(--bg-surface-low)] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-[var(--primary-color)]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
                                 value={password} 
                                 onChange={(e) => setPassword(e.target.value)} 
                                 required 
@@ -271,9 +258,9 @@ function Signup() {
 
                         {/* Terms Checkbox */}
                         <div className="flex items-start gap-3 pt-2">
-                            <input id="terms" name="terms" required type="checkbox" className="mt-0.5 rounded border-[#2D3139] bg-[#111318] text-[#aff82a] focus:ring-[#aff82a]" />
+                            <input id="terms" name="terms" required type="checkbox" className="mt-0.5 rounded border-[var(--bg-border)] bg-[var(--bg-surface-low)] text-[var(--primary-color)] focus:ring-[var(--primary-color)]" />
                             <label htmlFor="terms" className="text-[#8c947b] text-[13px] leading-normal">
-                                I agree to the <a href="#" className="text-[#aff82a] hover:underline">Terms &amp; Conditions</a> and Privacy Policy
+                                I agree to the Terms &amp; Conditions and Privacy Policy
                             </label>
                         </div>
 
@@ -281,7 +268,7 @@ function Signup() {
                         <button 
                             type="submit" 
                             disabled={status === "submitting"}
-                            className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                            className="w-full bg-[var(--primary-color)] hover:bg-[var(--primary-color-dim)] text-[var(--bg-base)] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                         >
                             {status === "submitting" ? (
                                 <>
@@ -294,16 +281,16 @@ function Signup() {
                         </button>
 
                         <div className="flex items-center gap-4 my-4">
-                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                            <div className="h-px bg-[var(--bg-border)] flex-1"></div>
                             <span className="text-[#8c947b] text-xs">or</span>
-                            <div className="h-px bg-[#2D3139] flex-1"></div>
+                            <div className="h-px bg-[var(--bg-border)] flex-1"></div>
                         </div>
 
                         <button
                             type="button"
                             onClick={handleGoogleSignUp}
                             disabled={isGoogleLoading || !googleAuthReady}
-                            className="w-full flex items-center justify-center gap-3 border border-[#2D3139] bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#4B5563]"
+                            className="w-full flex items-center justify-center gap-3 border border-[var(--bg-border)] bg-[var(--bg-surface-low)] hover:bg-[var(--bg-surface-high)] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#4B5563]"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -322,7 +309,7 @@ function Signup() {
 
                         <div className="text-center mt-6">
                             <p className="text-[#8c947b] text-[14px]">
-                                Already have an account? <Link to="/login" className="text-[#aff82a] font-semibold hover:underline">Sign In</Link>
+                                Already have an account? <Link to="/login" className="text-[var(--primary-color)] font-semibold hover:underline">Sign In</Link>
                             </p>
                         </div>
                     </form>

@@ -3,9 +3,11 @@ import Header from "./partials/header"
 import ProjectPanel from "./components/ProjectPanel"
 import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
-import { supabase } from "./supabase"
+import { supabase, getSessionUser } from "./supabase"
 import { Link, useNavigate } from "react-router-dom"
 import { useRole } from "./RoleContext"
+
+const RECENT_ACTIVITY_LIMIT = 10
 import CreateTaskModal from "./partials/CreateTaskModal"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
@@ -161,19 +163,24 @@ function Home() {
     const [activities, setActivities] = useState([])
     const [activitiesLoading, setActivitiesLoading] = useState(false)
 
-    const fetchActivities = async () => {
+    // Recent Activity is the signed-in user's own actions, for every role.
+    // Logins/sign-ups are left out so they don't crowd out real work.
+    const fetchActivities = async (sessionUser) => {
+        if (!sessionUser?.id) return
         setActivitiesLoading(true)
         try {
             const { data, error } = await supabase
                 .from("activity_log")
-                .select("*, actor:users(name, email)")
+                .select("id, action, entity_type, new_state, created_at, actor:users(name, email)")
+                .eq("actor_id", sessionUser.id)
+                .not("action", "in", "(login,signup)")
                 .order("created_at", { ascending: false })
-                .limit(10)
+                .limit(RECENT_ACTIVITY_LIMIT)
 
             if (error) {
                 console.warn("activity_log fetch error:", error)
-            } else if (data && data.length > 0) {
-                setActivities(data.map(formatActivityItem))
+            } else {
+                setActivities((data || []).map(formatActivityItem))
             }
         } catch (err) {
             console.error("fetchActivities error:", err)
@@ -228,56 +235,14 @@ function Home() {
         try {
             const { data, error } = await supabase
                 .from("tasks")
-                .select("*")
+                .select("id, title, description, status, sub_tasks, due_date, project_id")
                 .eq("assignee_id", userId)
 
             if (error) {
                 console.warn("tasks fetch error:", error)
             } else {
-                const corrected = (data || []).map(t => {
-                    let subtasksList = [];
-                    if (t.sub_tasks) {
-                        if (Array.isArray(t.sub_tasks)) {
-                            subtasksList = t.sub_tasks;
-                        } else if (typeof t.sub_tasks === "string") {
-                            const trimmed = t.sub_tasks.trim();
-                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                try {
-                                    const parsed = JSON.parse(trimmed);
-                                    if (Array.isArray(parsed)) {
-                                        subtasksList = parsed;
-                                    } else {
-                                        console.warn("Malformed sub_tasks (expected array) for task", t.id, parsed);
-                                        subtasksList = [];
-                                    }
-                                } catch (e) {
-                                    console.warn("Malformed sub_tasks for task", t.id, e);
-                                    subtasksList = [];
-                                }
-                            }
-                        }
-                    }
-                    const allDone = subtasksList.length > 0 && subtasksList.every(st => Boolean(st?.done));
-                    const anyDone = subtasksList.some(st => Boolean(st?.done));
-
-                    let expectedStatus = t.status;
-                    if (allDone) {
-                        expectedStatus = 'done';
-                    } else if (subtasksList.length === 0 || !anyDone) {
-                        expectedStatus = 'todo';
-                    } else {
-                        expectedStatus = 'in_progress';
-                    }
-
-                    if (t.status !== expectedStatus) {
-                        supabase.from('tasks').update({ status: expectedStatus }).eq('id', t.id).then(({ error }) => {
-                            if (error) console.error("Error auto-correcting task status", error);
-                        });
-                        return { ...t, status: expectedStatus };
-                    }
-                    return t;
-                });
-                setUserTasks(corrected)
+                // Show statuses as stored; they're only derived when subtasks are edited
+                setUserTasks(data || [])
             }
         } catch (err) {
             console.error("fetchUserTasks error:", err)
@@ -292,7 +257,7 @@ function Home() {
 
         const init = async () => {
             try {
-                const { data: authData } = await supabase.auth.getUser()
+                const authData = { user: await getSessionUser() }
                 const userId = authData?.user?.id
 
                 if (!userId) return
@@ -318,7 +283,7 @@ function Home() {
                 } else {
                     await fetchUserTasks(userId)
                 }
-                await fetchActivities()
+                await fetchActivities(authData?.user)
             } catch (err) {
                 console.error("Home init error:", err)
             }

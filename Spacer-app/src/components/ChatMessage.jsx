@@ -72,20 +72,35 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                 {/* Attachments */}
                 {message.message_attachments && message.message_attachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
-                        {message.message_attachments.map(att => (
-                            <a 
-                                key={att.id}
-                                href={att.file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className={`flex items-center gap-2 p-2 rounded text-sm ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-white/5 hover:bg-white/10'} transition-colors`}
-                            >
+                        {message.message_attachments.map(att => {
+                            const icon = (
                                 <span className="material-symbols-outlined text-sm">
-                                    {att.file_type.startsWith('image') ? 'image' : 'description'}
+                                    {att.file_type?.startsWith('image') ? 'image' : 'description'}
                                 </span>
-                                <span className="truncate max-w-[150px]">{att.file_name}</span>
-                            </a>
-                        ))}
+                            );
+                            // signed_url is a short-lived link created when messages load
+                            return att.signed_url ? (
+                                <a
+                                    key={att.id}
+                                    href={att.signed_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`flex items-center gap-2 p-2 rounded text-sm ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-white/5 hover:bg-white/10'} transition-colors`}
+                                >
+                                    {icon}
+                                    <span className="truncate max-w-[150px]">{att.file_name}</span>
+                                </a>
+                            ) : (
+                                <div
+                                    key={att.id}
+                                    title="This file is no longer available"
+                                    className="flex items-center gap-2 p-2 rounded text-sm bg-white/5 opacity-60"
+                                >
+                                    {icon}
+                                    <span className="truncate max-w-[150px]">{att.file_name}</span>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
 

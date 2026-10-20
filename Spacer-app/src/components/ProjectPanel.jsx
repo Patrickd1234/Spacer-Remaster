@@ -12,7 +12,8 @@
  *   onPreview: (file) => void   — open DocViewer
  */
 import { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabase";
+import { supabase, getSessionUser } from "../supabase";
+import { withSignedUrls } from "../projectFiles";
 
 const ACCEPTED = [
   "image/*",
@@ -66,7 +67,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
     if (error) {
       console.error("Error fetching files:", error);
     } else {
-      setFiles(data || []);
+      setFiles(await withSignedUrls(data || []));
     }
   }
 
@@ -88,27 +89,21 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
       return;
     }
 
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from("project-files")
-      .getPublicUrl(path);
-
-    const publicUrl = urlData?.publicUrl || "";
-
-    // Save metadata to project_files table
+    // Save metadata to project_files table. No stored URL: the bucket is
+    // private and links are signed when the list loads.
     const { data: fileData, error: dbError } = await supabase.from("project_files").insert({
       project_id: project.id,
       name: file.name,
       type: file.type,
       size: file.size,
       path,
-      url: publicUrl,
+      url: "",
     }).select().single();
 
     if (dbError) {
       setUploadError("Could not save file record: " + dbError.message);
     } else if (fileData) {
-      const { data: userData } = await supabase.auth.getUser();
+      const userData = { user: await getSessionUser() };
       const logEntry = {
         entity_type: "file",
         entity_id: fileData.id,
@@ -128,7 +123,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
     await supabase.storage.from("project-files").remove([f.path]);
     const { error } = await supabase.from("project_files").delete().eq("id", f.id);
     if (!error) {
-      const { data: userData } = await supabase.auth.getUser();
+      const userData = { user: await getSessionUser() };
       const logEntry = {
         entity_type: "file",
         entity_id: f.id,
