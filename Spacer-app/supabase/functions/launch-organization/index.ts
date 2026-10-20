@@ -13,7 +13,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse, badRequest } from "../_shared/cors.ts";
-import { requireMfa } from "../_shared/mfa.ts";
+import { callerHeaders, requireMfa } from "../_shared/mfa.ts";
 
 interface TeamSpaceInput {
   name: string;
@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
   // Client scoped to the caller, just to resolve who's calling.
   const callerClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
+    global: { headers: callerHeaders(req) },
   });
   const { data: userData, error: userErr } = await callerClient.auth.getUser();
   if (userErr || !userData.user) return badRequest("Not authenticated");
@@ -59,6 +59,18 @@ Deno.serve(async (req) => {
   // (Section 12): this function performs the atomic org-bootstrap that no
   // RLS policy could authorize on its own, since no Membership yet exists.
   const admin = createClient(supabaseUrl, serviceRoleKey);
+
+  // One organization per user: launching again would silently move an existing
+  // member (or admin) out of their organization into a new one
+  const { data: profile, error: profileErr } = await admin
+    .from("users")
+    .select("organization_id")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+  if (profileErr) return jsonResponse({ error: profileErr.message }, 500);
+  if (profile?.organization_id) {
+    return jsonResponse({ error: "You already belong to an organization." }, 409);
+  }
 
   const { data: org, error: orgErr } = await admin
     .from("organizations")

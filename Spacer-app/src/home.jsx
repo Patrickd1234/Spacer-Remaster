@@ -6,8 +6,10 @@ import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
 import { Link, useNavigate } from "react-router-dom"
 import { useRole } from "./RoleContext"
+import { safeHttpsUrl } from "./safeUrl"
 
 const RECENT_ACTIVITY_LIMIT = 10
+const UPCOMING_EVENTS_LIMIT = 2
 import CreateTaskModal from "./partials/CreateTaskModal"
 
 // ─── Team icon map ──────────────────────────────────────────────────────────
@@ -18,12 +20,6 @@ const TEAM_ICONS = {
     Finance: "account_balance",
     Design: "palette",
     default: "groups",
-}
-
-const TEAM_STATUS_COLOR = {
-    "ON TRACK": "#aff82a",
-    "NEEDS ATTENTION": "#f59e0b",
-    "AT RISK": "#ef4444",
 }
 
 // ─── StatCard ────────────────────────────────────────────────────────────────
@@ -48,8 +44,7 @@ function StatCard({ value, label, sub, subIcon, subColor }) {
 // ─── TeamCard ─────────────────────────────────────────────────────────────────
 function TeamCard({ team }) {
     const icon = TEAM_ICONS[team.name] || TEAM_ICONS.default
-    const statusLabel = team.status || "ON TRACK"
-    const statusColor = TEAM_STATUS_COLOR[statusLabel] || TEAM_STATUS_COLOR["ON TRACK"]
+    // No status badge: departments have no status data (it always read "ON TRACK")
 
     return (
         <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-[#aff82a]/30 transition-all duration-300">
@@ -78,11 +73,6 @@ function TeamCard({ team }) {
                     </span>
                     <span className="font-semibold text-white text-sm">{team.project_count ?? "—"}</span>
                 </div>
-            </div>
-            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-[#2D3139]">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: statusColor }} />
-                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>Status</span>
-                <span className="ml-auto text-[10px] font-bold uppercase tracking-wider" style={{ color: statusColor }}>{statusLabel}</span>
             </div>
         </div>
     )
@@ -161,6 +151,24 @@ function Home() {
     const [userTasks, setUserTasks] = useState([])
     const [tasksLoading, setTasksLoading] = useState(false)
     const [activities, setActivities] = useState([])
+    const [upcomingEvents, setUpcomingEvents] = useState([])
+
+    // Next two calendar events (row-level security limits them to the user's organization)
+    useEffect(() => {
+        let active = true
+        const today = new Date().toISOString().slice(0, 10)
+        supabase
+            .from("calendar_events")
+            .select("id, title, description, event_date, external_url")
+            .gte("event_date", today)
+            .order("event_date", { ascending: true })
+            .limit(UPCOMING_EVENTS_LIMIT)
+            .then(({ data, error }) => {
+                if (error) console.error("Loading upcoming events failed:", error)
+                if (active) setUpcomingEvents(data || [])
+            })
+        return () => { active = false }
+    }, [])
     const [activitiesLoading, setActivitiesLoading] = useState(false)
 
     // Recent Activity is the signed-in user's own actions, for every role.
@@ -221,7 +229,6 @@ function Home() {
                     ...ts,
                     member_count: allMembers.filter(m => m.team_space_id === ts.id).length,
                     project_count: activeProjects.filter(p => p.team_space_id === ts.id).length,
-                    status: ts.status || "ON TRACK",
                 }))
                 setTeams(enriched)
             }
@@ -301,11 +308,7 @@ function Home() {
     const doneTasks = userTasks.filter(t => t.status === "done")
     const openCount = todoTasks.length + inProgressTasks.length
 
-    const fallbackActivities = [
-        { id: "fb-1", initials: "SA", title: "Organization workspace initialized", sub: "Activity logging is live" }
-    ];
-    const displayActivities = activities.length > 0 ? activities : fallbackActivities;
-    const visibleActivities = showAllActivity ? displayActivities : displayActivities.slice(0, 3);
+    const visibleActivities = showAllActivity ? activities : activities.slice(0, 3);
 
     const displayName = userData?.full_name || userData?.name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
 
@@ -453,6 +456,9 @@ function Home() {
                                         <button onClick={() => setShowAllActivity(!showAllActivity)} className="text-xs text-primary-fixed hover:underline">{showAllActivity ? 'Show less' : 'See all'}</button>
                                     </div>
                                     <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-4 min-h-[200px]">
+                                        {activities.length === 0 && (
+                                            <p className="text-xs text-[#8c947b]">No activity yet. Create a project or task to get started.</p>
+                                        )}
                                         {visibleActivities.map(act => (
                                             <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
                                                 <div className="w-8 h-8 rounded-lg bg-[#252a33] border border-[#2D3139] flex items-center justify-center shrink-0 font-bold text-[10px] text-primary-fixed">{act.initials}</div>
@@ -591,7 +597,10 @@ function Home() {
                                     <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col min-h-[420px]">
                                         <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-[#2D3139]">Recent Activity</h3>
                                         <div className="space-y-4 overflow-y-auto flex-1">
-                                            {displayActivities.slice(0, 5).map(act => (
+                                            {activities.length === 0 && (
+                                                <p className="text-xs text-[#8c947b]">No activity yet. Create a project or task to get started.</p>
+                                            )}
+                                            {activities.slice(0, 5).map(act => (
                                                 <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
                                                     <div className="w-8 h-8 rounded-full bg-[#252a33] text-[#aff82a] border border-[#2D3139] flex items-center justify-center shrink-0 font-bold text-xs">
                                                         {act.initials}
@@ -614,26 +623,36 @@ function Home() {
                                 <h3 className="text-lg font-semibold text-white">Upcoming Meetings</h3>
                                 <Link to="/calendar" className="text-primary-fixed text-xs hover:underline">View all calendar</Link>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 hover:border-[#aff82a]/30 transition-colors">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-3 text-xs text-[#8c947b]">
-                                            <span className="font-semibold text-white">9:00 - 9:30 AM</span>
-                                            <span className="w-1 h-1 rounded-full bg-[#2D3139]"></span>
-                                            <span>30 mins</span>
-                                        </div>
-                                    </div>
-                                    <div className="mb-4">
-                                        <h4 className="text-base font-semibold text-white mb-1">Daily Standup — Dev Team</h4>
-                                        <p className="text-primary-fixed text-xs">Spacer Core Development</p>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <button className="flex-1 flex items-center justify-center gap-2 bg-[#14161b] border border-[#2D3139] hover:bg-[#252a33] text-white py-2 rounded-lg text-xs font-medium transition-colors">
-                                            <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
-                                        </button>
-                                    </div>
+                            {/* Next events from the organization's calendar */}
+                            {upcomingEvents.length === 0 ? (
+                                <div className="bg-[#191c21] border border-dashed border-[#2D3139] rounded-xl p-5 text-xs text-[#8c947b]">
+                                    No upcoming meetings. Events added to the calendar will appear here.
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {upcomingEvents.map(event => {
+                                        const joinUrl = safeHttpsUrl(event.external_url)
+                                        return (
+                                            <div key={event.id} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 hover:border-[#aff82a]/30 transition-colors">
+                                                <div className="flex items-center gap-3 text-xs text-[#8c947b] mb-4">
+                                                    <span className="font-semibold text-white">
+                                                        {new Date(`${event.event_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+                                                    </span>
+                                                </div>
+                                                <div className="mb-4">
+                                                    <h4 className="text-base font-semibold text-white mb-1">{event.title}</h4>
+                                                    {event.description && <p className="text-[#8c947b] text-xs line-clamp-2">{event.description}</p>}
+                                                </div>
+                                                {joinUrl && (
+                                                    <a href={joinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-[#14161b] border border-[#2D3139] hover:bg-[#252a33] text-white py-2 rounded-lg text-xs font-medium transition-colors">
+                                                        <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
+                                                    </a>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                     </div>

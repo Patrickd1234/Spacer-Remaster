@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase";
+import { clearTrustedDevice, TRUSTED_DEVICE_DAYS } from "../trustedDevice";
 
 const CODE_LENGTH = 6;
 
@@ -68,7 +69,7 @@ export default function TwoFactorSettings({ onNotify }) {
     };
 
     const cancelEnrollment = async () => {
-        if (enrollment) await supabase.auth.mfa.unenroll({ factorId: enrollment.id });
+        if (enrollment?.id) await supabase.auth.mfa.unenroll({ factorId: enrollment?.id });
         reset();
     };
 
@@ -89,9 +90,13 @@ export default function TwoFactorSettings({ onNotify }) {
         return true;
     };
 
+    // Optional chaining on factor/enrollment below is required: the React
+    // Compiler reads these values during render to memoize the handlers, and
+    // they're null until 2FA is set up (plain `.id` crashed the Settings page).
     const confirmEnrollment = async (e) => {
         e.preventDefault();
-        if (!(await verifyCode(enrollment.id))) return;
+        if (!enrollment?.id) return;
+        if (!(await verifyCode(enrollment?.id))) return;
         reset();
         await loadFactor();
         onNotify?.("Two-factor authentication is on. You'll be asked for a code when you sign in.", "success");
@@ -99,18 +104,36 @@ export default function TwoFactorSettings({ onNotify }) {
 
     const confirmDisable = async (e) => {
         e.preventDefault();
-        if (!(await verifyCode(factor.id))) return;
-        const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId: factor.id });
+        const factorId = factor?.id;
+        if (!factorId) return;
+        if (!(await verifyCode(factorId))) return;
+        const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
         if (unenrollError) {
             setBusy(false);
             setError(unenrollError.message);
             return;
         }
+        // Remembered devices are meaningless without two-factor
+        await supabase.rpc("forget_trusted_devices");
+        clearTrustedDevice();
         // Drop the now-meaningless second-factor level from this session
         await supabase.auth.refreshSession();
         reset();
         await loadFactor();
         onNotify?.("Two-factor authentication has been turned off.", "info");
+    };
+
+    // Every device must enter a code again at its next sign-in
+    const forgetDevices = async () => {
+        setBusy(true);
+        const { error: forgetError } = await supabase.rpc("forget_trusted_devices");
+        setBusy(false);
+        if (forgetError) {
+            setError("Couldn't forget remembered devices. Please try again.");
+            return;
+        }
+        clearTrustedDevice();
+        onNotify?.("Remembered devices forgotten. Each will ask for a code at its next sign-in.", "info");
     };
 
     const codeInput = (
@@ -193,6 +216,15 @@ export default function TwoFactorSettings({ onNotify }) {
                         </button>
                     </div>
                 </form>
+            )}
+
+            {factor && mode === "idle" && (
+                <p className="text-xs text-on-surface-variant">
+                    Devices where you tick "Remember this device" skip the code for {TRUSTED_DEVICE_DAYS} days.{" "}
+                    <button type="button" onClick={forgetDevices} disabled={busy} className="underline hover:text-on-surface disabled:opacity-50">
+                        Forget remembered devices
+                    </button>
+                </p>
             )}
 
             {error && <p role="alert" className="text-xs text-error font-medium">{error}</p>}

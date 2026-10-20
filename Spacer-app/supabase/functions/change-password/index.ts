@@ -10,7 +10,12 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse, badRequest } from "../_shared/cors.ts";
-import { requireMfa } from "../_shared/mfa.ts";
+import { callerHeaders, requireMfa } from "../_shared/mfa.ts";
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt only uses the first 72 bytes
@@ -27,7 +32,7 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+  const caller = createClient(supabaseUrl, anonKey, { global: { headers: callerHeaders(req) } });
   const { data: userData, error: userErr } = await caller.auth.getUser();
   if (userErr || !userData.user) return jsonResponse({ error: "Not authenticated" }, 401);
   const user = userData.user;
@@ -78,6 +83,13 @@ Deno.serve(async (req) => {
   // Keep this device signed in, sign out everywhere else
   const { error: othersErr } = await admin.auth.admin.signOut(accessToken, "others");
   if (othersErr) console.error("Signing out other sessions failed:", othersErr.message);
+
+  // Other remembered two-factor devices must enter a code again; keep this one
+  const deviceToken = req.headers.get("x-mfa-device");
+  let forget = admin.from("mfa_trusted_devices").delete().eq("user_id", user.id);
+  if (deviceToken) forget = forget.neq("token_hash", await sha256Hex(deviceToken));
+  const { error: forgetErr } = await forget;
+  if (forgetErr) console.error("Forgetting remembered devices failed:", forgetErr.message);
 
   return jsonResponse({ changed: true, other_sessions_signed_out: !othersErr });
 });

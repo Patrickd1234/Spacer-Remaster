@@ -83,6 +83,22 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Launch Organization page (used there but never defined before) */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+}
+
+.neon-glow {
+  box-shadow: 0 0 15px rgba(182, 255, 51, 0.15);
+  border-color: rgba(182, 255, 51, 0.3);
+}
+
+.vertical-divider {
+  width: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* Atmospheric glow */
 .glow-overlay {
   position: absolute;

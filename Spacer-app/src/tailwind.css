@@ -1,0 +1,6 @@
+/* Tailwind, built at compile time (replaces the Play CDN script in index.html).
+   Imported AFTER index.css in main.jsx to keep the CDN's cascade order, where
+   Tailwind's styles were injected after the app's own CSS. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

@@ -6,6 +6,7 @@ import { supabase, getSessionUser } from "./supabase"
 import { usePreferences } from "./PreferencesContext"
 import { useRole } from "./RoleContext"
 import TwoFactorSettings from "./components/TwoFactorSettings"
+import ComingSoonCard from "./components/ComingSoonCard"
 import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
 
 export default function Settings() {
@@ -19,33 +20,10 @@ export default function Settings() {
 
     const notifications = preferences?.notifications || {}
     const appearance = preferences?.appearance || {}
-    const security = preferences?.security || {}
-    const integrations = preferences?.integrations || {}
 
     // Password form state
     const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" })
     const [passwordMsg, setPasswordMsg] = useState(null)
-
-    // GitHub Link & Repositories Selector States
-    const [githubRepos, setGithubRepos] = useState(() => {
-        const cached = localStorage.getItem("spacers_github_repos")
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached)
-                return Array.isArray(parsed) ? parsed.filter(r => !r.includes("Arduinobeginner13")) : []
-            } catch {
-                return []
-            }
-        }
-        return []
-    })
-
-    // Personal Access Tokens State
-    const [apiTokens, setApiTokens] = useState([])
-    const [newTokenName, setNewTokenName] = useState("")
-    const [showTokenModal, setShowTokenModal] = useState(false)
-    const [generatedTokenSecret, setGeneratedTokenSecret] = useState("")
-    const [tokenCopied, setTokenCopied] = useState(false)
 
     // User & Org details from Supabase / localStorage
     const [user, setUser] = useState({
@@ -165,70 +143,6 @@ export default function Settings() {
         fetchUserData()
     }, [isSuperAdmin, isAdmin, membershipData])
 
-    // Setup listener for the pop-up OAuth simulator window
-    useEffect(() => {
-        const handleOAuthMessage = async (event) => {
-            if (event.data?.type === "GITHUB_AUTHORIZED") {
-                if (event.data.success) {
-                    const repos = Array.isArray(event.data.repos) ? event.data.repos : []
-                    const defaultRepo = repos[0] || ""
-                    const githubUser = event.data.user || ""
-                    setGithubRepos(repos)
-                    localStorage.setItem("spacers_github_repos", JSON.stringify(repos))
-                    const updated = {
-                        ...integrations,
-                        github: {
-                            connected: true,
-                            repo: defaultRepo,
-                            user: githubUser,
-                            repos: repos
-                        }
-                    }
-                    await updatePreferences("integrations", updated)
-                    showToast(`GitHub successfully connected${githubUser ? ` to @${githubUser}` : ""}!`, "success")
-                } else {
-                    showToast(event.data.error || "GitHub authorization failed.", "error")
-                }
-            }
-        }
-        window.addEventListener("message", handleOAuthMessage)
-        return () => window.removeEventListener("message", handleOAuthMessage)
-    }, [integrations])
-
-    // Synchronize GitHub repository list from stored preferences
-    useEffect(() => {
-        if (integrations?.github?.connected) {
-            if (Array.isArray(integrations.github.repos) && integrations.github.repos.length > 0) {
-                const cleaned = integrations.github.repos.filter(r => !r.includes("Arduinobeginner13"))
-                setGithubRepos(cleaned)
-            }
-        } else {
-            setGithubRepos([])
-        }
-    }, [integrations?.github?.connected, integrations?.github?.repos])
-
-    // Synchronize API Tokens from user security preferences & user-scoped storage
-    useEffect(() => {
-        if (Array.isArray(security?.apiTokens)) {
-            const valid = security.apiTokens.filter((t) => !["tok_1", "tok_2"].includes(t.id))
-            setApiTokens(valid)
-            return
-        }
-        const storageKey = user.id ? `spacers_api_tokens_${user.id}` : "spacers_api_tokens"
-        const cached = localStorage.getItem(storageKey) || localStorage.getItem("spacers_api_tokens")
-        if (cached) {
-            try {
-                const parsed = JSON.parse(cached)
-                const valid = Array.isArray(parsed) ? parsed.filter((t) => !["tok_1", "tok_2"].includes(t.id)) : []
-                setApiTokens(valid)
-            } catch {
-                setApiTokens([])
-            }
-        } else {
-            setApiTokens([])
-        }
-    }, [security?.apiTokens, user.id])
-
     // Handlers
     const handleSaveWorkspace = async () => {
         setSaving(true)
@@ -280,10 +194,6 @@ export default function Settings() {
         showToast("Appearance preferences saved!")
     }
 
-    const handleSaveSecurity = async (updatedSecurity) => {
-        await updatePreferences("security", updatedSecurity)
-        showToast("Security settings updated!")
-    }
 
     const handlePasswordChange = async (e) => {
         e.preventDefault()
@@ -308,126 +218,6 @@ export default function Settings() {
             setPasswordForm({ current: "", next: "", confirm: "" })
             showToast("Password updated successfully!")
         }
-    }
-
-    const handleCreateToken = async () => {
-        if (!newTokenName.trim()) return
-        try {
-            // Cryptographically secure random token generation
-            const randomBytes = new Uint8Array(20)
-            window.crypto.getRandomValues(randomBytes)
-            const secretHex = Array.from(randomBytes).map((b) => b.toString(16).padStart(2, "0")).join("")
-            const rawTokenSecret = `spc_live_${secretHex}`
-
-            // Compute SHA-256 hash for secure storage (never store raw token permanently)
-            const encoder = new TextEncoder()
-            const data = encoder.encode(rawTokenSecret)
-            const hashBuffer = await window.crypto.subtle.digest("SHA-256", data)
-            const tokenHash = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("")
-
-            const newTokenRecord = {
-                id: `tok_${Date.now()}`,
-                name: newTokenName.trim(),
-                tokenPrefix: `spc_live_${secretHex.slice(0, 4)}...${secretHex.slice(-4)}`,
-                tokenHash: tokenHash,
-                created: new Date().toISOString().split("T")[0],
-                lastUsed: "Never"
-            }
-
-            const updatedTokens = [newTokenRecord, ...apiTokens]
-            setApiTokens(updatedTokens)
-
-            // Persist to user security preferences in Supabase
-            const updatedSecurity = {
-                ...security,
-                apiTokens: updatedTokens
-            }
-            await updatePreferences("security", updatedSecurity)
-
-            // Persist to user-scoped storage
-            const storageKey = user.id ? `spacers_api_tokens_${user.id}` : "spacers_api_tokens"
-            localStorage.setItem(storageKey, JSON.stringify(updatedTokens))
-            localStorage.setItem("spacers_api_tokens", JSON.stringify(updatedTokens))
-
-            setGeneratedTokenSecret(rawTokenSecret)
-            setTokenCopied(false)
-            showToast("New API Token generated!", "success")
-        } catch (err) {
-            console.error("Token creation error:", err)
-            showToast("Failed to generate API token.", "error")
-        }
-    }
-
-    const handleRevokeToken = async (id) => {
-        const updatedTokens = apiTokens.filter((t) => t.id !== id)
-        setApiTokens(updatedTokens)
-
-        const updatedSecurity = {
-            ...security,
-            apiTokens: updatedTokens
-        }
-        await updatePreferences("security", updatedSecurity)
-
-        const storageKey = user.id ? `spacers_api_tokens_${user.id}` : "spacers_api_tokens"
-        localStorage.setItem(storageKey, JSON.stringify(updatedTokens))
-        localStorage.setItem("spacers_api_tokens", JSON.stringify(updatedTokens))
-
-        showToast("API token revoked.", "info")
-    }
-
-    const handleCopyToken = () => {
-        if (!generatedTokenSecret) return
-        navigator.clipboard.writeText(generatedTokenSecret)
-        setTokenCopied(true)
-        setTimeout(() => setTokenCopied(false), 3000)
-        showToast("Token copied to clipboard!", "success")
-    }
-
-    const handleToggleIntegration = async (key) => {
-        const isConnecting = !integrations[key].connected;
-        if (key === "github") {
-            if (isConnecting) {
-                // Open real simulated GitHub OAuth consent popup window
-                const width = 520;
-                const height = 740;
-                const left = window.screen.width / 2 - width / 2;
-                const top = window.screen.height / 2 - height / 2;
-                const defaultUser = user.name ? user.name.replace(/\s+/g, "").toLowerCase() : (user.email ? user.email.split("@")[0] : "");
-                window.open(
-                    `/github-oauth.html?user=${encodeURIComponent(defaultUser)}`,
-                    "GitHub Authorization",
-                    `width=${width},height=${height},top=${top},left=${left},status=no,resizable=yes`
-                );
-            } else {
-                const updated = {
-                    ...integrations,
-                    github: { connected: false, repo: "", user: "", repos: [] }
-                }
-                setGithubRepos([])
-                localStorage.removeItem("spacers_github_repos")
-                await updatePreferences("integrations", updated)
-                showToast("GitHub integration disconnected.", "info")
-            }
-        } else {
-            const updated = {
-                ...integrations,
-                [key]: { ...integrations[key], connected: isConnecting }
-            }
-            await updatePreferences("integrations", updated)
-            showToast(`${key.toUpperCase()} integration ${isConnecting ? "connected" : "disconnected"}.`)
-            if (isConnecting && key === "slack") {
-                window.open("https://slack.com", "_blank")
-            }
-        }
-    }
-
-    const handleSelectRepo = async (repoName) => {
-        const updated = {
-            ...integrations,
-            github: { ...integrations.github, repo: repoName }
-        }
-        await updatePreferences("integrations", updated)
-        showToast(`Linked repository updated to: ${repoName}`)
     }
 
     const tabs = [
@@ -992,56 +782,9 @@ export default function Settings() {
                                         </form>
                                     </div>
 
-                                    {/* Personal Access Tokens */}
-                                    <div className="space-y-md pt-md border-t border-outline-variant">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <h3 className="text-label-md font-semibold text-on-surface uppercase tracking-wider">Personal Access Tokens</h3>
-                                                <p className="text-body-sm text-on-surface-variant">Tokens used for authenticating with Spacers CLI and API webhooks.</p>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    setNewTokenName("")
-                                                    setGeneratedTokenSecret("")
-                                                    setTokenCopied(false)
-                                                    setShowTokenModal(true)
-                                                }}
-                                                className="px-md py-1.5 bg-surface-container-highest border border-outline-variant text-primary-fixed hover:bg-surface-variant font-body-sm font-semibold rounded-xl flex items-center gap-sm transition-colors"
-                                            >
-                                                <span className="material-symbols-outlined text-base">add</span>
-                                                Generate Token
-                                            </button>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            {apiTokens.length > 0 ? (
-                                                apiTokens.map((tok) => (
-                                                    <div key={tok.id} className="flex items-center justify-between p-md rounded-xl bg-surface-container-low border border-outline-variant">
-                                                        <div className="space-y-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="font-body-md font-semibold text-on-surface">{tok.name}</p>
-                                                                <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface-container-highest text-on-surface-variant border border-outline-variant">
-                                                                    {tok.tokenPrefix || "spc_live_••••"}
-                                                                </span>
-                                                            </div>
-                                                            <p className="text-xs text-on-surface-variant">Created {tok.created} • Last used {tok.lastUsed || "Never"}</p>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleRevokeToken(tok.id)}
-                                                            className="text-xs text-error hover:bg-error/10 px-3 py-1 rounded-lg transition-colors border border-error/20 font-medium"
-                                                        >
-                                                            Revoke
-                                                        </button>
-                                                    </div>
-                                                ))
-                                            ) : (
-                                                <div className="p-md rounded-xl bg-surface-container-low border border-dashed border-outline-variant text-center py-6 space-y-1">
-                                                    <span className="material-symbols-outlined text-on-surface-variant text-2xl">key_off</span>
-                                                    <p className="font-body-md font-semibold text-on-surface">No Personal Access Tokens</p>
-                                                    <p className="text-body-sm text-on-surface-variant">You have not created any active API access tokens yet.</p>
-                                                </div>
-                                            )}
-                                        </div>
+                                    {/* Personal Access Tokens: not built yet */}
+                                    <div className="pt-md border-t border-outline-variant">
+                                        <ComingSoonCard icon="key" title="Personal Access Tokens" description="Tokens for the Spacer CLI and API webhooks" />
                                     </div>
                                 </div>
                             )}
@@ -1101,94 +844,9 @@ export default function Settings() {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-                                        {/* GitHub */}
-                                        <div className="p-md rounded-xl bg-surface-container-low border border-outline-variant flex flex-col justify-between space-y-4">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center border border-outline-variant">
-                                                        <span className="material-symbols-outlined text-on-surface">code</span>
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-body-md font-bold text-on-surface">GitHub Sync</h3>
-                                                        <p className="text-xs text-on-surface-variant">Link PRs & commits to tasks</p>
-                                                    </div>
-                                                </div>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${integrations.github.connected ? "bg-primary-container/20 text-primary-fixed" : "bg-surface-container-highest text-on-surface-variant"}`}>
-                                                    {integrations.github.connected ? "CONNECTED" : "OFFLINE"}
-                                                </span>
-                                            </div>
-
-                                            {integrations.github?.connected ? (
-                                                <div className="p-sm rounded-lg bg-surface-container-high border border-outline-variant space-y-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <label className="block text-[10px] font-semibold text-on-surface-variant uppercase tracking-wider">Sync Repository</label>
-                                                        {integrations.github.user && (
-                                                            <span className="text-[10px] text-primary-fixed font-mono font-semibold">@{integrations.github.user}</span>
-                                                        )}
-                                                    </div>
-                                                    {githubRepos.length > 0 ? (
-                                                        <>
-                                                            <select
-                                                                value={integrations.github.repo || ""}
-                                                                onChange={(e) => handleSelectRepo(e.target.value)}
-                                                                className="w-full bg-surface-container-highest border border-outline-variant rounded-lg px-2 py-1 text-xs text-on-surface focus:outline-none"
-                                                            >
-                                                                <option value="" disabled>-- Select Repository --</option>
-                                                                {githubRepos.map((repo) => (
-                                                                    <option key={repo} value={repo}>{repo}</option>
-                                                                ))}
-                                                            </select>
-                                                            {integrations.github.repo && (
-                                                                <div className="flex items-center gap-2 pt-1 text-[10px] text-primary-fixed">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-primary-fixed animate-ping"></span>
-                                                                    <span>Monitoring commits & branches</span>
-                                                                </div>
-                                                            )}
-                                                        </>
-                                                    ) : (
-                                                        <div className="py-2 text-center text-on-surface-variant text-xs">
-                                                            No repositories found for this account.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="p-sm rounded-lg bg-surface-container-high border border-outline-variant text-xs text-on-surface-variant flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">info</span>
-                                                    <span>Connect your GitHub account to view and link repositories.</span>
-                                                </div>
-                                            )}
-
-                                            <button
-                                                onClick={() => handleToggleIntegration("github")}
-                                                className="w-full py-2 bg-surface-container-highest border border-outline-variant text-on-surface font-body-sm font-semibold rounded-xl hover:bg-surface-variant transition-colors"
-                                            >
-                                                {integrations.github.connected ? "Disconnect GitHub" : "Connect GitHub"}
-                                            </button>
-                                        </div>
-
-                                        {/* Slack */}
-                                        <div className="p-md rounded-xl bg-surface-container-low border border-outline-variant flex flex-col justify-between space-y-4">
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-surface-container-highest flex items-center justify-center border border-outline-variant">
-                                                        <span className="material-symbols-outlined text-on-surface">chat</span>
-                                                    </div>
-                                                    <div>
-                                                        <h3 className="font-body-md font-bold text-on-surface">Slack Bot</h3>
-                                                        <p className="text-xs text-on-surface-variant">Post daily task digests</p>
-                                                    </div>
-                                                </div>
-                                                <span className={`text-xs px-2 py-0.5 rounded font-semibold ${integrations.slack.connected ? "bg-primary-container/20 text-primary-fixed" : "bg-surface-container-highest text-on-surface-variant"}`}>
-                                                    {integrations.slack.connected ? "CONNECTED" : "OFFLINE"}
-                                                </span>
-                                            </div>
-                                            <button
-                                                onClick={() => handleToggleIntegration("slack")}
-                                                className="w-full py-2 bg-surface-container-highest border border-outline-variant text-on-surface font-body-sm font-semibold rounded-xl hover:bg-surface-variant transition-colors"
-                                            >
-                                                {integrations.slack.connected ? "Configure Slack" : "Connect Slack"}
-                                            </button>
-                                        </div>
+                                        {/* Integrations: not built yet */}
+                                        <ComingSoonCard icon="code" title="GitHub Sync" description="Link PRs & commits to tasks" />
+                                        <ComingSoonCard icon="chat" title="Slack Bot" description="Post daily task digests" />
                                     </div>
                                 </div>
                             )}
@@ -1197,115 +855,6 @@ export default function Settings() {
                     </div>
                 </div>
             </main>
-
-            {/* API Token Creation Modal */}
-            {showTokenModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
-                    <div className="glass-card rounded-2xl p-lg max-w-md w-full space-y-md border border-outline-variant shadow-2xl animate-scaleIn">
-                        <div className="flex items-center justify-between border-b border-outline-variant pb-sm">
-                            <h3 className="text-headline-md font-bold text-on-surface">
-                                {generatedTokenSecret ? "Token Generated" : "Generate API Access Token"}
-                            </h3>
-                            <button
-                                onClick={() => {
-                                    setShowTokenModal(false)
-                                    setGeneratedTokenSecret("")
-                                    setNewTokenName("")
-                                }}
-                                className="text-on-surface-variant hover:text-on-surface"
-                            >
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-
-                        {generatedTokenSecret ? (
-                            <div className="space-y-md">
-                                <div className="p-md rounded-xl bg-primary-container/10 border border-primary-fixed/30 text-on-surface space-y-2">
-                                    <div className="flex items-center gap-2 text-primary-fixed font-semibold text-sm">
-                                        <span className="material-symbols-outlined text-base">warning</span>
-                                        <span>Copy your new token now</span>
-                                    </div>
-                                    <p className="text-xs text-on-surface-variant">
-                                        For security reasons, this token will never be displayed again. If you lose it, you will need to generate a new one.
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-label-md font-semibold text-on-surface mb-2">Access Token</label>
-                                    <div className="flex items-center rounded-xl bg-surface-container-highest border border-outline-variant overflow-hidden">
-                                        <input
-                                            type="text"
-                                            readOnly
-                                            value={generatedTokenSecret}
-                                            className="w-full bg-transparent px-md py-2.5 font-mono text-xs text-primary-fixed select-all focus:outline-none"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={handleCopyToken}
-                                            className="px-md py-2.5 bg-surface-container-high hover:bg-surface-variant border-l border-outline-variant text-on-surface font-body-sm font-semibold flex items-center gap-1 transition-colors"
-                                        >
-                                            <span className="material-symbols-outlined text-sm">
-                                                {tokenCopied ? "check" : "content_copy"}
-                                            </span>
-                                            <span>{tokenCopied ? "Copied" : "Copy"}</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-end pt-sm border-t border-outline-variant">
-                                    <button
-                                        onClick={() => {
-                                            setShowTokenModal(false)
-                                            setGeneratedTokenSecret("")
-                                            setNewTokenName("")
-                                        }}
-                                        className="px-lg py-2 bg-primary-container text-on-primary-container font-body-sm font-semibold rounded-xl hover:scale-[0.98] transition-all"
-                                    >
-                                        Done
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="space-y-md">
-                                <div>
-                                    <label className="block text-label-md font-semibold text-on-surface mb-2">Token Name / Service</label>
-                                    <input
-                                        type="text"
-                                        placeholder="e.g. CI/CD Deployment Pipeline"
-                                        className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
-                                        value={newTokenName}
-                                        onChange={(e) => setNewTokenName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter") {
-                                                e.preventDefault()
-                                                handleCreateToken()
-                                            }
-                                        }}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-end gap-md pt-sm border-t border-outline-variant">
-                                    <button
-                                        onClick={() => {
-                                            setShowTokenModal(false)
-                                            setNewTokenName("")
-                                        }}
-                                        className="px-md py-2 bg-surface-container-highest text-on-surface font-body-sm font-semibold rounded-xl hover:bg-surface-variant transition-colors"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        onClick={handleCreateToken}
-                                        disabled={!newTokenName.trim()}
-                                        className="px-md py-2 bg-primary-container text-on-primary-container font-body-sm font-semibold rounded-xl hover:scale-[0.98] transition-all disabled:opacity-50"
-                                    >
-                                        Generate Token
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
 
         </>
     )

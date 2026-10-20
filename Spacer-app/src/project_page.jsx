@@ -915,14 +915,23 @@ function ProjectPage() {
                             </button>
                         )}
                         {canDeleteProject === false && (
+                            // Compact pill; the full reason shows in a tooltip on hover or focus
                             <span
-                                className="ml-auto flex items-center gap-1.5 px-3 py-2 text-[12px] text-[#8c947b]"
-                                title="Deleting a project requires team lead or admin in its department"
+                                tabIndex={0}
+                                aria-describedby="delete-locked-reason"
+                                className="group relative ml-auto shrink-0 flex items-center gap-1.5 whitespace-nowrap rounded-md border border-[#2D3139] bg-[#14161b] px-2.5 py-1.5 text-[12px] font-medium text-[#8c947b] cursor-help outline-none hover:text-red-400 hover:border-red-500/40 hover:bg-red-950/20 focus-visible:text-red-400 focus-visible:border-red-500/40 focus-visible:bg-red-950/20 focus-visible:ring-2 focus-visible:ring-red-500/30 transition-colors"
                             >
-                                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">lock</span>
-                                {projectDepartmentName
-                                    ? <>Only admins of <span className="text-white font-medium">{projectDepartmentName}</span> can delete this project</>
-                                    : "This project has no department, so it can't be deleted here"}
+                                <span className="material-symbols-outlined text-[15px]" aria-hidden="true">lock</span>
+                                Delete locked
+                                <span
+                                    id="delete-locked-reason"
+                                    role="tooltip"
+                                    className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 whitespace-normal rounded-lg border border-[#2D3139] bg-[#1C1F26] px-3 py-2 text-left text-[12px] font-normal leading-relaxed text-[#c4c6d0] shadow-xl opacity-0 translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100 group-focus-visible:translate-y-0"
+                                >
+                                    {projectDepartmentName
+                                        ? <>Only team leads and admins of <span className="text-white font-semibold">{projectDepartmentName}</span> can delete this project.</>
+                                        : "This project has no department, so it can't be deleted here. A super admin can assign it one in Supabase."}
+                                </span>
                             </span>
                         )}
                     </div>

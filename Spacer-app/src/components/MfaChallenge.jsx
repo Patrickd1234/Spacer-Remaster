@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
+import { saveTrustedDevice, TRUSTED_DEVICE_DAYS } from "../trustedDevice";
 
 const CODE_LENGTH = 6;
 
@@ -10,6 +11,7 @@ export default function MfaChallenge({ onVerified }) {
     const [code, setCode] = useState("");
     const [error, setError] = useState("");
     const [verifying, setVerifying] = useState(false);
+    const [rememberDevice, setRememberDevice] = useState(true);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -29,12 +31,23 @@ export default function MfaChallenge({ onVerified }) {
         }
 
         const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId: factor.id, code });
-        setVerifying(false);
         if (verifyError) {
+            setVerifying(false);
             setError("That code didn't work. Check your authenticator app and try again.");
             setCode("");
             return;
         }
+
+        // The session is now verified (aal2), so the server will issue a device token
+        if (rememberDevice) {
+            const { data: { session } } = await supabase.auth.getSession();
+            const { data: token, error: trustError } = await supabase.rpc("trust_this_device", {
+                p_user_agent: navigator.userAgent,
+            });
+            if (trustError || !token) console.error("Couldn't remember this device:", trustError);
+            else if (session?.user?.id) saveTrustedDevice(session.user.id, token);
+        }
+        setVerifying(false);
         onVerified();
     };
 
@@ -64,6 +77,16 @@ export default function MfaChallenge({ onVerified }) {
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                     className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-center text-[22px] tracking-[0.5em] placeholder-[#4a4f42] focus:outline-none transition-colors"
                 />
+
+                <label className="flex items-center justify-center gap-2 mt-4 text-[#8c947b] text-[13px] cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        checked={rememberDevice}
+                        onChange={(e) => setRememberDevice(e.target.checked)}
+                        className="rounded border-[#2D3139] bg-[#111318] text-[#aff82a] focus:ring-[#aff82a]"
+                    />
+                    Remember this device for {TRUSTED_DEVICE_DAYS} days
+                </label>
 
                 {error && <p role="alert" className="text-red-400 text-[13px] mt-3">{error}</p>}
 

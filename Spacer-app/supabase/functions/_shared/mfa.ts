@@ -6,6 +6,15 @@ interface RpcClient {
   rpc(fn: string): PromiseLike<{ data: any; error: unknown }>;
 }
 
+// Headers for a client that acts as the caller: their JWT, plus the
+// "remember this device" token so mfa_satisfied() can accept it
+export function callerHeaders(req: Request): Record<string, string> {
+  const headers: Record<string, string> = { Authorization: req.headers.get("Authorization") ?? "" };
+  const deviceToken = req.headers.get("x-mfa-device");
+  if (deviceToken) headers["x-mfa-device"] = deviceToken;
+  return headers;
+}
+
 // Functions that act with the service role must enforce two-factor themselves:
 // RLS (which checks it via mfa_satisfied()) doesn't apply to the service role.
 // `caller` is a client carrying the user's JWT. Returns a 403 response to send

@@ -8,7 +8,7 @@
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse, badRequest, notFound } from "../_shared/cors.ts";
-import { requireMfa } from "../_shared/mfa.ts";
+import { callerHeaders, requireMfa } from "../_shared/mfa.ts";
 
 interface InviteRequest {
   organization_id: string;
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
   // Scoped client: confirms the caller is actually an org admin under RLS
   // before we touch anything with the service role.
   const caller = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
+    global: { headers: callerHeaders(req) },
   });
   const { data: userData, error: userErr } = await caller.auth.getUser();
   if (userErr || !userData.user) return badRequest("Not authenticated");
