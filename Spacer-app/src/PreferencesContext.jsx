@@ -28,11 +28,13 @@ const defaultPreferences = {
     analyticsOptIn: false,
     sessionTimeout: "30_mins"
   },
+  // No integrations are built yet (Settings shows them as "Coming soon"),
+  // so nothing may default to connected
   integrations: {
-    github: { connected: false, repo: "" },
-    slack: { connected: true, channel: "#proj-spacers" },
+    github: { connected: false },
+    slack: { connected: false },
     gcal: { connected: false },
-    figma: { connected: true }
+    figma: { connected: false }
   }
 };
 

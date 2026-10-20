@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
+import { describeActivity, timeAgo } from "./activityLabels"
 
 function initials(name, email) {
     const source = (name || email || "").trim()
@@ -28,11 +29,15 @@ function Profile() {
         email: "",
         phone: "",
         job_title: "",
-        department: "Engineering & Design",
-        location: "San Francisco, CA",
-        bio: "Passionate about building intuitive workspace products and user-centered design systems.",
-        website: "https://openspace.finance/"
+        department: "",
+        location: "",
+        bio: "",
+        website: ""
     })
+
+    // Overview numbers and feed, from the user's real tasks, projects and activity
+    const [overview, setOverview] = useState(null) // { projects, openTasks, doneTasks, memberSince }
+    const [activityFeed, setActivityFeed] = useState([])
 
     // Draft values during editing
     const [isEditing, setIsEditing] = useState(false)
@@ -94,14 +99,41 @@ function Profile() {
                 name: data?.name || authUser.user_metadata?.full_name || "",
                 email: data?.email || authUser.email || "",
                 phone: data?.phone || "",
-                job_title: data?.job_title || "Product Designer",
-                department: data?.department || "Engineering & Design",
-                location: data?.location || "San Francisco, CA",
-                bio: authUser.user_metadata?.bio || data?.bio || "Passionate about building intuitive workspace products and user-centered design systems.",
-                website: data?.website || "https://openspace.finance/"
+                job_title: data?.job_title || "",
+                department: data?.department || "",
+                location: data?.location || "",
+                bio: authUser.user_metadata?.bio || data?.bio || "",
+                website: data?.website || ""
             }
             setProfile(next)
             setDraft(next)
+
+            // Real overview: assigned tasks, projects joined, account age, own activity
+            const [tasksRes, memberRes, activityRes] = await Promise.all([
+                supabase.from("tasks").select("status, project_id").eq("assignee_id", authUser.id),
+                supabase.from("project_members").select("project_id").eq("user_id", authUser.id),
+                supabase
+                    .from("activity_log")
+                    .select("id, action, entity_type, new_state, created_at")
+                    .eq("actor_id", authUser.id)
+                    .neq("action", "login")
+                    .order("created_at", { ascending: false })
+                    .limit(6),
+            ])
+            if (tasksRes.error) console.error("Loading tasks for profile failed:", tasksRes.error)
+            if (activityRes.error) console.error("Loading activity failed:", activityRes.error)
+            const tasks = tasksRes.data || []
+            const projectIds = new Set([
+                ...tasks.map(t => t.project_id).filter(Boolean),
+                ...(memberRes.data || []).map(m => m.project_id),
+            ])
+            setOverview({
+                projects: projectIds.size,
+                openTasks: tasks.filter(t => t.status !== "done").length,
+                doneTasks: tasks.filter(t => t.status === "done").length,
+                memberSince: new Date(authUser.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" }),
+            })
+            setActivityFeed((activityRes.data || []).map(row => ({ ...describeActivity(row), time: timeAgo(row.created_at), id: row.id })))
 
             if (!data) {
                 if (import.meta.env.DEV) {
@@ -224,36 +256,12 @@ function Profile() {
         }
     }
 
-    // Stats calculation for Overview
-    const stats = isSuperAdmin ? [
-        { label: "Organizations Managed", value: "3", icon: "domain", color: "text-primary-fixed" },
-        { label: "Active Users", value: "245", icon: "group", color: "text-emerald-400" },
-        { label: "System Health", value: "99.9%", icon: "monitor_heart", color: "text-amber-400" }
-    ] : isAdmin ? [
-        { label: "Department Members", value: "12", icon: "groups", color: "text-secondary-fixed" },
-        { label: "Team Projects", value: "8", icon: "folder", color: "text-emerald-400" },
-        { label: "Pending Approvals", value: "3", icon: "pending_actions", color: "text-amber-400" }
-    ] : [
-        { label: "Active Projects", value: "4", icon: "folder_open", color: "text-secondary-fixed" },
-        { label: "Tasks Completed", value: "32", icon: "task_alt", color: "text-emerald-400" },
-        { label: "Member Since", value: "Jan 2024", icon: "calendar_today", color: "text-amber-400" }
-    ]
-
-    const activityFeed = isSuperAdmin ? [
-        { title: "System update deployed to production", time: "1 hour ago", icon: "system_update_alt", badge: "System" },
-        { title: "New department 'Marketing EMEA' created", time: "3 hours ago", icon: "domain_add", badge: "Organization" },
-        { title: "Reviewed security compliance report", time: "Yesterday at 2:00 PM", icon: "verified", badge: "Security" },
-        { title: "Granted admin rights to new manager", time: "2 days ago", icon: "manage_accounts", badge: "Access" }
-    ] : isAdmin ? [
-        { title: "Approved design system budget", time: "4 hours ago", icon: "fact_check", badge: "Approvals" },
-        { title: "Added 2 new members to Frontend Team", time: "Yesterday at 11:30 AM", icon: "person_add", badge: "Team" },
-        { title: "Updated Q3 project milestones", time: "3 days ago", icon: "flag", badge: "Projects" },
-        { title: "Generated monthly department report", time: "Last week", icon: "assessment", badge: "Reports" }
-    ] : [
-        { title: "Updated project milestones", time: "2 hours ago", icon: "flag", badge: "Project Space" },
-        { title: "Completed task: 'Review wireframes'", time: "Yesterday at 4:15 PM", icon: "check_circle", badge: "Tasks" },
-        { title: "Changed security preferences", time: "3 days ago", icon: "shield", badge: "Security" },
-        { title: "Joined team workspace", time: "Jan 15, 2024", icon: "person_add", badge: "Team" }
+    // Overview cards, from the user's real data ("–" while loading)
+    const stats = [
+        { label: "Projects", value: overview?.projects ?? "–", icon: "folder_open", color: "text-secondary-fixed" },
+        { label: "Open Tasks", value: overview?.openTasks ?? "–", icon: "pending_actions", color: "text-amber-400" },
+        { label: "Tasks Completed", value: overview?.doneTasks ?? "–", icon: "task_alt", color: "text-emerald-400" },
+        { label: "Member Since", value: overview?.memberSince ?? "–", icon: "calendar_today", color: "text-primary-fixed" }
     ]
 
     return (
@@ -394,12 +402,17 @@ function Profile() {
                                                 <span className="material-symbols-outlined text-emerald-400">history</span>
                                                 Recent Activity
                                             </h3>
-                                            <span className="text-xs text-neutral-400">Past 30 Days</span>
+                                            <span className="text-xs text-neutral-400">Latest</span>
                                         </div>
 
                                         <div className="space-y-4">
-                                            {activityFeed.map((item, idx) => (
-                                                <div key={idx} className="flex items-start gap-4 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors">
+                                            {activityFeed.length === 0 && (
+                                                <p className="text-sm text-neutral-400 py-6 text-center">
+                                                    No activity yet. Create or update a task and it will show up here.
+                                                </p>
+                                            )}
+                                            {activityFeed.map((item) => (
+                                                <div key={item.id} className="flex items-start gap-4 p-3.5 rounded-xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-colors">
                                                     <div className="p-2 rounded-lg bg-primary-fixed/10 text-primary-fixed shrink-0">
                                                         <span className="material-symbols-outlined text-lg">{item.icon}</span>
                                                     </div>

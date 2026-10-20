@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { supabase } from "./supabase"
+import { callEdgeFunction } from "./edgeFunctions"
 
-export default function LaunchOrganization() {
+export default function LaunchOrganization({ onOrganizationChanged }) {
     const navigate = useNavigate()
     const [orgName, setOrgName] = useState("")
     const [teamName, setTeamName] = useState("")
@@ -13,7 +13,7 @@ export default function LaunchOrganization() {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        if (!orgName.trim() || !teamName.trim() || !deptHeadEmail.trim()) {
+        if (!orgName.trim() || !teamName.trim()) {
             setErrorMsg("Please fill in all required fields.")
             return
         }
@@ -22,36 +22,29 @@ export default function LaunchOrganization() {
         setErrorMsg("")
 
         try {
-            // Check if user is authenticated
-            const { data: userData, error: userError } = await supabase.auth.getUser();
-            if (userError || !userData?.user) {
-                throw new Error("You must be logged in to launch an organization.");
-            }
-
-            const { error } = await supabase.functions.invoke('launch-organization', {
-                body: {
-                    organization_name: orgName.trim(),
-                    team_spaces: [
-                        {
-                            name: teamName.trim(),
-                            team_lead_email: deptHeadEmail.trim(),
-                            member_emails: teamMemberEmails
-                                .split(/[\n,]/)
-                                .map((e) => e.trim())
-                                .filter(Boolean)
-                        }
-                    ]
-                }
+            // Makes the caller the organization's super admin (edge function)
+            const { error } = await callEdgeFunction('launch-organization', {
+                organization_name: orgName.trim(),
+                team_spaces: [
+                    {
+                        name: teamName.trim(),
+                        team_lead_email: deptHeadEmail.trim() || undefined,
+                        member_emails: teamMemberEmails
+                            .split(/[\n,]/)
+                            .map((e) => e.trim())
+                            .filter(Boolean)
+                    }
+                ]
             });
 
             if (error) {
-                throw error;
+                throw new Error(error);
             }
 
             setStatus("success")
-            setTimeout(() => {
-                navigate("/onboarding")
-            }, 1500)
+            // App.jsx only lets members of an organization past this point
+            await onOrganizationChanged?.()
+            navigate("/onboarding", { replace: true })
 
         } catch (err) {
             console.error("Error launching organization:", err)
@@ -189,7 +182,7 @@ export default function LaunchOrganization() {
                         {/* Field: Department / Team Lead Email */}
                         <div data-purpose="input-group">
                             <label className="block text-sm font-medium text-gray-300 mb-2" htmlFor="lead-email">
-                                Team Lead Email <span className="text-brand">*</span>
+                                Team Lead Email <span className="text-xs text-gray-500 font-normal">(optional — they join when they sign up with this email)</span>
                             </label>
                             <input
                                 id="lead-email"
@@ -197,7 +190,6 @@ export default function LaunchOrganization() {
                                 value={deptHeadEmail}
                                 onChange={(e) => setDeptHeadEmail(e.target.value)}
                                 placeholder="lead@company.com"
-                                required
                                 className="w-full bg-surface-dim border border-white/10 rounded-custom px-4 py-3 text-sm text-white focus:border-brand focus:ring-1 focus:ring-brand transition-all outline-none placeholder:text-gray-600"
                             />
                         </div>

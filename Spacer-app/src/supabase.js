@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { fetchWithTrustedDevice } from './trustedDevice';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -7,7 +8,11 @@ if (!supabaseUrl || !supabaseKey) {
     console.warn("supabaseUrl or supabaseKey not found");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// The fetch wrapper adds this browser's "remember this device" token, if any,
+// to database, storage and edge function requests (see trustedDevice.js)
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { fetch: fetchWithTrustedDevice },
+});
 
 // Signed-in user from the locally stored session — no network round trip,
 // unlike supabase.auth.getUser(). Use it for the user's id/email/metadata in
