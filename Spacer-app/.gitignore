@@ -25,3 +25,6 @@ dist-ssr
 ECC*
 # Supabase CLI local cache
 supabase/.temp/
+
+# Microsoft Office lock files
+~$*

@@ -1,12 +1,30 @@
-import { useState } from "react"
-import { useNavigate, Link } from "react-router-dom"
+import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
 
 function Onboarding() {
-    const navigate = useNavigate()
     const [teamInput, setTeamInput] = useState("")
     const [teams, setTeams] = useState(["Development Team", "Product & Design"])
     const [status, setStatus] = useState("idle") // "idle" | "submitting" | "success"
+    const [errorMsg, setErrorMsg] = useState("")
+    // The organization comes from the user's profile row (set by launch-organization),
+    // never from user_metadata, which users can edit themselves
+    const [organization, setOrganization] = useState(null) // { id, name }
+    const organizationId = organization?.id
+
+    useEffect(() => {
+        let active = true
+        getSessionUser().then(async (user) => {
+            if (!user) return
+            const { data, error } = await supabase
+                .from("users")
+                .select("organization:organizations(id, name)")
+                .eq("id", user.id)
+                .maybeSingle()
+            if (error) console.error("Loading organization failed:", error)
+            if (active) setOrganization(data?.organization || null)
+        })
+        return () => { active = false }
+    }, [])
 
     const handleAddTeam = () => {
         if (!teamInput.trim()) return
@@ -35,35 +53,34 @@ function Onboarding() {
         }
 
         setStatus("submitting")
+        setErrorMsg("")
         try {
-            const userData = { user: await getSessionUser() }
-            if (userData?.user) {
-                const user = userData.user
-                let orgId = user.user_metadata?.organization_id
-                if (!orgId) {
-                    const { data: memberData } = await supabase
-                        .from("memberships")
-                        .select("team_spaces(organization_id)")
-                        .eq("user_id", user.id)
-                        .limit(1)
-                        .maybeSingle()
-                    orgId = memberData?.team_spaces?.organization_id
-                }
+            if (!organizationId) throw new Error("Your organization couldn't be found. Please reload and try again.")
 
-                // Insert each added team space into team_spaces
-                for (const teamName of teams) {
-                    const payload = { name: teamName }
-                    if (orgId) payload.organization_id = orgId
-                    await supabase.from("team_spaces").insert(payload)
-                }
+            // Skip departments that already exist (e.g. the one created on the previous step)
+            const { data: existing, error: existingError } = await supabase
+                .from("team_spaces")
+                .select("name")
+                .eq("organization_id", organizationId)
+            if (existingError) throw existingError
+            const existingNames = new Set((existing || []).map(t => t.name.trim().toLowerCase()))
+            const toCreate = [...new Set([...teams, teamInput.trim()].filter(Boolean))]
+                .filter(name => !existingNames.has(name.toLowerCase()))
+
+            if (toCreate.length > 0) {
+                const { error: insertError } = await supabase
+                    .from("team_spaces")
+                    .insert(toCreate.map(name => ({ name, organization_id: organizationId })))
+                if (insertError) throw insertError
             }
+
+            setStatus("success")
+            // Full reload so the new super admin role and departments load everywhere
+            setTimeout(() => window.location.assign("/"), 1200)
         } catch (err) {
             console.error("Error saving onboarding teams:", err)
-        } finally {
-            setStatus("success")
-            setTimeout(() => {
-                navigate("/")
-            }, 1200)
+            setErrorMsg(err.message || "Couldn't create your teams. Please try again.")
+            setStatus("idle")
         }
     }
 
@@ -97,7 +114,7 @@ function Onboarding() {
                             <div className="w-8 h-8 bg-blue-600/30 border border-blue-500/40 rounded flex items-center justify-center text-blue-400 font-bold">
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
                             </div>
-                            <span className="font-semibold text-sm text-white">Spacer</span>
+                            <span className="font-semibold text-sm text-white">{organization?.name || "Your organization"}</span>
                         </div>
                         <span className="text-[10px] bg-white/5 text-zinc-400 px-2 py-0.5 rounded border border-white/5">Organization</span>
                     </div>
@@ -169,6 +186,11 @@ function Onboarding() {
                         Many organizations begin with three teams and expand as adoption grows.
                     </p>
                     
+                    {errorMsg && (
+                        <div role="alert" className="mb-6 p-3 rounded-custom bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                            {errorMsg}
+                        </div>
+                    )}
                     <form className="space-y-8" data-purpose="teams-setup-form" onSubmit={handleContinue}>
                         {/* Input Group */}
                         <div className="space-y-3">

@@ -16,7 +16,7 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse, badRequest, notFound } from "../_shared/cors.ts";
-import { requireMfa } from "../_shared/mfa.ts";
+import { callerHeaders, requireMfa } from "../_shared/mfa.ts";
 
 const PROJECT_FILES_BUCKET = "project-files";
 const CHAT_ATTACHMENTS_BUCKET = "chat-attachments";
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  const caller = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+  const caller = createClient(supabaseUrl, anonKey, { global: { headers: callerHeaders(req) } });
   const { data: userData, error: userErr } = await caller.auth.getUser();
   if (userErr || !userData.user) return jsonResponse({ error: "Not authenticated" }, 401);
   const mfaBlocked = await requireMfa(caller);

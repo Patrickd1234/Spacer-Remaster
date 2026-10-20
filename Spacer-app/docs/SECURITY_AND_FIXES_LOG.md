@@ -1,6 +1,6 @@
 # Spacer: Security Hardening & Fixes Log
 
-**Period:** 16–18 October 2026
+**Period:** 16–19 October 2026
 **Scope:** `Spacer-reMastered/Spacer-app` (React 19 + Vite + Supabase project `vrzepdjjjpodztqkfsbh`)
 **Reference:** issue IDs (S-, D-, B-, F-, X-, P-) come from `Spacer_Production_Readiness_Review.docx` (15 Oct 2026).
 
@@ -39,9 +39,11 @@ This document records what was changed, why, how it was verified, and what is st
 | Task status no longer reset on page load; Kanban drag-and-drop | ✅ Live (frontend) |
 | Server-side project/department delete | ✅ Live |
 | URL/XSS guards, dependency vulnerabilities | ✅ Done (0 npm audit findings) |
-| **Two-factor (Supabase MFA) + password change** | ⚠️ **Code done, not live.** See [§7](#7-two-factor-authentication--password-change) |
+| Two-factor (Supabase MFA) + password change | ✅ Live (19 Oct) |
+| "Remember this device for 7 days" | ✅ Live (19 Oct) |
+| GitHub / Slack / API tokens | ✅ Shown as "Coming soon" (fakes removed) |
 
-> **Pending action:** run migration `20261018090000_enforce_mfa.sql`, *then* deploy edge functions `change-password`, `delete-workspace-item`, `invite-department-member`, `invite-team-post-launch`, `launch-organization`. Until then, **Settings → Change Password does not work**, because the frontend calls the not-yet-deployed `change-password` function.
+> **Rollout note:** the MFA migration was applied before deploying the edge functions that call `mfa_satisfied()`. Keep that order for any future change to those functions' database dependencies.
 
 ---
 
@@ -185,6 +187,26 @@ New implementation:
 - Frontend: `src/passwordChange.js`; a "Current Password" field in Settings → Security.
 - `Profile.jsx`'s password handler was updated too, but Profile renders no password form (dead code).
 
+### Remember this device for 7 days
+At the user's request, the code isn't asked on every sign-in.
+- After a code is entered (session at `aal2`), the code screen's **"Remember this device for 7 days"** checkbox (ticked by default) calls `trust_this_device()`. It returns a random 64-hex token; only its SHA-256 hash is stored, in `mfa_trusted_devices`.
+- The browser keeps the token (`src/trustedDevice.js`) and sends it as the **`x-mfa-device`** header on every Supabase request. `src/supabase.js` uses a custom `fetch`, so the database, storage and edge functions all receive it.
+- `mfa_satisfied()` now also accepts a valid, unexpired token belonging to the caller (`is_trusted_device()`). `App.jsx` asks the server with `is_trusted_device` before skipping the prompt.
+- **Revocation:**
+  - turning 2FA off forgets all devices;
+  - Settings → Security → **Forget remembered devices**;
+  - a password change forgets all devices except the current one.
+- Edge functions forward the header (`callerHeaders()` in `_shared/mfa.ts`), and CORS allows it.
+- Dry run results:
+  - a token can't be issued without a code;
+  - the right token gives access, while a wrong token or no token gets 0 rows;
+  - another user can't use your token;
+  - access stops after "forget".
+- **Not yet confirmed:** whether Supabase Storage applies the header for remembered sessions. Check that project files open after a remembered sign-in.
+
+### React Compiler gotcha
+The project uses the React Compiler, which reads values used inside event handlers **during render** to memoize them. `TwoFactorSettings` read `factor.id` in a handler while `factor` was `null`, which crashed the Security tab into a blank page. Use optional chaining (`factor?.id`) for state that can be null, even inside handlers.
+
 ### Go-live order (important)
 1. Supabase → Authentication → Multi-Factor: **Authenticator app (TOTP)** enabled.
 2. Run `20261018090000_enforce_mfa.sql`.
@@ -209,6 +231,8 @@ New implementation:
 
 ## 9. Frontend hardening
 
+- **F-02 / F-03 fake integrations:** the GitHub "OAuth" popup (`public/github-oauth.html`, spoofable via `postMessage(..., '*')`) was deleted. GitHub, Slack and Personal Access Tokens now show as disabled `ComingSoonCard`s, and integration defaults no longer claim Slack/Figma are connected.
+
 - **X-01 XSS through URLs:** `src/safeUrl.js` (`safeHttpsUrl`, `safeImageDataUrl`, `safeDownloadDataUrl`) applied to DM attachments and `DocViewer.jsx`. 14/14 checks pass (blocks `javascript:`, `data:text/html`, SVG, foreign `http:`). Also fixed null `type` crashes.
 - **X-07 dependencies:** `package-lock.json` pinned vulnerable react-router **7.11.0** (a local install happened to have 7.18.1). `npm audit fix` brought it to **7.18.4** plus build-tool patches. `npm audit` now reports **0** in both `package.json` folders.
 - **Known and accepted:** Office files preview through Google's document viewer, which receives a 1-hour signed link.
@@ -230,7 +254,8 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261017120000_private_project_files_bucket.sql` | ✅ | ✅ |
 | `20261017130000_chat_attachments_bucket.sql` | ✅ | ✅ |
 | `20261017140000_dm_pins_and_reactions.sql` | ✅ | ✅ |
-| `20261018090000_enforce_mfa.sql` | ⚠️ **Not yet** | ✅ |
+| `20261018090000_enforce_mfa.sql` | ✅ | ✅ |
+| `20261019090000_mfa_trusted_devices.sql` | ✅ | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
 
@@ -262,21 +287,17 @@ Undo scripts restore the **previous, insecure** state. Use them only to unblock 
 
 ## 13. Remaining work (by priority)
 
-**Finish in progress**
-- Run the MFA migration, then deploy the 5 edge functions (§7).
-
 **Before launch (Critical/High)**
 1. S-01: untrack `.env` and root `node_modules`, add `.env.example`.
 2. P-03: production URLs (`SITE_URL`, Supabase redirect URLs, Google OAuth).
 3. P-02: SPA rewrite rule on the host.
 4. P-01: build Tailwind instead of loading it from the CDN.
-5. F-02: remove or label the fake, spoofable GitHub integration.
-6. B-04: errors swallowed while the UI shows success.
-7. B-03: onboarding fails silently.
-8. D-06: org/identity read from user-editable metadata or localStorage.
-9. P-07: error boundary, monitoring, tests.
+5. B-04: errors swallowed while the UI shows success.
+6. B-03: onboarding fails silently.
+7. D-06: org/identity read from user-editable metadata or localStorage.
+8. P-07: error boundary, monitoring, tests. (A missing error boundary turned a single component crash into a blank page on 19 Oct.)
 
-**Medium:** F-07 invented data, F-03 fake Slack/API tokens, F-05 standups localStorage fallback, B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-05 email change half-applied, X-08/X-03 DM base64 attachments and file-name sanitising, P-04 polling and unbounded queries, B-05 sprint completion not logged.
+**Medium:** F-07 invented data, F-05 standups localStorage fallback, B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-05 email change half-applied, X-08/X-03 DM base64 attachments and file-name sanitising, P-04 polling and unbounded queries, B-05 sprint completion not logged.
 
 **Low:** B-08 small bugs, P-05 bundle size, P-06 very large files, P-08 lint, account cleanup, signup activity-log insert.
 
