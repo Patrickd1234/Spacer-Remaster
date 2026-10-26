@@ -3,7 +3,6 @@ import { supabase, getSessionUser } from "../supabase";
 import { useState, useEffect, useRef } from "react";
 import CreateProjectModal from "./CreateProjectModal";
 import { useRole } from "../RoleContext";
-import { fetchDirectProjects, mergeProjects } from "./projectMemberships";
 
 export default function AdminSidebar({ searchQuery = "", userEmail = "", userData = null, onCollapsedChange }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -74,22 +73,18 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
     const matchesSearch = (value) => !normalizedQuery || value.toLowerCase().includes(normalizedQuery);
     const visibleProjects = projects.filter((project) => matchesSearch(project.name || ""));
 
-    // Projects of the department chosen on the Department page (RoleContext)
+    // Only the projects of the department chosen on the Department page (RoleContext)
     useEffect(() => {
         if (!activeTeamSpaceId) return;
         let cancelled = false;
         const fetchProjects = async () => {
-            const userId = localStorage.getItem("userId");
-            const [{ data, error }, directProjects] = await Promise.all([
-                supabase
-                    .from("project_spaces")
-                    .select("id, name")
-                    .eq("team_space_id", activeTeamSpaceId),
-                userId ? fetchDirectProjects(userId) : Promise.resolve([]),
-            ]);
+            const { data, error } = await supabase
+                .from("project_spaces")
+                .select("id, name")
+                .eq("team_space_id", activeTeamSpaceId);
             if (cancelled) return;
             if (error) console.error("Error fetching department projects:", error);
-            setProjects(mergeProjects(error ? [] : (data || []), directProjects));
+            setProjects(error ? [] : (data || []));
         };
         fetchProjects();
         return () => { cancelled = true; };
@@ -273,7 +268,12 @@ export default function AdminSidebar({ searchQuery = "", userEmail = "", userDat
             {showCreateModal && (
                 <CreateProjectModal
                     onClose={() => setShowCreateModal(false)}
-                    onCreated={(newProject) => setProjects((prev) => [...prev, newProject])}
+                    onCreated={(newProject) => {
+                        // Only list it if it belongs to the department being viewed
+                        if (String(newProject?.team_space_id) === String(activeTeamSpaceId)) {
+                            setProjects((prev) => [...prev, newProject]);
+                        }
+                    }}
                 />
             )}
         </>
