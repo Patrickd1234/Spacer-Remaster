@@ -23,6 +23,65 @@ const TEAM_ICONS = {
 }
 
 // ─── StatCard ────────────────────────────────────────────────────────────────
+// Placeholder shaped like the real page: 4 stat cards, then the main column
+// (My Open Work / Team Overview) beside Recent Activity
+const SKELETON_BLOCK = "bg-[#252a33] rounded"
+
+function HomeSkeleton() {
+    return (
+        <div className="space-y-8 animate-pulse" role="status" aria-label="Loading your home page">
+            <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {[...Array(4)].map((_, i) => (
+                    <div key={i} className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col gap-2 min-h-[118px]">
+                        <div className={`h-8 w-14 ${SKELETON_BLOCK}`} />
+                        <div className={`h-3 w-24 ${SKELETON_BLOCK}`} />
+                        <div className={`h-2.5 w-28 mt-auto ${SKELETON_BLOCK}`} />
+                    </div>
+                ))}
+            </section>
+
+            <div className="grid grid-cols-12 gap-6">
+                <div className="col-span-12 lg:col-span-8 space-y-4">
+                    <div className="flex items-center justify-between">
+                        <div className={`h-5 w-36 ${SKELETON_BLOCK}`} />
+                        <div className={`h-3 w-20 ${SKELETON_BLOCK}`} />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-3">
+                                <div className={`h-3 w-16 ${SKELETON_BLOCK}`} />
+                                <div className={`h-4 w-4/5 ${SKELETON_BLOCK}`} />
+                                <div className={`h-3 w-3/5 ${SKELETON_BLOCK}`} />
+                                <div className="flex items-center justify-between pt-1">
+                                    <div className="w-6 h-6 rounded-full bg-[#252a33]" />
+                                    <div className={`h-3 w-14 ${SKELETON_BLOCK}`} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="col-span-12 lg:col-span-4">
+                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5">
+                        <div className={`h-4 w-32 mb-4 ${SKELETON_BLOCK}`} />
+                        <div className="space-y-4 border-t border-[#2D3139] pt-4">
+                            {[...Array(4)].map((_, i) => (
+                                <div key={i} className="flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-[#252a33] shrink-0" />
+                                    <div className="flex-1 space-y-2 pt-0.5">
+                                        <div className={`h-3 w-4/5 ${SKELETON_BLOCK}`} />
+                                        <div className={`h-2.5 w-1/3 ${SKELETON_BLOCK}`} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+}
+
 function StatCard({ value, label, sub, subIcon, subColor }) {
     return (
         <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-[#aff82a]/30 transition-all duration-300">
@@ -149,7 +208,8 @@ function Home() {
 
     // User tasks (non-superadmin only)
     const [userTasks, setUserTasks] = useState([])
-    const [tasksLoading, setTasksLoading] = useState(false)
+    // Starts true so "You're all caught up" never shows before the tasks have loaded
+    const [tasksLoading, setTasksLoading] = useState(true)
     const [activities, setActivities] = useState([])
     const [upcomingEvents, setUpcomingEvents] = useState([])
 
@@ -267,32 +327,40 @@ function Home() {
                 const authData = { user: await getSessionUser() }
                 const userId = authData?.user?.id
 
-                if (!userId) return
+                if (!userId) {
+                    setTasksLoading(false)
+                    return
+                }
 
-                const { data: profile } = await supabase
+                // Profile, the role's main content and recent activity are independent,
+                // so they load together instead of one after another
+                const profileWork = supabase
                     .from("users")
                     .select("*")
                     .eq("id", userId)
                     .maybeSingle()
-                if (profile) setUserData(profile)
+                    .then(({ data: profile }) => { if (profile) setUserData(profile) })
 
-                if (isSuperAdmin) {
-                    let orgId = authData?.user?.user_metadata?.organization_id;
-                    if (!orgId && membershipData?.team_space_id) {
-                        const { data: tsData } = await supabase
-                            .from("team_spaces")
-                            .select("organization_id")
-                            .eq("id", membershipData.team_space_id)
-                            .maybeSingle();
-                        orgId = tsData?.organization_id;
-                    }
-                    await fetchOrgData(orgId)
-                } else {
-                    await fetchUserTasks(userId)
-                }
-                await fetchActivities(authData?.user)
+                const mainWork = isSuperAdmin
+                    ? (async () => {
+                        let orgId = authData?.user?.user_metadata?.organization_id;
+                        if (!orgId && membershipData?.team_space_id) {
+                            const { data: tsData } = await supabase
+                                .from("team_spaces")
+                                .select("organization_id")
+                                .eq("id", membershipData.team_space_id)
+                                .maybeSingle();
+                            orgId = tsData?.organization_id;
+                        }
+                        await fetchOrgData(orgId)
+                        setTasksLoading(false) // super admins don't see the personal task list
+                    })()
+                    : fetchUserTasks(userId)
+
+                await Promise.all([profileWork, mainWork, fetchActivities(authData?.user)])
             } catch (err) {
                 console.error("Home init error:", err)
+                setTasksLoading(false)
             }
         }
 
@@ -339,17 +407,8 @@ function Home() {
                             </div>
                         </section>
 
-                        {/* ── LOADING SKELETON ──────────────────────────────── */}
-                        {roleLoading && (
-                            <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                {[...Array(4)].map((_, i) => (
-                                    <div key={i} className="bg-surface-container border border-outline-variant p-6 rounded-xl flex flex-col gap-2 animate-pulse">
-                                        <div className="h-8 w-16 bg-surface-container-highest rounded" />
-                                        <div className="h-3 w-24 bg-surface-container-highest rounded mt-2" />
-                                    </div>
-                                ))}
-                            </section>
-                        )}
+                        {/* ── LOADING SKELETON (mirrors the layout that loads next) ── */}
+                        {roleLoading && <HomeSkeleton />}
 
                         {/* ── SUPERADMIN: ORG SUMMARY CARDS ─────────────────── */}
                         {isSuperAdmin && !roleLoading && (
