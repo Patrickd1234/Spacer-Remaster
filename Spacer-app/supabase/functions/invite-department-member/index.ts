@@ -65,13 +65,35 @@ serve(async (req: Request) => {
         const body = await req.json().catch(() => ({}))
         const role = body.role
         const team_space_id = body.team_space_id
-        const organization_id = body.organization_id
         const email = String(body.email || "").trim().toLowerCase()
 
         if (!email || !team_space_id) return json({ error: "email and team_space_id are required" }, 400)
         if (!["member", "admin"].includes(role)) return json({ error: "Invalid role" }, 400)
 
-        // ── Permission check (server-side, can't be bypassed from the client)
+        // ── The department must belong to the caller's own organization.
+        //    Its organization is always read from the database, never from the
+        //    request body, so nobody can act on (or move users into) another org.
+        const { data: team } = await admin
+            .from("team_spaces")
+            .select("id, name, organization_id")
+            .eq("id", team_space_id)
+            .maybeSingle()
+
+        const { data: inviterProfile } = await admin
+            .from("users")
+            .select("name, email, organization_id")
+            .eq("id", callerId)
+            .maybeSingle()
+
+        if (!team || !inviterProfile?.organization_id || team.organization_id !== inviterProfile.organization_id) {
+            return json({ error: "Department not found" }, 404)
+        }
+        const organization_id = team.organization_id
+        const inviterName = inviterProfile.name || inviterProfile.email || "A Spacer admin"
+
+        // ── Permission check (server-side, can't be bypassed from the client).
+        //    Scoped to this org by the check above: a super admin of another
+        //    organization never gets this far.
         const { data: callerMemberships, error: memErr } = await admin
             .from("memberships")
             .select("role, team_space_id")
@@ -90,28 +112,19 @@ serve(async (req: Request) => {
             return json({ error: "Only admins or super admins can add members to this department." }, 403)
         }
 
-        const { data: team } = await admin
-            .from("team_spaces")
-            .select("id, name, organization_id")
-            .eq("id", team_space_id)
-            .maybeSingle()
-        if (!team) return json({ error: "Department not found" }, 404)
-
-        const { data: inviterProfile } = await admin
-            .from("users")
-            .select("name, email")
-            .eq("id", callerId)
-            .maybeSingle()
-        const inviterName = inviterProfile?.name || inviterProfile?.email || "A Spacer admin"
-
         // ── Does an account already exist for this email?
         const { data: existingUser } = await admin
             .from("users")
-            .select("id, name, email")
+            .select("id, name, email, organization_id")
             .eq("email", email)
             .maybeSingle()
 
         if (existingUser) {
+            // Never pull someone out of another organization
+            if (existingUser.organization_id && existingUser.organization_id !== organization_id) {
+                return json({ error: `${email} already belongs to another organization.` }, 409)
+            }
+
             const { data: existingMembership } = await admin
                 .from("memberships")
                 .select("id")
@@ -130,6 +143,15 @@ serve(async (req: Request) => {
             })
             if (insertMemErr) return json({ error: insertMemErr.message }, 500)
 
+            // An account with no organization yet joins this one (same as invite-team-post-launch)
+            if (!existingUser.organization_id) {
+                const { error: orgErr } = await admin
+                    .from("users")
+                    .update({ organization_id })
+                    .eq("id", existingUser.id)
+                if (orgErr) return json({ error: orgErr.message }, 500)
+            }
+
             // Surfaces in the existing header.jsx in-app notifications feed,
             // which is driven directly off activity_log.
             await admin.from("activity_log").insert({
@@ -147,7 +169,7 @@ serve(async (req: Request) => {
                 .from("invitations")
                 .insert({
                     email,
-                    organization_id: organization_id || team.organization_id,
+                    organization_id,
                     team_space_id,
                     role,
                     invited_by: callerId,
@@ -182,7 +204,7 @@ serve(async (req: Request) => {
             data: {
                 invited_team_space_id: team_space_id,
                 invited_role: role,
-                organization_id: organization_id || team.organization_id,
+                organization_id,
             },
         })
 
@@ -198,7 +220,7 @@ serve(async (req: Request) => {
             id: newUserId,
             email,
             name: email.split("@")[0],
-            organization_id: organization_id || team.organization_id,
+            organization_id,
         })
         if (profileErr) console.error("Profile insert error (non-fatal):", profileErr.message)
 
@@ -221,7 +243,7 @@ serve(async (req: Request) => {
             .from("invitations")
             .insert({
                 email,
-                organization_id: organization_id || team.organization_id,
+                organization_id,
                 team_space_id,
                 role,
                 invited_by: callerId,
