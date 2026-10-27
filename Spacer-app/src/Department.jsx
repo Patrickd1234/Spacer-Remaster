@@ -1,11 +1,16 @@
 import Sidebar from "./partials/SidebarRouter";
 import Header from "./partials/header";
 import { supabase, getSessionUser } from "./supabase";
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useLocation } from "react-router-dom";
 import { useRole } from "./RoleContext";
 import GroupChat from "./components/GroupChat";
+import Toast from "./components/Toast";
 import DepartmentSwitcher from "./partials/DepartmentSwitcher";
+import CreateDepartmentModal from "./partials/CreateDepartmentModal";
 import { deleteWorkspaceItem } from "./workspaceDelete";
+import { createdToast, failedToast } from "./createDepartment";
+import { DEPARTMENT_CREATED_EVENT } from "./appEvents";
 
 function Department() {
     const [userId, setUserId] = useState(null)
@@ -19,7 +24,8 @@ function Department() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [organizationId, setOrganizationId] = useState(null)
     const [showCreateDeptModal, setShowCreateDeptModal] = useState(false)
-    const [newDeptName, setNewDeptName] = useState("")
+    const [toast, setToast] = useState(null)
+    const closeToast = useCallback(() => setToast(null), [])
     const [showAddMemberModal, setShowAddMemberModal] = useState(false)
     const [orgUsers, setOrgUsers] = useState([])
     const [addMemberTab, setAddMemberTab] = useState("existing") // "existing" | "invite"
@@ -30,6 +36,9 @@ function Department() {
     const [inviteSuccess, setInviteSuccess] = useState("")
     const [actionSaving, setActionSaving] = useState(false)
     const [activeTab, setActiveTab] = useState("directory")
+    const location = useLocation()
+    const requestedTeamId = location.state?.teamSpaceId ?? null
+    const requestedTeamIdRef = useRef(requestedTeamId)
 
     useEffect(() => {
         const init = async () => {
@@ -94,8 +103,11 @@ function Department() {
 
         setAllTeams(teams || [])
         if (teams && teams.length > 0) {
-            setActiveTeam(teams[0])
-            await fetchTeamMembers(teams[0].id)
+            // The sidebar's Team Spaces passes the department to open
+            const requested = teams.find(t => String(t.id) === String(requestedTeamIdRef.current))
+            const first = requested || teams[0]
+            setActiveTeam(first)
+            await fetchTeamMembers(first.id)
         }
     }
 
@@ -148,36 +160,36 @@ function Department() {
         setLoading(false)
     }
 
-    const handleCreateDept = async (e) => {
-        e.preventDefault();
-        if (!canManage) {
-            alert("Only admins or super admins can create departments.");
-            return;
-        }
-        if (!newDeptName.trim() || !organizationId) return;
-        setActionSaving(true);
-        try {
-            const { data, error } = await supabase
-                .from("team_spaces")
-                .insert({ name: newDeptName.trim(), organization_id: organizationId })
-                .select()
-                .single();
-
-            if (error) {
-                alert("Error creating department: " + error.message);
-            } else {
-                setAllTeams(prev => [...prev, data]);
-                setActiveTeam(data);
-                await fetchTeamMembers(data.id);
-                setShowCreateDeptModal(false);
-                setNewDeptName("");
-            }
-        } catch (err) {
-            console.error("Create department error:", err);
-        } finally {
-            setActionSaving(false);
-        }
+    // The modal has already created the department and added its people
+    const handleDeptCreated = async ({ department, failedEmails }) => {
+        setShowCreateDeptModal(false);
+        setToast(createdToast(failedEmails));
+        setAllTeams(prev => prev.some(t => t.id === department.id) ? prev : [...prev, department]);
+        setActiveTeam(department);
+        await fetchTeamMembers(department.id);
     };
+
+    // Picking another department in the sidebar while this page is already open
+    useEffect(() => {
+        requestedTeamIdRef.current = requestedTeamId
+        if (!isSuperAdmin || !requestedTeamId) return
+        const team = allTeams.find(t => String(t.id) === String(requestedTeamId))
+        // Syncing to a navigation (external to this component), so updating state here is intended
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        if (team && String(team.id) !== String(activeTeam?.id)) switchTeam(team)
+        // Only react to a new request from the sidebar, not to team list changes
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.key])
+
+    // Departments created from the header's Create menu while this page is open
+    useEffect(() => {
+        const handleCreatedElsewhere = (e) => {
+            const department = e.detail;
+            if (department) setAllTeams(prev => prev.some(t => t.id === department.id) ? prev : [...prev, department]);
+        };
+        window.addEventListener(DEPARTMENT_CREATED_EVENT, handleCreatedElsewhere);
+        return () => window.removeEventListener(DEPARTMENT_CREATED_EVENT, handleCreatedElsewhere);
+    }, []);
 
     const handleDeleteDept = async (teamId) => {
         if (!teamId) return;
@@ -562,47 +574,16 @@ return (
         </main>
 
         {/* Create Department Modal */}
-        {showCreateDeptModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
-                <div className="bg-[#191c21] rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#2D3139] shadow-2xl animate-scaleIn">
-                    <div className="flex items-center justify-between border-b border-[#2D3139]/30 pb-3">
-                        <h3 className="text-lg font-bold text-[#aff82a]">Create New Department</h3>
-                        <button onClick={() => setShowCreateDeptModal(false)} className="text-[#8c947b] hover:text-white cursor-pointer">
-                            <span className="material-symbols-outlined">close</span>
-                        </button>
-                    </div>
-                    <form onSubmit={handleCreateDept} className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Department Name</label>
-                            <input
-                                type="text"
-                                required
-                                placeholder="e.g. Design & Creative"
-                                className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none placeholder-[#8c947b]/40"
-                                value={newDeptName}
-                                onChange={(e) => setNewDeptName(e.target.value)}
-                            />
-                        </div>
-                        <div className="flex items-center justify-end gap-3 pt-2">
-                            <button
-                                type="button"
-                                onClick={() => setShowCreateDeptModal(false)}
-                                className="px-4 py-2 border border-[#2D3139] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                disabled={actionSaving}
-                                className="px-4 py-2 bg-[#aff82a] text-[#1C1F26] hover:bg-[#9de022] rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
-                            >
-                                {actionSaving ? "Creating..." : "Create Department"}
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
+        {showCreateDeptModal && canManage && (
+            <CreateDepartmentModal
+                organizationId={organizationId}
+                canAssignPeople={isSuperAdmin}
+                onClose={() => setShowCreateDeptModal(false)}
+                onCreated={handleDeptCreated}
+                onFailed={() => setToast(failedToast)}
+            />
         )}
+        <Toast toast={toast} onClose={closeToast} />
 
         {/* Add Member Modal */}
         {showAddMemberModal && (

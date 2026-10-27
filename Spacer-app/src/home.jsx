@@ -1,704 +1,112 @@
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
-import ProjectPanel from "./components/ProjectPanel"
-import DocViewer from "./components/DocViewer"
 import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
-import { Link, useNavigate } from "react-router-dom"
 import { useRole } from "./RoleContext"
-import { safeHttpsUrl } from "./safeUrl"
-
-const RECENT_ACTIVITY_LIMIT = 10
-const UPCOMING_EVENTS_LIMIT = 2
 import CreateTaskModal from "./partials/CreateTaskModal"
+import OrgOverview from "./OrgOverview"
+import MySpace from "./myspace/MySpace"
+import { StatCardSkeleton } from "./components/DashboardParts"
+import { TASK_CREATED_EVENT } from "./appEvents"
 
-// ─── Team icon map ──────────────────────────────────────────────────────────
-const TEAM_ICONS = {
-    Development: "code",
-    Marketing: "campaign",
-    HR: "person_search",
-    Finance: "account_balance",
-    Design: "palette",
-    default: "groups",
-}
-
-// ─── StatCard ────────────────────────────────────────────────────────────────
-function StatCard({ value, label, sub, subIcon, subColor }) {
-    return (
-        <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group cursor-default hover:border-[#aff82a]/30 transition-all duration-300">
-            <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                style={{ background: "radial-gradient(circle, rgba(var(--primary-color-rgb), 0.1) 0%, transparent 70%)" }} />
-            <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
-            <p className="text-[#8c947b] text-[13px] font-medium">{label}</p>
-            {sub && (
-                <p className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider mt-auto"
-                    style={{ color: subColor || "#aff82a" }}>
-                    {subIcon && <span className="material-symbols-outlined text-[13px]">{subIcon}</span>}
-                    {sub}
-                </p>
-            )}
-        </div>
-    )
-}
-
-// ─── TeamCard ─────────────────────────────────────────────────────────────────
-function TeamCard({ team }) {
-    const icon = TEAM_ICONS[team.name] || TEAM_ICONS.default
-    // No status badge: departments have no status data (it always read "ON TRACK")
-
-    return (
-        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col gap-3 min-w-[220px] flex-1 hover:border-[#aff82a]/30 transition-all duration-300">
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#252a33] border border-[#2D3139]">
-                        <span className="material-symbols-outlined text-[20px] text-primary-fixed">{icon}</span>
-                    </div>
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b]">Team</p>
-                        <p className="font-semibold text-white text-sm">{team.name}</p>
-                    </div>
-                </div>
-                <span className="material-symbols-outlined text-[#8c947b] text-base cursor-pointer hover:text-white transition-colors">more_horiz</span>
-            </div>
-            <div className="space-y-1.5 mt-1">
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
-                        <span className="material-symbols-outlined text-[14px]">person</span>Members
-                    </span>
-                    <span className="font-semibold text-white text-sm">{team.member_count ?? "—"}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-[#8c947b] text-xs">
-                        <span className="material-symbols-outlined text-[14px]">grid_view</span>Projects
-                    </span>
-                    <span className="font-semibold text-white text-sm">{team.project_count ?? "—"}</span>
-                </div>
-            </div>
-        </div>
-    )
-}
-
-const formatActivityItem = (act) => {
-    const actorName = act.actor?.name || act.actor?.email?.split('@')[0] || act.new_state?.full_name || "User"
-    const initials = (actorName || "SA")
-        .split(" ")
-        .map(n => n[0])
-        .filter(Boolean)
-        .join("")
-        .toUpperCase()
-        .slice(0, 2) || "SA"
-
-    let title = ""
-    let sub = ""
-
-    if (act.action === "login") {
-        title = `${actorName} logged in`
-        sub = act.new_state?.email ? `Session started (${act.new_state.email})` : "Active session"
-    } else if (act.action === "signup") {
-        title = `${actorName} joined the organization`
-        sub = "New team member onboarded"
-    } else if (act.action === "created") {
-        const entity = act.entity_type || (act.new_state?.title ? "task" : "item")
-        title = `${actorName} created ${entity}: ${act.new_state?.title || act.new_state?.name || "New entry"}`
-        sub = act.new_state?.description || "Created recently"
-    } else if (act.action === "updated") {
-        title = `${actorName} updated ${act.entity_type || "item"}`
-        sub = act.new_state?.title || (act.new_state?.status ? `Status: ${act.new_state.status}` : "Modified recently")
-    } else {
-        title = `${actorName} performed ${act.action || "action"}`
-        sub = act.new_state?.title || act.entity_type || "Activity recorded"
-    }
-
-    if (act.created_at) {
-        try {
-            const date = new Date(act.created_at)
-            const diffMin = Math.floor((Date.now() - date.getTime()) / (1000 * 60))
-            if (diffMin < 1) sub = `${sub} • Just now`
-            else if (diffMin < 60) sub = `${sub} • ${diffMin}m ago`
-            else if (diffMin < 1440) sub = `${sub} • ${Math.floor(diffMin / 60)}h ago`
-            else sub = `${sub} • ${date.toLocaleDateString()}`
-        } catch (e) {}
-    }
-
-    return {
-        id: act.id,
-        initials,
-        title,
-        sub,
-    }
-}
-
+// Super admins land on the organization overview, everyone else on My Space
 function Home() {
-    const navigate = useNavigate()
-    const [userEmail, setUserEmail] = useState("")
+    const [userEmail] = useState(() => localStorage.getItem("userEmail") || "")
     const [userData, setUserData] = useState(null)
-    const [selectedProject, setSelectedProject] = useState(null)
-    const [previewFile, setPreviewFile] = useState(null)
+    const [orgId, setOrgId] = useState(null)
+    const [orgName, setOrgName] = useState("")
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const [showAllActivity, setShowAllActivity] = useState(false)
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false)
-
-    // Context roles
     const { isSuperAdmin, roleLoading, membershipData } = useRole()
 
-    // Org stats (superadmin only)
-    const [orgStats, setOrgStats] = useState({ members: null, teams: null, activeProjects: null })
-    const [teams, setTeams] = useState([])
-    const [teamPage, setTeamPage] = useState(0)
-    const TEAMS_PER_PAGE = 3
-
-    // User tasks (non-superadmin only)
-    const [userTasks, setUserTasks] = useState([])
-    const [tasksLoading, setTasksLoading] = useState(false)
-    const [activities, setActivities] = useState([])
-    const [upcomingEvents, setUpcomingEvents] = useState([])
-
-    // Next two calendar events (row-level security limits them to the user's organization)
     useEffect(() => {
+        if (roleLoading) return
         let active = true
-        const today = new Date().toISOString().slice(0, 10)
-        supabase
-            .from("calendar_events")
-            .select("id, title, description, event_date, external_url")
-            .gte("event_date", today)
-            .order("event_date", { ascending: true })
-            .limit(UPCOMING_EVENTS_LIMIT)
-            .then(({ data, error }) => {
-                if (error) console.error("Loading upcoming events failed:", error)
-                if (active) setUpcomingEvents(data || [])
-            })
-        return () => { active = false }
-    }, [])
-    const [activitiesLoading, setActivitiesLoading] = useState(false)
-
-    // Recent Activity is the signed-in user's own actions, for every role.
-    // Logins/sign-ups are left out so they don't crowd out real work.
-    const fetchActivities = async (sessionUser) => {
-        if (!sessionUser?.id) return
-        setActivitiesLoading(true)
-        try {
-            const { data, error } = await supabase
-                .from("activity_log")
-                .select("id, action, entity_type, new_state, created_at, actor:users(name, email)")
-                .eq("actor_id", sessionUser.id)
-                .not("action", "in", "(login,signup)")
-                .order("created_at", { ascending: false })
-                .limit(RECENT_ACTIVITY_LIMIT)
-
-            if (error) {
-                console.warn("activity_log fetch error:", error)
-            } else {
-                setActivities((data || []).map(formatActivityItem))
-            }
-        } catch (err) {
-            console.error("fetchActivities error:", err)
-        } finally {
-            setActivitiesLoading(false)
-        }
-    }
-
-    const fetchOrgData = async (orgId) => {
-        try {
-            let teamQuery = supabase.from("team_spaces").select("id, name")
-            if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
-            const { data: teamSpaces, error } = await teamQuery
-            if (error) console.warn("team_spaces fetch error:", error)
-            const teamCount = teamSpaces?.length ?? 0
-            const teamIds = teamSpaces?.map(ts => ts.id) || []
-
-            let allMembers = []
-            let activeProjects = []
-
-            if (teamIds.length > 0) {
-                const [{ data: memsData }, { data: projsData }] = await Promise.all([
-                    supabase.from("memberships").select("id, team_space_id").in("team_space_id", teamIds),
-                    supabase.from("project_spaces").select("id, team_space_id").in("team_space_id", teamIds),
-                ])
-                allMembers = memsData || []
-                activeProjects = projsData || []
-            }
-
-            setOrgStats({
-                members: allMembers.length,
-                teams: teamCount,
-                activeProjects: activeProjects.length
-            })
-
-            if (teamSpaces && teamSpaces.length > 0) {
-                const enriched = teamSpaces.map((ts) => ({
-                    ...ts,
-                    member_count: allMembers.filter(m => m.team_space_id === ts.id).length,
-                    project_count: activeProjects.filter(p => p.team_space_id === ts.id).length,
-                }))
-                setTeams(enriched)
-            }
-        } catch (err) {
-            console.error("Org data fetch error:", err)
-        }
-    }
-
-    const fetchUserTasks = async (userId) => {
-        setTasksLoading(true)
-        try {
-            const { data, error } = await supabase
-                .from("tasks")
-                .select("id, title, description, status, sub_tasks, due_date, project_id")
-                .eq("assignee_id", userId)
-
-            if (error) {
-                console.warn("tasks fetch error:", error)
-            } else {
-                // Show statuses as stored; they're only derived when subtasks are edited
-                setUserTasks(data || [])
-            }
-        } catch (err) {
-            console.error("fetchUserTasks error:", err)
-        } finally {
-            setTasksLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        const email = localStorage.getItem("userEmail")
-        if (email) setUserEmail(email)
-
         const init = async () => {
             try {
-                const authData = { user: await getSessionUser() }
-                const userId = authData?.user?.id
+                const sessionUser = await getSessionUser()
+                if (!sessionUser?.id) return
 
-                if (!userId) return
+                const { data: profile } = await supabase.from("users").select("*").eq("id", sessionUser.id).maybeSingle()
+                if (!active) return
+                setUserData(profile || { id: sessionUser.id, email: sessionUser.email })
+                if (!isSuperAdmin) return
 
-                const { data: profile } = await supabase
-                    .from("users")
-                    .select("*")
-                    .eq("id", userId)
-                    .maybeSingle()
-                if (profile) setUserData(profile)
-
-                if (isSuperAdmin) {
-                    let orgId = authData?.user?.user_metadata?.organization_id;
-                    if (!orgId && membershipData?.team_space_id) {
-                        const { data: tsData } = await supabase
-                            .from("team_spaces")
-                            .select("organization_id")
-                            .eq("id", membershipData.team_space_id)
-                            .maybeSingle();
-                        orgId = tsData?.organization_id;
-                    }
-                    await fetchOrgData(orgId)
-                } else {
-                    await fetchUserTasks(userId)
+                let resolvedOrgId = profile?.organization_id || sessionUser.user_metadata?.organization_id
+                if (!resolvedOrgId && membershipData?.team_space_id) {
+                    const { data: tsData } = await supabase.from("team_spaces").select("organization_id").eq("id", membershipData.team_space_id).maybeSingle()
+                    resolvedOrgId = tsData?.organization_id
                 }
-                await fetchActivities(authData?.user)
+                if (!active) return
+                setOrgId(resolvedOrgId || null)
+                if (resolvedOrgId) {
+                    const { data: org, error } = await supabase.from("organizations").select("name").eq("id", resolvedOrgId).maybeSingle()
+                    if (error) console.warn("organizations fetch error:", error)
+                    if (active) setOrgName(org?.name || "")
+                }
             } catch (err) {
                 console.error("Home init error:", err)
             }
         }
-
-        if (!roleLoading) {
-            init()
-        }
+        init()
+        return () => { active = false }
     }, [isSuperAdmin, roleLoading, membershipData])
-    const totalTeamPages = Math.ceil(teams.length / TEAMS_PER_PAGE)
-    const visibleTeams = teams.slice(teamPage * TEAMS_PER_PAGE, teamPage * TEAMS_PER_PAGE + TEAMS_PER_PAGE)
 
-    const todoTasks = userTasks.filter(t => t.status === "todo")
-    const inProgressTasks = userTasks.filter(t => t.status === "in_progress")
-    const doneTasks = userTasks.filter(t => t.status === "done")
-    const openCount = todoTasks.length + inProgressTasks.length
-
-    const visibleActivities = showAllActivity ? activities : activities.slice(0, 3);
-
-    const displayName = userData?.full_name || userData?.name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User";
+    const displayName = userData?.full_name || userData?.name || userEmail.split("@")[0] || "there"
+    const isReady = !roleLoading && Boolean(userData)
 
     return (
         <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex">
             <Sidebar onCollapsedChange={setSidebarCollapsed} userData={userData} userEmail={userEmail} />
             <div className="flex-1 flex flex-col min-w-0">
-                <Header />
+                <Header
+                    breadcrumb={isSuperAdmin ? { icon: "home", label: "Home" } : { icon: "person", label: "My Space" }}
+                    insetLeft={sidebarCollapsed ? 72 : 260}
+                />
                 <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col pt-16 transition-all duration-300 ease-out`}>
-                    <div className="p-8 space-y-8 max-w-[1400px] w-full mx-auto">
-
-                        {/* ── GREETING / HEADER BAR ──────────────────────────────── */}
-                        <section className="flex items-start justify-between">
-                            <div>
-                                <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-                                    Hello, {displayName} 👋
-                                </h1>
-                                <p className="text-[#8c947b] text-sm mt-1">
-                                    {isSuperAdmin
-                                        ? "Organization's overview and activity."
-                                        : "Here's what's on your plate in this workspace."}
-                                </p>
-                            </div>
-                            <div className="flex items-center gap-2 text-[#8c947b] text-xs">
-                                <span className="material-symbols-outlined text-[16px]">home</span>
-                                <span>/</span>
-                                <span className="text-white font-medium">Home</span>
-                            </div>
-                        </section>
-
-                        {/* ── LOADING SKELETON ──────────────────────────────── */}
-                        {roleLoading && (
-                            <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                {[...Array(4)].map((_, i) => (
-                                    <div key={i} className="bg-surface-container border border-outline-variant p-6 rounded-xl flex flex-col gap-2 animate-pulse">
-                                        <div className="h-8 w-16 bg-surface-container-highest rounded" />
-                                        <div className="h-3 w-24 bg-surface-container-highest rounded mt-2" />
-                                    </div>
-                                ))}
+                    <div className="p-8 space-y-6 max-w-[1400px] w-full mx-auto">
+                        {!isReady && (
+                            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {[0, 1, 2, 3].map((i) => <StatCardSkeleton key={i} />)}
                             </section>
                         )}
 
-                        {/* ── SUPERADMIN: ORG SUMMARY CARDS ─────────────────── */}
-                        {isSuperAdmin && !roleLoading && (
-                            <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <StatCard
-                                    label="Members"
-                                    value={orgStats.members ?? "—"}
-                                    sub="Company Members"
-                                    subIcon="person"
-                                />
-                                <StatCard
-                                    label="Teams"
-                                    value={orgStats.teams ?? "—"}
-                                    sub="Across the Organization"
-                                    subIcon="grid_view"
-                                />
-                                <StatCard
-                                    label="Active Projects"
-                                    value={orgStats.activeProjects ?? "—"}
-                                    sub="Currently in Progress"
-                                    subIcon="fiber_manual_record"
-                                    subColor="#aff82a"
-                                />
-                                <StatCard
-                                    label="Requires Attention"
-                                    value={teams.filter(t => t.status === "NEEDS ATTENTION" || t.status === "AT RISK").length}
-                                    sub="Pending Leadership Decisions"
-                                    subIcon="flag"
-                                    subColor="#ef4444"
-                                />
-                            </section>
+                        {isReady && isSuperAdmin && (
+                            <>
+                                <section>
+                                    <h1 className="text-2xl font-semibold text-white">{orgName || "Your Organization"}</h1>
+                                    <p className="text-[#8c947b] text-sm mt-1">Organization's overview and activity.</p>
+                                </section>
+                                <OrgOverview userId={userData.id} orgId={orgId} />
+                            </>
                         )}
 
-                        {/* ── NON-SUPERADMIN: PERSONAL TASK METRICS ─────────── */}
-                        {!isSuperAdmin && !roleLoading && (
-                            <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
-                                    <p className="text-3xl font-bold text-white">{tasksLoading ? "—" : todoTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">To do</p>
-                                </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
-                                    <p className="text-3xl font-bold text-primary-fixed">{tasksLoading ? "—" : inProgressTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">In progress</p>
-                                </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
-                                    <p className="text-3xl font-bold text-green-400">{tasksLoading ? "—" : doneTasks.length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Done</p>
-                                </div>
-                                <div className="bg-[#191c21] border border-[#2D3139] p-5 rounded-xl flex flex-col hover:border-[#aff82a]/30 transition-all">
-                                    <p className="text-3xl font-bold text-red-400">{tasksLoading ? "—" : userTasks.filter(t => t.due_date && new Date(t.due_date) < new Date() && t.status !== "done").length}</p>
-                                    <p className="text-[#8c947b] text-xs font-medium mt-1">Overdue</p>
-                                </div>
-                            </section>
-                        )}
-
-                        {/* ── SUPERADMIN: TEAM OVERVIEW + RECENT ACTIVITY ───── */}
-                        {isSuperAdmin && !roleLoading && (
-                            <div className="grid grid-cols-12 gap-6">
-                                {/* Team Overview */}
-                                <div className="col-span-12 lg:col-span-8 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h2 className="text-lg font-semibold text-white">Team Overview</h2>
-                                        {totalTeamPages > 1 && (
-                                            <div className="flex items-center gap-2 text-outline text-xs">
-                                                <button
-                                                    onClick={() => setTeamPage(p => Math.max(0, p - 1))}
-                                                    disabled={teamPage === 0}
-                                                    className="p-1 rounded bg-surface-container border border-outline-variant hover:text-white disabled:opacity-30 transition-colors"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">chevron_left</span>
-                                                </button>
-                                                <span>
-                                                    {teamPage * TEAMS_PER_PAGE + 1}–{Math.min((teamPage + 1) * TEAMS_PER_PAGE, teams.length)} out of {teams.length}
-                                                </span>
-                                                <button
-                                                    onClick={() => setTeamPage(p => Math.min(totalTeamPages - 1, p + 1))}
-                                                    disabled={teamPage >= totalTeamPages - 1}
-                                                    className="p-1 rounded bg-surface-container border border-outline-variant hover:text-white disabled:opacity-30 transition-colors"
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {teams.length === 0 ? (
-                                        <div className="bg-surface-container border border-outline-variant rounded-xl p-8 flex flex-col items-center justify-center text-center min-h-[200px] gap-3">
-                                            <span className="material-symbols-outlined text-4xl text-outline">groups</span>
-                                            <p className="text-outline text-sm">No teams found in the organization yet.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="flex gap-4 flex-wrap">
-                                            {visibleTeams.map(team => (
-                                                <TeamCard key={team.id} team={team} />
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Recent Activity */}
-                                <div className="col-span-12 lg:col-span-4 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h2 className="text-lg font-semibold text-white">Recent Activity</h2>
-                                        <button onClick={() => setShowAllActivity(!showAllActivity)} className="text-xs text-primary-fixed hover:underline">{showAllActivity ? 'Show less' : 'See all'}</button>
-                                    </div>
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-4 min-h-[200px]">
-                                        {activities.length === 0 && (
-                                            <p className="text-xs text-[#8c947b]">No activity yet. Create a project or task to get started.</p>
-                                        )}
-                                        {visibleActivities.map(act => (
-                                            <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
-                                                <div className="w-8 h-8 rounded-lg bg-[#252a33] border border-[#2D3139] flex items-center justify-center shrink-0 font-bold text-[10px] text-primary-fixed">{act.initials}</div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-xs font-medium text-white">{act.title}</p>
-                                                    <p className="text-[11px] text-[#8c947b] mt-0.5">{act.sub}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ── NON-SUPERADMIN: PERSONAL WORK BOARD ───────────── */}
-                        {!isSuperAdmin && !roleLoading && (
-                            <div className="grid grid-cols-12 gap-6">
-                                {/* Task Kanban — 3 columns */}
-                                <div className="col-span-12 lg:col-span-8 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-lg font-semibold text-white">My Open Work</h3>
-                                        <span className="text-xs text-outline">
-                                            {tasksLoading ? "Loading…" : `${openCount} open item${openCount !== 1 ? "s" : ""}`}
-                                        </span>
-                                    </div>
-
-                                    {tasksLoading ? (
-                                        <div className="grid grid-cols-3 gap-4">
-                                            {[...Array(3)].map((_, i) => (
-                                                <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-4 space-y-2 animate-pulse">
-                                                    <div className="h-3 w-16 bg-[#252a33] rounded" />
-                                                    <div className="h-10 w-full bg-[#252a33] rounded-lg" />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ) : openCount === 0 && doneTasks.length === 0 ? (
-                                        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col items-center justify-center p-8 text-center min-h-[350px]">
-                                            <div className="text-5xl mb-4">🎉</div>
-                                            <h4 className="text-lg font-semibold text-white">You're all caught up</h4>
-                                            <p className="text-[#8c947b] text-sm max-w-xs mt-2">Nothing assigned to you is open right now.</p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            {/* To-Do column */}
-                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-[#8c947b]" />
-                                                        <span className="font-semibold text-white text-xs uppercase tracking-wider">To‑Do</span>
-                                                    </div>
-                                                    <span className="text-xs text-[#8c947b] font-bold">{todoTasks.length}</span>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
-                                                    {todoTasks.length === 0 ? (
-                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
-                                                    ) : todoTasks.map(task => (
-                                                        <div
-                                                            key={task.id}
-                                                            onClick={() => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)}
-                                                            className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#aff82a]/50 transition-all cursor-pointer group"
-                                                        >
-                                                            <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
-                                                            {task.due_date && (
-                                                                <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
-                                                                    <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                                                    {new Date(task.due_date).toLocaleDateString()}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* In Progress column */}
-                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-primary-fixed" />
-                                                        <span className="font-semibold text-white text-xs uppercase tracking-wider">In Progress</span>
-                                                    </div>
-                                                    <span className="text-xs text-[#8c947b] font-bold">{inProgressTasks.length}</span>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
-                                                    {inProgressTasks.length === 0 ? (
-                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
-                                                    ) : inProgressTasks.map(task => (
-                                                        <div
-                                                            key={task.id}
-                                                            onClick={() => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)}
-                                                            className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 hover:border-[#aff82a]/50 transition-all cursor-pointer"
-                                                        >
-                                                            <p className="text-sm font-semibold text-white truncate">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
-                                                            {task.due_date && (
-                                                                <p className="text-[10px] mt-2 flex items-center gap-1" style={{ color: new Date(task.due_date) < new Date() ? "#ef4444" : "#aff82a" }}>
-                                                                    <span className="material-symbols-outlined text-[12px]">calendar_today</span>
-                                                                    {new Date(task.due_date).toLocaleDateString()}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Done column */}
-                                            <div className="bg-[#191c21] border border-[#2D3139] rounded-xl flex flex-col">
-                                                <div className="p-4 border-b border-[#2D3139] flex items-center justify-between">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="w-2 h-2 rounded-full bg-green-400" />
-                                                        <span className="font-semibold text-white text-xs uppercase tracking-wider">Done</span>
-                                                    </div>
-                                                    <span className="text-xs text-[#8c947b] font-bold">{doneTasks.length}</span>
-                                                </div>
-                                                <div className="flex-1 overflow-y-auto p-3 space-y-2 max-h-[380px]">
-                                                    {doneTasks.length === 0 ? (
-                                                        <p className="text-xs text-[#8c947b] text-center py-6">No tasks here</p>
-                                                    ) : doneTasks.map(task => (
-                                                        <div
-                                                            key={task.id}
-                                                            onClick={() => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)}
-                                                            className="bg-[#1C1F26] border border-[#2D3139] rounded-lg p-3 opacity-70 hover:opacity-100 hover:border-[#aff82a]/50 transition-all cursor-pointer"
-                                                        >
-                                                            <p className="text-sm font-semibold text-white truncate line-through text-[#8c947b]">{task.title || task.name || "Untitled"}</p>
-                                                            {task.description && <p className="text-[11px] text-[#8c947b] mt-1 line-clamp-2">{task.description}</p>}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Activity / Meetings panel */}
-                                <div className="col-span-12 lg:col-span-4 space-y-4">
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col min-h-[420px]">
-                                        <h3 className="font-semibold text-white text-base mb-4 pb-3 border-b border-[#2D3139]">Recent Activity</h3>
-                                        <div className="space-y-4 overflow-y-auto flex-1">
-                                            {activities.length === 0 && (
-                                                <p className="text-xs text-[#8c947b]">No activity yet. Create a project or task to get started.</p>
-                                            )}
-                                            {activities.slice(0, 5).map(act => (
-                                                <div key={act.id} className="flex gap-3 items-start animate-fadeIn">
-                                                    <div className="w-8 h-8 rounded-full bg-[#252a33] text-[#aff82a] border border-[#2D3139] flex items-center justify-center shrink-0 font-bold text-xs">
-                                                        {act.initials}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <p className="text-xs text-white font-medium">{act.title}</p>
-                                                        <p className="text-[10px] text-[#8c947b] mt-1">{act.sub}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* MEETINGS SECTION */}
-                        <div className="space-y-4 pt-4 border-t border-[#2D3139]">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-lg font-semibold text-white">Upcoming Meetings</h3>
-                                <Link to="/calendar" className="text-primary-fixed text-xs hover:underline">View all calendar</Link>
-                            </div>
-                            {/* Next events from the organization's calendar */}
-                            {upcomingEvents.length === 0 ? (
-                                <div className="bg-[#191c21] border border-dashed border-[#2D3139] rounded-xl p-5 text-xs text-[#8c947b]">
-                                    No upcoming meetings. Events added to the calendar will appear here.
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {upcomingEvents.map(event => {
-                                        const joinUrl = safeHttpsUrl(event.external_url)
-                                        return (
-                                            <div key={event.id} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 hover:border-[#aff82a]/30 transition-colors">
-                                                <div className="flex items-center gap-3 text-xs text-[#8c947b] mb-4">
-                                                    <span className="font-semibold text-white">
-                                                        {new Date(`${event.event_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
-                                                    </span>
-                                                </div>
-                                                <div className="mb-4">
-                                                    <h4 className="text-base font-semibold text-white mb-1">{event.title}</h4>
-                                                    {event.description && <p className="text-[#8c947b] text-xs line-clamp-2">{event.description}</p>}
-                                                </div>
-                                                {joinUrl && (
-                                                    <a href={joinUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-[#14161b] border border-[#2D3139] hover:bg-[#252a33] text-white py-2 rounded-lg text-xs font-medium transition-colors">
-                                                        <span className="material-symbols-outlined text-[16px]">video_camera_front</span> Join Meeting
-                                                    </a>
-                                                )}
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
-                        </div>
-
+                        {isReady && !isSuperAdmin && <MySpace userId={userData.id} displayName={displayName} />}
                     </div>
                 </main>
             </div>
 
-            {/* Project panel */}
-            {selectedProject && (
-                <ProjectPanel
-                    project={selectedProject}
-                    onClose={() => setSelectedProject(null)}
-                    onPreview={setPreviewFile}
-                />
-            )}
-
-            {/* Document viewer */}
-            {previewFile && (
-                <DocViewer
-                    file={previewFile}
-                    onClose={() => setPreviewFile(null)}
-                />
+            {/* Members create tasks from the header's Create menu; super admins keep this button */}
+            {isSuperAdmin && (
+                <button
+                    type="button"
+                    onClick={() => setIsCreateTaskModalOpen(true)}
+                    className="fixed bottom-[96px] right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
+                >
+                    <span className="material-symbols-outlined text-[28px] font-bold">add</span>
+                    <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
+                        Add Task
+                    </span>
+                </button>
             )}
 
             {isCreateTaskModalOpen && (
                 <CreateTaskModal
                     organizationId={userData?.organization_id}
                     onClose={() => setIsCreateTaskModalOpen(false)}
-                    onCreated={() => {
-                        if (userData?.id) {
-                            fetchUserTasks(userData.id)
-                        }
-                    }}
+                    onCreated={(task) => window.dispatchEvent(new CustomEvent(TASK_CREATED_EVENT, { detail: task }))}
                 />
             )}
-
-            {/* Floating Action Button */}
-            <button
-                type="button"
-                onClick={() => setIsCreateTaskModalOpen(true)}
-                className="fixed bottom-[96px] right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
-            >
-                <span className="material-symbols-outlined text-[28px] font-bold">add</span>
-                <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
-                    Add Task
-                </span>
-            </button>
         </div>
     )
 }
