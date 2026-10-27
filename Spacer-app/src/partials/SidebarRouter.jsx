@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
-import Sidebar from "./sidebar";
-import AdminSidebar from "./admin_sidebar";
-import SuperAdminSidebar from "./super_admin_sidebar";
+import WorkspaceSidebar from "./WorkspaceSidebar";
 import GroupChat from "../components/GroupChat";
 import { useRole } from "../RoleContext";
 import { safeDownloadDataUrl, safeImageDataUrl } from "../safeUrl";
@@ -21,7 +19,7 @@ function groupReactions(rows) {
 
 export default function SidebarRouter(props) {
     // Role comes from RoleContext, which handles users with several memberships
-    const { userRole, roleLoading } = useRole();
+    const { roleLoading } = useRole();
     const [userId, setUserId] = useState(null);
     const [orgUsers, setOrgUsers] = useState([]);
 
@@ -553,15 +551,14 @@ export default function SidebarRouter(props) {
     // The role (from RoleContext) decides which sidebar renders
     if (roleLoading) return null;
 
-    const sidebarElement = (() => {
-        if (userRole === "super_admin" || userRole === "superadmin") {
-            return <SuperAdminSidebar {...props} />;
-        }
-        if (userRole === "admin") {
-            return <AdminSidebar {...props} />;
-        }
-        return <Sidebar {...props} />;
-    })();
+    // Every role shares one sidebar; it adapts to super admins itself
+    const sidebarElement = (
+        <WorkspaceSidebar
+            {...props}
+            unreadMessages={getUnreadConversationsCount()}
+            onOpenMessages={() => { setShowChatModal(true); setIsChatMinimized(false); }}
+        />
+    );
 
     return (
         <>

@@ -10,8 +10,11 @@ import {
 } from "../notifications";
 import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
+import CreateMenu from "./CreateMenu";
 
-function Header({ onSearch = () => {} }) {
+// `breadcrumb` ({ icon, label }) is optional; pages that show their own keep it off.
+// The header sits under the fixed sidebar, so `insetLeft` (px) moves the breadcrumb clear of it.
+function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();
     const navigate = useNavigate();
     const [showNotifications, setShowNotifications] = useState(() => {
@@ -251,7 +254,15 @@ function Header({ onSearch = () => {} }) {
         <>
             {/* HEADER */}
             <header className="h-16 flex items-center justify-between gap-3 px-3 sm:px-lg w-full border-b border-[#2D3139] bg-[#0F1115] sticky top-0 z-40">
+                {breadcrumb && (
+                    <div className="flex items-center gap-2 text-sm text-white font-medium transition-[margin] duration-300" style={{ marginLeft: insetLeft }}>
+                        <span className="material-symbols-outlined text-[18px] text-[#8c947b]">{breadcrumb.icon}</span>
+                        {breadcrumb.label}
+                    </div>
+                )}
                 <div className="ml-auto flex items-center gap-2 sm:gap-3">
+                    {!roleLoading && <CreateMenu isSuperAdmin={isSuperAdmin} />}
+
                     
                     {/* SEARCH BAR CONTAINER */}
                     <div className="relative w-full max-w-[220px] sm:max-w-[260px]" ref={searchRef}>
