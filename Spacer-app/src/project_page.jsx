@@ -10,6 +10,11 @@ import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
 import { statusFromSubtasks } from "./taskStatus"
 import { deleteWorkspaceItem } from "./workspaceDelete"
+import {
+    DEFAULT_COLUMNS, fetchProjectColumns, ensureSavedColumns, createColumn, renameColumn,
+    saveColumnOrder, deleteColumn, fallbackColumn, columnKeyForTask,
+} from "./projectColumns"
+import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./components/BoardColumns"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -24,6 +29,10 @@ const BOARD_NOTICE_MS = 5000
 
 // Board column names for each task status
 const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
+// Column dot colour by the status a column stands for
+const STATUS_DOT = { todo: "bg-[#2D3139]", in_progress: "bg-[#3b82f6]", done: "bg-primary-fixed-dim" }
+// Derived from due dates; always last, can't be edited or dropped into
+const OVERDUE_COLUMN = { key: "overdue", name: "Overdue", isOverdue: true }
 
 const MAX_FILE_SIZE_MB = 50
 const MAX_FILE_SIZE    = MAX_FILE_SIZE_MB * 1024 * 1024   // 50 MB in bytes
@@ -225,6 +234,28 @@ function ProjectPage() {
     const [uploadError, setUploadError] = useState("")
     const [dragOver, setDragOver] = useState(false)
     const [boardNotice, setBoardNotice] = useState("")
+    // Custom board columns (project_columns); defaults until the project customises them
+    const [boardColumns, setBoardColumns] = useState(DEFAULT_COLUMNS)
+    const [columnsAvailable, setColumnsAvailable] = useState(true)
+    const [columnSaving, setColumnSaving] = useState(false)
+    const [draggingColumnKey, setDraggingColumnKey] = useState(null)
+    const [columnDropKey, setColumnDropKey] = useState(null)
+    const [columnToDelete, setColumnToDelete] = useState(null)
+    const [deletingColumn, setDeletingColumn] = useState(false)
+    const [deleteColumnError, setDeleteColumnError] = useState("")
+
+    useEffect(() => {
+        if (!project_id) return undefined
+        let cancelled = false
+        const loadColumns = async () => {
+            const { columns, available } = await fetchProjectColumns(project_id)
+            if (cancelled) return
+            setBoardColumns(columns)
+            setColumnsAvailable(available)
+        }
+        loadColumns()
+        return () => { cancelled = true }
+    }, [project_id])
     const [pendingFile, setPendingFile] = useState(null)
     const [pendingUrl, setPendingUrl] = useState(null)
     const [reviewFile, setReviewFile] = useState(null)
@@ -497,7 +528,112 @@ function ProjectPage() {
         setTimeout(() => setBoardNotice(""), BOARD_NOTICE_MS)
     }
 
-    const handleDrop = async (e, newStatus) => {
+    // People who can manage the project (same server rule as deleting it) edit columns
+    const canManageColumns = canDeleteProject === true && columnsAvailable
+
+    const columnSaveFailed = () =>
+        showBoardNotice("Couldn't save the board's columns. You may not have permission to change this project.")
+
+    // Default columns are saved the first time someone customises the board
+    const withSavedColumns = async () => {
+        const { columns, error } = await ensureSavedColumns(project_id, boardColumns)
+        if (error) {
+            console.error("Error saving board columns:", error)
+            columnSaveFailed()
+            return null
+        }
+        if (columns !== boardColumns) setBoardColumns(columns)
+        return columns
+    }
+
+    // New columns are added at the end of the board
+    const handleAddColumn = async (name, baseStatus) => {
+        setColumnSaving(true)
+        try {
+            const saved = await withSavedColumns()
+            if (!saved) return false
+            const { column, error } = await createColumn(project_id, { name, baseStatus, position: saved.length })
+            if (error || !column) {
+                console.error("Error adding column:", error)
+                columnSaveFailed()
+                return false
+            }
+            setBoardColumns([...saved, column])
+            return true
+        } finally {
+            setColumnSaving(false)
+        }
+    }
+
+    const handleRenameColumn = async (column, name) => {
+        const index = boardColumns.findIndex(c => c.key === column.key)
+        const saved = await withSavedColumns()
+        if (!saved || index < 0) return
+        setBoardColumns(saved.map((c, i) => (i === index ? { ...c, name } : c)))
+        const { error } = await renameColumn(saved[index].id, name)
+        if (error) {
+            console.error("Error renaming column:", error)
+            setBoardColumns(saved)
+            columnSaveFailed()
+        }
+    }
+
+    const handleMoveColumn = async (fromKey, toIndex) => {
+        const fromIndex = boardColumns.findIndex(c => c.key === fromKey)
+        if (fromIndex < 0 || toIndex < 0 || toIndex >= boardColumns.length || fromIndex === toIndex) return
+        const saved = await withSavedColumns()
+        if (!saved) return
+        const reordered = [...saved]
+        const [moved] = reordered.splice(fromIndex, 1)
+        reordered.splice(toIndex, 0, moved)
+        setBoardColumns(reordered)
+        const { error } = await saveColumnOrder(reordered)
+        if (error) {
+            console.error("Error reordering columns:", error)
+            setBoardColumns(saved)
+            columnSaveFailed()
+        }
+    }
+
+    const tasksInColumn = (column) => project_tasks.filter(t => columnKeyForTask(t, boardColumns) === column.key)
+
+    const confirmDeleteColumn = async () => {
+        const column = columnToDelete
+        if (!column) return
+        const index = boardColumns.findIndex(c => c.key === column.key)
+        setDeletingColumn(true)
+        setDeleteColumnError("")
+        try {
+            const saved = await withSavedColumns()
+            if (!saved || index < 0) {
+                setDeleteColumnError("Couldn't save the board's columns. You may not have permission to change this project.")
+                return
+            }
+            const savedColumn = saved[index]
+            const target = fallbackColumn(saved, savedColumn)
+            if (!target) {
+                setDeleteColumnError("A board needs at least one column.")
+                return
+            }
+            const lastOfStatus = !saved.some(c => c.key !== savedColumn.key && c.base_status === savedColumn.base_status)
+            const { error } = await deleteColumn(project_id, savedColumn, target, { lastOfStatus })
+            if (error) {
+                setDeleteColumnError("Couldn't delete the column: " + error.message)
+                return
+            }
+            setProjectTasks(prev => prev.map(t => {
+                const movesWithColumn = t.column_id === savedColumn.id ||
+                    (lastOfStatus && !t.column_id && t.status === savedColumn.base_status)
+                return movesWithColumn ? { ...t, column_id: target.id, status: target.base_status } : t
+            }))
+            setBoardColumns(saved.filter(c => c.key !== savedColumn.key))
+            setColumnToDelete(null)
+        } finally {
+            setDeletingColumn(false)
+        }
+    }
+
+    const handleDrop = async (e, column) => {
         e.preventDefault()
         setDragOverColumn(null)
         const taskId = e.dataTransfer.getData("taskId")
@@ -505,46 +641,46 @@ function ProjectPage() {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
 
-        // Any task can be moved to any status; ticking subtasks still updates it automatically
+        // Any task can be moved to any column; ticking subtasks still updates its status automatically
+        const newStatus = column.base_status
         const isOverdue = newStatus !== "done" && task.due_date && new Date(task.due_date) < new Date()
-        if (task.status === newStatus) {
-            if (isOverdue) showBoardNotice(`"${task.title}" is already ${STATUS_LABELS[newStatus]} — it shows under Overdue until it's done or its due date changes.`)
+        if (columnKeyForTask(task, boardColumns) === column.key) {
+            if (isOverdue) showBoardNotice(`"${task.title}" is already in ${column.name} — it shows under Overdue until it's done or its due date changes.`)
             return
         }
 
-        const previousStatus = task.status
+        // column_id only exists once the custom-columns migration has been run
+        const changes = columnsAvailable ? { status: newStatus, column_id: column.id || null } : { status: newStatus }
+        const previous = { status: task.status, column_id: task.column_id ?? null }
         setProjectTasks(prevTasks =>
-            prevTasks.map(t =>
-                String(t.id) === String(taskId) ? { ...t, status: newStatus } : t
-            )
+            prevTasks.map(t => (String(t.id) === String(taskId) ? { ...t, ...changes } : t))
         )
 
         // .select() confirms a row actually changed (permissions can silently update 0 rows)
         const { data: updated, error } = await supabase
             .from("tasks")
-            .update({ status: newStatus })
+            .update(changes)
             .eq("id", taskId)
             .select("id")
 
         if (error || !updated?.length) {
             console.error("Error moving task:", error)
             setProjectTasks(prevTasks =>
-                prevTasks.map(t =>
-                    String(t.id) === String(taskId) ? { ...t, status: previousStatus } : t
-                )
+                prevTasks.map(t => (String(t.id) === String(taskId) ? { ...t, ...previous } : t))
             )
             showBoardNotice(`Couldn't move "${task.title}". You may not have permission to edit this project.`)
-        } else {
-            if (isOverdue) showBoardNotice(`"${task.title}" moved to ${STATUS_LABELS[newStatus]}. It stays under Overdue until it's done or its due date changes.`)
-            const userData = { user: await getSessionUser() }
-            const logEntry = {
-                entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
-                action: "status_changed",
-                new_state: { project_id: project_id, title: task.title, status: newStatus }
-            }
-            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
-            if (newLog) setActivityLog(prev => [newLog, ...prev])
+            return
         }
+        if (isOverdue) showBoardNotice(`"${task.title}" moved to ${column.name}. It stays under Overdue until it's done or its due date changes.`)
+        if (newStatus === task.status) return // moved between columns of the same status
+        const userData = { user: await getSessionUser() }
+        const logEntry = {
+            entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
+            action: "status_changed",
+            new_state: { project_id: project_id, title: task.title, status: newStatus }
+        }
+        const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
+        if (newLog) setActivityLog(prev => [newLog, ...prev])
     }
 
     const handleDeleteTask = async (taskId, taskTitle) => {
@@ -1366,38 +1502,67 @@ function ProjectPage() {
                                     {boardNotice}
                                 </div>
                             )}
+                            {canDeleteProject === true && !columnsAvailable && (
+                                <p className="mt-md text-[12px] text-[#8c947b]">
+                                    Custom columns need a database update: run the <span className="text-white">20261026090000_project_columns</span> migration in Supabase.
+                                </p>
+                            )}
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
-                                {[
-                                    { key: "todo", label: "Backlog", dotColor: "bg-[#2D3139]" },
-                                    { key: "in_progress", label: "Doing", dotColor: "bg-[#3b82f6]" },
-                                    { key: "done", label: "Done", dotColor: "bg-primary-fixed-dim" },
-                                    { key: "overdue", label: "Overdue", dotColor: "bg-error" },
-                                ].map(column => {
+                                {[...boardColumns, OVERDUE_COLUMN].map((column, columnIndex) => {
                                     const columnTasks = project_tasks.filter(t => {
-                                        if (t.status === "done") return column.key === "done";
-                                        const isOverdue = t.due_date && new Date(t.due_date) < new Date();
-                                        if (isOverdue) return column.key === "overdue";
-                                        return column.key === t.status;
+                                        const isOverdueTask = t.status !== "done" && t.due_date && new Date(t.due_date) < new Date();
+                                        if (column.isOverdue) return isOverdueTask;
+                                        if (isOverdueTask) return false;
+                                        return columnKeyForTask(t, boardColumns) === column.key;
                                     });
-                                    // "Overdue" is derived from the due date, not a status you can drop into
-                                    const acceptsDrop = column.key !== "overdue";
-                                    const isDropTarget = acceptsDrop && dragOverColumn === column.key;
+                                    // "Overdue" is derived from the due date, not a column you can drop into
+                                    const acceptsDrop = !column.isOverdue;
+                                    const isDropTarget = acceptsDrop && (draggingColumnKey ? columnDropKey === column.key : dragOverColumn === column.key);
+                                    const editable = canManageColumns && !column.isOverdue;
                                     return (
                                         <div
                                             key={column.key}
-                                            onDragOver={acceptsDrop ? (e) => { e.preventDefault(); setDragOverColumn(column.key) } : undefined}
-                                            onDragLeave={acceptsDrop ? (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverColumn(null) } : undefined}
-                                            onDrop={acceptsDrop ? (e) => handleDrop(e, column.key) : undefined}
-                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border ${isDropTarget ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5' : 'border-[#2D3139]/30'}`}
+                                            onDragOver={acceptsDrop ? (e) => {
+                                                e.preventDefault()
+                                                if (draggingColumnKey) setColumnDropKey(column.key)
+                                                else setDragOverColumn(column.key)
+                                            } : undefined}
+                                            onDragLeave={acceptsDrop ? (e) => {
+                                                if (!e.currentTarget.contains(e.relatedTarget)) { setDragOverColumn(null); setColumnDropKey(null) }
+                                            } : undefined}
+                                            onDrop={acceptsDrop ? (e) => {
+                                                if (draggingColumnKey) {
+                                                    e.preventDefault()
+                                                    const fromKey = draggingColumnKey
+                                                    setDraggingColumnKey(null)
+                                                    setColumnDropKey(null)
+                                                    handleMoveColumn(fromKey, columnIndex)
+                                                } else {
+                                                    handleDrop(e, column)
+                                                }
+                                            } : undefined}
+                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border ${isDropTarget ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5' : 'border-[#2D3139]/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
                                         >
                                             {/* Column Header */}
-                                            <div className="flex items-center justify-between px-md py-sm sticky top-0 z-10">
-                                                <div className="flex items-center gap-sm">
-                                                    <span className={`w-2.5 h-2.5 rounded-full ${column.dotColor}`}></span>
-                                                    <span className="font-label-md text-label-md text-white font-bold">{column.label}</span>
-                                                    <span className="text-[10px] text-[#8c947b] bg-[#1C1F26] border border-[#2D3139]/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center">{columnTasks.length}</span>
-                                                </div>
-                                            </div>
+                                            <BoardColumnHeader
+                                                column={column}
+                                                count={columnTasks.length}
+                                                dotColor={column.isOverdue ? "bg-error" : STATUS_DOT[column.base_status]}
+                                                editable={editable}
+                                                canMoveLeft={columnIndex > 0}
+                                                canMoveRight={columnIndex < boardColumns.length - 1}
+                                                canDelete={boardColumns.length > 1}
+                                                onRename={(name) => handleRenameColumn(column, name)}
+                                                onMoveLeft={() => handleMoveColumn(column.key, columnIndex - 1)}
+                                                onMoveRight={() => handleMoveColumn(column.key, columnIndex + 1)}
+                                                onDelete={() => { setDeleteColumnError(""); setColumnToDelete(column) }}
+                                                onDragStart={(e) => {
+                                                    e.dataTransfer.effectAllowed = "move"
+                                                    e.dataTransfer.setData("text/plain", column.key)
+                                                    setDraggingColumnKey(column.key)
+                                                }}
+                                                onDragEnd={() => { setDraggingColumnKey(null); setColumnDropKey(null) }}
+                                            />
 
                                             {/* Task Cards */}
                                             <div className="flex-1 overflow-y-auto scroll-hide px-sm space-y-sm pb-sm">
@@ -1530,13 +1695,14 @@ function ProjectPage() {
                                                 {columnTasks.length === 0 && (
                                                     <div className="flex flex-col items-center justify-center py-xl text-center opacity-40">
                                                         <span className="material-symbols-outlined text-[32px] text-[#8c947b] mb-xs">drag_indicator</span>
-                                                        <p className="text-[11px] text-[#8c947b]">Drag tasks here</p>
+                                                        <p className="text-[11px] text-[#8c947b]">{column.isOverdue ? "No overdue tasks" : "Drag tasks here"}</p>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
                                     )
                                 })}
+                                {canManageColumns && <AddColumnTile columns={boardColumns} onAdd={handleAddColumn} saving={columnSaving} />}
                             </div>
                         </div>
                     )}
@@ -2363,6 +2529,19 @@ function ProjectPage() {
             {/* Post-upload file review modal */}
             {reviewFile && (
                 <DocViewer file={reviewFile} onClose={() => setReviewFile(null)} />
+            )}
+
+            {/* ── Delete column confirmation modal ── */}
+            {columnToDelete && (
+                <DeleteColumnModal
+                    column={columnToDelete}
+                    target={fallbackColumn(boardColumns, columnToDelete)}
+                    taskCount={tasksInColumn(columnToDelete).length}
+                    deleting={deletingColumn}
+                    error={deleteColumnError}
+                    onCancel={() => { if (!deletingColumn) { setColumnToDelete(null); setDeleteColumnError("") } }}
+                    onConfirm={confirmDeleteColumn}
+                />
             )}
 
             {/* ── Delete project confirmation modal ── */}

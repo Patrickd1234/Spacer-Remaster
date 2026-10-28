@@ -1,7 +1,28 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
 
-const CustomDropdown = ({ options, value, onChange, placeholder, direction = "down" }) => {
+const STATUS_OPTIONS = [
+    { value: "todo", label: "To-do" },
+    { value: "in_progress", label: "In progress" },
+    { value: "done", label: "Done" },
+];
+
+const PRIORITY_OPTIONS = [
+    { value: "low", label: "Low" },
+    { value: "medium", label: "Normal" },
+    { value: "high", label: "High" },
+    { value: "urgent", label: "Urgent" },
+];
+
+const fieldClass = "w-full bg-[#14161b] border border-[#2D3139] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-colors placeholder-[#8c947b]/60";
+
+const Label = ({ htmlFor, children, isRequired = false }) => (
+    <label htmlFor={htmlFor} className="block text-xs font-medium text-white mb-2">
+        {children}{isRequired && <span className="text-red-400"> *</span>}
+    </label>
+);
+
+const CustomDropdown = ({ options, value, onChange, placeholder, icon = null, isDisabled = false }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef(null);
 
@@ -19,28 +40,31 @@ const CustomDropdown = ({ options, value, onChange, placeholder, direction = "do
 
     return (
         <div className="relative" ref={dropdownRef}>
-            <div 
-                className={`w-full bg-[#111318] border rounded-xl px-4 py-3 text-sm text-white cursor-pointer flex justify-between items-center transition-all ${isOpen ? 'border-[var(--primary-color)] ring-1 ring-[var(--primary-color)]' : 'border-[#2D3139] hover:border-[#424934]'}`}
+            <button
+                type="button"
+                disabled={isDisabled}
                 onClick={() => setIsOpen(!isOpen)}
+                className={`w-full bg-[#14161b] border rounded-lg px-3 py-2.5 text-sm text-white flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isOpen ? "border-[var(--primary-color)]" : "border-[#2D3139] hover:border-[#3d424d]"}`}
             >
-                <span className={!selectedOption ? "text-[#8c947b]" : ""}>{selectedOption ? selectedOption.label : placeholder}</span>
-                <span className="material-symbols-outlined text-[#8c947b] text-[20px] transition-transform duration-200" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-                    expand_more
-                </span>
-            </div>
+                {icon && <span className="material-symbols-outlined text-[16px] text-[#8c947b]">{icon}</span>}
+                <span className={`flex-1 text-left truncate ${!selectedOption ? "text-[#8c947b]" : ""}`}>{selectedOption ? selectedOption.label : placeholder}</span>
+                <span className={`material-symbols-outlined text-[#8c947b] text-[18px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
+            </button>
             {isOpen && (
-                <div className={`absolute z-50 w-full bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl max-h-60 overflow-y-auto ${direction === 'up' ? 'bottom-full mb-1' : 'top-full mt-1'}`}>
+                <div className="absolute z-50 top-full mt-1 w-full min-w-[160px] bg-[#1c1f26] border border-[#2D3139] rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
+                    {options.length === 0 && <p className="px-3 py-2 text-xs text-[#8c947b]">Nothing to choose yet</p>}
                     {options.map((opt) => (
-                        <div 
+                        <button
+                            type="button"
                             key={opt.value}
-                            className={`px-4 py-2.5 cursor-pointer text-sm transition-colors ${String(value) === String(opt.value) ? 'bg-[#5b644d] text-white font-semibold' : 'text-white hover:bg-[#2D3139]'}`}
+                            className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${String(value) === String(opt.value) ? "bg-[#252a33] text-white font-semibold" : "text-[#c2caae] hover:bg-[#252a33] hover:text-white"}`}
                             onClick={() => {
                                 onChange(opt.value);
                                 setIsOpen(false);
                             }}
                         >
                             {opt.label}
-                        </div>
+                        </button>
                     ))}
                 </div>
             )}
@@ -51,63 +75,56 @@ const CustomDropdown = ({ options, value, onChange, placeholder, direction = "do
 export default function CreateTaskModal({ projectId, organizationId, teamSpaceId, initialStatus = "todo", initialDate = "", onClose, onCreated, isInline = false }) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [dueDate, setDueDate] = useState(initialDate);
+    const [dueDate, setDueDate] = useState(String(initialDate || "").slice(0, 10));
+    const [status, setStatus] = useState(STATUS_OPTIONS.some(o => o.value === initialStatus) ? initialStatus : "todo");
     const [priority, setPriority] = useState("medium");
     const [assigneeId, setAssigneeId] = useState("");
+    const [teamSpaces, setTeamSpaces] = useState([]);
+    const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState(teamSpaceId || "");
     const [selectedProjectId, setSelectedProjectId] = useState(projectId || "");
     const [projects, setProjects] = useState([]);
-    
     const [users, setUsers] = useState([]);
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
 
+    // Departments to choose from (row-level security keeps this to what the user can see)
     useEffect(() => {
-        if (!projectId && organizationId) {
-            const fetchProjects = async () => {
-                try {
-                    // Try querying team_spaces -> project_spaces first (which matches the Spacer schema)
-                    const { data: teamSpaces } = await supabase
-                        .from("team_spaces")
-                        .select("id")
-                        .eq("organization_id", organizationId);
-                        
-                    if (teamSpaces && teamSpaces.length > 0) {
-                        const teamIds = teamSpaces.map(ts => ts.id);
-                        const { data, error } = await supabase
-                            .from("project_spaces")
-                            .select("id, name")
-                            .in("team_space_id", teamIds);
-                        
-                        if (!error && data) {
-                            setProjects(data.map(p => ({ id: p.id, title: p.name || p.title })));
-                            return;
-                        }
-                    }
-                    
-                    // Fallback to plain project_spaces select
-                    const { data: fallbackSpaces } = await supabase
-                        .from("project_spaces")
-                        .select("id, name");
-                    if (fallbackSpaces) {
-                        setProjects(fallbackSpaces.map(p => ({ id: p.id, title: p.name || p.title })));
-                        return;
-                    }
+        if (projectId || !organizationId) return;
+        let active = true;
+        supabase
+            .from("team_spaces")
+            .select("id, name")
+            .eq("organization_id", organizationId)
+            .order("name")
+            .then(({ data, error: tsError }) => {
+                if (tsError) console.warn("Error fetching departments for task modal:", tsError);
+                if (!active) return;
+                setTeamSpaces(data || []);
+                if (!teamSpaceId && data?.length === 1) setSelectedTeamSpaceId(data[0].id);
+            });
+        return () => { active = false; };
+    }, [projectId, organizationId, teamSpaceId]);
 
-                    // Fallback to legacy projects table
-                    const { data } = await supabase.from("projects").select("id, title").eq("organization_id", organizationId);
-                    if (data) setProjects(data);
-                } catch (err) {
-                    console.warn("Error fetching projects for modal:", err);
-                }
-            };
-            fetchProjects();
-        }
-    }, [projectId, organizationId]);
+    // Projects in the chosen department
+    useEffect(() => {
+        if (projectId || !selectedTeamSpaceId) return;
+        let active = true;
+        supabase
+            .from("project_spaces")
+            .select("id, name")
+            .eq("team_space_id", selectedTeamSpaceId)
+            .order("name")
+            .then(({ data, error: projError }) => {
+                if (projError) console.warn("Error fetching projects for task modal:", projError);
+                if (active) setProjects(data || []);
+            });
+        return () => { active = false; };
+    }, [projectId, selectedTeamSpaceId]);
 
     useEffect(() => {
         const fetchTeamMembers = async () => {
-            let activeTeamSpaceId = teamSpaceId;
-            
+            let activeTeamSpaceId = teamSpaceId || selectedTeamSpaceId;
+
             if (!activeTeamSpaceId && selectedProjectId) {
                 const { data: projData } = await supabase
                     .from("project_spaces")
@@ -154,7 +171,14 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
             setUsers([...byId.values()]);
         };
         fetchTeamMembers();
-    }, [teamSpaceId, selectedProjectId, organizationId]);
+    }, [teamSpaceId, selectedTeamSpaceId, selectedProjectId, organizationId]);
+
+    const chooseTeamSpace = (id) => {
+        setSelectedTeamSpaceId(id);
+        setSelectedProjectId("");
+        setProjects([]);
+        setAssigneeId("");
+    };
 
     const createTask = async () => {
         setError(null);
@@ -173,7 +197,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
 
         setSaving(true);
         const userData = { user: await getSessionUser() };
-        
+
         const { data, error } = await supabase
             .from("tasks")
             .insert({
@@ -185,11 +209,11 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 priority: priority,
                 assignee_id: assigneeId || null,
                 created_by: userData?.user?.id || null,
-                status: 'todo'
+                status,
             })
             .select()
             .single();
-        
+
         setSaving(false);
 
         if (error) {
@@ -208,7 +232,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     title: data.title,
                     assignee_id: assigneeId || null,
                     priority,
-                    status: initialStatus
+                    status
                 }
             });
         } catch (logError) {
@@ -221,125 +245,104 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
 
     const content = (
         <div
-            className={`bg-[#191c21] rounded-2xl border border-[#2D3139] flex flex-col text-white ${isInline ? 'w-full h-full border-none rounded-none' : 'w-full max-w-lg shadow-2xl overflow-visible'}`}
+            className={`@container bg-[#191c21] border border-[#2D3139] flex flex-col text-white ${isInline ? "w-full h-full border-none rounded-none" : "w-full max-w-[600px] rounded-2xl shadow-2xl overflow-visible"}`}
             onClick={(e) => !isInline && e.stopPropagation()}
         >
-            <div className={`p-6 border-b border-[#2D3139] flex justify-between items-center bg-[#181a20] rounded-t-2xl shrink-0 ${isInline ? 'hidden' : ''}`}>
+            <div className={`px-6 pt-5 pb-4 border-b border-[#2D3139] flex justify-between items-start shrink-0 ${isInline ? "hidden" : ""}`}>
                 <div>
-                    <h2 className="text-xl font-bold text-white">Create New Task</h2>
-                    <p className="text-[#8c947b] text-xs mt-0.5">Add a new actionable item to your project backlog.</p>
+                    <h2 className="text-base font-semibold text-white">Create Task</h2>
+                    <p className="text-[#8c947b] text-xs mt-1">Add a task, choose where it belongs, and assign it to someone.</p>
                 </div>
-                <button className="text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
-                    <span className="material-symbols-outlined">close</span>
+                <button type="button" aria-label="Close" className="text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
+                    <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
             </div>
 
-            <div className="p-6 space-y-5">
-                {!projectId && (
-                    <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider">
-                            Project
-                        </label>
-                        <CustomDropdown 
-                            options={projects.map(p => ({ value: p.id, label: p.title }))}
-                            value={selectedProjectId}
-                            onChange={setSelectedProjectId}
-                            placeholder="Select a project"
-                        />
-                    </div>
-                )}
-
-                <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider" htmlFor="task-title">
-                        Task Name
-                    </label>
-                    <input
-                        id="task-title"
-                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-all placeholder-[#8c947b]"
-                        placeholder="e.g. Implement user authentication"
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                    />
+            <div className="px-6 py-5 space-y-5">
+                <div>
+                    <Label htmlFor="task-title" isRequired>Task Name</Label>
+                    <input id="task-title" className={fieldClass} placeholder="Enter the task name" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
                 </div>
 
-                <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider" htmlFor="task-description">
-                        Description
-                    </label>
+                <div>
+                    <Label htmlFor="task-description">Task Description <span className="text-[#8c947b]">(optional)</span></Label>
                     <textarea
                         id="task-description"
-                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-all placeholder-[#8c947b] min-h-[80px] resize-y"
-                        placeholder="Add more details about this task..."
+                        className={`${fieldClass} min-h-[80px] resize-y`}
+                        placeholder="Briefly describe what needs to be done and the expected outcome."
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                     />
                 </div>
 
-                <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider" htmlFor="task-deadline">
-                        Deadline
-                    </label>
-                    <input
-                        id="task-deadline"
-                        className="w-full bg-[#111318] border border-[#2D3139] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-all [color-scheme:dark]"
-                        type="datetime-local"
-                        value={dueDate}
-                        onChange={(e) => setDueDate(e.target.value)}
-                    />
-                </div>
+                {!projectId && (
+                    <div className="grid grid-cols-1 @md:grid-cols-2 gap-4">
+                        <div>
+                            <Label>Team Space</Label>
+                            <CustomDropdown
+                                options={teamSpaces.map(ts => ({ value: ts.id, label: ts.name }))}
+                                value={selectedTeamSpaceId}
+                                onChange={chooseTeamSpace}
+                                placeholder="Select a department"
+                                isDisabled={Boolean(teamSpaceId)}
+                            />
+                        </div>
+                        <div>
+                            <Label isRequired>Project</Label>
+                            <CustomDropdown
+                                options={projects.map(p => ({ value: p.id, label: p.name }))}
+                                value={selectedProjectId}
+                                onChange={setSelectedProjectId}
+                                placeholder={selectedTeamSpaceId ? "Select a project" : "Choose a department first"}
+                                isDisabled={!selectedTeamSpaceId}
+                            />
+                        </div>
+                    </div>
+                )}
 
-                <div className="flex gap-4">
-                    <div className="space-y-1.5 flex-1">
-                        <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider">
-                            Assignee
-                        </label>
-                        <CustomDropdown 
-                            options={[
-                                { value: "", label: "Unassigned" },
-                                ...users.map(u => ({ value: u.id, label: u.name }))
-                            ]}
+                <div className="grid grid-cols-2 @lg:grid-cols-4 gap-3">
+                    <div>
+                        <Label isRequired>Status</Label>
+                        <CustomDropdown options={STATUS_OPTIONS} value={status} onChange={setStatus} placeholder="Status" />
+                    </div>
+                    <div>
+                        <Label>Assignee</Label>
+                        <CustomDropdown
+                            options={[{ value: "", label: "Unassigned" }, ...users.map(u => ({ value: u.id, label: u.name }))]}
                             value={assigneeId}
                             onChange={setAssigneeId}
-                            placeholder="Select assignee"
-                            direction="up"
+                            placeholder="Assign to someone"
+                            icon="person"
                         />
                     </div>
-                    
-                    <div className="space-y-1.5 flex-1">
-                        <label className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider">
-                            Priority
-                        </label>
-                        <CustomDropdown 
-                            options={[
-                                { value: "low", label: "Low" },
-                                { value: "medium", label: "Medium" },
-                                { value: "high", label: "High" },
-                                { value: "urgent", label: "Urgent" }
-                            ]}
-                            value={priority}
-                            onChange={setPriority}
-                            placeholder="Select priority"
-                            direction="up"
-                        />
+                    <div>
+                        <Label htmlFor="task-due-date">Due Date</Label>
+                        <input id="task-due-date" className={`${fieldClass} [color-scheme:dark]`} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                    </div>
+                    <div>
+                        <Label>Priority</Label>
+                        <CustomDropdown options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} placeholder="Priority" icon="flag" />
                     </div>
                 </div>
 
-                {error && <p className="text-xs text-red-400">{error}</p>}
+                {error && (
+                    <p className="text-xs text-red-400 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[14px]">error</span>{error}
+                    </p>
+                )}
             </div>
 
-            <div className="p-6 pt-0 flex gap-3">
-                <button
-                    className="flex-1 py-3 border border-[#2D3139] bg-[#181a20] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white transition-all cursor-pointer"
-                    onClick={onClose}
-                >
-                    Cancel
+            <div className="px-6 py-4 border-t border-[#2D3139] flex justify-end gap-3">
+                <button type="button" className="flex items-center gap-1 px-3 py-2 text-xs text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
+                    <span className="material-symbols-outlined text-[14px]">close</span> Cancel
                 </button>
                 <button
-                    className="flex-1 py-3 btn-primary-accent rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                    type="button"
+                    className="flex items-center gap-1.5 px-4 py-2 btn-primary-accent rounded-lg text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                     onClick={createTask}
                     disabled={saving}
                 >
+                    <span className="material-symbols-outlined text-[16px]">add_task</span>
                     {saving ? "Creating…" : "Create Task"}
                 </button>
             </div>
