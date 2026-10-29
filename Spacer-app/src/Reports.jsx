@@ -15,6 +15,8 @@ const STATUS_COLORS = {
 }
 
 const PROJECTS_COLLAPSED_KEY = "reports:projectsCollapsed"
+// Backup refresh interval, used only while the Realtime connection is down
+const POLL_FALLBACK_MS = 12000
 const STAGGER_MS = 60
 const MAX_STAGGER_MS = 480
 
@@ -293,51 +295,12 @@ export default function Reports() {
     }
   }
 
-  // ── Initial load & live subscriptions ──────────────────────────────────
+  // ── Initial load & tab focus ───────────────────────────────────────────
+  // Runs once: the ids the first load stores no longer restart it
   useEffect(() => {
     fetchReportData()
 
-    const userId = currentUserId || localStorage.getItem("userId")
-    // Determine realtime filter:
-    // - Personal reports: filter by assignee_id to only react to user's own tasks
-    // - Organization reports: filter by organization_id if available, otherwise fallback to assignee_id
-    const taskFilter = scope === "personal" || !organizationId
-      ? (userId ? `assignee_id=eq.${userId}` : undefined)
-      : `organization_id=eq.${organizationId}`
-
-    const taskSubOptions = {
-      event: "*",
-      schema: "public",
-      table: "tasks",
-      ...(taskFilter ? { filter: taskFilter } : {})
-    }
-
-    // 1. Supabase Realtime channel on both tasks and project_spaces
-    const channelName = `reports-realtime-${scope}-${userId || "anon"}-${organizationId || "none"}`
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        taskSubOptions,
-        () => {
-          fetchReportData(true)
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "project_spaces" },
-        () => {
-          fetchReportData(true)
-        }
-      )
-      .subscribe()
-
-    // 2. Background polling fallback (every 12 seconds)
-    const pollingInterval = setInterval(() => {
-      fetchReportData(true)
-    }, 12000)
-
-    // 3. Tab focus & visibility change listener
+    // Coming back to the tab catches up on anything skipped while it was hidden
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         fetchReportData(true)
@@ -351,12 +314,61 @@ export default function Reports() {
     window.addEventListener("focus", handleWindowFocus)
 
     return () => {
-      supabase.removeChannel(channel)
-      clearInterval(pollingInterval)
       document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("focus", handleWindowFocus)
     }
-  }, [fetchReportData, scope, currentUserId, organizationId])
+  }, [fetchReportData])
+
+  // ── Live updates: Realtime, polling only while Realtime is down ─────────
+  useEffect(() => {
+    // Wait for the first load, which supplies the ids the subscription filters on
+    if (loading) return undefined
+
+    // Every scope is built from the organisation's tasks, so listen to all of them
+    const taskFilter = organizationId
+      ? `organization_id=eq.${organizationId}`
+      : (currentUserId ? `assignee_id=eq.${currentUserId}` : null)
+    if (!taskFilter) return undefined
+
+    let disposed = false
+    let hasConnected = false
+    let pollingInterval = null
+
+    // Hidden tabs skip updates; the visibility listener reloads on return
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") fetchReportData(true)
+    }
+    const startPolling = () => {
+      if (!pollingInterval) pollingInterval = setInterval(refreshIfVisible, POLL_FALLBACK_MS)
+    }
+    const stopPolling = () => {
+      clearInterval(pollingInterval)
+      pollingInterval = null
+    }
+
+    const channel = supabase
+      .channel(`reports-realtime-${currentUserId || "anon"}-${organizationId || "none"}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: taskFilter }, refreshIfVisible)
+      .on("postgres_changes", { event: "*", schema: "public", table: "project_spaces" }, refreshIfVisible)
+      .subscribe((status) => {
+        if (disposed) return
+        if (status === "SUBSCRIBED") {
+          stopPolling()
+          // After an outage, catch up on changes made while disconnected
+          if (hasConnected) refreshIfVisible()
+          hasConnected = true
+        } else {
+          // CHANNEL_ERROR, TIMED_OUT or CLOSED: poll until Realtime reconnects
+          startPolling()
+        }
+      })
+
+    return () => {
+      disposed = true
+      stopPolling()
+      supabase.removeChannel(channel)
+    }
+  }, [loading, currentUserId, organizationId, fetchReportData])
 
   // ── Filtered tasks according to active scope & project ───────────────────
   // project id -> department (team space) id
