@@ -104,10 +104,5 @@ export function fallbackColumn(columns, column) {
     return others.find((c) => c.base_status === column.base_status) || others[0] || null
 }
 
-// The column a task shows in: its saved column if that still matches its status,
-// otherwise the first column for its status (status can change via subtasks)
-export function columnKeyForTask(task, columns) {
-    const saved = task.column_id && columns.find((c) => c.id === task.column_id)
-    if (saved && saved.base_status === task.status) return saved.key
-    return (columns.find((c) => c.base_status === task.status) || columns[0])?.key ?? null
-}
+// Lives with the other grouping rules, which tests can load without Supabase
+export { columnKeyForTask } from "./boardGrouping"
