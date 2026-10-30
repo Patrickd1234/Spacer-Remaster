@@ -3,7 +3,8 @@ import { supabase, getSessionUser } from "../supabase";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import GroupChat from "../components/GroupChat";
 import { useRole } from "../RoleContext";
-import { safeDownloadDataUrl, safeImageDataUrl } from "../safeUrl";
+import { attachmentDisplay, dmAttachmentPath, formatFileSize, validateDmAttachment } from "../dmAttachmentFiles";
+import { removeDmAttachment, uploadDmAttachment, withDmAttachmentLinks } from "../dmAttachments";
 
 // How close (px) to the bottom of the DM list still counts as "at the bottom"
 const NEAR_BOTTOM_PX = 120;
@@ -39,6 +40,8 @@ export default function SidebarRouter(props) {
     const [editingText, setEditingText] = useState("");
     const [replyingToMessage, setReplyingToMessage] = useState(null);
     const [attachedFile, setAttachedFile] = useState(null);
+    const [attachError, setAttachError] = useState("");
+    const isSendingRef = useRef(false);
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
 
     const imageInputRef = useRef(null);
@@ -335,7 +338,7 @@ export default function SidebarRouter(props) {
                     pinned: m.pinned || false,
                     reactions: groupReactions(m.direct_message_reactions)
                 }));
-                setChatMessages(mappedData);
+                setChatMessages(await withDmAttachmentLinks(mappedData));
             }
         } catch (err) {
             console.error("Fetch direct messages error:", err);
@@ -354,11 +357,34 @@ export default function SidebarRouter(props) {
         e.preventDefault();
         if (!newMessage.trim() && !attachedFile) return;
         if (!chatRecipient || !userId) return;
-        const msgContent = newMessage.trim();
-        setNewMessage("");
+        // A second Enter while a file uploads would send it twice
+        if (isSendingRef.current) return;
+        isSendingRef.current = true;
 
-        const newMsgObj = {
-            id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(),
+        const msgContent = newMessage.trim();
+        const fileToSend = attachedFile;
+        const messageId = crypto.randomUUID();
+        setAttachError("");
+
+        // Upload first: the message must never point at a file that isn't there.
+        // The row stores only where the file is, not the file itself.
+        let fileAttachment = null;
+        if (fileToSend) {
+            const path = dmAttachmentPath(userId, messageId, fileToSend.name);
+            const uploadError = await uploadDmAttachment(path, fileToSend.file);
+            if (uploadError) {
+                console.error("DM attachment upload failed:", uploadError);
+                setAttachError(`Could not upload ${fileToSend.name}. Please try again.`);
+                isSendingRef.current = false;
+                return;
+            }
+            fileAttachment = { name: fileToSend.name, size: fileToSend.size, type: fileToSend.type, path };
+        }
+        setNewMessage("");
+        isSendingRef.current = false;
+
+        const [newMsgObj] = await withDmAttachmentLinks([{
+            id: messageId,
             sender_id: userId,
             receiver_id: chatRecipient.user_id,
             content: msgContent,
@@ -366,8 +392,8 @@ export default function SidebarRouter(props) {
             replyToId: replyingToMessage ? replyingToMessage.id : null,
             replyToContent: replyingToMessage ? replyingToMessage.content : null,
             replyToSenderName: replyingToMessage ? (replyingToMessage.sender_id === userId ? "You" : chatRecipient.name) : null,
-            fileAttachment: attachedFile || null
-        };
+            fileAttachment
+        }]);
 
         setChatMessages(prev => [...prev, newMsgObj]);
         setDmLatestMessages(prev => ({ ...prev, [chatRecipient.user_id]: newMsgObj }));
@@ -378,15 +404,17 @@ export default function SidebarRouter(props) {
             const { error } = await supabase
                 .from("direct_messages")
                 .insert({
+                    id: messageId,
                     sender_id: userId,
                     receiver_id: chatRecipient.user_id,
                     content: msgContent,
                     reply_to_id: newMsgObj.replyToId,
-                    file_attachment: newMsgObj.fileAttachment
+                    file_attachment: fileAttachment
                 });
 
             if (error) {
                 console.warn("DB message save failed:", error.message);
+                if (fileAttachment) removeDmAttachment(fileAttachment.path);
             }
         } catch (err) {
             console.warn("Error sending message to DB:", err);
@@ -418,13 +446,15 @@ export default function SidebarRouter(props) {
     const handleDeleteMessage = async (msgId) => {
         if (!chatRecipient || !userId) return;
         try {
+            const attachmentPath = chatMessages.find(m => m.id === msgId)?.fileAttachment?.path;
             const updatedMessages = chatMessages.filter(m => m.id !== msgId);
             setChatMessages(updatedMessages);
 
-            await supabase
+            const { error } = await supabase
                 .from("direct_messages")
                 .delete()
                 .eq("id", msgId);
+            if (!error && attachmentPath) await removeDmAttachment(attachmentPath);
         } catch (err) {
             console.warn("Delete message error:", err);
         }
@@ -511,19 +541,13 @@ export default function SidebarRouter(props) {
 
     const handleAttachFile = (e) => {
         const file = e.target.files?.[0];
+        e.target.value = ""; // picking the same file again should fire onChange
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-            setAttachedFile({
-                name: file.name,
-                size: sizeMB > 0.1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(1)} KB`,
-                type: file.type,
-                dataUrl: reader.result
-            });
-        };
-        reader.readAsDataURL(file);
+        const invalid = validateDmAttachment(file);
+        setAttachError(invalid || "");
+        if (invalid) return;
+        setAttachedFile({ file, name: file.name, size: formatFileSize(file.size), type: file.type });
     };
 
     const getUnreadConversationsCount = () => {
@@ -883,13 +907,15 @@ export default function SidebarRouter(props) {
                                                         } ${isMe ? '' : 'order-1'} ${msg.pinned ? 'ring-1 ring-primary-accent border border-primary-accent/40' : ''}`}>
                                                             
                                                             {/* Attached File */}
-                                                            {msg.fileAttachment && (
+                                                            {msg.fileAttachment && (() => {
+                                                                // Signed storage link, or a checked legacy data URL; unsafe ones aren't rendered
+                                                                const { imageSrc, downloadHref } = attachmentDisplay(msg.fileAttachment);
+                                                                return (
                                                                 <div className="mb-2 p-1.5 rounded-lg bg-black/20 border border-white/5 max-w-[240px]">
-                                                                    {/* Stored data URLs are checked before use; unsafe ones aren't rendered as links/images */}
-                                                                    {safeImageDataUrl(msg.fileAttachment.dataUrl) ? (
-                                                                        <img 
-                                                                            src={safeImageDataUrl(msg.fileAttachment.dataUrl)}
-                                                                            alt={msg.fileAttachment.name} 
+                                                                    {imageSrc ? (
+                                                                        <img
+                                                                            src={imageSrc}
+                                                                            alt={msg.fileAttachment.name}
                                                                             className="max-h-[140px] rounded object-cover max-w-full"
                                                                         />
                                                                     ) : (
@@ -899,10 +925,12 @@ export default function SidebarRouter(props) {
                                                                                 <p className="truncate font-semibold text-[10px]">{msg.fileAttachment.name}</p>
                                                                                 <p className="text-[8px] opacity-75">{msg.fileAttachment.size}</p>
                                                                             </div>
-                                                                            {safeDownloadDataUrl(msg.fileAttachment.dataUrl) && (
+                                                                            {downloadHref && (
                                                                                 <a
-                                                                                    href={safeDownloadDataUrl(msg.fileAttachment.dataUrl)}
+                                                                                    href={downloadHref}
                                                                                     download={msg.fileAttachment.name || "attachment"}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
                                                                                     className="ml-auto text-primary-accent hover:underline flex items-center justify-center p-1"
                                                                                 >
                                                                                     <span className="material-symbols-outlined text-base">download</span>
@@ -911,7 +939,8 @@ export default function SidebarRouter(props) {
                                                                         </div>
                                                                     )}
                                                                 </div>
-                                                            )}
+                                                                );
+                                                            })()}
 
                                                             {isEditing ? (
                                                                 <div className="flex flex-col gap-1 w-48">
@@ -981,6 +1010,12 @@ export default function SidebarRouter(props) {
                                         </div>
                                     )}
 
+                                    {attachError && (
+                                        <div role="alert" className="px-3 py-2 bg-red-500/10 border-t border-red-500/20 text-[10px] text-red-400">
+                                            {attachError}
+                                        </div>
+                                    )}
+
                                     {/* Attachment Preview */}
                                     {attachedFile && (
                                         <div className="px-3 py-2 bg-black/40 border-t border-[#2D3139] flex items-center justify-between text-[10px] text-primary-accent">
@@ -1007,7 +1042,7 @@ export default function SidebarRouter(props) {
                                         <input 
                                             type="file" 
                                             ref={imageInputRef} 
-                                            accept="image/*,video/*" 
+                                            accept="image/jpeg,image/png,image/gif,image/webp"
                                             onChange={(e) => { handleAttachFile(e); setShowAttachmentMenu(false); }} 
                                             className="hidden" 
                                         />

@@ -3,7 +3,7 @@
 -- Reports, Home, notifications and subtask-driven statuses keep working: moving a
 -- card sets both tasks.column_id and tasks.status. A project without rows here
 -- shows the default Backlog / Doing / Done columns.
--- Rollback: supabase/rollback/20261026090000_project_columns_rollback.sql
+-- Rollback: supabase/rollback/20261026100000_project_columns_rollback.sql
 
 create table if not exists public.project_columns (
   id uuid primary key default gen_random_uuid(),

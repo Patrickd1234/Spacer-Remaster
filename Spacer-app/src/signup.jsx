@@ -61,20 +61,8 @@ function Signup() {
                 throw error
             }
 
-            // The users profile row is created by the on_auth_user_created database trigger
-            if (data?.user) {
-                try {
-                    await supabase.from('activity_log').insert({
-                        entity_type: 'user',
-                        entity_id: data.user.id,
-                        actor_id: data.user.id,
-                        action: 'signup',
-                        new_state: { email, full_name: fullName }
-                    })
-                } catch (logError) {
-                    console.error('Error logging signup activity:', logError)
-                }
-            }
+            // The on_auth_user_created database trigger creates the users profile
+            // row and logs the 'signup' activity (no session exists yet here)
 
             // With email confirmation on, no session is returned until the user clicks the link
             if (!data?.session) {
