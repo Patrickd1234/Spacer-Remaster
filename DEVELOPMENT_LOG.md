@@ -25,7 +25,7 @@ This log tracks development work and code changes made for this project.
 - Daily stand-ups are now per department:
   - Members and admins see their active department's sheet (picked in the sidebar). Super admins choose a department from a dropdown, which defaults to the last department they opened.
   - New stand-ups save with `team_space_id`. The local-storage fallback is split by department too.
-  - Migration `supabase/migrations/20261030090000_standups_department.sql` adds a nullable `daily_standups.team_space_id` (cascades on department delete) and an index. It backfills existing rows only for authors who are in exactly one department. Rollback is in `supabase/rollback/`. **This has not been confirmed as applied to the live database.**
+  - Migration `supabase/migrations/20261030090000_standups_department.sql` adds a nullable `daily_standups.team_space_id` (cascades on department delete) and an index. It backfills existing rows only for authors who are in exactly one department. Rollback is in `supabase/rollback/`. It is applied to the live database (verified on 2026-10-30, see below).
 - Sidebar (`WorkspaceSidebar.jsx`, `SidebarNav.jsx`, `SidebarRouter.jsx`):
   - It lists only projects that belong to the user's departments. Projects the user was added to directly are no longer listed, and `fetchDirectProjects` has been removed from `projectMemberships.js`.
   - Highlights: the active department row is highlighted when opened from the sidebar (otherwise Directory is), nested items get a tinted background, and Messages is highlighted while the chat is open.
@@ -38,3 +38,8 @@ This log tracks development work and code changes made for this project.
   - Reminders are built in the browser from the user's open tasks (new `fetchOpenAssignedTasks`), so no database change. Their ids include the date, so they come back unread each day; "Mark all read" covers them.
   - Turning off Settings → "Task Assignments & Due Dates" also turns the reminders off.
   - Checked: `node --test src/taskReminders.test.js` passes 6/6, ESLint is clean on the changed files, and `vite build` succeeds. Not exercised in a browser (needs a signed-in account).
+- Checked the stand-ups migration on the live database (project "Spacer") with read-only queries through the Supabase CLI. It was already fully applied, so nothing was run:
+  - `20261030090000 standups_department` is recorded in `supabase_migrations.schema_migrations`.
+  - `daily_standups.team_space_id` exists (uuid, nullable) with its foreign key to `team_spaces` (on delete cascade) and the `daily_standups_team_space_date_idx` index.
+  - 4 of 8 stand-ups have a department. The other 4 have none, so they don't show on any department's sheet; no remaining stand-up's author is in exactly one department, so the backfill has nothing left to fill.
+- Updated the class1 tutorial doc to match: Lesson 2 and self-check question 6 now say the migration is applied.
