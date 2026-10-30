@@ -556,6 +556,7 @@ export default function SidebarRouter(props) {
         <WorkspaceSidebar
             {...props}
             unreadMessages={getUnreadConversationsCount()}
+            isMessagesOpen={showChatModal && !isChatMinimized}
             onOpenMessages={() => { setShowChatModal(true); setIsChatMinimized(false); }}
         />
     );

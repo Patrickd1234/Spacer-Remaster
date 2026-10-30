@@ -14,7 +14,7 @@ export default function AuthBrandPanel({ tagline, quote, showThirdGlow = false, 
             <div className="relative z-10 mb-12">
                 <div className="flex items-center gap-2 mb-8">
                     <span className="material-symbols-outlined text-[var(--primary-color)] font-bold text-[24px]">token</span>
-                    <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
+                    <h1 className="text-[16px] font-bold tracking-widest text-white">Spacer</h1>
                 </div>
                 {tagline}
             </div>

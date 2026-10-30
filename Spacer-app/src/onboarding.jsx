@@ -97,7 +97,7 @@ function Onboarding() {
                         <div className="w-6 h-6 bg-brand rounded-sm flex items-center justify-center shadow-[0_0_15px_rgba(182,255,51,0.4)]">
                             <svg fill="none" height="14" stroke="black" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" viewBox="0 0 24 24" width="14"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.83a.5.5 0 0 0-.838-.376L16 11"></path><rect height="12" rx="2" width="14" x="2" y="6"></rect></svg>
                         </div>
-                        <span className="font-bold text-sm tracking-widest text-white uppercase">SPACER</span>
+                        <span className="font-bold text-sm tracking-widest text-white">Spacer</span>
                     </div>
                     <p className="text-zinc-400 max-w-sm text-sm leading-relaxed">
                         One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place

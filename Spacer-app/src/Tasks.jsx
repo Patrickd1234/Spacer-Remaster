@@ -5,6 +5,7 @@ import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
 import { useRole } from "./RoleContext"
 import CreateTaskModal from "./partials/CreateTaskModal"
+import DepartmentTaskGroups from "./components/DepartmentTaskGroups"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -47,7 +48,9 @@ export default function Tasks() {
     const [loading, setLoading] = useState(true)
     const [selectedTask, setSelectedTask] = useState(null)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const { roleLoading } = useRole()
+    const { roleLoading, isSuperAdmin, activeDepartment, orgDepartmentId } = useRole()
+    // Super admins see tasks grouped by department → project
+    const [departments, setDepartments] = useState([])
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false)
 
     // Standup Tab states
@@ -61,6 +64,8 @@ export default function Tasks() {
     const [isLocalFallback, setIsLocalFallback] = useState(false)
     const [currentUserProfile, setCurrentUserProfile] = useState(null)
     const [orgId, setOrgId] = useState(null)
+    // Super admins pick which department's stand-ups to view
+    const [standupDeptChoice, setStandupDeptChoice] = useState(null)
 
 
     useEffect(() => {
@@ -86,7 +91,7 @@ export default function Tasks() {
 
                 let query = supabase
                     .from("tasks")
-                    .select("*, project:project_spaces(name)")
+                    .select("*, project:project_spaces(name, team_space_id)")
 
                 if (currentOrgId) {
                     query = query.eq("organization_id", currentOrgId)
@@ -94,7 +99,15 @@ export default function Tasks() {
                     query = query.eq("assignee_id", userId)
                 }
 
-                const { data, error } = await query.order("created_at", { ascending: false })
+                const [{ data, error }, departmentResult] = await Promise.all([
+                    query.order("created_at", { ascending: false }),
+                    isSuperAdmin && currentOrgId
+                        ? supabase.from("team_spaces").select("id, name").eq("organization_id", currentOrgId).order("name")
+                        : Promise.resolve({ data: [] }),
+                ])
+
+                if (departmentResult.error) console.error("Error fetching departments:", departmentResult.error)
+                setDepartments(departmentResult.data || [])
 
                 if (error) {
                     console.error("Error fetching tasks:", error)
@@ -105,6 +118,7 @@ export default function Tasks() {
                 setTasks((data || []).map(t => ({
                     ...t,
                     project_name: t.project?.name || null,
+                    project_team_space_id: t.project?.team_space_id ?? null,
                 })))
             } catch (err) {
                 console.error("Error fetching tasks:", err)
@@ -116,23 +130,40 @@ export default function Tasks() {
         if (!roleLoading) {
             fetchTasks()
         }
-    }, [roleLoading])
+    }, [roleLoading, isSuperAdmin])
 
-    const fetchStandups = async (currentOrgId) => {
+    // Stand-ups are per department: members and admins see their active department
+    // (chosen in the sidebar); super admins pick one, defaulting to the last opened
+    const rememberedDeptId = departments.some(d => String(d.id) === String(orgDepartmentId)) ? orgDepartmentId : departments[0]?.id
+    const standupDepartmentId = isSuperAdmin
+        ? (standupDeptChoice ?? rememberedDeptId ?? null)
+        : (activeDepartment?.team_space_id ?? null)
+    const standupDepartmentName = isSuperAdmin
+        ? departments.find(d => String(d.id) === String(standupDepartmentId))?.name
+        : activeDepartment?.name
+
+    // Local-storage fallback keeps the same per-department split
+    const readLocalStandups = (deptId) => {
+        const local = localStorage.getItem("spacers_daily_standups")
+        const rows = local ? JSON.parse(local) : []
+        return rows.filter(row => String(row.team_space_id) === String(deptId))
+    }
+
+    const fetchStandups = async (currentOrgId, deptId) => {
         setStandupLoading(true)
         try {
             const { data, error } = await supabase
                 .from("daily_standups")
                 .select("*, user:users(name, email)")
                 .eq("organization_id", currentOrgId)
+                .eq("team_space_id", deptId)
                 .order("standup_date", { ascending: false })
                 .order("created_at", { ascending: false })
 
             if (error) {
                 console.warn("daily_standups table fetch error, falling back to localStorage:", error)
                 setIsLocalFallback(true)
-                const local = localStorage.getItem("spacers_daily_standups")
-                setStandups(local ? JSON.parse(local) : [])
+                setStandups(readLocalStandups(deptId))
             } else {
                 setStandups(data || [])
                 setIsLocalFallback(false)
@@ -140,23 +171,25 @@ export default function Tasks() {
         } catch (err) {
             console.error("Error fetching standups:", err)
             setIsLocalFallback(true)
-            const local = localStorage.getItem("spacers_daily_standups")
-            setStandups(local ? JSON.parse(local) : [])
+            setStandups(readLocalStandups(deptId))
         } finally {
             setStandupLoading(false)
         }
     }
 
     useEffect(() => {
-        if (orgId) {
-            fetchStandups(orgId)
+        if (roleLoading) return
+        if (!standupDepartmentId) {
+            setStandups([])
+            setStandupLoading(false)
+        } else if (orgId) {
+            fetchStandups(orgId, standupDepartmentId)
         } else {
             setIsLocalFallback(true)
-            const local = localStorage.getItem("spacers_daily_standups")
-            setStandups(local ? JSON.parse(local) : [])
+            setStandups(readLocalStandups(standupDepartmentId))
             setStandupLoading(false)
         }
-    }, [orgId, activeTab])
+    }, [orgId, activeTab, standupDepartmentId, roleLoading])
 
     const handleAddStandup = async (e) => {
         e.preventDefault()
@@ -166,6 +199,10 @@ export default function Tasks() {
         
         if (!yesterdayClean && !todayClean && !blockersClean) {
             alert("Please fill out at least one section of your daily standup.")
+            return
+        }
+        if (!standupDepartmentId) {
+            alert("Stand-ups are saved to a department. Join or select a department first.")
             return
         }
 
@@ -179,6 +216,7 @@ export default function Tasks() {
                 const newRow = {
                     id: `std_${Date.now()}`,
                     organization_id: orgId || "local",
+                    team_space_id: standupDepartmentId,
                     user_id: uid || "local_user",
                     standup_date: new Date().toISOString().split("T")[0],
                     yesterday_work: yesterdayClean,
@@ -190,9 +228,11 @@ export default function Tasks() {
                         email: currentUserProfile?.email || authData?.user?.email || "local@spacers.com"
                     }
                 }
-                const updated = [newRow, ...standups]
-                localStorage.setItem("spacers_daily_standups", JSON.stringify(updated))
-                setStandups(updated)
+                // Keep other departments' local rows; show only this department's
+                const local = localStorage.getItem("spacers_daily_standups")
+                const allLocal = [newRow, ...(local ? JSON.parse(local) : [])]
+                localStorage.setItem("spacers_daily_standups", JSON.stringify(allLocal))
+                setStandups([newRow, ...standups])
                 setYesterdayText("")
                 setTodayText("")
                 setBlockersText("")
@@ -201,6 +241,7 @@ export default function Tasks() {
                     .from("daily_standups")
                     .insert({
                         organization_id: orgId,
+                        team_space_id: standupDepartmentId,
                         user_id: uid,
                         yesterday_work: yesterdayClean,
                         today_work: todayClean,
@@ -213,7 +254,7 @@ export default function Tasks() {
                     setYesterdayText("")
                     setTodayText("")
                     setBlockersText("")
-                    await fetchStandups(orgId)
+                    await fetchStandups(orgId, standupDepartmentId)
                 }
             }
         } catch (err) {
@@ -335,6 +376,8 @@ export default function Tasks() {
                                             <h4 className="text-lg font-semibold text-white">All caught up</h4>
                                             <p className="text-[#8c947b] text-sm max-w-xs mt-2">There are no open tasks in the organization right now.</p>
                                         </div>
+                                    ) : isSuperAdmin ? (
+                                        <DepartmentTaskGroups tasks={tasks} departments={departments} onSelectTask={setSelectedTask} />
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                                             {/* TO-DO Column */}
@@ -412,11 +455,26 @@ export default function Tasks() {
                             <section className="space-y-6">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <h2 className="text-lg font-semibold text-white">Daily Standup Tracker</h2>
+                                        <h2 className="text-lg font-semibold text-white">
+                                            Daily Standup Tracker{standupDepartmentName ? ` · ${standupDepartmentName}` : ""}
+                                        </h2>
                                         <p className="text-xs text-[#8c947b] mt-0.5">
                                             Log what you did yesterday, what you are working on today, and any blockers.
+                                            {" "}Only {standupDepartmentName || "this department"}'s stand-ups are shown.
                                         </p>
                                     </div>
+                                    {isSuperAdmin && departments.length > 0 && (
+                                        <label className="flex items-center gap-2 text-xs text-[#8c947b]">
+                                            Department
+                                            <select
+                                                value={standupDepartmentId ?? ""}
+                                                onChange={(e) => setStandupDeptChoice(e.target.value)}
+                                                className="bg-[#0F1115] border border-[#2D3139] rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] cursor-pointer"
+                                            >
+                                                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                            </select>
+                                        </label>
+                                    )}
                                     {isLocalFallback && (
                                         <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-semibold">
                                             <span className="material-symbols-outlined text-[14px]">warning</span>
@@ -519,7 +577,9 @@ export default function Tasks() {
                                                 ) : standups.length === 0 ? (
                                                     <tr>
                                                         <td colSpan="7" className="px-4 py-8 text-center text-[#8c947b] bg-[#191c21]/20">
-                                                            No daily standups logged yet. Add your standup above!
+                                                            {standupDepartmentId
+                                                                ? `No stand-ups logged for ${standupDepartmentName || "this department"} yet. Add yours above!`
+                                                                : "You're not in a department yet, so there's no stand-up sheet to show."}
                                                         </td>
                                                     </tr>
                                                 ) : (
@@ -647,12 +707,13 @@ export default function Tasks() {
                     onCreated={async (newTask) => {
                         const { data: projData } = await supabase
                             .from("project_spaces")
-                            .select("name")
+                            .select("name, team_space_id")
                             .eq("id", newTask.project_id)
                             .maybeSingle();
                         const updatedTask = {
                             ...newTask,
-                            project_name: projData?.name || null
+                            project_name: projData?.name || null,
+                            project_team_space_id: projData?.team_space_id ?? null,
                         };
                         setTasks(prev => [updatedTask, ...prev]);
                     }}

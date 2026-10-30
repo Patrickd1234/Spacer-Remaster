@@ -158,13 +158,24 @@ export default function Settings() {
 
                 const orgId = userProfile?.organization_id
                 if (orgId) {
-                    const { error } = await supabase
+                    // .select() returns the updated row; the database silently skips
+                    // the update (no error) when the user isn't allowed to rename
+                    const { data: updatedRows, error } = await supabase
                         .from("organizations")
                         .update({ name: workspace.name })
                         .eq("id", orgId)
+                        .select("id")
 
                     if (error) {
                         alert("Error saving organization settings: " + error.message)
+                        setSaving(false)
+                        return
+                    }
+                    if (!updatedRows?.length) {
+                        alert(
+                            "The workspace name wasn't saved. Only organization admins can rename the workspace, " +
+                            "and they need to have signed in with two-factor authentication."
+                        )
                         setSaving(false)
                         return
                     }

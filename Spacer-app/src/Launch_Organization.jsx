@@ -63,7 +63,7 @@ export default function LaunchOrganization({ onOrganizationChanged }) {
                         <div className="w-6 h-6 bg-brand rounded-sm flex items-center justify-center">
                             <svg className="w-4 h-4 text-black" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
                         </div>
-                        <span className="font-bold text-lg tracking-widest uppercase">SPACER</span>
+                        <span className="font-bold text-lg tracking-widest">Spacer</span>
                     </div>
                     <p className="text-gray-400 max-w-sm text-sm leading-relaxed">
                         One workspace for every company. HR, Design, Dev and Marketing — each in their own space, all in one place.

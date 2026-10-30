@@ -20,7 +20,9 @@ function Department() {
     const [mem_info, setMem_info] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment } = useRole()
+    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment, departments } = useRole()
+    // Admins of any department switch departments from the sidebar, not the page dropdown
+    const isAdminAnywhere = departments.some(d => d.role === "admin")
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [organizationId, setOrganizationId] = useState(null)
     const [showCreateDeptModal, setShowCreateDeptModal] = useState(false)
@@ -462,7 +464,7 @@ return (
                         <p className="text-[#8c947b] text-sm mt-1">
                             {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""} {isSuperAdmin && activeTeam ? `assigned to ${activeTeam.name}` : "in your department team"}
                         </p>
-                        {!isSuperAdmin && (
+                        {!isSuperAdmin && !isAdminAnywhere && (
                             <div className="mt-3">
                                 <DepartmentSwitcher />
                             </div>
@@ -478,8 +480,9 @@ return (
                                 <span className="material-symbols-outlined text-[18px]">person_add</span>
                                 Add Member
                             </button>
-                            {canManage && (
-                                <button 
+                            {/* Only super admins create departments here (hidden for admins; the database rule is unchanged) */}
+                            {isSuperAdmin && (
+                                <button
                                     onClick={() => setShowCreateDeptModal(true)}
                                     className="px-4 py-2 bg-[#aff82a] text-[#1C1F26] hover:bg-[#9de022] text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
                                 >

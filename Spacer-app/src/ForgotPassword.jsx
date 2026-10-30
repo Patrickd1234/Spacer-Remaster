@@ -71,7 +71,7 @@ function ForgotPassword() {
                 <div className="relative z-10 mb-12">
                     <div className="flex items-center gap-2 mb-8">
                         <span className="material-symbols-outlined text-[#aff82a] font-bold text-[24px]">token</span>
-                        <h1 className="text-[16px] font-bold tracking-widest text-white uppercase">Spacer</h1>
+                        <h1 className="text-[16px] font-bold tracking-widest text-white">Spacer</h1>
                     </div>
                     <p className="text-white text-[20px] leading-relaxed max-w-md">
                         One workspace for every team. HR, Design, Dev and Marketing—each in their own space, all in one place.

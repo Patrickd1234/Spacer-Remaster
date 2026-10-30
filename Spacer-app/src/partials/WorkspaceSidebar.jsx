@@ -5,15 +5,16 @@ import { useRole } from "../RoleContext"
 import CreateProjectModal from "./CreateProjectModal"
 import SidebarProfile from "./SidebarProfile"
 import { NavLink, NavButton, NavSection, SubLink, EmptyNote, TeamSpaceGroup } from "./SidebarNav"
-import { fetchDirectProjects, mergeProjects } from "./projectMemberships"
+import { mergeProjects } from "./projectMemberships"
 
 // Sidebar for every role. Super admins see all of the organization's departments
 // under Team Spaces; everyone else sees the departments they belong to.
-// `unreadMessages` / `onOpenMessages` come from SidebarRouter, which owns the chat window.
-export default function WorkspaceSidebar({ userEmail = "", userData = null, onCollapsedChange, unreadMessages = 0, onOpenMessages }) {
+// `unreadMessages` / `isMessagesOpen` / `onOpenMessages` come from SidebarRouter, which owns the chat window.
+export default function WorkspaceSidebar({ userEmail = "", userData = null, onCollapsedChange, unreadMessages = 0, isMessagesOpen = false, onOpenMessages }) {
     const navigate = useNavigate()
-    const { pathname } = useLocation()
-    const { departments, setActiveDepartment, isSuperAdmin } = useRole()
+    const location = useLocation()
+    const { pathname } = location
+    const { departments, setActiveDepartment, isSuperAdmin, activeDepartment, orgDepartmentId } = useRole()
     const [collapsed, setCollapsed] = useState(false)
     const [hovered, setHovered] = useState(false)
     const [projects, setProjects] = useState([])
@@ -27,21 +28,19 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
     const teamKey = teams.map((t) => t.id).join(",")
     const home = isSuperAdmin ? { icon: "domain", label: "Organization" } : { icon: "person", label: "My Space" }
 
-    // Projects from the user's departments, plus projects they were added to directly
+    // Only projects in the user's departments (super admins: every department).
+    // Being added to a project directly doesn't list it without its department.
     useEffect(() => {
         let active = true
         const load = async () => {
-            const user = await getSessionUser()
-            if (!user) return
             const ids = teamKey ? teamKey.split(",") : []
-            const [departmentResult, directProjects] = await Promise.all([
-                ids.length > 0
-                    ? supabase.from("project_spaces").select("id, name, team_space_id").in("team_space_id", ids)
-                    : Promise.resolve({ data: [] }),
-                fetchDirectProjects(user.id),
-            ])
-            if (departmentResult.error) console.error("Loading department projects failed:", departmentResult.error)
-            if (active) setProjects(mergeProjects(departmentResult.data || [], directProjects))
+            if (ids.length === 0) {
+                if (active) setProjects([])
+                return
+            }
+            const { data, error } = await supabase.from("project_spaces").select("id, name, team_space_id").in("team_space_id", ids)
+            if (error) console.error("Loading department projects failed:", error)
+            if (active) setProjects(error ? [] : (data || []))
         }
         load()
         return () => { active = false }
@@ -89,6 +88,12 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
         navigate("/department", { state: { teamSpaceId } })
     }
 
+    // Department pages: a department row is highlighted when it was opened from the sidebar
+    // (route state), otherwise Directory is. The id shown follows the page's own switcher.
+    const isDepartmentPage = pathname === "/department"
+    const openedDepartment = isDepartmentPage && location.state?.teamSpaceId != null
+    const shownDepartmentId = String((isSuperAdmin ? orgDepartmentId : activeDepartment?.team_space_id) ?? location.state?.teamSpaceId ?? "")
+
     const displayName = dbUser?.name || userData?.full_name || localStorage.getItem("userEmail")?.split("@")[0] || userEmail?.split("@")[0] || "User"
     const displayEmail = dbUser?.email || userData?.email || localStorage.getItem("userEmail") || userEmail || ""
 
@@ -123,7 +128,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                     <NavLink to="/" icon={home.icon} label={home.label} isActive={pathname === "/"} isExpanded={isExpanded} />
 
                     <NavSection icon="workspaces" label="General Space" isExpanded={isExpanded}>
-                        <SubLink to="/department" label="Directory" isActive={pathname === "/department"} />
+                        <SubLink to="/department" label="Directory" isActive={isDepartmentPage && !openedDepartment} />
                         <SubLink to="/tasks" label="All Tasks" isActive={pathname === "/tasks"} />
                     </NavSection>
 
@@ -136,6 +141,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                                     name={t.name}
                                     projects={projects.filter((p) => String(p.team_space_id) === String(t.id))}
                                     onOpenDepartment={() => openDepartment(t.id)}
+                                    isActive={openedDepartment && String(t.id) === shownDepartmentId}
                                     activePath={pathname}
                                 />
                             ))}
@@ -164,7 +170,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                             : projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={pathname === `/project_page/${p.id}`} />)}
                     </NavSection>
 
-                    <NavButton icon="chat" label="Messages" onClick={onOpenMessages} isExpanded={isExpanded} badge={unreadMessages} />
+                    <NavButton icon="chat" label="Messages" onClick={onOpenMessages} isActive={isMessagesOpen} isExpanded={isExpanded} badge={unreadMessages} />
                     <NavLink to="/calendar" icon="calendar_today" label="Calendar" isActive={pathname === "/calendar"} isExpanded={isExpanded} />
                     <NavLink to="/reports" icon="bar_chart" label="Reports" isActive={pathname === "/reports"} isExpanded={isExpanded} />
                 </nav>
@@ -179,7 +185,12 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
             {showCreateModal && (
                 <CreateProjectModal
                     onClose={() => setShowCreateModal(false)}
-                    onCreated={(newProject) => setProjects((prev) => mergeProjects(prev, [newProject]))}
+                    onCreated={(newProject) => {
+                        // Only list it if it belongs to one of the user's departments
+                        if (teams.some((t) => String(t.id) === String(newProject?.team_space_id))) {
+                            setProjects((prev) => mergeProjects(prev, [newProject]))
+                        }
+                    }}
                 />
             )}
         </>

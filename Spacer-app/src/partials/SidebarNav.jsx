@@ -6,6 +6,9 @@ import { Link } from "react-router-dom"
 const ACTIVE_ITEM ="bg-primary-accent text-[#0F1115] font-semibold"
 const INACTIVE_ITEM = "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
 const ROW = "rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors w-full text-left"
+// Nested items (Directory, projects, departments): tinted background + accent text
+const SUB_ACTIVE = "bg-primary-accent-dim text-primary-accent font-semibold"
+const SUB_INACTIVE = "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
 
 export function NavLink({ to, icon, label, isActive, isExpanded, badge = 0 }) {
     return (
@@ -17,9 +20,9 @@ export function NavLink({ to, icon, label, isActive, isExpanded, badge = 0 }) {
     )
 }
 
-export function NavButton({ icon, label, onClick, isExpanded, badge = 0 }) {
+export function NavButton({ icon, label, onClick, isActive = false, isExpanded, badge = 0 }) {
     return (
-        <button type="button" onClick={onClick} title={isExpanded ? undefined : label} className={`${ROW} ${INACTIVE_ITEM} relative`}>
+        <button type="button" onClick={onClick} title={isExpanded ? undefined : label} aria-pressed={isActive} className={`${ROW} ${isActive ? ACTIVE_ITEM : INACTIVE_ITEM} relative`}>
             <span className="material-symbols-outlined text-[20px]">{icon}</span>
             {isExpanded && <span className="font-medium text-[14px] flex-1 truncate">{label}</span>}
             {badge > 0 && (isExpanded
@@ -61,7 +64,7 @@ export function NavSection({ icon, label, isExpanded, defaultOpen = false, actio
 
 export function SubLink({ to, label, isActive }) {
     return (
-        <Link to={to} className={`block rounded-md px-3 py-1.5 text-[13px] truncate transition-colors ${isActive ? "text-primary-accent font-semibold" : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"}`}>
+        <Link to={to} aria-current={isActive ? "page" : undefined} className={`block rounded-md px-3 py-1.5 text-[13px] truncate transition-colors ${isActive ? SUB_ACTIVE : SUB_INACTIVE}`}>
             {label}
         </Link>
     )
@@ -72,12 +75,12 @@ export function EmptyNote({ children }) {
 }
 
 // A department row that opens its projects; the name itself opens the department
-export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath }) {
+export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, isActive = false }) {
     const [isOpen, setIsOpen] = useState(false)
     return (
         <div>
-            <div className="flex items-center rounded-md hover:bg-[#2D3139] transition-colors">
-                <button type="button" onClick={onOpenDepartment} className="flex-1 min-w-0 text-left px-3 py-1.5 text-[13px] text-[#8c947b] hover:text-white truncate cursor-pointer">
+            <div className={`flex items-center rounded-md transition-colors ${isActive ? "bg-primary-accent-dim" : "hover:bg-[#2D3139]"}`}>
+                <button type="button" onClick={onOpenDepartment} aria-current={isActive ? "page" : undefined} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-[13px] truncate cursor-pointer ${isActive ? "text-primary-accent font-semibold" : "text-[#8c947b] hover:text-white"}`}>
                     {name}
                 </button>
                 <button type="button" onClick={() => setIsOpen((open) => !open)} aria-label={`${isOpen ? "Hide" : "Show"} ${name} projects`} aria-expanded={isOpen} className="px-1.5 text-[#8c947b] hover:text-white cursor-pointer">
