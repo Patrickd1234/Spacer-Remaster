@@ -70,6 +70,17 @@ export const fetchNotificationActivities = async ({ userId, email, isSuperAdmin,
     return { data: data || [], error }
 }
 
+// Open tasks assigned to the user, for the daily and deadline reminders (taskReminders.js)
+export const fetchOpenAssignedTasks = async (userId) => {
+    if (!userId) return { data: [], error: null }
+    const { data, error } = await supabase
+        .from("tasks")
+        .select("id, title, due_date, status")
+        .eq("assignee_id", userId)
+        .neq("status", "done")
+    return { data: data || [], error }
+}
+
 // ── Read state (per user, per browser) ──────────────────────────────────────
 // Everything up to lastReadAt counts as read ("Mark all read"); ids holds
 // notifications read individually after that.

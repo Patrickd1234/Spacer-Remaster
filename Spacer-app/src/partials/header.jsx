@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { supabase, getSessionUser } from "../supabase";
 import {
     fetchNotificationActivities,
+    fetchOpenAssignedTasks,
     loadReadState,
     isActivityRead,
     markActivityRead,
     markAllActivitiesRead,
 } from "../notifications";
+import { buildTaskReminders } from "../taskReminders";
 import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
 import CreateMenu from "./CreateMenu";
@@ -29,6 +31,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchIndex, setSearchIndex] = useState(-1);
     const [activities, setActivities] = useState([]);
+    const [reminders, setReminders] = useState([]);
     const [notifyUserId, setNotifyUserId] = useState(null);
     const [readState, setReadState] = useState({ lastReadAt: null, ids: [] });
     const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -185,6 +188,8 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     };
 
     const inAppEnabled = preferences?.notifications?.inApp !== false;
+    // Settings → "Task Assignments & Due Dates" also turns the daily/deadline reminders off
+    const remindersEnabled = preferences?.notifications?.taskAssigned !== false;
 
     // Activity scoped to this user: members see what concerns them, admins also
     // see their departments, super admins see everything (see notifications.js).
@@ -201,19 +206,25 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
             if (cancelled) return;
             if (!sessionUser) {
                 setActivities([]);
+                setReminders([]);
                 return;
             }
             setNotificationsLoading(true);
             setNotifyUserId(sessionUser.id);
             setReadState(loadReadState(sessionUser.id));
             try {
-                const { data, error } = await fetchNotificationActivities({
-                    userId: sessionUser.id,
-                    email: sessionUser.email,
-                    isSuperAdmin,
-                    isAdmin,
-                });
+                const [{ data, error }, assigned] = await Promise.all([
+                    fetchNotificationActivities({
+                        userId: sessionUser.id,
+                        email: sessionUser.email,
+                        isSuperAdmin,
+                        isAdmin,
+                    }),
+                    remindersEnabled ? fetchOpenAssignedTasks(sessionUser.id) : Promise.resolve({ data: [], error: null }),
+                ]);
                 if (cancelled) return;
+                if (assigned.error) console.warn("Unable to load task reminders", assigned.error);
+                setReminders(buildTaskReminders(assigned.data));
                 if (error) {
                     console.warn("Unable to load activity notifications", error);
                     return;
@@ -226,20 +237,35 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
         };
         loadNotifications();
         return () => { cancelled = true; };
-    }, [showNotifications, inAppEnabled, roleLoading, isSuperAdmin, isAdmin]);
+    }, [showNotifications, inAppEnabled, remindersEnabled, roleLoading, isSuperAdmin, isAdmin]);
 
-    const notifications = useMemo(() => activities.map((activity) => ({
-        id: activity.id,
-        title: formatActivityTitle(activity),
-        message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
-        time: activity.timeLabel,
-        type: activity.action === "deleted" ? "error" : activity.action === "created" ? "success" : "info",
-        unread: !isActivityRead(readState, activity),
-    })), [activities, readState]);
+    // Today's task reminders sit above the activity feed
+    const notifications = useMemo(() => [
+        ...reminders.map((reminder) => ({
+            id: reminder.id,
+            title: reminder.title,
+            message: reminder.message,
+            time: "Today",
+            type: reminder.kind === "due" ? "deadline" : "reminder",
+            unread: !isActivityRead(readState, reminder),
+        })),
+        ...activities.map((activity) => ({
+            id: activity.id,
+            title: formatActivityTitle(activity),
+            message: activity.new_state?.title || activity.new_state?.project_name || activity.new_state?.description || "Review the latest details in your workspace.",
+            time: activity.timeLabel,
+            type: activity.action === "deleted" ? "error" : activity.action === "created" ? "success" : "info",
+            unread: !isActivityRead(readState, activity),
+        })),
+    ], [reminders, activities, readState]);
 
     const handleMarkAllRead = () => {
         if (!notifyUserId) return;
-        setReadState(markAllActivitiesRead(notifyUserId, activities[0]?.created_at));
+        // Timestamps come in different formats, so compare them as dates
+        const newest = [activities[0]?.created_at, reminders[0]?.created_at]
+            .filter(Boolean)
+            .reduce((a, b) => (!a || new Date(b) > new Date(a) ? b : a), null);
+        setReadState(markAllActivitiesRead(notifyUserId, newest));
     };
 
     const handleNotificationClick = (notificationId) => {
@@ -413,8 +439,8 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                                 aria-label={notification.unread ? `Mark as read: ${notification.title}` : notification.title}
                                                 className={`w-full text-left rounded-lg p-3 border flex gap-2 transition-colors cursor-pointer ${notification.unread ? "bg-[#252a33] border-[#2D3139] hover:border-[#424934]" : "bg-[#1C1F26] border-[#2D3139]/60 opacity-75 hover:opacity-100"}`}
                                             >
-                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : "text-[#8c947b]"}`}>
-                                                    {notification.type === "success" ? "check_circle" : "notifications_active"}
+                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : notification.type === "deadline" ? "text-amber-400" : "text-[#8c947b]"}`}>
+                                                    {notification.type === "success" ? "check_circle" : notification.type === "deadline" ? "schedule" : notification.type === "reminder" ? "assignment" : "notifications_active"}
                                                 </span>
                                                 <div className="flex-1">
                                                     <div className="flex items-start justify-between gap-2">

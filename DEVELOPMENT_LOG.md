@@ -33,3 +33,8 @@ This log tracks development work and code changes made for this project.
 - Settings (`Settings.jsx`): renaming the workspace now catches the case where the database silently skips the update (no error, no rows). It tells the user that only org admins signed in with 2FA can rename.
 - Brand text on the auth/onboarding screens (`ForgotPassword.jsx`, `Launch_Organization.jsx`, `onboarding.jsx`, `AuthBrandPanel.jsx`): dropped the forced uppercase, so it reads "Spacer".
 - Checked: `node --test src/components/groupTasksByDepartment.test.js` passes 5/5. The UI changes were not exercised in a browser in this session.
+- Task reminders in the notification bell (`taskReminders.js`, `notifications.js`, `partials/header.jsx`):
+  - Each day the bell shows one summary of the user's open assigned tasks, plus one reminder per task due today, tomorrow or the day after. They sit above the activity feed with their own icons.
+  - Reminders are built in the browser from the user's open tasks (new `fetchOpenAssignedTasks`), so no database change. Their ids include the date, so they come back unread each day; "Mark all read" covers them.
+  - Turning off Settings → "Task Assignments & Due Dates" also turns the reminders off.
+  - Checked: `node --test src/taskReminders.test.js` passes 6/6, ESLint is clean on the changed files, and `vite build` succeeds. Not exercised in a browser (needs a signed-in account).
