@@ -24,6 +24,20 @@ const AcceptInvite = lazy(() => import('./AcceptInvite'))
 const Welcome = lazy(() => import('./Welcome'))
 const ForgotPassword = lazy(() => import('./ForgotPassword'))
 const ResetPassword = lazy(() => import('./ResetPassword'))
+const SetPassword = lazy(() => import('./SetPassword'))
+
+// Pages that set the password themselves, so the gate below leaves them alone
+const SETS_OWN_PASSWORD = new Set(['/accept-invite', '/reset-password'])
+
+// Accounts without a password (Google sign-ups, unfinished invites) must set
+// one before using the app
+function PasswordGate({ needsPassword, email, onPasswordSet, children }) {
+  const { pathname } = useLocation()
+  if (needsPassword && !SETS_OWN_PASSWORD.has(pathname)) {
+    return <SetPassword email={email} onPasswordSet={onPasswordSet} />
+  }
+  return children
+}
 
 const PageLoader = () => (
   <div className="bg-background text-on-background min-h-screen flex items-center justify-center">
@@ -80,6 +94,25 @@ function App() {
 
   // Which organization the user belongs to (null = none yet -> /welcome)
   const [orgStatus, setOrgStatus] = useState(null) // { userId, orgId }
+  // Whether the account has a password (false = show SetPassword)
+  const [passwordStatus, setPasswordStatus] = useState(null) // { userId, hasPassword }
+
+  const refreshPasswordStatus = useCallback(async () => {
+    const { data: { session: current } } = await supabase.auth.getSession()
+    const currentUserId = current?.user?.id
+    if (!currentUserId) return
+    const { data, error } = await supabase.rpc('has_password')
+    // On failure let them in rather than lock them out; the next load asks again
+    if (error) console.error('Checking for a password failed:', error)
+    setPasswordStatus({ userId: currentUserId, hasPassword: error ? null : data })
+  }, [])
+
+  useEffect(() => {
+    if (!sessionReady || passwordStatus?.userId === userId) return
+    let active = true
+    const timer = setTimeout(() => { if (active) refreshPasswordStatus() }, 0)
+    return () => { active = false; clearTimeout(timer) }
+  }, [sessionReady, userId, passwordStatus?.userId, refreshPasswordStatus])
 
   // Accept any pending invite for this email, then read the user's organization.
   // Returns whether they now belong to one.
@@ -127,12 +160,15 @@ function App() {
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       handleSession(session)
+      // A password was set on /accept-invite or /reset-password: re-check, deferred
+      // because calling Supabase inside this callback can deadlock
+      if (event === 'USER_UPDATED') setTimeout(refreshPasswordStatus, 0)
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [refreshPasswordStatus])
 
   if (loading) return <PageLoader />
 
@@ -148,8 +184,9 @@ function App() {
     }
   }
 
-  // Signed in, organization not known yet
-  if (sessionReady && orgStatus?.userId !== userId) return <PageLoader />
+  // Signed in, organization or password status not known yet
+  if (sessionReady && (orgStatus?.userId !== userId || passwordStatus?.userId !== userId)) return <PageLoader />
+  const needsPassword = sessionReady && passwordStatus?.hasPassword === false
   const hasOrganization = Boolean(session) && Boolean(orgStatus?.orgId)
 
   // Pages that need an organization: no session -> login, no org -> get started
@@ -165,6 +202,11 @@ function App() {
         <Router>
           <PageErrorBoundary>
           <Suspense fallback={<PageLoader />}>
+          <PasswordGate
+            needsPassword={needsPassword}
+            email={session?.user?.email}
+            onPasswordSet={() => setPasswordStatus({ userId, hasPassword: true })}
+          >
           <Routes>
             <Route path="/" element={inOrganization(<Home />)} />
             <Route path="/welcome" element={withoutOrganization(<Welcome onOrganizationChanged={refreshOrganization} />)} />
@@ -186,6 +228,7 @@ function App() {
             <Route path="/tasks" element={inOrganization(<Tasks />)} />
             <Route path="/project_page/:project_id" element={inOrganization(<ProjectPage />)} />
           </Routes>
+          </PasswordGate>
           </Suspense>
           </PageErrorBoundary>
         </Router>

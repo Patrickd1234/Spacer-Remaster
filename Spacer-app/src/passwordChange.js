@@ -1,6 +1,6 @@
 import { callEdgeFunction } from "./edgeFunctions";
 
-export const MIN_PASSWORD_LENGTH = 8;
+export { MIN_PASSWORD_LENGTH } from "./passwordRules";
 
 // Change the password through the change-password edge function, which checks
 // the current password first and signs out the user's other sessions.
