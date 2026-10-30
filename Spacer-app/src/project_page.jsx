@@ -15,6 +15,7 @@ import {
     saveColumnOrder, deleteColumn, fallbackColumn, columnKeyForTask,
 } from "./projectColumns"
 import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./components/BoardColumns"
+import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -31,8 +32,6 @@ const BOARD_NOTICE_MS = 5000
 const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
 // Column dot colour by the status a column stands for
 const STATUS_DOT = { todo: "bg-[#2D3139]", in_progress: "bg-[#3b82f6]", done: "bg-primary-fixed-dim" }
-// Derived from due dates; always last, can't be edited or dropped into
-const OVERDUE_COLUMN = { key: "overdue", name: "Overdue", isOverdue: true }
 
 const MAX_FILE_SIZE_MB = 50
 const MAX_FILE_SIZE    = MAX_FILE_SIZE_MB * 1024 * 1024   // 50 MB in bytes
@@ -596,6 +595,8 @@ function ProjectPage() {
     }
 
     const tasksInColumn = (column) => project_tasks.filter(t => columnKeyForTask(t, boardColumns) === column.key)
+    // What the board shows, overdue split out; the Summary overview counts the same groups
+    const tasksByColumn = groupTasksByColumn(project_tasks, boardColumns)
 
     const confirmDeleteColumn = async () => {
         const column = columnToDelete
@@ -643,7 +644,7 @@ function ProjectPage() {
 
         // Any task can be moved to any column; ticking subtasks still updates its status automatically
         const newStatus = column.base_status
-        const isOverdue = newStatus !== "done" && task.due_date && new Date(task.due_date) < new Date()
+        const isOverdue = isTaskOverdue({ ...task, status: newStatus })
         if (columnKeyForTask(task, boardColumns) === column.key) {
             if (isOverdue) showBoardNotice(`"${task.title}" is already in ${column.name} — it shows under Overdue until it's done or its due date changes.`)
             return
@@ -1082,16 +1083,18 @@ function ProjectPage() {
                                 <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-xl rounded-xl mb-lg">
                                     <h3 className="font-headline-lg text-headline-lg mb-xl text-white">Task Overview</h3>
                                     <div className="space-y-lg max-w-3xl">
-                                        {[
-                                            { label: 'Backlog', count: project_tasks.filter(t => t.status === 'todo').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
-                                            { label: 'Doing', count: project_tasks.filter(t => t.status === 'in_progress').length, color: 'text-white', barColor: 'bg-[#8c947b]' },
-                                            { label: 'Done', count: project_tasks.filter(t => t.status === 'done').length, color: 'text-[var(--primary-color)]', barColor: 'bg-[var(--primary-color)]' },
-                                            { label: 'Overdue', count: project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length, color: 'text-error', barColor: 'bg-error' },
-                                        ].map(stat => {
+                                        {/* Same columns and counts as the Tasks board, custom columns included */}
+                                        {[...boardColumns, OVERDUE_COLUMN].map(column => ({
+                                            key: column.key,
+                                            label: column.name,
+                                            count: (tasksByColumn[column.key] ?? []).length,
+                                            color: column.isOverdue ? 'text-error' : column.base_status === 'done' ? 'text-[var(--primary-color)]' : 'text-white',
+                                            barColor: column.isOverdue ? 'bg-error' : column.base_status === 'done' ? 'bg-[var(--primary-color)]' : 'bg-[#8c947b]',
+                                        })).map(stat => {
                                             const total = Math.max(1, project_tasks.length);
                                             const percent = (stat.count / total) * 100;
                                             return (
-                                                <div key={stat.label} className="flex items-center gap-6">
+                                                <div key={stat.key} className="flex items-center gap-6">
                                                     <span className={`w-28 text-right font-headline-sm tracking-wide ${stat.color}`}>{stat.label}</span>
                                                     <div className="flex-1 h-3.5 bg-[#2D3139] rounded-full overflow-hidden">
                                                         <div className={`h-full ${stat.barColor} rounded-full transition-all duration-1000`} style={{ width: `${percent}%` }}></div>
@@ -1509,12 +1512,7 @@ function ProjectPage() {
                             )}
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[...boardColumns, OVERDUE_COLUMN].map((column, columnIndex) => {
-                                    const columnTasks = project_tasks.filter(t => {
-                                        const isOverdueTask = t.status !== "done" && t.due_date && new Date(t.due_date) < new Date();
-                                        if (column.isOverdue) return isOverdueTask;
-                                        if (isOverdueTask) return false;
-                                        return columnKeyForTask(t, boardColumns) === column.key;
-                                    });
+                                    const columnTasks = tasksByColumn[column.key] ?? [];
                                     // "Overdue" is derived from the due date, not a column you can drop into
                                     const acceptsDrop = !column.isOverdue;
                                     const isDropTarget = acceptsDrop && (draggingColumnKey ? columnDropKey === column.key : dragOverColumn === column.key);
@@ -2199,7 +2197,7 @@ function ProjectPage() {
                                 <h1 className="font-headline-lg text-white font-bold mb-md leading-tight">{selectedTask.title}</h1>
                                 <div className="flex flex-wrap gap-sm">
                                     {(() => {
-                                        const isOverdue = selectedTask.status !== 'done' && selectedTask.due_date && new Date(selectedTask.due_date) < new Date();
+                                        const isOverdue = isTaskOverdue(selectedTask);
                                         const displayStatus = isOverdue ? 'overdue' : selectedTask.status;
                                         return (
                                             <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-[#1C1F26] border border-[#2D3139]/50 text-[#8c947b]'

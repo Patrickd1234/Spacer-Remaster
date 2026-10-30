@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
+import NewPasswordForm from "./components/NewPasswordForm"
 
 // Lands here when someone clicks the "invite" link Supabase emails them
 // (see supabase/functions/invite-department-member). Their auth account,
@@ -11,11 +12,6 @@ function AcceptInvite() {
     const navigate = useNavigate()
     const [status, setStatus] = useState("checking") // checking | ready | invalid | success
     const [email, setEmail] = useState("")
-    const [password, setPassword] = useState("")
-    const [confirmPassword, setConfirmPassword] = useState("")
-    const [showPassword, setShowPassword] = useState(false)
-    const [errorMsg, setErrorMsg] = useState("")
-    const [submitting, setSubmitting] = useState(false)
 
     useEffect(() => {
         // supabase-js parses the invite link's tokens out of the URL hash
@@ -41,31 +37,9 @@ function AcceptInvite() {
         return () => subscription.unsubscribe()
     }, [])
 
-    const handleSetPassword = async (e) => {
-        e.preventDefault()
-        setErrorMsg("")
-
-        if (password.length < 8) {
-            setErrorMsg("Password must be at least 8 characters.")
-            return
-        }
-        if (password !== confirmPassword) {
-            setErrorMsg("Passwords don't match.")
-            return
-        }
-
-        setSubmitting(true)
-        try {
-            const { error } = await supabase.auth.updateUser({ password })
-            if (error) throw error
-            setStatus("success")
-            setTimeout(() => navigate("/"), 1200)
-        } catch (err) {
-            console.error("Set password error:", err)
-            setErrorMsg(err.message || "Something went wrong setting your password.")
-        } finally {
-            setSubmitting(false)
-        }
+    const handlePasswordSet = () => {
+        setStatus("success")
+        setTimeout(() => navigate("/"), 1200)
     }
 
     return (
@@ -104,58 +78,7 @@ function AcceptInvite() {
                             <span className="text-white font-medium"> {email}</span> to finish signing in.
                         </p>
 
-                        <form onSubmit={handleSetPassword} className="space-y-4">
-                            <div className="relative">
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Create a password"
-                                    className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
-                                >
-                                    <span className="material-symbols-outlined text-[20px]">
-                                        {showPassword ? "visibility_off" : "visibility"}
-                                    </span>
-                                </button>
-                            </div>
-
-                            <input
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Confirm password"
-                                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                required
-                            />
-
-                            {errorMsg && (
-                                <p className="text-red-400 text-xs flex items-center gap-1.5">
-                                    <span className="material-symbols-outlined text-[14px]">error</span>
-                                    {errorMsg}
-                                </p>
-                            )}
-
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                            >
-                                {submitting ? (
-                                    <>
-                                        <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
-                                        Setting password…
-                                    </>
-                                ) : (
-                                    "Set password & continue"
-                                )}
-                            </button>
-                        </form>
+                        <NewPasswordForm submitLabel="Set password & continue" onSuccess={handlePasswordSet} />
                     </>
                 )}
 

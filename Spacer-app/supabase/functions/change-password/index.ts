@@ -54,8 +54,14 @@ Deno.serve(async (req) => {
   if (newPassword.length > MAX_PASSWORD_LENGTH) return badRequest(`New password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
   if (newPassword === currentPassword) return badRequest("New password must be different from the current one.");
 
-  const hasPasswordLogin = (user.identities ?? []).some((i) => i.provider === "email");
-  if (!user.email || !hasPasswordLogin) {
+  // Not user.identities: a Google account that set a password later still has
+  // only a 'google' identity. has_password() reads auth.users directly.
+  const { data: hasPassword, error: hasPasswordErr } = await caller.rpc("has_password");
+  if (hasPasswordErr) {
+    console.error("has_password failed:", hasPasswordErr);
+    return jsonResponse({ error: "Could not check your account. Please try again." }, 500);
+  }
+  if (!user.email || !hasPassword) {
     return badRequest("Your account signs in with Google, so it has no password to change.");
   }
 

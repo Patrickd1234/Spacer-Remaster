@@ -1,22 +1,91 @@
-import { useState, useEffect } from "react"
-import Sidebar from "./partials/SidebarRouter"
-import Header from "./partials/header"
-import CreateTaskModal from "./partials/CreateTaskModal"
+import { useState, useEffect, useMemo } from "react"
 import { supabase, getSessionUser } from "./supabase"
 import { statusFromSubtasks } from "./taskStatus"
+import { useRole } from "./RoleContext"
+import { createEvent } from "./general/generalData"
+import {
+    dayKey, startOfDay, weekDays, eventsByDay, upcomingEvents, shiftCursor, agendaItems,
+} from "./general/generalFormat"
+import { GeneralShell, PageHeading, PrimaryButton, DateBadge } from "./general/GeneralParts"
+import { MonthView, WeekView, AgendaView, MiniMonth, EventChip, EventListItem, EventDetail, EventForm, CalendarToolbar } from "./general/CalendarParts"
+import { Panel } from "./components/DashboardParts"
+import { DayScheduleDrawer, TaskDetailsDrawer } from "./components/CalendarTaskDrawers"
 
+const UPCOMING_DAYS = 30
+const UPCOMING_LIMIT = 6
+
+// A task due on a day, shaped like an all-day calendar item so the shared views can place it
+const taskItem = (task) => ({
+    id: `task-${task.id}`,
+    kind: "task",
+    title: task.title,
+    description: task.description,
+    event_date: task.due_date.slice(0, 10),
+    starts_at: null,
+    task,
+})
+
+function TaskChip({ task, onOpen }) {
+    const isDone = task.status === "done"
+    return (
+        <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onOpen(task) }}
+            title={`Task: ${task.title}`}
+            className={`w-full text-left px-1.5 py-1 rounded-md border text-[11px] leading-tight truncate cursor-pointer flex items-center gap-1 ${isDone ? "bg-green-500/10 text-green-400 border-green-500/30 line-through" : "bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30"}`}
+        >
+            <span className="material-symbols-outlined text-[12px] shrink-0">{isDone ? "task_alt" : "radio_button_unchecked"}</span>
+            <span className="truncate">{task.title}</span>
+        </button>
+    )
+}
+
+function TaskRow({ item, onOpen }) {
+    return (
+        <button type="button" onClick={() => onOpen(item.task)} className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-[#191c21] cursor-pointer">
+            <DateBadge event={item} />
+            <div className="min-w-0 flex-1">
+                <p className={`text-sm font-medium truncate ${item.task.status === "done" ? "text-[#8c947b] line-through" : "text-white"}`}>{item.title}</p>
+                <p className="text-[11px] text-[#8c947b]">Task due</p>
+            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-medium bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30">Task</span>
+        </button>
+    )
+}
+
+function Legend() {
+    return (
+        <Panel title="Legend">
+            <p className="flex items-center gap-2 text-xs text-[#c4c9b8]"><span className="w-3 h-3 rounded-sm bg-[#aff82a]/30 border border-[#aff82a]/50" />Your tasks (by due date)</p>
+            <p className="flex items-center gap-2 text-xs text-[#c4c9b8]"><span className="w-3 h-3 rounded-sm bg-blue-500/30 border border-blue-500/50" />Company events (coloured by category)</p>
+        </Panel>
+    )
+}
+
+// Only the columns that existed before the General Space migration, so this
+// page keeps working whether or not that migration has been applied
+async function fetchCalendarProfile() {
+    const user = await getSessionUser()
+    if (!user?.id) return null
+    const { data, error } = await supabase.from("users").select("id, organization_id").eq("id", user.id).maybeSingle()
+    if (error) console.error("Error fetching user", error)
+    return data
+}
+
+// Personal calendar: the tasks assigned to you, plus your organization's events
 export default function CalendarView() {
-    const [userData, setUserData] = useState(null)
-    const [calendarMonth, setCalendarMonth] = useState(new Date())
+    const { isSuperAdmin: canManage } = useRole()
+    const [profile, setProfile] = useState(null)
+    const [view, setView] = useState("month")
+    const [cursor, setCursor] = useState(() => startOfDay(new Date()))
+    const [miniCursor, setMiniCursor] = useState(() => startOfDay(new Date()))
     const [tasks, setTasks] = useState([])
     const [events, setEvents] = useState([])
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const [selectedDateEvents, setSelectedDateEvents] = useState(null)
+    const [selectedDate, setSelectedDate] = useState(null)
     const [selectedTask, setSelectedTask] = useState(null)
-    const [orgUsers, setOrgUsers] = useState([])
-    const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
-    const [creatingInSidebar, setCreatingInSidebar] = useState(null)
-    const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
+    const [openEvent, setOpenEvent] = useState(null)
+    const [newEventDate, setNewEventDate] = useState(null)
+    const todayKey = dayKey(new Date())
 
     const updateTaskSubtasks = async (taskId, newSubtasks) => {
         const task = tasks.find(t => String(t.id) === String(taskId))
@@ -112,508 +181,121 @@ export default function CalendarView() {
     }
 
     useEffect(() => {
-        const fetchUserAndData = async () => {
-            const email = localStorage.getItem("userEmail")
-            if (!email) return
+        let active = true
+        fetchCalendarProfile().then((data) => { if (active) setProfile(data) })
+        return () => { active = false }
+    }, [])
 
-            const { data: user, error: userError } = await supabase
-                .from("users")
-                .select("*")
-                .eq("email", email)
-                .maybeSingle()
-            
-            if (userError || !user) {
-                console.error("Error fetching user", userError)
-                return
-            }
-            setUserData(user)
-
+    useEffect(() => {
+        if (!profile?.id) return
+        let active = true
+        const fetchData = async () => {
             const { data: userTasks, error: tasksError } = await supabase
                 .from("tasks")
                 .select("*")
-                .eq("assignee_id", user.id)
+                .eq("assignee_id", profile.id)
                 .not("due_date", "is", null)
-            
-            if (tasksError) {
-                console.error("Error fetching tasks", tasksError)
-            } else {
-                // Show statuses as stored; they're only derived when subtasks are edited
-                setTasks(userTasks || [])
-            }
+            if (tasksError) console.error("Error fetching tasks", tasksError)
+            // Show statuses as stored; they're only derived when subtasks are edited
+            else if (active) setTasks(userTasks || [])
 
-            if (user.organization_id) {
-                const { data: orgEvents, error: eventsError } = await supabase
-                    .from("calendar_events")
-                    .select("*")
-                    .eq("organization_id", user.organization_id)
-                
-                if (eventsError) {
-                    console.error("Error fetching events", eventsError)
-                } else {
-                    setEvents(orgEvents || [])
-                }
-
-                const { data: users, error: usersError } = await supabase
-                    .from("users")
-                    .select("*")
-                    .eq("organization_id", user.organization_id)
-                if (!usersError) setOrgUsers(users || [])
-            }
+            if (!profile.organization_id) return
+            const { data: orgEvents, error: eventsError } = await supabase
+                .from("calendar_events")
+                .select("*")
+                .eq("organization_id", profile.organization_id)
+            if (eventsError) console.error("Error fetching events", eventsError)
+            else if (active) setEvents(orgEvents || [])
         }
-        
-        fetchUserAndData()
-    }, [])
+        fetchData()
+        return () => { active = false }
+    }, [profile?.id, profile?.organization_id])
 
-    const startOfCurrentMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1)
-    const endOfCurrentMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0)
-    const startDayOfWeek = startOfCurrentMonth.getDay()
-    const daysInMonth = endOfCurrentMonth.getDate()
+    const items = useMemo(() => [...events, ...tasks.map(taskItem)], [events, tasks])
+    const byDay = useMemo(() => eventsByDay(items), [items])
+    const upcoming = useMemo(
+        () => upcomingEvents(items.filter((i) => i.kind !== "task" || i.task.status !== "done"), new Date(), UPCOMING_DAYS, UPCOMING_LIMIT),
+        [items],
+    )
 
-    const calendarDays = []
-    for (let i = 0; i < startDayOfWeek; i++) {
-        calendarDays.push(null)
-    }
-    for (let i = 1; i <= daysInMonth; i++) {
-        calendarDays.push(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i))
-    }
-
-    const formatYMD = (date) => {
-        if (!date) return ""
-        const y = date.getFullYear()
-        const m = String(date.getMonth() + 1).padStart(2, '0')
-        const d = String(date.getDate()).padStart(2, '0')
-        return `${y}-${m}-${d}`
+    const goTo = (day) => {
+        setCursor(startOfDay(day))
+        setMiniCursor(startOfDay(day))
     }
 
-    const handlePrevMonth = () => {
-        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))
-    }
+    const renderChip = (item) => item.kind === "task"
+        ? <TaskChip key={item.id} task={item.task} onOpen={setSelectedTask} />
+        : <EventChip key={item.id} event={item} onOpen={setOpenEvent} />
+    const renderRow = (item) => item.kind === "task"
+        ? <TaskRow key={item.id} item={item} onOpen={setSelectedTask} />
+        : <EventListItem key={item.id} event={item} onOpen={setOpenEvent} />
 
-    const handleNextMonth = () => {
-        setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))
+    const handleCreateEvent = async (form) => {
+        const { data, error } = await createEvent(profile, form)
+        if (error) return error
+        setEvents((prev) => [...prev, data])
+        setNewEventDate(null)
+        return null
     }
 
     return (
-        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
-            <Sidebar onCollapsedChange={setSidebarCollapsed} />
-            <Header />
-            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col pt-16 transition-all duration-300 ease-out p-8 h-[calc(100vh-64px)] overflow-hidden`}>
-                <div className="flex items-center justify-between mb-6 shrink-0">
-                    <div>
-                        <h1 className="text-2xl font-bold text-white">Global Calendar</h1>
-                        <p className="text-[#8c947b] text-sm mt-1">View assigned tasks and scheduled company events.</p>
-                    </div>
-                </div>
+        <GeneralShell page="Calendar" section={null} icon="calendar_today">
+            <PageHeading
+                title="Global Calendar"
+                subtitle="View assigned tasks and scheduled company events."
+                actions={<PrimaryButton icon="add" onClick={() => setSelectedDate(cursor)}>Add to {cursor.toLocaleDateString([], { day: "numeric", month: "short" })}</PrimaryButton>}
+            />
 
-                <div className="flex-1 flex flex-col min-h-0 bg-[#191c21] border border-[#2D3139] rounded-xl p-6">
-                    {/* Calendar Header */}
-                    <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] shrink-0">
-                        <h3 className="text-lg font-bold text-white capitalize">
-                            {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                        </h3>
-                        <div className="flex items-center gap-2">
-                            <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
-                                <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                            </button>
-                            <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
-                                <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                            </button>
-                        </div>
-                    </div>
+            <div className="grid grid-cols-12 gap-4 items-start">
+                <section className="col-span-12 xl:col-span-9 space-y-3">
+                    <CalendarToolbar view={view} cursor={cursor} onViewChange={setView} onToday={() => goTo(new Date())} onShift={(n) => setCursor((c) => shiftCursor(view, c, n))} />
+                    {view === "month" && <MonthView cursor={cursor} byDay={byDay} todayKey={todayKey} onPickDay={setSelectedDate} renderItem={renderChip} />}
+                    {view === "week" && <WeekView days={weekDays(cursor)} byDay={byDay} todayKey={todayKey} renderItem={renderChip} />}
+                    {view === "agenda" && <AgendaView events={agendaItems(items, cursor)} renderItem={renderRow} />}
+                </section>
 
-                    {/* Calendar Grid */}
-                    <div className="flex-1 overflow-y-auto min-h-0 mt-4">
-                        <div className="grid grid-cols-7 gap-px bg-[#2D3139] overflow-hidden rounded-lg border border-[#2D3139]">
-                            {/* Day Names */}
-                            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                                <div key={day} className="bg-[#181a20] p-3 text-center text-xs font-bold text-[#8c947b] uppercase tracking-wider">
-                                    {day}
-                                </div>
-                            ))}
-                            {/* Day Cells */}
-                            {calendarDays.map((date, idx) => {
-                                const dateString = formatYMD(date);
-                                const dayTasks = date ? tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString) : [];
-                                const dayEvents = date ? events.filter(e => e.event_date && e.event_date.substring(0, 10) === dateString) : [];
-                                const isToday = dateString === formatYMD(new Date());
-                                
-                                return (
-                                    <div 
-                                        key={idx} 
-                                        onClick={() => date && setSelectedDateEvents(date)}
-                                        className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-[#191c21] hover:bg-[#1C1F26]' : 'bg-[#111318]'}`}
-                                    >
-                                        {date && (
-                                            <>
-                                                <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
-                                                    {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>}
-                                                    {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[#aff82a]"></span>}
-                                                    <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
-                                                        {date.getDate()}
-                                                    </span>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    {dayEvents.map(event => (
-                                                        <div 
-                                                            key={`evt-${event.id}`} 
-                                                            className="px-2 py-1 text-[10px] font-medium rounded truncate bg-purple-500/10 text-purple-400 border border-purple-500/30"
-                                                        >
-                                                            {event.title}
-                                                        </div>
-                                                    ))}
-                                                    {dayTasks.map(task => (
-                                                        <div 
-                                                            key={`tsk-${task.id}`} 
-                                                            className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${
-                                                                task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                                                                'bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30'
-                                                            }`}
-                                                        >
-                                                            {task.title}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
+                <aside className="col-span-12 xl:col-span-3 space-y-4">
+                    <section className="bg-[#14161b] border border-[#2D3139] rounded-xl p-4">
+                        <MiniMonth
+                            cursor={miniCursor}
+                            todayKey={todayKey}
+                            onPick={goTo}
+                            onShift={(n) => setMiniCursor((c) => new Date(c.getFullYear(), c.getMonth() + n, 1))}
+                        />
+                    </section>
+                    <Panel title="Coming Up">
+                        {upcoming.length === 0
+                            ? <p className="text-xs text-[#8c947b]">Nothing in the next {UPCOMING_DAYS} days.</p>
+                            : upcoming.map(renderRow)}
+                    </Panel>
+                    <Legend />
+                </aside>
+            </div>
 
-                {/* Date Schedule Side Drawer */}
-                {selectedDateEvents && (
-                    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-                        <div className="w-full max-w-lg bg-[#191c21] border-l border-[#2D3139] shadow-2xl h-full flex flex-col text-white">
-                            <div className="flex items-center justify-between p-6 border-b border-[#2D3139] bg-[#181a20] shrink-0">
-                                <div>
-                                    <h2 className="text-lg font-bold text-white">
-                                        Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
-                                    </h2>
-                                    <p className="text-xs text-[#8c947b] mt-0.5">Tasks and events scheduled for this day</p>
-                                </div>
-                                <div className="flex items-center gap-2 relative">
-                                    <button 
-                                        className="text-[#8c947b] hover:text-white bg-[#1e2025] hover:bg-[#2D3139] w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]" 
-                                        onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
-                                        title="Add Item"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">add</span>
-                                    </button>
-                                    {sidebarActionMenuOpen && (
-                                        <>
-                                            <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                            <div className="absolute right-0 top-full mt-1 w-44 bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl z-50 overflow-hidden">
-                                                <button 
-                                                    className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
-                                                    onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px] text-[#aff82a]">task</span> Add Task
-                                                </button>
-                                                <button 
-                                                    className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
-                                                    onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
-                                                >
-                                                    <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Add Event
-                                                </button>
-                                            </div>
-                                        </>
-                                    )}
-                                    <button className="text-[#8c947b] hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#2D3139] transition-colors cursor-pointer" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
-                                        <span className="material-symbols-outlined text-[20px]">close</span>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="p-6 overflow-y-auto flex-1 space-y-4">
-                                {creatingInSidebar === 'task' ? (
-                                    <div className="h-full flex flex-col">
-                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-[#8c947b] hover:text-white flex items-center gap-1 cursor-pointer w-fit">
-                                            <span className="material-symbols-outlined text-[14px]">arrow_back</span> Back to day schedule
-                                        </button>
-                                        <CreateTaskModal
-                                            organizationId={userData?.organization_id}
-                                            initialStatus="todo"
-                                            initialDate={selectedDateEvents ? `${selectedDateEvents.getFullYear()}-${String(selectedDateEvents.getMonth()+1).padStart(2,'0')}-${String(selectedDateEvents.getDate()).padStart(2,'0')}T09:00` : ""}
-                                            isInline={true}
-                                            onClose={() => setCreatingInSidebar(null)}
-                                            onCreated={(newTask) => {
-                                                setTasks(prev => [newTask, ...prev])
-                                                setCreatingInSidebar(null)
-                                            }}
-                                        />
-                                    </div>
-                                ) : creatingInSidebar === 'meeting' ? (
-                                    <div className="h-full flex flex-col">
-                                        <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-xs font-medium text-[#8c947b] hover:text-white flex items-center gap-1 cursor-pointer w-fit">
-                                            <span className="material-symbols-outlined text-[14px]">arrow_back</span> Back to day schedule
-                                        </button>
-                                        <div className="flex-1 flex items-center justify-center bg-[#1C1F26] rounded-xl border border-[#2D3139] border-dashed p-6 text-center">
-                                            <p className="text-[#8c947b] text-xs">Event creation added for this date.</p>
-                                        </div>
-                                    </div>
-                                ) : (() => {
-                                    const dateString = formatYMD(selectedDateEvents);
-                                    const dayTasks = tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString);
-                                    const dayEvents = events.filter(e => e.event_date && e.event_date.substring(0, 10) === dateString);
-                                    
-                                    const combined = [
-                                        ...dayEvents.map(e => ({ ...e, isEvent: true, sortTime: new Date(e.event_date).getTime(), originalDateStr: e.event_date })),
-                                        ...dayTasks.map(t => ({ ...t, isTask: true, sortTime: new Date(t.due_date).getTime(), originalDateStr: t.due_date }))
-                                    ].sort((a, b) => a.sortTime - b.sortTime);
-
-                                    if (combined.length === 0) {
-                                        return (
-                                            <div className="flex flex-col items-center justify-center py-12 text-center text-[#8c947b] space-y-2">
-                                                <span className="material-symbols-outlined text-4xl">calendar_today</span>
-                                                <p className="text-sm font-medium text-white">Nothing scheduled for this day</p>
-                                                <p className="text-xs">Click the "+" button above to add a task or meeting.</p>
-                                            </div>
-                                        );
-                                    }
-
-                                    return combined.map(item => (
-                                        <div 
-                                            key={(item.isEvent ? 'evt-' : 'tsk-') + item.id} 
-                                            onClick={() => {
-                                                if (!item.isEvent) {
-                                                    setSelectedTask(item);
-                                                }
-                                            }}
-                                            className={`bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139] flex flex-col gap-2 ${!item.isEvent ? 'cursor-pointer hover:border-[#424934] transition-all' : ''}`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${
-                                                    item.isEvent ? 'bg-purple-500/20 text-purple-400' : 'bg-[#aff82a]/20 text-[#aff82a]'
-                                                }`}>
-                                                    <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
-                                                    {item.isEvent ? 'Event' : 'Task'}
-                                                </span>
-                                                <span className="text-xs text-[#8c947b] font-medium">
-                                                    {(item.originalDateStr && (item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))) 
-                                                        ? new Date(item.sortTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                                        : 'All Day'}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-sm font-bold text-white mt-1">{item.title}</h3>
-                                            {item.description && <p className="text-xs text-[#8c947b] line-clamp-2">{item.description}</p>}
-                                            {item.isTask && (() => {
-                                                let subtasksList = [];
-                                                if (item.sub_tasks) {
-                                                    if (Array.isArray(item.sub_tasks)) {
-                                                        subtasksList = item.sub_tasks;
-                                                    } else if (typeof item.sub_tasks === "string") {
-                                                        const trimmed = item.sub_tasks.trim();
-                                                        if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                                            try {
-                                                                const parsed = JSON.parse(trimmed);
-                                                                if (Array.isArray(parsed)) {
-                                                                    subtasksList = parsed;
-                                                                } else {
-                                                                    console.warn("Malformed sub_tasks (expected array) for task", item.id, parsed);
-                                                                    subtasksList = [];
-                                                                }
-                                                            } catch (e) {
-                                                                console.warn("Malformed sub_tasks for task", item.id, e);
-                                                                subtasksList = [];
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                if (subtasksList.length === 0) return null;
-
-                                                const completedCount = subtasksList.filter(st => st.done).length;
-                                                const totalCount = subtasksList.length;
-                                                const percent = (completedCount / totalCount) * 100;
-
-                                                return (
-                                                    <div className="mt-2">
-                                                        <div className="flex items-center justify-between text-[10px] text-[#8c947b] mb-1 font-medium">
-                                                            <span className="flex items-center gap-1">
-                                                                <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
-                                                                Sub-tasks
-                                                            </span>
-                                                            <span>{completedCount}/{totalCount}</span>
-                                                        </div>
-                                                        <div className="w-full bg-[#16181e] rounded-full h-1 overflow-hidden">
-                                                            <div 
-                                                                className="bg-[#aff82a] h-full transition-all duration-300"
-                                                                style={{ width: `${percent}%` }}
-                                                            ></div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                    ));
-                                })()}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Task details drawer */}
-                {selectedTask && (
-                    <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
-                        <div className="w-full max-w-md bg-[#191c21] border-l border-[#2D3139] p-6 flex flex-col justify-between h-full text-white">
-                            <div>
-                                <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] mb-6">
-                                    <h3 className="font-bold text-lg text-white">Task Details</h3>
-                                    <button onClick={() => setSelectedTask(null)} className="text-[#8c947b] hover:text-white">
-                                        <span className="material-symbols-outlined">close</span>
-                                    </button>
-                                </div>
-                                <h2 className="text-xl font-bold text-white mb-2">{selectedTask.title}</h2>
-                                <p className="text-sm text-[#8c947b] mb-4">{selectedTask.description || "No description provided."}</p>
-
-                                <div className="mb-6 space-y-3">
-                                    <h4 className="text-xs font-semibold text-[#8c947b] uppercase tracking-wider flex items-center gap-1">
-                                        <span className="material-symbols-outlined text-[14px]">format_list_bulleted</span>
-                                        Sub-tasks
-                                    </h4>
-                                    
-                                    <div className="bg-[#181a20] p-4 rounded-xl border border-[#2D3139] space-y-2">
-                                        {(() => {
-                                            let subtasksList = [];
-                                            if (selectedTask.sub_tasks) {
-                                                if (Array.isArray(selectedTask.sub_tasks)) {
-                                                    subtasksList = selectedTask.sub_tasks;
-                                                } else if (typeof selectedTask.sub_tasks === "string") {
-                                                    const trimmed = selectedTask.sub_tasks.trim();
-                                                    if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                                        try {
-                                                            const parsed = JSON.parse(trimmed);
-                                                            if (Array.isArray(parsed)) {
-                                                                subtasksList = parsed;
-                                                            } else {
-                                                                console.warn("Malformed sub_tasks (expected array) for task", selectedTask.id, parsed);
-                                                                subtasksList = [];
-                                                            }
-                                                        } catch (e) {
-                                                            console.warn("Malformed sub_tasks for task", selectedTask.id, e);
-                                                            subtasksList = [];
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            const handleToggleSubtask = (stId) => {
-                                                const updated = subtasksList.map(st => 
-                                                    st.id === stId ? { ...st, done: !st.done } : st
-                                                );
-                                                updateTaskSubtasks(selectedTask.id, updated);
-                                            };
-
-                                            const handleDeleteSubtask = (stId) => {
-                                                const updated = subtasksList.filter(st => st.id !== stId);
-                                                updateTaskSubtasks(selectedTask.id, updated);
-                                            };
-
-                                            const handleAddSubtask = (e) => {
-                                                e.preventDefault();
-                                                if (!newSubtaskTitle.trim()) return;
-                                                const newSub = {
-                                                    id: Math.random().toString(36).substring(2, 9),
-                                                    title: newSubtaskTitle.trim(),
-                                                    done: false
-                                                };
-                                                updateTaskSubtasks(selectedTask.id, [...subtasksList, newSub]);
-                                                setNewSubtaskTitle("");
-                                            };
-
-                                            return (
-                                                <>
-                                                    {subtasksList.length === 0 ? (
-                                                        <p className="text-[11px] text-[#8c947b] italic">No sub-tasks added yet.</p>
-                                                    ) : (
-                                                        <div className="space-y-1">
-                                                            {subtasksList.map(st => (
-                                                                <div key={st.id} className="flex items-center justify-between group py-0.5">
-                                                                    <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-white flex-1">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleToggleSubtask(st.id)}
-                                                                            className={`check-btn ${!st.done ? '!bg-[#111318] !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} !p-0 !w-3.5 !h-3.5 !rounded flex items-center justify-center shrink-0`}
-                                                                            title={st.done ? "Mark as incomplete" : "Mark as done"}
-                                                                        >
-                                                                            <svg className={`check-icon transition-opacity ${!st.done ? 'opacity-0' : 'opacity-100'} !w-2.5 !h-2.5`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                                            </svg>
-                                                                        </button>
-                                                                        <span className={st.done ? 'line-through text-[#8c947b]' : ''}>
-                                                                            {st.title}
-                                                                        </span>
-                                                                    </label>
-                                                                    <button
-                                                                        onClick={() => handleDeleteSubtask(st.id)}
-                                                                        className="opacity-0 group-hover:opacity-100 text-[#8c947b] hover:text-red-400 w-5 h-5 rounded flex items-center justify-center transition-all cursor-pointer"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[14px]">delete</span>
-                                                                    </button>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                    
-                                                    <form onSubmit={handleAddSubtask} className="flex gap-2 pt-2 border-t border-[#2D3139] mt-2">
-                                                        <input
-                                                            type="text"
-                                                            placeholder="Add sub-task..."
-                                                            value={newSubtaskTitle}
-                                                            onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                                                            className="flex-1 bg-[#111318] border border-[#2D3139] rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#aff82a] transition-all placeholder-[#8c947b]"
-                                                        />
-                                                        <button
-                                                            type="submit"
-                                                            className="px-3 bg-[#5b644d] text-white rounded-lg text-[11px] font-semibold hover:bg-[#6c765c] transition-all cursor-pointer flex items-center justify-center gap-1"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[14px]">add</span>
-                                                            Add
-                                                        </button>
-                                                    </form>
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4 text-xs">
-                                    <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
-                                        <span className="text-[#8c947b]">Status</span>
-                                        <select
-                                            value={selectedTask.status || "todo"}
-                                            onChange={(e) => updateTaskStatus(selectedTask.id, e.target.value)}
-                                            className="bg-[#181a20] border border-[#2D3139] text-white font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
-                                        >
-                                            <option value="todo" className="bg-[#191c21]">Backlog / To Do</option>
-                                            <option value="in_progress" className="bg-[#191c21]">Doing / In Progress</option>
-                                            <option value="done" className="bg-[#191c21]">Done</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
-                                        <span className="text-[#8c947b]">Priority</span>
-                                        <select
-                                            value={selectedTask.priority || "medium"}
-                                            onChange={(e) => updateTaskPriority(selectedTask.id, e.target.value)}
-                                            className="bg-[#181a20] border border-[#2D3139] text-[#aff82a] font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
-                                        >
-                                            <option value="low" className="bg-[#191c21] text-white">Low</option>
-                                            <option value="medium" className="bg-[#191c21] text-white">Medium</option>
-                                            <option value="high" className="bg-[#191c21] text-amber-400">High</option>
-                                            <option value="urgent" className="bg-[#191c21] text-red-400">Urgent</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-[#2D3139]">
-                                        <span className="text-[#8c947b]">Due Date</span>
-                                        <span className="font-semibold text-white">{selectedTask.due_date ? new Date(selectedTask.due_date).toLocaleDateString() : "—"}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </main>
-        </div>
+            {selectedDate && (
+                <DayScheduleDrawer
+                    date={selectedDate}
+                    items={byDay.get(dayKey(selectedDate)) || []}
+                    organizationId={profile?.organization_id}
+                    canAddEvent={canManage && Boolean(profile)}
+                    onAddEvent={() => setNewEventDate(selectedDate)}
+                    onTaskCreated={(task) => setTasks((prev) => [task, ...prev])}
+                    onOpenTask={setSelectedTask}
+                    onOpenEvent={setOpenEvent}
+                    onClose={() => setSelectedDate(null)}
+                />
+            )}
+            {selectedTask && (
+                <TaskDetailsDrawer
+                    task={selectedTask}
+                    onClose={() => setSelectedTask(null)}
+                    onSubtasksChange={updateTaskSubtasks}
+                    onStatusChange={updateTaskStatus}
+                    onPriorityChange={updateTaskPriority}
+                />
+            )}
+            {openEvent && <EventDetail event={openEvent} canEdit={false} onClose={() => setOpenEvent(null)} />}
+            {newEventDate && <EventForm event={null} defaultDate={newEventDate} onSubmit={handleCreateEvent} onClose={() => setNewEventDate(null)} />}
+        </GeneralShell>
     )
 }
