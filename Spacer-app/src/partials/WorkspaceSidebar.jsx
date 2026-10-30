@@ -127,8 +127,11 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                 <nav className="flex-1 overflow-y-auto px-3 space-y-1 scrollbar-thin">
                     <NavLink to="/" icon={home.icon} label={home.label} isActive={pathname === "/"} isExpanded={isExpanded} />
 
-                    <NavSection icon="workspaces" label="General Space" isExpanded={isExpanded}>
-                        <SubLink to="/department" label="Directory" isActive={isDepartmentPage && !openedDepartment} />
+                    <NavSection icon="workspaces" label="General Space" isExpanded={isExpanded} defaultOpen={pathname.startsWith("/general")}>
+                        <SubLink to="/general" label="Overview" isActive={pathname === "/general"} />
+                        <SubLink to="/general/announcements" label="Announcements" isActive={pathname === "/general/announcements"} />
+                        <SubLink to="/general/calendar" label="Company Calendar" isActive={pathname === "/general/calendar"} />
+                        <SubLink to="/general/directory" label="Directory" isActive={pathname === "/general/directory"} />
                         <SubLink to="/tasks" label="All Tasks" isActive={pathname === "/tasks"} />
                     </NavSection>
 

@@ -25,6 +25,10 @@ const Welcome = lazy(() => import('./Welcome'))
 const ForgotPassword = lazy(() => import('./ForgotPassword'))
 const ResetPassword = lazy(() => import('./ResetPassword'))
 const SetPassword = lazy(() => import('./SetPassword'))
+const GeneralOverview = lazy(() => import('./general/GeneralOverview'))
+const Announcements = lazy(() => import('./general/Announcements'))
+const CompanyCalendar = lazy(() => import('./general/CompanyCalendar'))
+const Directory = lazy(() => import('./general/Directory'))
 
 // Pages that set the password themselves, so the gate below leaves them alone
 const SETS_OWN_PASSWORD = new Set(['/accept-invite', '/reset-password'])
@@ -226,6 +230,10 @@ function App() {
             <Route path="/profile" element={inOrganization(<Profile />)} />
             <Route path="/settings" element={inOrganization(<Settings />)} />
             <Route path="/tasks" element={inOrganization(<Tasks />)} />
+            <Route path="/general" element={inOrganization(<GeneralOverview />)} />
+            <Route path="/general/announcements" element={inOrganization(<Announcements />)} />
+            <Route path="/general/calendar" element={inOrganization(<CompanyCalendar />)} />
+            <Route path="/general/directory" element={inOrganization(<Directory />)} />
             <Route path="/project_page/:project_id" element={inOrganization(<ProjectPage />)} />
           </Routes>
           </PasswordGate>
