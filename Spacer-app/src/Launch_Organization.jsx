@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { callEdgeFunction } from "./edgeFunctions"
+import { summarizeInviteProblems } from "./launchInvites"
 
 export default function LaunchOrganization({ onOrganizationChanged }) {
     const navigate = useNavigate()
@@ -10,6 +11,7 @@ export default function LaunchOrganization({ onOrganizationChanged }) {
     const [teamMemberEmails, setTeamMemberEmails] = useState("")
     const [status, setStatus] = useState("idle") // "idle" | "submitting" | "success" | "error"
     const [errorMsg, setErrorMsg] = useState("")
+    const [inviteProblems, setInviteProblems] = useState(null)
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -23,7 +25,7 @@ export default function LaunchOrganization({ onOrganizationChanged }) {
 
         try {
             // Makes the caller the organization's super admin (edge function)
-            const { error } = await callEdgeFunction('launch-organization', {
+            const { data, error } = await callEdgeFunction('launch-organization', {
                 organization_name: orgName.trim(),
                 team_spaces: [
                     {
@@ -44,6 +46,13 @@ export default function LaunchOrganization({ onOrganizationChanged }) {
             setStatus("success")
             // App.jsx only lets members of an organization past this point
             await onOrganizationChanged?.()
+            // The organization exists either way; stay here only to show which
+            // invites didn't go out, so the founder can follow up
+            const problems = summarizeInviteProblems(data?.invites)
+            if (problems) {
+                setInviteProblems(problems)
+                return
+            }
             navigate("/onboarding", { replace: true })
 
         } catch (err) {
@@ -145,6 +154,19 @@ export default function LaunchOrganization({ onOrganizationChanged }) {
                         </div>
                     )}
 
+                    {inviteProblems && (
+                        <div className="mb-6 p-4 rounded-custom bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs space-y-3" role="status">
+                            <p>Your organization is ready, but some invites didn't go out. {inviteProblems}</p>
+                            <button
+                                type="button"
+                                onClick={() => navigate("/onboarding", { replace: true })}
+                                className="py-2 px-4 bg-brand text-black font-bold rounded-custom hover:opacity-90"
+                            >
+                                Continue
+                            </button>
+                        </div>
+                    )}
+
                     {/* Form */}
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {/* Field: Organization Name */}
@@ -234,7 +256,7 @@ export default function LaunchOrganization({ onOrganizationChanged }) {
                                 {status === "submitting"
                                     ? "Launching Organization..."
                                     : status === "success"
-                                    ? "Organization Launched! Redirecting..."
+                                    ? (inviteProblems ? "Organization Launched!" : "Organization Launched! Redirecting...")
                                     : "Launch Organization"}
                             </span>
                         </button>

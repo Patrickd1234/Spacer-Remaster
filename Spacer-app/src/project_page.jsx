@@ -1504,7 +1504,7 @@ function ProjectPage() {
                             )}
                             {canDeleteProject === true && !columnsAvailable && (
                                 <p className="mt-md text-[12px] text-[#8c947b]">
-                                    Custom columns need a database update: run the <span className="text-white">20261026090000_project_columns</span> migration in Supabase.
+                                    Custom columns need a database update: run the <span className="text-white">20261026100000_project_columns</span> migration in Supabase.
                                 </p>
                             )}
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>

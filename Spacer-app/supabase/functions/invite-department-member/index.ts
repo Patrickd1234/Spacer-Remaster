@@ -27,13 +27,12 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 import { corsHeaders } from "../_shared/cors.ts"
 import { escapeHtml } from "../_shared/html.ts"
+import { sendEmail } from "../_shared/email.ts"
 import { callerHeaders, requireMfa } from "../_shared/mfa.ts"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") // optional
-const EMAIL_FROM = Deno.env.get("EMAIL_FROM") || "Spacer <notifications@yourdomain.com>"
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173"
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -266,25 +265,6 @@ serve(async (req: Request) => {
         return json({ error: message }, 500)
     }
 })
-
-async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
-    if (!RESEND_API_KEY) {
-        console.warn(`RESEND_API_KEY not set — skipping notify email to ${to}`)
-        return
-    }
-    try {
-        await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${RESEND_API_KEY}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
-        })
-    } catch (err) {
-        console.error("sendEmail failed (non-fatal):", err)
-    }
-}
 
 function addedToTeamEmailHtml({ recipientName, teamName, role, inviterName, loginUrl }: {
     recipientName: string;

@@ -1,7 +1,7 @@
 import { supabase } from "./supabase"
 
 // Custom task-board columns per project (table project_columns, migration
-// 20261026090000_project_columns.sql). Every column maps to a task status, so a
+// 20261026100000_project_columns.sql). Every column maps to a task status, so a
 // card's status always follows the column it sits in.
 
 export const BASE_STATUSES = [

@@ -1,19 +1,24 @@
 // AUTH-04 — Guided Organization Launch Flow
-// Creates the Organization + General Space (implicit), makes the calling
-// user its Admin, then creates 2-5 priority Team Spaces and invites in a
-// single all-or-nothing transaction (per Tech Spec Open Question in
-// Section 14 — resolved here as a single Edge Function transaction rather
-// than a sequence of RLS-protected inserts, since a partially-completed
-// launch would leave inconsistent data).
+// Creates the Organization, makes the calling user its Admin, creates 1-5
+// Team Spaces with their invites, then emails everyone invited.
+//
+// All database writes happen inside the launch_organization() Postgres
+// function (migration 20261030100000), which runs as one transaction: if any
+// row fails, nothing is kept. Emails go out only after that commit, and a
+// failed email never undoes the launch; each invite's outcome is returned.
 //
 // This is one of the few operations that legitimately needs the service
 // role (per Security Considerations, Section 12): it creates the very
 // Organization / Membership rows that RLS would otherwise require to
 // already exist before allowing the insert.
+//
+// Required secrets: SITE_URL, RESEND_API_KEY. Optional: EMAIL_FROM.
 
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, jsonResponse, badRequest } from "../_shared/cors.ts";
 import { callerHeaders, requireMfa } from "../_shared/mfa.ts";
+import { escapeHtml } from "../_shared/html.ts";
+import { sendEmail } from "../_shared/email.ts";
 
 interface TeamSpaceInput {
   name: string;
@@ -23,7 +28,142 @@ interface TeamSpaceInput {
 
 interface LaunchRequest {
   organization_name: string;
-  team_spaces: TeamSpaceInput[]; // 2–5, per AUTH-04 acceptance criteria
+  team_spaces: TeamSpaceInput[];
+}
+
+// Shape returned by launch_organization()
+interface CreatedInvite {
+  email: string;
+  role: string;
+  team_space_id: string;
+  team_name: string;
+}
+
+type InviteStatus = "invite_sent" | "notified_existing" | "other_organization" | "email_failed";
+
+const MAX_TEAM_SPACES = 5;
+const MAX_NAME_LENGTH = 100;
+// Resend's free plan sends 100 emails a day; keep one launch well under that
+const MAX_INVITES = 50;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Postgres error codes raised by launch_organization()
+const DB_ERROR_STATUS: Record<string, number> = {
+  "22023": 400, // invalid input
+  "23505": 409, // already belongs to an organization
+  "P0002": 404, // no profile row yet
+};
+
+const isOptionalString = (value: unknown) => value === undefined || value === null || typeof value === "string";
+
+// The body is untrusted JSON: check every type before calling string methods
+function validate(body: LaunchRequest): string | null {
+  if (typeof body !== "object" || body === null) return "Request body must be a JSON object";
+  if (typeof body.organization_name !== "string" || !body.organization_name.trim()) {
+    return "organization_name is required";
+  }
+  if (body.organization_name.trim().length > MAX_NAME_LENGTH) {
+    return `organization_name must be at most ${MAX_NAME_LENGTH} characters`;
+  }
+
+  const teams = body.team_spaces;
+  if (!Array.isArray(teams) || teams.length < 1 || teams.length > MAX_TEAM_SPACES) {
+    return `team_spaces must contain 1 to ${MAX_TEAM_SPACES} entries`;
+  }
+
+  const emails: string[] = [];
+  for (const ts of teams) {
+    if (typeof ts !== "object" || ts === null || !isOptionalString(ts.name) || !isOptionalString(ts.team_lead_email)) {
+      return "Each team space needs a text name and an optional text team_lead_email";
+    }
+    if ((ts.name?.trim().length ?? 0) > MAX_NAME_LENGTH) {
+      return `Team space names must be at most ${MAX_NAME_LENGTH} characters`;
+    }
+    const members = ts.member_emails ?? [];
+    if (!Array.isArray(members) || !members.every((email) => typeof email === "string")) {
+      return "member_emails must be a list of email addresses";
+    }
+    for (const email of [ts.team_lead_email ?? "", ...members]) {
+      if (email.trim()) emails.push(email.trim());
+    }
+  }
+
+  const invalid = emails.filter((email) => !EMAIL_PATTERN.test(email));
+  if (invalid.length) return `Not a valid email address: ${invalid.join(", ")}`;
+  if (emails.length > MAX_INVITES) return `You can invite at most ${MAX_INVITES} people while launching`;
+  return null;
+}
+
+function invitedToOrgEmailHtml({ orgName, teamNames, inviterName, actionUrl, actionLabel }: {
+  orgName: string;
+  teamNames: string[];
+  inviterName: string;
+  actionUrl: string;
+  actionLabel: string;
+}) {
+  return `
+    <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+      <h2>You're invited to ${escapeHtml(orgName)}</h2>
+      <p><strong>${escapeHtml(inviterName)}</strong> invited you to join <strong>${escapeHtml(orgName)}</strong> on Spacer
+        (${teamNames.map(escapeHtml).join(", ")}).</p>
+      <p>Log in with this email address and you'll be added automatically.</p>
+      <p><a href="${actionUrl}" style="display:inline-block;background:#aff82a;color:#1C1F26;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:bold;">${escapeHtml(actionLabel)}</a></p>
+    </div>
+  `;
+}
+
+// One email per address, even if the same person was invited to several teams
+async function emailInvitees(
+  admin: SupabaseClient,
+  invites: CreatedInvite[],
+  { orgId, orgName, inviterName }: { orgId: string; orgName: string; inviterName: string },
+): Promise<{ email: string; status: InviteStatus }[]> {
+  const siteUrl = Deno.env.get("SITE_URL") || "http://localhost:5173";
+  const teamsByEmail = new Map<string, string[]>();
+  for (const invite of invites) {
+    teamsByEmail.set(invite.email, [...(teamsByEmail.get(invite.email) ?? []), invite.team_name]);
+  }
+
+  const results: { email: string; status: InviteStatus }[] = [];
+  // Sequential on purpose: Resend and Supabase Auth both rate-limit bursts
+  for (const [email, teamNames] of teamsByEmail) {
+    const { data: existing, error: lookupErr } = await admin
+      .from("users")
+      .select("organization_id")
+      .ilike("email", email.replace(/[\\%_]/g, (c) => `\\${c}`))
+      .maybeSingle();
+    if (lookupErr) {
+      console.error(`Looking up ${email} failed:`, lookupErr);
+      results.push({ email, status: "email_failed" });
+      continue;
+    }
+
+    if (existing?.organization_id && existing.organization_id !== orgId) {
+      // claim_pending_invites() won't move them across organizations, so an
+      // email would only promise something that can't happen
+      results.push({ email, status: "other_organization" });
+      continue;
+    }
+
+    if (existing) {
+      const sent = await sendEmail({
+        to: email,
+        subject: `You're invited to ${orgName} on Spacer`,
+        html: invitedToOrgEmailHtml({ orgName, teamNames, inviterName, actionUrl: `${siteUrl}/login`, actionLabel: "Log in to Spacer" }),
+      });
+      results.push({ email, status: sent ? "notified_existing" : "email_failed" });
+      continue;
+    }
+
+    // No account yet: Supabase creates one and emails a link to set a password.
+    // Their first sign-in runs claim_pending_invites(), which joins the teams.
+    const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${siteUrl}/accept-invite`,
+    });
+    if (inviteErr) console.error(`Invite email to ${email} failed:`, inviteErr);
+    results.push({ email, status: inviteErr ? "email_failed" : "invite_sent" });
+  }
+  return results;
 }
 
 Deno.serve(async (req) => {
@@ -47,86 +187,46 @@ Deno.serve(async (req) => {
   const mfaBlocked = await requireMfa(callerClient);
   if (mfaBlocked) return mfaBlocked;
 
-  const body: LaunchRequest = await req.json();
-  if (!body.organization_name?.trim()) {
-    return badRequest("organization_name is required");
+  let body: LaunchRequest;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest("Request body must be JSON");
   }
-  if (!Array.isArray(body.team_spaces) || body.team_spaces.length < 1) {
-  return badRequest("team_spaces must contain at least 1 entry");
-}
+  const invalid = validate(body);
+  if (invalid) return badRequest(invalid);
 
-  // Service-role client — the one narrow, documented use of the bypass
-  // (Section 12): this function performs the atomic org-bootstrap that no
-  // RLS policy could authorize on its own, since no Membership yet exists.
+  // Service-role client: the one narrow, documented use of the bypass
+  // (Section 12). launch_organization() is executable by the service role only.
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
-  // One organization per user: launching again would silently move an existing
-  // member (or admin) out of their organization into a new one
-  const { data: profile, error: profileErr } = await admin
+  const { data: launched, error: launchErr } = await admin.rpc("launch_organization", {
+    p_user_id: userData.user.id,
+    p_organization_name: body.organization_name.trim(),
+    p_team_spaces: body.team_spaces,
+  });
+  if (launchErr) {
+    const status = DB_ERROR_STATUS[launchErr.code ?? ""];
+    if (status) return jsonResponse({ error: launchErr.message }, status);
+    console.error("launch_organization failed:", launchErr);
+    return jsonResponse({ error: "Could not launch your organization. Nothing was saved; please try again." }, 500);
+  }
+
+  const { data: inviter } = await admin
     .from("users")
-    .select("organization_id")
+    .select("name, email")
     .eq("id", userData.user.id)
     .maybeSingle();
-  if (profileErr) return jsonResponse({ error: profileErr.message }, 500);
-  if (profile?.organization_id) {
-    return jsonResponse({ error: "You already belong to an organization." }, 409);
-  }
 
-  const { data: org, error: orgErr } = await admin
-    .from("organizations")
-    .insert({ name: body.organization_name.trim() })
-    .select()
-    .single();
-  if (orgErr) return jsonResponse({ error: orgErr.message }, 500);
-
-  const userId = userData.user.id;
-
-  await admin.from("users").update({ organization_id: org.id }).eq("id", userId);
-
-  await admin.from("memberships").insert({
-    user_id: userId,
-    team_space_id: null,
-    role: "super_admin",
+  const inviteResults = await emailInvitees(admin, launched.invites ?? [], {
+    orgId: launched.organization.id,
+    orgName: launched.organization.name,
+    inviterName: inviter?.name || inviter?.email || "A Spacer admin",
   });
 
-  const createdTeamSpaces = [];
-
-  for (const ts of body.team_spaces) {
-    if (!ts.name?.trim()) continue;
-
-    const { data: teamSpace, error: tsErr } = await admin
-      .from("team_spaces")
-      .insert({ organization_id: org.id, name: ts.name.trim() })
-      .select()
-      .single();
-    if (tsErr) return jsonResponse({ error: tsErr.message }, 500);
-
-    if (ts.team_lead_email) {
-      await admin.from("invites").insert({
-        organization_id: org.id,
-        team_space_id: teamSpace.id,
-        email: ts.team_lead_email.toLowerCase().trim(),
-        role: "team_lead",
-        invited_by: userId,
-      });
-    }
-
-    for (const email of ts.member_emails ?? []) {
-      if (!email?.trim()) continue;
-      await admin.from("invites").insert({
-        organization_id: org.id,
-        team_space_id: teamSpace.id,
-        email: email.toLowerCase().trim(),
-        role: "member",
-        invited_by: userId,
-      });
-    }
-
-    createdTeamSpaces.push(teamSpace);
-  }
-
   return jsonResponse({
-    organization: org,
-    team_spaces: createdTeamSpaces,
+    organization: launched.organization,
+    team_spaces: launched.team_spaces,
+    invites: inviteResults,
   });
 });

@@ -1,4 +1,4 @@
--- Undo for 20261026090000_project_columns.sql.
+-- Undo for 20261026100000_project_columns.sql.
 -- Tasks keep their status, so boards fall back to the default
 -- Backlog / Doing / Done columns. Custom column names and order are lost.
 
