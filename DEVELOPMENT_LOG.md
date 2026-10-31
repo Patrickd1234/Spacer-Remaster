@@ -43,3 +43,17 @@ This log tracks development work and code changes made for this project.
   - `daily_standups.team_space_id` exists (uuid, nullable) with its foreign key to `team_spaces` (on delete cascade) and the `daily_standups_team_space_date_idx` index.
   - 4 of 8 stand-ups have a department. The other 4 have none, so they don't show on any department's sheet; no remaining stand-up's author is in exactly one department, so the backfill has nothing left to fill.
 - Updated the class1 tutorial doc to match: Lesson 2 and self-check question 6 now say the migration is applied.
+
+## 2026-11-01
+
+- Reviewed all 21 migrations in `Spacer-app/supabase/migrations` by hand and checked the live database (project "Spacer") with read-only queries through the Supabase CLI. Findings:
+  - The live database has three migrations that `Test-phase` did not: `20261030150000 org_team_memberships` (on the `22's` branch), and `20261031090000 sprints` and `20261031100000 notifications`, which are in no git branch. Until those two files are committed, `supabase db push` refuses to run.
+  - There is no baseline migration: the first file expects `public.users` and the existing policies, so `supabase db reset`, a fresh local stack or a Supabase branch fails. The base schema is only in the read-only `supabase/schema/schema.sql` snapshot.
+  - `project_columns.sql` was renamed from `20261026090000` to `20261026100000`; both versions are recorded live, so the history matches.
+  - `20261016120000_handle_new_user` and `20261017080000_project_member_access` have no rollback file.
+  - `supabase/.temp/project-ref` is missing, so `--linked` commands fail with "Have you run supabase link?". The checks passed `--project-ref` instead; `npx supabase link` fixes it for good.
+- `20261030140000_general_space_fields.sql` is now safe to run twice: `add column if not exists`, `create index if not exists`, `drop constraint if exists` before each table-level check, and `drop policy if exists` before each of its 5 policies. It is already applied live, so this only matters for replays.
+  - Checked the live data against its rules: 1 calendar event and 1 announcement, none with a non-`https://` link or a blank or 200+ character title.
+  - Not run against a database after the edit.
+- Merged `22's` into `Test-phase` (directory fix, React Compiler lint fixes, migration `20261030150000_org_team_memberships.sql`, and `.env` / root `node_modules` no longer tracked). `vite build` succeeds after the merge.
+  - The merge deletes `Spacer-app/.env` and the root `node_modules` from disk. Restore with `cp Spacer-app/.env.example Spacer-app/.env` (then fill in both values from Supabase → Project Settings → API) and `npm install` in the repo root.

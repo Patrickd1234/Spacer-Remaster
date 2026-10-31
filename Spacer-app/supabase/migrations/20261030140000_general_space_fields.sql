@@ -10,20 +10,22 @@
 -- Announcements: category, cover image, optional event details
 -- ---------------------------------------------------------------------------
 alter table public.announcements
-  add column category text not null default 'company_update'
+  add column if not exists category text not null default 'company_update'
     constraint announcements_category_check
     check (category in ('company_update', 'policy', 'event', 'people_culture')),
-  add column cover_path text,
-  add column event_starts_at timestamptz,
-  add column event_ends_at timestamptz,
+  add column if not exists cover_path text,
+  add column if not exists event_starts_at timestamptz,
+  add column if not exists event_ends_at timestamptz,
   -- Only https links: rendered as clickable links, so no javascript: or data: URLs
-  add column meeting_url text
+  add column if not exists meeting_url text
     constraint announcements_meeting_url_check check (meeting_url ~ '^https://'),
+  drop constraint if exists announcements_event_order_check,
   add constraint announcements_event_order_check
     check (event_ends_at is null or event_starts_at is null or event_ends_at >= event_starts_at),
+  drop constraint if exists announcements_title_length_check,
   add constraint announcements_title_length_check check (char_length(title) between 1 and 200);
 
-create index announcements_org_created_idx on public.announcements (organization_id, created_at desc);
+create index if not exists announcements_org_created_idx on public.announcements (organization_id, created_at desc);
 
 -- ---------------------------------------------------------------------------
 -- Calendar events: times, category, edit/delete rights
@@ -31,23 +33,28 @@ create index announcements_org_created_idx on public.announcements (organization
 -- event_date stays the day the event is on (existing code reads it); timed
 -- events also set starts_at/ends_at.
 alter table public.calendar_events
-  add column starts_at timestamptz,
-  add column ends_at timestamptz,
-  add column category text not null default 'meeting'
+  add column if not exists starts_at timestamptz,
+  add column if not exists ends_at timestamptz,
+  add column if not exists category text not null default 'meeting'
     constraint calendar_events_category_check
     check (category in ('meeting', 'holiday', 'training', 'social', 'review', 'other')),
+  drop constraint if exists calendar_events_time_order_check,
   add constraint calendar_events_time_order_check
     check (ends_at is null or starts_at is null or ends_at >= starts_at),
+  drop constraint if exists calendar_events_external_url_check,
   add constraint calendar_events_external_url_check check (external_url ~ '^https://'),
+  drop constraint if exists calendar_events_title_length_check,
   add constraint calendar_events_title_length_check check (char_length(title) between 1 and 200);
 
-create index calendar_events_org_date_idx on public.calendar_events (organization_id, event_date);
+create index if not exists calendar_events_org_date_idx on public.calendar_events (organization_id, event_date);
 
 -- Until now events could be added but never edited or removed
+drop policy if exists calendar_events_update on public.calendar_events;
 create policy calendar_events_update on public.calendar_events as permissive for update to authenticated
   using (organization_id = current_org_id() and (is_org_admin() or created_by = auth.uid()))
   with check (organization_id = current_org_id() and (is_org_admin() or created_by = auth.uid()));
 
+drop policy if exists calendar_events_delete on public.calendar_events;
 create policy calendar_events_delete on public.calendar_events as permissive for delete to authenticated
   using (organization_id = current_org_id() and (is_org_admin() or created_by = auth.uid()));
 
@@ -55,11 +62,12 @@ create policy calendar_events_delete on public.calendar_events as permissive for
 -- People profiles: job title, photo, location, time zone, manager
 -- ---------------------------------------------------------------------------
 alter table public.users
-  add column job_title text constraint users_job_title_length_check check (char_length(job_title) <= 100),
-  add column location text constraint users_location_length_check check (char_length(location) <= 100),
-  add column timezone text constraint users_timezone_length_check check (char_length(timezone) <= 64),
-  add column avatar_path text,
-  add column reports_to uuid references public.users (id) on delete set null,
+  add column if not exists job_title text constraint users_job_title_length_check check (char_length(job_title) <= 100),
+  add column if not exists location text constraint users_location_length_check check (char_length(location) <= 100),
+  add column if not exists timezone text constraint users_timezone_length_check check (char_length(timezone) <= 64),
+  add column if not exists avatar_path text,
+  add column if not exists reports_to uuid references public.users (id) on delete set null,
+  drop constraint if exists users_reports_to_not_self_check,
   add constraint users_reports_to_not_self_check check (reports_to is distinct from id);
 
 -- Everyone edits their own profile, but only an org admin sets who they report to
@@ -135,6 +143,7 @@ values ('general-media', 'general-media', false, 5242880,
         array['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 on conflict (id) do nothing;
 
+drop policy if exists general_media_select on storage.objects;
 create policy general_media_select on storage.objects as permissive for select to authenticated
   using (
     bucket_id = 'general-media' and (
@@ -147,6 +156,7 @@ create policy general_media_select on storage.objects as permissive for select t
     )
   );
 
+drop policy if exists general_media_insert on storage.objects;
 create policy general_media_insert on storage.objects as permissive for insert to authenticated
   with check (
     bucket_id = 'general-media' and (
@@ -157,6 +167,7 @@ create policy general_media_insert on storage.objects as permissive for insert t
     )
   );
 
+drop policy if exists general_media_delete on storage.objects;
 create policy general_media_delete on storage.objects as permissive for delete to authenticated
   using (
     bucket_id = 'general-media' and (
