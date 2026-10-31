@@ -10,7 +10,8 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
     const [activeChannel, setActiveChannel] = useState(activeChannelFromFab || null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [loading, setLoading] = useState(true);
+    // The floating chat is handed its channel, so it has nothing to load
+    const [loading, setLoading] = useState(!fabMode);
     
     // Creating channel
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -41,19 +42,16 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        if (!fabMode) {
-            fetchChannels();
-        } else {
-            setLoading(false);
-        }
+        if (!fabMode) fetchChannels();
     }, [projectId, departmentId, fabMode]);
 
-    // Sync from FAB
-    useEffect(() => {
-        if (fabMode && activeChannelFromFab) {
-            setActiveChannel(activeChannelFromFab);
-        }
-    }, [fabMode, activeChannelFromFab]);
+    // Follow the channel picked in the floating chat. Adjusted while rendering
+    // (React's pattern for state that follows a prop), not in an effect.
+    const [fabChannel, setFabChannel] = useState(activeChannelFromFab);
+    if (activeChannelFromFab !== fabChannel) {
+        setFabChannel(activeChannelFromFab);
+        if (fabMode && activeChannelFromFab) setActiveChannel(activeChannelFromFab);
+    }
 
     // Fetch messages when active channel changes
     useEffect(() => {
@@ -64,13 +62,17 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             return () => {
                 if (unsubscribe) unsubscribe();
             };
-        } else {
-            setMessages([]);
-            setActiveChannelMembers([]);
         }
     }, [activeChannel]);
 
-    const fetchChannelMembers = async (channel) => {
+    // Leaving or deleting a channel is the only way back to "no channel"
+    const closeActiveChannel = () => {
+        setActiveChannel(null);
+        setMessages([]);
+        setActiveChannelMembers([]);
+    };
+
+    async function fetchChannelMembers(channel) {
         if (!channel.is_private) {
             // Public channels include all members passed in
             setActiveChannelMembers(members);
@@ -94,11 +96,11 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         scrollToBottom();
     }, [messages]);
 
-    const scrollToBottom = () => {
+    function scrollToBottom() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const fetchChannels = async () => {
+    async function fetchChannels() {
         try {
             let query = supabase.from('chat_channels').select('id, name, is_private');
             if (projectId) query = query.eq('project_id', projectId);
@@ -120,7 +122,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         }
     };
 
-    const fetchMessages = async (channelId) => {
+    async function fetchMessages(channelId) {
         try {
             const { data, error } = await supabase
                 .from('messages')
@@ -154,7 +156,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         }
     };
 
-    const subscribeToMessages = (channelId) => {
+    function subscribeToMessages(channelId) {
         try {
             const channel = supabase
                 .channel(`messages:${channelId}`)
@@ -373,7 +375,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             if (error) throw error;
 
             setChannels(prev => prev.filter(c => c.id !== activeChannel.id));
-            setActiveChannel(null);
+            closeActiveChannel();
             setShowSettingsModal(false);
         } catch (error) {
             console.error('Error leaving channel:', error);
@@ -392,7 +394,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             if (error) throw error;
 
             setChannels(prev => prev.filter(c => c.id !== activeChannel.id));
-            setActiveChannel(null);
+            closeActiveChannel();
             setShowSettingsModal(false);
         } catch (error) {
             console.error('Error deleting channel:', error);

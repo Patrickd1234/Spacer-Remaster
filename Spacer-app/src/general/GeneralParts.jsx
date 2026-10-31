@@ -144,6 +144,8 @@ export function Modal({ title, onClose, children, wide = false }) {
 }
 
 export const INPUT_CLASS = "w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-lg px-3 py-2 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
+// Toolbar select that sizes to its content (INPUT_CLASS's w-full beats an added w-auto)
+export const COMPACT_SELECT_CLASS = "bg-[#111318] border border-[#2D3139] hover:border-[#3d424d] focus:border-[#aff82a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none transition-colors cursor-pointer"
 
 export function Field({ label, children, hint = null }) {
     return (

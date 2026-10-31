@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Avatar, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote } from "./GeneralParts"
 import { validateImage } from "./generalData"
 
@@ -24,6 +24,86 @@ function TeamTags({ teams }) {
                 <span key={t.id} className="px-2 py-0.5 rounded-md border border-[#2D3139] bg-[#191c21] text-[11px] text-[#c4c9b8]">{t.name}</span>
             ))}
             {teams.length > MAX_TAGS && <span className="px-1 text-[11px] text-[#8c947b]">+{teams.length - MAX_TAGS}</span>}
+        </div>
+    )
+}
+
+// "Filters" button with Team and Role inside; the badge counts active filters.
+// Closes on Escape or a click outside.
+export function FilterMenu({ teams, jobTitles, teamId, jobTitle, onTeamChange, onJobTitleChange, onClear }) {
+    const menuRef = useRef(null)
+    const [isOpen, setIsOpen] = useState(false)
+    const activeCount = (teamId !== "all" ? 1 : 0) + (jobTitle !== "all" ? 1 : 0)
+
+    useEffect(() => {
+        if (!isOpen) return
+        const onPointer = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false) }
+        const onKey = (e) => { if (e.key === "Escape") setIsOpen(false) }
+        document.addEventListener("mousedown", onPointer)
+        window.addEventListener("keydown", onKey)
+        return () => {
+            document.removeEventListener("mousedown", onPointer)
+            window.removeEventListener("keydown", onKey)
+        }
+    }, [isOpen])
+
+    return (
+        <div className="relative" ref={menuRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen((open) => !open)}
+                aria-haspopup="dialog"
+                aria-expanded={isOpen}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors cursor-pointer ${activeCount > 0 ? "border-[#aff82a]/60 text-white" : "border-[#2D3139] text-[#c4c9b8] hover:text-white hover:border-[#3d424d]"}`}
+            >
+                <span className="material-symbols-outlined text-[18px]">filter_list</span>
+                Filters
+                {activeCount > 0 && (
+                    <span className="min-w-5 h-5 px-1 rounded-full bg-[#aff82a] text-[#1C1F26] text-[11px] font-semibold flex items-center justify-center">{activeCount}</span>
+                )}
+            </button>
+            {isOpen && (
+                <div role="dialog" aria-label="Filter people" className="absolute right-0 top-full mt-2 z-30 w-72 bg-[#14161b] border border-[#2D3139] rounded-xl p-4 space-y-4 shadow-xl shadow-black/40">
+                    <Field label="Team">
+                        <select className={INPUT_CLASS} value={teamId} onChange={(e) => onTeamChange(e.target.value)}>
+                            <option value="all">All teams</option>
+                            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                    </Field>
+                    <Field label="Role">
+                        <select className={INPUT_CLASS} value={jobTitle} onChange={(e) => onJobTitleChange(e.target.value)}>
+                            <option value="all">All roles</option>
+                            {jobTitles.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                    </Field>
+                    <div className="flex justify-between items-center pt-1">
+                        <button type="button" onClick={onClear} disabled={activeCount === 0} className="text-xs text-[#8c947b] hover:text-white disabled:opacity-40 disabled:hover:text-[#8c947b] cursor-pointer disabled:cursor-default">
+                            Clear filters
+                        </button>
+                        <button type="button" onClick={() => setIsOpen(false)} className="text-xs font-medium text-[#aff82a] hover:underline cursor-pointer">Done</button>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// Removable chips for the filters in use; nothing when none are
+export function ActiveFilters({ filters, onClearAll }) {
+    if (filters.length === 0) return null
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            {filters.map((f) => (
+                <span key={f.key} className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-[#aff82a]/10 border border-[#aff82a]/30 text-xs text-[#aff82a]">
+                    {f.label}
+                    <button type="button" onClick={f.onRemove} aria-label={`Remove filter ${f.label}`} className="flex items-center rounded-full hover:bg-[#aff82a]/20 cursor-pointer">
+                        <span className="material-symbols-outlined text-[14px]">close</span>
+                    </button>
+                </span>
+            ))}
+            {filters.length > 1 && (
+                <button type="button" onClick={onClearAll} className="text-xs text-[#8c947b] hover:text-white cursor-pointer">Clear all</button>
+            )}
         </div>
     )
 }

@@ -298,6 +298,8 @@ export default function Reports() {
   // ── Initial load & tab focus ───────────────────────────────────────────
   // Runs once: the ids the first load stores no longer restart it
   useEffect(() => {
+    // `loading` already starts true, so the first load's setLoading(true) changes nothing
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchReportData()
 
     // Coming back to the tab catches up on anything skipped while it was hidden

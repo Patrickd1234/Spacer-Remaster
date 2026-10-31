@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { ANNOUNCEMENT_CATEGORIES, filterAnnouncements, sortAnnouncements } from "./generalFormat"
 import { fetchAnnouncements, createAnnouncement, setAnnouncementPinned, deleteAnnouncement } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
-import { GeneralShell, PageHeading, PrimaryButton, Chip, ErrorNote, INPUT_CLASS } from "./GeneralParts"
+import { GeneralShell, PageHeading, PrimaryButton, Chip, ErrorNote, COMPACT_SELECT_CLASS } from "./GeneralParts"
 import { PanelMessage } from "../components/DashboardParts"
 import { AnnouncementCard, AnnouncementRow, AnnouncementDetail, AnnouncementForm } from "./AnnouncementParts"
 
@@ -82,7 +82,7 @@ export default function Announcements() {
                 </div>
                 <label className="flex items-center gap-2 text-xs text-[#8c947b]">
                     Sort
-                    <select className={`${INPUT_CLASS} w-auto py-1.5`} value={sort} onChange={(e) => setSort(e.target.value)}>
+                    <select className={`${COMPACT_SELECT_CLASS} py-1.5`} value={sort} onChange={(e) => setSort(e.target.value)}>
                         <option value="latest">Latest</option>
                         <option value="oldest">Oldest</option>
                     </select>

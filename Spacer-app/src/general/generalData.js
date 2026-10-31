@@ -171,26 +171,40 @@ export async function deleteEvent(id) {
 
 // Everyone in the organization with the teams the viewer may see them in.
 // Members only see teams they share access to, so tags can be partial.
-export async function fetchPeople({ limit } = {}) {
-    let usersQuery = supabase.from("users").select(PERSON_FIELDS).order("name")
-    if (limit) usersQuery = usersQuery.limit(limit)
-    const [{ data: users, error }, { data: memberships }, { data: teams }] = await Promise.all([
-        usersQuery,
+// Everyone's team memberships in the organization as { user_id, team_space_id, team_name, role }.
+// org_team_memberships() lets members see other people's teams; until that
+// migration is applied, fall back to the tables (members then see only their own teams).
+async function fetchOrgTeamMemberships() {
+    const { data, error } = await supabase.rpc("org_team_memberships")
+    if (!error) return data || []
+    console.error("Loading organization teams failed, using your own teams:", error)
+    const [{ data: memberships }, { data: teams }] = await Promise.all([
         supabase.from("memberships").select("user_id, team_space_id, role").not("team_space_id", "is", null),
         supabase.from("team_spaces").select("id, name"),
     ])
+    const nameById = new Map((teams || []).map((t) => [t.id, t.name]))
+    return (memberships || [])
+        .filter((m) => nameById.has(m.team_space_id))
+        .map((m) => ({ ...m, team_name: nameById.get(m.team_space_id) }))
+}
+
+export async function fetchPeople({ limit } = {}) {
+    let usersQuery = supabase.from("users").select(PERSON_FIELDS).order("name")
+    if (limit) usersQuery = usersQuery.limit(limit)
+    const [{ data: users, error }, memberships] = await Promise.all([usersQuery, fetchOrgTeamMemberships()])
     if (error) {
         console.error("Loading people failed:", error)
         return { data: [], teams: [], error }
     }
-    const teamById = new Map((teams || []).map((t) => [t.id, t]))
+    const teams = [...new Map(memberships.map((m) => [m.team_space_id, { id: m.team_space_id, name: m.team_name }])).values()]
+        .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
     const people = (users || []).map((user) => ({
         ...user,
-        teams: (memberships || [])
-            .filter((m) => m.user_id === user.id && teamById.has(m.team_space_id))
-            .map((m) => ({ ...teamById.get(m.team_space_id), role: m.role })),
+        teams: memberships
+            .filter((m) => m.user_id === user.id)
+            .map((m) => ({ id: m.team_space_id, name: m.team_name, role: m.role })),
     }))
-    return { data: await withImageLinks(people, (p) => p.avatar_path, "avatarUrl"), teams: teams || [], error: null }
+    return { data: await withImageLinks(people, (p) => p.avatar_path, "avatarUrl"), teams, error: null }
 }
 
 // fields: { name, job_title, location, timezone, description }

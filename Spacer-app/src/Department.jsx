@@ -120,7 +120,7 @@ function Department() {
         return () => { cancelled = true }
     }, [isSuperAdmin, orgDepartmentId, allTeams])
 
-    const fetchAllTeams = async (orgId) => {
+    async function fetchAllTeams(orgId) {
         let teamQuery = supabase.from("team_spaces").select("id, name")
         if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
         
@@ -140,7 +140,7 @@ function Department() {
         }
     }
 
-    const fetchTeamMembers = async (teamId) => {
+    async function fetchTeamMembers(teamId) {
         if (!teamId) { setMem_info([]); return }
 
         if (!activeTeam || activeTeam.id !== teamId) {

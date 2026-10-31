@@ -56,7 +56,7 @@ export default function Tasks() {
     // Standup Tab states
     const [activeTab, setActiveTab] = useState("board")
     const [standups, setStandups] = useState([])
-    const [standupLoading, setStandupLoading] = useState(true)
+    const [standupsLoadedFor, setStandupsLoadedFor] = useState(null) // "<org id>:<department id>" of the list in `standups`
     const [yesterdayText, setYesterdayText] = useState("")
     const [todayText, setTodayText] = useState("")
     const [blockersText, setBlockersText] = useState("")
@@ -141,6 +141,10 @@ export default function Tasks() {
     const standupDepartmentName = isSuperAdmin
         ? departments.find(d => String(d.id) === String(standupDepartmentId))?.name
         : activeDepartment?.name
+    // Which list should show; loading until that one has arrived
+    const standupKey = orgId && standupDepartmentId ? `${orgId}:${standupDepartmentId}` : null
+    const isStandupLoading = standupKey !== null && standupsLoadedFor !== standupKey
+    const shownStandups = standupKey ? standups : []
 
     // Local-storage fallback keeps the same per-department split
     const readLocalStandups = (deptId) => {
@@ -150,7 +154,6 @@ export default function Tasks() {
     }
 
     const fetchStandups = async (currentOrgId, deptId) => {
-        setStandupLoading(true)
         try {
             const { data, error } = await supabase
                 .from("daily_standups")
@@ -173,22 +176,17 @@ export default function Tasks() {
             setIsLocalFallback(true)
             setStandups(readLocalStandups(deptId))
         } finally {
-            setStandupLoading(false)
+            setStandupsLoadedFor(`${currentOrgId}:${deptId}`)
         }
     }
 
+    // Waits for the organization. It used to fall back to browser-only stand-ups
+    // until the org loaded, so anything posted in that moment never reached the database.
     useEffect(() => {
-        if (roleLoading) return
-        if (!standupDepartmentId) {
-            setStandups([])
-            setStandupLoading(false)
-        } else if (orgId) {
-            fetchStandups(orgId, standupDepartmentId)
-        } else {
-            setIsLocalFallback(true)
-            setStandups(readLocalStandups(standupDepartmentId))
-            setStandupLoading(false)
-        }
+        if (roleLoading || !orgId || !standupDepartmentId) return
+        // Only sets state after the request returns (the rule can't see past the await)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        fetchStandups(orgId, standupDepartmentId)
     }, [orgId, activeTab, standupDepartmentId, roleLoading])
 
     const handleAddStandup = async (e) => {
@@ -565,7 +563,7 @@ export default function Tasks() {
                                                 </tr>
 
                                                 {/* DATA ROWS */}
-                                                {standupLoading ? (
+                                                {isStandupLoading ? (
                                                     <tr>
                                                         <td colSpan="7" className="px-4 py-8 text-center text-[#8c947b] bg-[#191c21]/20">
                                                             <div className="flex items-center justify-center gap-2">
@@ -574,7 +572,7 @@ export default function Tasks() {
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                ) : standups.length === 0 ? (
+                                                ) : shownStandups.length === 0 ? (
                                                     <tr>
                                                         <td colSpan="7" className="px-4 py-8 text-center text-[#8c947b] bg-[#191c21]/20">
                                                             {standupDepartmentId
@@ -583,7 +581,7 @@ export default function Tasks() {
                                                         </td>
                                                     </tr>
                                                 ) : (
-                                                    standups.map((row, index) => (
+                                                    shownStandups.map((row, index) => (
                                                         <tr key={row.id} className="hover:bg-[#1C1F26]/30 border-b border-[#2D3139]/40 transition-colors">
                                                             <td className="w-10 border-r border-[#2D3139] text-center font-mono text-[#8c947b] bg-[#121418]">{index + 1}</td>
                                                             <td className="px-4 py-3 border-r border-[#2D3139] font-medium text-white">

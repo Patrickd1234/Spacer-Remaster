@@ -3,9 +3,9 @@ import { useSearchParams } from "react-router-dom"
 import { filterPeople, sortPeople } from "./generalFormat"
 import { fetchPeople, updateMyProfile, updateMyAvatar, setReportsTo } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
-import { GeneralShell, PageHeading, ErrorNote, INPUT_CLASS } from "./GeneralParts"
+import { GeneralShell, PageHeading, ErrorNote, INPUT_CLASS, COMPACT_SELECT_CLASS } from "./GeneralParts"
 import { PanelMessage } from "../components/DashboardParts"
-import { PersonCard, PersonRow, ProfileDrawer, EditProfileForm } from "./DirectoryParts"
+import { PersonCard, PersonRow, ProfileDrawer, EditProfileForm, FilterMenu, ActiveFilters } from "./DirectoryParts"
 
 const LAYOUT_KEY = "directory_layout"
 
@@ -59,11 +59,25 @@ export default function Directory() {
     const jobTitles = useMemo(() => [...new Set(people.map((p) => p.job_title).filter(Boolean))].sort(), [people])
     const visible = useMemo(() => sortPeople(filterPeople(people, { query, teamId, jobTitle }), order), [people, query, teamId, jobTitle, order])
     const selected = people.find((p) => p.id === searchParams.get("person")) || null
+    // Plain ids for the handlers below. The React Compiler re-checks what a
+    // handler reads on every render, so `selected.id` there would throw while
+    // no profile is open, and `profile.id` before your profile has loaded.
+    const selectedId = selected?.id ?? null
+    const myId = profile?.id ?? null
+    const clearFilters = () => {
+        setTeamId("all")
+        setJobTitle("all")
+    }
+    const activeFilters = [
+        teamId !== "all" && { key: "team", label: teams.find((t) => t.id === teamId)?.name || "Team", onRemove: () => setTeamId("all") },
+        jobTitle !== "all" && { key: "role", label: jobTitle, onRemove: () => setJobTitle("all") },
+    ].filter(Boolean)
     const open = (id) => setSearchParams({ person: id }, { replace: true })
     const close = useCallback(() => setSearchParams({}, { replace: true }), [setSearchParams])
 
     const handleSaveProfile = async (fields, avatarFile) => {
-        const saved = await updateMyProfile(profile.id, fields)
+        if (!myId) return "Your profile hasn't loaded yet."
+        const saved = await updateMyProfile(myId, fields)
         if (saved.error) return saved.error
         if (avatarFile) {
             const uploaded = await updateMyAvatar(profile, avatarFile)
@@ -80,7 +94,8 @@ export default function Directory() {
 
     const handleSetManager = async (managerId) => {
         setActionError("")
-        const { error } = await setReportsTo(selected.id, managerId)
+        if (!selectedId) return
+        const { error } = await setReportsTo(selectedId, managerId)
         if (error) setActionError("Couldn't change who they report to.")
         await load()
     }
@@ -107,15 +122,16 @@ export default function Directory() {
                         onChange={(e) => setQuery(e.target.value)}
                     />
                 </div>
-                <select aria-label="Filter by team" className={`${INPUT_CLASS} w-auto`} value={teamId} onChange={(e) => setTeamId(e.target.value)}>
-                    <option value="all">All Teams</option>
-                    {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-                <select aria-label="Filter by role" className={`${INPUT_CLASS} w-auto`} value={jobTitle} onChange={(e) => setJobTitle(e.target.value)}>
-                    <option value="all">All Roles</option>
-                    {jobTitles.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-                <select aria-label="Sort" className={`${INPUT_CLASS} w-auto`} value={order} onChange={(e) => setOrder(e.target.value)}>
+                <FilterMenu
+                    teams={teams}
+                    jobTitles={jobTitles}
+                    teamId={teamId}
+                    jobTitle={jobTitle}
+                    onTeamChange={setTeamId}
+                    onJobTitleChange={setJobTitle}
+                    onClear={clearFilters}
+                />
+                <select aria-label="Sort" className={COMPACT_SELECT_CLASS} value={order} onChange={(e) => setOrder(e.target.value)}>
                     <option value="az">A–Z</option>
                     <option value="za">Z–A</option>
                 </select>
@@ -134,6 +150,8 @@ export default function Directory() {
                     ))}
                 </div>
             </div>
+
+            <ActiveFilters filters={activeFilters} onClearAll={clearFilters} />
 
             {status === "error" && <ErrorNote onRetry={load}>Couldn't load the directory.</ErrorNote>}
             {actionError && <ErrorNote>{actionError}</ErrorNote>}
@@ -161,7 +179,7 @@ export default function Directory() {
                         <ProfileDrawer
                             person={selected}
                             people={people}
-                            isMe={selected.id === profile?.id}
+                            isMe={myId !== null && selectedId === myId}
                             canSetManager={canManage}
                             onClose={close}
                             onMessage={() => openChat(selected)}
