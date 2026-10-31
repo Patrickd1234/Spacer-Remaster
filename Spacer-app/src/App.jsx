@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 import { RoleProvider } from './RoleContext'
@@ -51,6 +51,12 @@ const PageLoader = () => (
 
 // One crashing page shows a recovery screen instead of blanking the app.
 // Keyed by path so moving to another page starts fresh.
+// A fresh project page per project, so nothing from the previous one lingers
+function ProjectPageRoute() {
+  const { project_id } = useParams()
+  return <ProjectPage key={project_id} />
+}
+
 function PageErrorBoundary({ children }) {
   const { pathname } = useLocation()
   return <ErrorBoundary key={pathname}>{children}</ErrorBoundary>
@@ -234,7 +240,7 @@ function App() {
             <Route path="/general/announcements" element={inOrganization(<Announcements />)} />
             <Route path="/general/calendar" element={inOrganization(<CompanyCalendar />)} />
             <Route path="/general/directory" element={inOrganization(<Directory />)} />
-            <Route path="/project_page/:project_id" element={inOrganization(<ProjectPage />)} />
+            <Route path="/project_page/:project_id" element={inOrganization(<ProjectPageRoute />)} />
           </Routes>
           </PasswordGate>
           </Suspense>

@@ -18,7 +18,28 @@ function groupReactions(rows) {
     return [...usersByEmoji.entries()].map(([emoji, users]) => ({ emoji, users }));
 }
 
+// When this browser last read a DM thread (drives the unread dot), kept in
+// localStorage between visits. Outside the component: Date.now() is for event
+// handlers only, never render.
+function storeDmReadNow(otherUserId) {
+    const at = Date.now();
+    localStorage.setItem(`dm_last_read_${otherUserId}`, at);
+    return at;
+}
+
+function storedDmRead(otherUserId) {
+    return Number(localStorage.getItem(`dm_last_read_${otherUserId}`)) || 0;
+}
+
 export default function SidebarRouter(props) {
+    // Read times marked in this session. Being state, marking one re-renders the
+    // unread dots; a bare localStorage write wouldn't once the component is compiled.
+    const [dmReadAt, setDmReadAt] = useState({});
+    const markDmRead = (otherUserId) => {
+        const at = storeDmReadNow(otherUserId);
+        setDmReadAt(prev => ({ ...prev, [otherUserId]: at }));
+    };
+    const dmLastRead = (otherUserId) => dmReadAt[otherUserId] ?? storedDmRead(otherUserId);
     // Role comes from RoleContext, which handles users with several memberships
     const { roleLoading } = useRole();
     const [userId, setUserId] = useState(null);
@@ -162,7 +183,7 @@ export default function SidebarRouter(props) {
             setIsChatMinimized(false);
             await fetchChatMessages(member.user_id);
 
-            localStorage.setItem(`dm_last_read_${member.user_id}`, Date.now());
+            markDmRead(member.user_id);
         };
         window.addEventListener("open_coworker_chat", handleOpenChatEvent);
         return () => window.removeEventListener("open_coworker_chat", handleOpenChatEvent);
@@ -262,7 +283,7 @@ export default function SidebarRouter(props) {
                         
                         const isCurrentlyOpen = showChatModal && !isChatMinimized && chatRecipient?.user_id === otherId;
                         if (isCurrentlyOpen) {
-                            localStorage.setItem(`dm_last_read_${otherId}`, Date.now());
+                            markDmRead(otherId);
                         }
                     }
                 }
@@ -316,7 +337,7 @@ export default function SidebarRouter(props) {
     }, [userGroups, showChatModal, isChatMinimized, activeGroupChat, userId]);
 
     // Chat operations
-    const fetchChatMessages = async (recipientId) => {
+    async function fetchChatMessages(recipientId) {
         if (!userId || !recipientId) return;
         try {
             const { data, error } = await supabase
@@ -349,7 +370,7 @@ export default function SidebarRouter(props) {
         setChatRecipient(recipient);
         setShowChatModal(true);
         setIsChatMinimized(false);
-        localStorage.setItem(`dm_last_read_${recipient.user_id}`, Date.now());
+        markDmRead(recipient.user_id);
         await fetchChatMessages(recipient.user_id);
     };
 
@@ -557,8 +578,7 @@ export default function SidebarRouter(props) {
             if (member.user_id === userId) return;
             const latestMsg = dmLatestMessages[member.user_id];
             if (latestMsg && latestMsg.receiver_id === userId) {
-                const lastRead = localStorage.getItem(`dm_last_read_${member.user_id}`);
-                if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
+                if (new Date(latestMsg.created_at).getTime() > dmLastRead(member.user_id)) {
                     count++;
                 }
             }
@@ -758,8 +778,7 @@ export default function SidebarRouter(props) {
                                                     const lastMsg = item.latestMsg;
                                                     let isUnread = false;
                                                     if (lastMsg && lastMsg.receiver_id === userId) {
-                                                        const lastRead = localStorage.getItem(`dm_last_read_${item.user_id}`);
-                                                        if (!lastRead || new Date(lastMsg.created_at).getTime() > Number(lastRead)) {
+                                                        if (new Date(lastMsg.created_at).getTime() > dmLastRead(item.user_id)) {
                                                             isUnread = true;
                                                         }
                                                     }
@@ -768,7 +787,7 @@ export default function SidebarRouter(props) {
                                                         <div 
                                                             key={`dm_${item.user_id}`}
                                                             onClick={() => {
-                                                                localStorage.setItem(`dm_last_read_${item.user_id}`, Date.now());
+                                                                markDmRead(item.user_id);
                                                                 handleOpenChat(item);
                                                             }}
                                                             className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"

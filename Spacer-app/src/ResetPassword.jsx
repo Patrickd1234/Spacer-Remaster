@@ -2,28 +2,29 @@ import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 
+// The error Supabase puts in the link's #hash when it's expired or invalid; null if none
+function linkError() {
+    const hash = window.location.hash || ""
+    if (!hash.includes("error=") && !hash.includes("error_description=")) return null
+    const desc = new URLSearchParams(hash.replace(/^#/, "")).get("error_description")
+    return (desc || "The password reset link is invalid or has expired.").replace(/\+/g, " ")
+}
+
 function ResetPassword() {
     const navigate = useNavigate()
-    const [status, setStatus] = useState("checking") // checking | ready | invalid | success
+    // Read once when the page opens, so a broken link shows its error right away
+    const [initialLinkError] = useState(linkError)
+    const [status, setStatus] = useState(initialLinkError ? "invalid" : "checking") // checking | ready | invalid | success
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
-    const [errorMsg, setErrorMsg] = useState("")
+    const [errorMsg, setErrorMsg] = useState(initialLinkError || "")
     const [submitting, setSubmitting] = useState(false)
 
     useEffect(() => {
+        if (initialLinkError) return
         let mounted = true
-
-        // Check if the URL hash contains an explicit error from Supabase (e.g. expired link)
-        const hash = window.location.hash || ""
-        if (hash.includes("error=") || hash.includes("error_description=")) {
-            const params = new URLSearchParams(hash.replace(/^#/, ""))
-            const desc = params.get("error_description") || "The password reset link is invalid or has expired."
-            setErrorMsg(desc.replace(/\+/g, " "))
-            setStatus("invalid")
-            return
-        }
 
         const checkSession = async () => {
             try {
@@ -68,7 +69,7 @@ function ResetPassword() {
             mounted = false
             subscription?.unsubscribe?.()
         }
-    }, [])
+    }, [initialLinkError])
 
     const handleUpdatePassword = async (e) => {
         e.preventDefault()

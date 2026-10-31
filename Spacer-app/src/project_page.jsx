@@ -166,8 +166,8 @@ function formatBytes(bytes) {
 
 function ProjectPage() {
     const { project_id } = useParams()
-    const [project_name, setProjectName] = useState("Website Redesign")
-    const [project_description, setProjectDescription] = useState("Corporate portal redesign featuring accessible dark mode theme, optimized rendering, and unified design tokens.")
+    const [project_name, setProjectName] = useState("Loading...")
+    const [project_description, setProjectDescription] = useState("")
     const [project_status, setProjectStatus] = useState("In Progress")
     const [project_due_date, setProjectDueDate] = useState("")
     const [project_tasks, setProjectTasks] = useState([])
@@ -377,6 +377,8 @@ function ProjectPage() {
                 setSprintTimeRemaining(prev => prev - 1);
             }, 1000);
         } else if (sprintTimeRemaining === 0 && sprintPhase === 'active') {
+            // The timer running out isn't a user event, so the sprint ends from here
+            // eslint-disable-next-line react-hooks/set-state-in-effect
             handleEndSprint();
         }
         return () => clearInterval(interval);
@@ -389,6 +391,8 @@ function ProjectPage() {
                 return current && current.status === 'done';
             });
             if (allDone) {
+                // Tasks can be finished elsewhere (board, realtime), so this watches for it
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 handleEndSprint();
             }
         }
@@ -727,16 +731,19 @@ function ProjectPage() {
         if (!error) setProjectFiles(await withSignedUrls(data || []))
     }, [project_id])
 
-    // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
-    useEffect(() => {
-        // Reset states to prevent loading flash of previous project
-        setProjectName("Loading...");
-        setProjectDescription("");
-        setProjectTasks([]);
-        setProjectFiles([]);
-        setProjectMembers([]);
-        setActivityLog([]);
+    const fetchProjectMembers = async () => {
+        if (!project_id) return
+        const { data, error } = await supabase
+            .from("project_members")
+            .select("*, user:users(*)")
+            .eq("project_id", project_id)
+        if (!error) setProjectMembers(data || [])
+    }
 
+    // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
+    // App.jsx keys this page by project_id, so switching projects starts from
+    // fresh state instead of resetting it here
+    useEffect(() => {
         const fetchProject = async () => {
             if (!project_id) return
             const { data, error } = await supabase
@@ -815,18 +822,11 @@ function ProjectPage() {
         fetchTasks()
         fetchActivity()
         fetchUserRole()
+        // Both only set state after their request returns (the rule can't see past the await)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchFiles()
         fetchProjectMembers()
     }, [project_id])
-
-    const fetchProjectMembers = async () => {
-        if (!project_id) return
-        const { data, error } = await supabase
-            .from("project_members")
-            .select("*, user:users(*)")
-            .eq("project_id", project_id)
-        if (!error) setProjectMembers(data || [])
-    }
 
     // ── Delete this project
     const handleDeleteProject = async () => {
