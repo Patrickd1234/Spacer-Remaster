@@ -57,3 +57,17 @@ This log tracks development work and code changes made for this project.
   - Not run against a database after the edit.
 - Merged `22's` into `Test-phase` (directory fix, React Compiler lint fixes, migration `20261030150000_org_team_memberships.sql`, and `.env` / root `node_modules` no longer tracked). `vite build` succeeds after the merge.
   - The merge deletes `Spacer-app/.env` and the root `node_modules` from disk. Restore with `cp Spacer-app/.env.example Spacer-app/.env` (then fill in both values from Supabase → Project Settings → API) and `npm install` in the repo root.
+- Dropdowns (`b8cc517`):
+  - Dropdowns did not use Inter. Pages wrapped in Tailwind's `font-sans` (not mapped to Inter in `tailwind.config.js`) gave them the system font, and native `<select>` lists drew with Windows styling.
+  - New `components/Select.jsx` replaces all 19 native selects. It renders a dark rounded panel in a portal (modals no longer clip it; it opens upwards near the bottom), shows the selection in the accent colour with a check, and supports arrows, Home/End, Enter/Space, Escape (closes only the list) and typeahead. Keyboard helpers are in `components/selectOptions.js` with 2 tests.
+  - 13 custom dropdown panels (menus, pickers, department switcher, Directory filter) got the `font-body-md` (Inter) class. Native `select`/`option` fall back to Inter in `tailwind.css`.
+  - Not changed: other text on `font-sans` pages still uses the system font unless it has its own font class.
+- Directory by role (`ac3322a`): super admins see everyone; admins see the people in the departments they are admin of; everyone else sees their own departments. The viewer is always listed and the team filter only offers departments in scope. New `scopeDirectory` in `general/generalFormat.js` with 4 tests.
+  - Page-level only: the `users` table is still readable organization-wide (chat and task assignment rely on it).
+  - Someone who is admin of one department and a member of another sees only their admin department. The General Space Overview's people preview is not scoped.
+- Sprints (`b3715d9`):
+  - The Sprint Lobby promised "past sprint history" but had none. No timer sprint was ever saved: the report id was a short random string and `activity_log.entity_id` is a uuid, so every insert failed silently (0 `sprint_completed` rows live).
+  - The live database already had `20261031090000 sprints` (applied 31 Oct, not in git). Copied its exact statements from `supabase_migrations.schema_migrations` into `supabase/migrations/20261031090000_sprints.sql` and wrote the rollback it names. Only `20261031100000 notifications` is still missing from git.
+  - The Sprint tab now uses it (`src/sprints/`): active sprint (goal, days left, totals, burndown), planned sprints (plan, edit, start, delete), backlog (move to a sprint, story points), complete with carry-over and retrospective, and past sprints with finished tasks and retro notes. Permissions follow `can_manage_project`; members can only set story points. The browser-only 15-minute timer was removed. `sprintMath.js` has 10 tests.
+  - The project page task query now loads `sprint_id`, `story_points` and `completed_at`; the activity feed shows `sprint_started` and names completed sprints.
+- Checked: `npm test` passes 69/69 and `vite build` succeeds. The new files lint clean; existing lint problems in `project_page.jsx`, `Department.jsx`, `Settings.jsx` and `Tasks.jsx` are unchanged (`project_page.jsx` went from 9 to 7). None of the three changes was exercised in a browser.
