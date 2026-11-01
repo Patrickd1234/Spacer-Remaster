@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { filterPeople, sortPeople } from "./generalFormat"
+import { filterPeople, sortPeople, scopeDirectory } from "./generalFormat"
 import { fetchPeople, updateMyProfile, updateMyAvatar, setReportsTo } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
+import { useRole } from "../RoleContext"
 import { GeneralShell, PageHeading, ErrorNote, INPUT_CLASS, COMPACT_SELECT_CLASS } from "./GeneralParts"
 import { PanelMessage } from "../components/DashboardParts"
 import { PersonCard, PersonRow, ProfileDrawer, EditProfileForm, FilterMenu, ActiveFilters } from "./DirectoryParts"
+import Select from "../components/Select"
 
 const LAYOUT_KEY = "directory_layout"
 
@@ -17,14 +19,16 @@ function readLayout() {
     }
 }
 
-// Screen 4: everyone in the organization. ?person=<id> opens a profile drawer;
+// Screen 4: the people the viewer may see (see scopeDirectory). ?person=<id> opens a profile drawer;
 // search, filters and layout stay as they were when it closes.
 export default function Directory() {
-    const { profile, canManage, reload: reloadProfile } = useMyProfile()
+    const { profile, error: profileError, canManage, reload: reloadProfile } = useMyProfile()
     const [searchParams, setSearchParams] = useSearchParams()
-    const [people, setPeople] = useState([])
-    const [teams, setTeams] = useState([])
-    const [status, setStatus] = useState("loading")
+    const { isSuperAdmin, roleLoading } = useRole()
+    // Everyone in the organization; the drawer still names managers outside the scope
+    const [everyone, setEveryone] = useState([])
+    const [orgTeams, setOrgTeams] = useState([])
+    const [loadStatus, setStatus] = useState("loading")
     const [query, setQuery] = useState("")
     const [teamId, setTeamId] = useState("all")
     const [jobTitle, setJobTitle] = useState("all")
@@ -35,8 +39,8 @@ export default function Directory() {
 
     const load = useCallback(async () => {
         const result = await fetchPeople()
-        setPeople(result.data)
-        setTeams(result.teams)
+        setEveryone(result.data)
+        setOrgTeams(result.teams)
         setStatus(result.error ? "error" : "ready")
     }, [])
 
@@ -44,8 +48,8 @@ export default function Directory() {
         let active = true
         fetchPeople().then((result) => {
             if (!active) return
-            setPeople(result.data)
-            setTeams(result.teams)
+            setEveryone(result.data)
+            setOrgTeams(result.teams)
             setStatus(result.error ? "error" : "ready")
         })
         return () => { active = false }
@@ -56,6 +60,15 @@ export default function Directory() {
         try { localStorage.setItem(LAYOUT_KEY, next) } catch { /* private mode: layout just isn't remembered */ }
     }
 
+    // Who to list depends on your role and departments, so wait for both
+    const status = loadStatus !== "ready" ? loadStatus
+        : profileError ? "error"
+        : roleLoading || !profile ? "loading"
+        : "ready"
+    const { people, teams } = useMemo(
+        () => scopeDirectory(everyone, orgTeams, { viewerId: profile?.id ?? null, isSuperAdmin }),
+        [everyone, orgTeams, profile?.id, isSuperAdmin]
+    )
     const jobTitles = useMemo(() => [...new Set(people.map((p) => p.job_title).filter(Boolean))].sort(), [people])
     const visible = useMemo(() => sortPeople(filterPeople(people, { query, teamId, jobTitle }), order), [people, query, teamId, jobTitle, order])
     const selected = people.find((p) => p.id === searchParams.get("person")) || null
@@ -131,10 +144,10 @@ export default function Directory() {
                     onJobTitleChange={setJobTitle}
                     onClear={clearFilters}
                 />
-                <select aria-label="Sort" className={COMPACT_SELECT_CLASS} value={order} onChange={(e) => setOrder(e.target.value)}>
+                <Select aria-label="Sort" className={COMPACT_SELECT_CLASS} value={order} onChange={(e) => setOrder(e.target.value)}>
                     <option value="az">A–Z</option>
                     <option value="za">Z–A</option>
-                </select>
+                </Select>
                 <div className="flex rounded-lg border border-[#2D3139] overflow-hidden" role="group" aria-label="Layout">
                     {[["grid", "grid_view"], ["list", "view_list"]].map(([value, icon]) => (
                         <button
@@ -153,7 +166,7 @@ export default function Directory() {
 
             <ActiveFilters filters={activeFilters} onClearAll={clearFilters} />
 
-            {status === "error" && <ErrorNote onRetry={load}>Couldn't load the directory.</ErrorNote>}
+            {status === "error" && <ErrorNote onRetry={() => { load(); reloadProfile() }}>Couldn't load the directory.</ErrorNote>}
             {actionError && <ErrorNote>{actionError}</ErrorNote>}
 
             <div className="grid grid-cols-12 gap-4 items-start">
@@ -178,7 +191,7 @@ export default function Directory() {
                     <div className="col-span-12 lg:col-span-4">
                         <ProfileDrawer
                             person={selected}
-                            people={people}
+                            people={everyone}
                             isMe={myId !== null && selectedId === myId}
                             canSetManager={canManage}
                             onClose={close}

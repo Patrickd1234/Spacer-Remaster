@@ -191,6 +191,23 @@ export function filterPeople(people, { query = "", teamId = "all", jobTitle = "a
     })
 }
 
+const DEPARTMENT_ADMIN_ROLES = new Set(["admin", "super_admin"])
+
+// Who the directory lists. Super admins see everyone. Admins see the people in
+// the departments they are admin of; everyone else sees the people in their own
+// departments. The viewer is always listed, and the team filter only offers
+// departments in that scope.
+export function scopeDirectory(people, teams, { viewerId, isSuperAdmin }) {
+    if (isSuperAdmin) return { people, teams }
+    const myTeams = people.find((p) => p.id === viewerId)?.teams || []
+    const adminTeams = myTeams.filter((t) => DEPARTMENT_ADMIN_ROLES.has(t.role))
+    const scope = new Set((adminTeams.length > 0 ? adminTeams : myTeams).map((t) => t.id))
+    return {
+        people: people.filter((p) => p.id === viewerId || p.teams.some((t) => scope.has(t.id))),
+        teams: teams.filter((t) => scope.has(t.id)),
+    }
+}
+
 export function sortPeople(people, order) {
     const direction = order === "za" ? -1 : 1
     return [...people].sort((a, b) => direction * (a.name || "").localeCompare(b.name || ""))

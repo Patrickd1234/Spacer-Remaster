@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
     meetingPlatform, filterAnnouncements, sortAnnouncements, validateAnnouncement,
     upcomingEvents, eventsByDay, monthGrid, weekDays, dayKey, validateEvent,
-    filterPeople, sortPeople, initials, eventDayKey,
+    filterPeople, sortPeople, scopeDirectory, initials, eventDayKey,
 } from "./generalFormat.js";
 
 test("meetingPlatform names known hosts and rejects non-https links", () => {
@@ -101,6 +101,40 @@ test("filterPeople searches name, title and team, and filters exactly", () => {
 test("sortPeople orders A-Z and Z-A", () => {
     assert.deepEqual(sortPeople(PEOPLE, "az").map((p) => p.id), ["c", "b", "a"]);
     assert.deepEqual(sortPeople(PEOPLE, "za").map((p) => p.id), ["a", "b", "c"]);
+});
+
+const ORG = [
+    { id: "boss", teams: [] },
+    { id: "adm", teams: [{ id: "eng", role: "admin" }, { id: "ops", role: "member" }] },
+    { id: "dev", teams: [{ id: "eng", role: "member" }] },
+    { id: "ops1", teams: [{ id: "ops", role: "member" }] },
+    { id: "mkt", teams: [{ id: "marketing", role: "member" }] },
+];
+const ORG_TEAMS = [{ id: "eng" }, { id: "marketing" }, { id: "ops" }];
+const ids = (list) => list.map((x) => x.id);
+
+test("scopeDirectory shows super admins everyone", () => {
+    const result = scopeDirectory(ORG, ORG_TEAMS, { viewerId: "boss", isSuperAdmin: true });
+    assert.deepEqual(ids(result.people), ["boss", "adm", "dev", "ops1", "mkt"]);
+    assert.deepEqual(ids(result.teams), ["eng", "marketing", "ops"]);
+});
+
+test("scopeDirectory shows admins only the departments they are admin of", () => {
+    const result = scopeDirectory(ORG, ORG_TEAMS, { viewerId: "adm", isSuperAdmin: false });
+    assert.deepEqual(ids(result.people), ["adm", "dev"]);
+    assert.deepEqual(ids(result.teams), ["eng"]);
+});
+
+test("scopeDirectory shows members their fellow department members", () => {
+    const result = scopeDirectory(ORG, ORG_TEAMS, { viewerId: "ops1", isSuperAdmin: false });
+    assert.deepEqual(ids(result.people), ["adm", "ops1"]);
+    assert.deepEqual(ids(result.teams), ["ops"]);
+});
+
+test("scopeDirectory always lists the viewer, even with no department", () => {
+    const result = scopeDirectory(ORG, ORG_TEAMS, { viewerId: "boss", isSuperAdmin: false });
+    assert.deepEqual(ids(result.people), ["boss"]);
+    assert.deepEqual(result.teams, []);
 });
 
 test("initials uses up to two words", () => {
