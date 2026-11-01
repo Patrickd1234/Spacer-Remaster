@@ -6,6 +6,7 @@ import Header from "./partials/header"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
+import SprintTab from "./sprints/SprintTab"
 import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
 import { statusFromSubtasks } from "./taskStatus"
@@ -263,201 +264,6 @@ function ProjectPage() {
     const [taskUploading, setTaskUploading] = useState(false)
     const [taskUploadError, setTaskUploadError] = useState("")
     const taskFileInputRef = useRef()
-
-    // ── Sprint Timer state
-    const [sprintTotalTime, setSprintTotalTime] = useState(15 * 60);
-    const [sprintTimeRemaining, setSprintTimeRemaining] = useState(15 * 60);
-    const [isTimerRunning, setIsTimerRunning] = useState(false);
-    const [isEditingTimer, setIsEditingTimer] = useState(false);
-    const [timerInputValue, setTimerInputValue] = useState("00:15:00");
-
-    // ── Sprint Lifecycle state
-    const [sprintPhase, setSprintPhase] = useState('idle'); // 'idle' | 'active' | 'summary'
-    const [currentSprintReport, setCurrentSprintReport] = useState(null);
-    const [sprintStartTime, setSprintStartTime] = useState(null);
-
-    const formatTimerDisplay = (totalSeconds) => {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    const handleTimerInputBlur = () => {
-        const parts = timerInputValue.split(':').map(n => parseInt(n, 10) || 0);
-        let totalSeconds = 0;
-        if (parts.length === 3) {
-            totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        } else if (parts.length === 2) {
-            totalSeconds = parts[0] * 60 + parts[1];
-        } else if (parts.length === 1) {
-            totalSeconds = parts[0];
-        }
-        
-        const finalSeconds = totalSeconds > 0 ? totalSeconds : 1;
-        setSprintTotalTime(finalSeconds);
-        setSprintTimeRemaining(finalSeconds);
-        setTimerInputValue(formatTimerDisplay(finalSeconds));
-        setIsEditingTimer(false);
-    };
-
-    const [sprintTasks, setSprintTasks] = useState([]);
-
-    // ── Sprint Lifecycle handlers
-    const handleStartNewSprint = () => {
-        setSprintPhase('active');
-        setSprintStartTime(new Date().toISOString());
-        setSprintTasks([]);
-        setSprintTotalTime(15 * 60);
-        setSprintTimeRemaining(15 * 60);
-        setTimerInputValue("00:15:00");
-        setIsTimerRunning(false);
-        setIsEditingTimer(false);
-        setCurrentSprintReport(null);
-    };
-
-    const handleEndSprint = async () => {
-        setIsTimerRunning(false);
-        const endTime = new Date().toISOString();
-        const timeElapsed = sprintTotalTime - sprintTimeRemaining;
-
-        const completedTasks = sprintTasks.filter(st => {
-            const current = project_tasks.find(t => t.id === st.id);
-            return current && current.status === 'done';
-        });
-        const incompleteTasks = sprintTasks.filter(st => {
-            const current = project_tasks.find(t => t.id === st.id);
-            return !current || current.status !== 'done';
-        });
-
-        const report = {
-            id: Math.random().toString(36).substring(2, 11),
-            startTime: sprintStartTime,
-            endTime,
-            timerSet: sprintTotalTime,
-            timeElapsed,
-            totalTasks: sprintTasks.length,
-            completedCount: completedTasks.length,
-            incompleteCount: incompleteTasks.length,
-            completionPercent: sprintTasks.length > 0 ? Math.round((completedTasks.length / sprintTasks.length) * 100) : 0,
-            completedTasks: completedTasks.map(t => {
-                const current = project_tasks.find(pt => pt.id === t.id);
-                return { id: t.id, title: current?.title || t.title };
-            }),
-            incompleteTasks: incompleteTasks.map(t => {
-                const current = project_tasks.find(pt => pt.id === t.id);
-                return { id: t.id, title: current?.title || t.title };
-            }),
-        };
-
-        setCurrentSprintReport(report);
-        setSprintPhase('summary');
-
-        const userData = { user: await getSessionUser() };
-        const logEntry = {
-            entity_type: "sprint",
-            entity_id: report.id,
-            actor_id: userData?.user?.id,
-            action: "sprint_completed",
-            new_state: { 
-                project_id: project_id, 
-                completionPercent: report.completionPercent,
-                completedCount: report.completedCount,
-                totalTasks: report.totalTasks
-            }
-        };
-        const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single();
-        if (newLog) setActivityLog(prev => [newLog, ...prev]);
-    };
-
-    useEffect(() => {
-        let interval;
-        if (isTimerRunning && sprintTimeRemaining > 0) {
-            interval = setInterval(() => {
-                setSprintTimeRemaining(prev => prev - 1);
-            }, 1000);
-        } else if (sprintTimeRemaining === 0 && sprintPhase === 'active') {
-            // The timer running out isn't a user event, so the sprint ends from here
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            handleEndSprint();
-        }
-        return () => clearInterval(interval);
-    }, [isTimerRunning, sprintTimeRemaining, sprintPhase]);
-
-    useEffect(() => {
-        if (sprintPhase === 'active' && sprintTasks.length > 0) {
-            const allDone = sprintTasks.every(st => {
-                const current = project_tasks.find(t => t.id === st.id);
-                return current && current.status === 'done';
-            });
-            if (allDone) {
-                // Tasks can be finished elsewhere (board, realtime), so this watches for it
-                // eslint-disable-next-line react-hooks/set-state-in-effect
-                handleEndSprint();
-            }
-        }
-    }, [project_tasks, sprintTasks, sprintPhase]);
-
-    const handleTimerStart = async () => setIsTimerRunning(prev => !prev);
-    const handleTimerReset = async () => {
-        setIsTimerRunning(false);
-        setSprintTimeRemaining(sprintTotalTime);
-    };
-
-    const handleExitSprint = () => {
-        setSprintPhase('idle');
-        setSprintTasks([]);
-        setCurrentSprintReport(null);
-        setSprintStartTime(null);
-        setSprintTotalTime(15 * 60);
-        setSprintTimeRemaining(15 * 60);
-        setTimerInputValue("00:15:00");
-        setIsTimerRunning(false);
-        setIsEditingTimer(false);
-    };
-
-    const handleToggleTaskInSprint = (task) => {
-        const isSelected = !!sprintTasks.find(st => st.id === task.id);
-        
-        let allSubtasksDone = true;
-        let hasSubtasks = false;
-        if (task.sub_tasks) {
-            if (Array.isArray(task.sub_tasks)) {
-                if (task.sub_tasks.length > 0) {
-                    hasSubtasks = true;
-                    allSubtasksDone = task.sub_tasks.every(st => Boolean(st?.done));
-                }
-            } else if (typeof task.sub_tasks === "string") {
-                const trimmed = task.sub_tasks.trim();
-                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                    try {
-                        const parsed = JSON.parse(trimmed);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            hasSubtasks = true;
-                            allSubtasksDone = parsed.every(st => Boolean(st?.done));
-                        }
-                    } catch (e) {
-                        console.warn("Malformed sub_tasks for task", task.id, e);
-                    }
-                }
-            }
-        }
-        const isLocked = isTimerRunning && isSelected && hasSubtasks && !allSubtasksDone;
-
-        if (isLocked) {
-            alert("This task is locked! Complete all subtasks first.");
-            return;
-        }
-
-        setSprintTasks(prev => {
-            const exists = prev.find(st => st.id === task.id);
-            if (exists) {
-                return prev.filter(st => st.id !== task.id);
-            } else {
-                return [...prev, task];
-            }
-        });
-    };
 
     const updateTaskPriority = async (taskId, newPriority) => {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
@@ -784,7 +590,7 @@ function ProjectPage() {
             if (!project_id) return
             const { data, error } = await supabase
                 .from("tasks")
-                .select("id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by")
+                .select("id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by, sprint_id, story_points, completed_at")
                 .eq("project_id", project_id)
                 .order("created_at", { ascending: false })
             if (error) { console.error("Error fetching tasks:", error) }
@@ -1140,8 +946,11 @@ function ProjectPage() {
                                                             {activity.action === "file_removed" && (
                                                                 <>deleted file <span className="text-error font-bold">{activity.new_state?.name}</span></>
                                                             )}
+                                                            {activity.action === "sprint_started" && (
+                                                                <>started <span className="text-white font-bold">{activity.new_state?.name || "a sprint"}</span> with {activity.new_state?.totalTasks ?? 0} tasks</>
+                                                            )}
                                                             {activity.action === "sprint_completed" && (
-                                                                <>completed a sprint with <span className="text-[var(--primary-color)] font-bold">{activity.new_state?.completionPercent}%</span> success ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
+                                                                <>completed {activity.new_state?.name ? <span className="text-white font-bold">{activity.new_state.name}</span> : "a sprint"} with <span className="text-[var(--primary-color)] font-bold">{activity.new_state?.completionPercent}%</span> success ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
                                                             )}
                                                         </p>
                                                         <p className="text-[#8c947b] text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
@@ -1158,331 +967,7 @@ function ProjectPage() {
                     {/* Sprint Tab */}
                     {activeTab === "sprint" && (
                         <div className="tab-pane block" id="section-sprint">
-                            {sprintPhase === 'idle' && (
-                                <div className="flex flex-col gap-8 max-w-4xl mx-auto items-center pt-10">
-                                    <div className="text-center space-y-4">
-                                        <h2 className="text-3xl font-black text-white">Sprint Lobby</h2>
-                                        <p className="text-[#8c947b]">Start a new sprint or review your past sprint history.</p>
-                                    </div>
-                                    <button 
-                                        onClick={handleStartNewSprint}
-                                        className="bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--primary-color-rgb),0.3)] flex items-center gap-3"
-                                    >
-                                        <span className="material-symbols-outlined">rocket_launch</span>
-                                        Start New Sprint
-                                    </button>
-                                </div>
-                            )}
-
-                            {sprintPhase === 'active' && (
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
-                                    {/* Left Column: Backlog */}
-                                    <div className="lg:col-span-8 flex flex-col gap-lg">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-sm">
-                                                <h3 className="font-headline-xl text-white">Active Sprint</h3>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <span className="px-3 py-1 bg-[#1C1F26] text-[#8c947b] border border-[#2D3139] rounded-full text-sm font-medium">{sprintTasks.length} Tasks</span>
-                                                {(isTimerRunning || sprintTimeRemaining < sprintTotalTime) && (
-                                                    <button onClick={handleEndSprint} className="px-4 py-1 bg-error text-white rounded-full text-sm font-bold hover:bg-error/80 transition-colors shadow-lg">End Sprint</button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Task Add From Overdue */}
-                                        {project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length > 0 && (
-                                            <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-4">
-                                                <h4 className="text-error text-xs font-bold uppercase mb-3 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">assignment_late</span> Overdue Tasks
-                                                </h4>
-                                                <div className="flex flex-col gap-2">
-                                                    {project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).map(task => {
-                                                        const isSelected = !!sprintTasks.find(st => st.id === task.id);
-                                                        
-                                                        let allSubtasksDone = true;
-                                                        let hasSubtasks = false;
-                                                        if (task.sub_tasks) {
-                                                            if (Array.isArray(task.sub_tasks)) {
-                                                                if (task.sub_tasks.length > 0) {
-                                                                    hasSubtasks = true;
-                                                                    allSubtasksDone = task.sub_tasks.every(st => Boolean(st?.done));
-                                                                }
-                                                            } else if (typeof task.sub_tasks === "string") {
-                                                                const trimmed = task.sub_tasks.trim();
-                                                                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                                                    try {
-                                                                        const parsed = JSON.parse(trimmed);
-                                                                        if (Array.isArray(parsed) && parsed.length > 0) {
-                                                                            hasSubtasks = true;
-                                                                            allSubtasksDone = parsed.every(st => Boolean(st?.done));
-                                                                        }
-                                                                    } catch (e) {
-                                                                        console.warn("Malformed sub_tasks for task", task.id, e);
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-
-                                                        const sprintHasStarted = isTimerRunning || sprintTimeRemaining < sprintTotalTime;
-                                                        if (sprintHasStarted && !isSelected) return null;
-
-                                                        const cantSelect = !hasSubtasks && !isSelected;
-                                                        const isLocked = sprintHasStarted && isSelected && hasSubtasks && !allSubtasksDone;
-                                                        const buttonDisabled = isLocked || cantSelect;
-
-                                                        return (
-                                                            <div key={`overdue-${task.id}`} className={`p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors ${isSelected ? 'bg-[var(--primary-color)]/5 border-[var(--primary-color)]/30' : 'bg-[#191c21]'}`}>
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (cantSelect) return;
-                                                                        handleToggleTaskInSprint(task);
-                                                                    }}
-                                                                    className={`check-btn flex items-center justify-center ${!isSelected ? '!bg-transparent !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} ${buttonDisabled ? '!bg-[#191c21] !border-[#2D3139] opacity-50 cursor-not-allowed hover:!bg-[#191c21]' : ''}`}
-                                                                    title={cantSelect ? "Requires sub-tasks" : (isLocked ? "Locked - Complete all subtasks" : (isSelected ? "Remove from Sprint" : "Add to Sprint"))}
-                                                                >
-                                                                    {cantSelect ? (
-                                                                        <span className="material-symbols-outlined text-[14px] text-[#8c947b] opacity-100 block">block</span>
-                                                                    ) : isLocked ? (
-                                                                        <svg className="check-icon opacity-100 text-[#8c947b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                                                        </svg>
-                                                                    ) : (
-                                                                        <svg className={`check-icon transition-opacity ${!isSelected ? 'opacity-0' : 'opacity-100'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    )}
-                                                                </button>
-                                                                <div 
-                                                                    className="flex-1 cursor-pointer"
-                                                                    onClick={() => setSelectedTask(task)}
-                                                                >
-                                                                    <p className={`text-sm font-medium hover:underline ${isSelected ? 'text-white' : 'text-[#8c947b]'}`}>{task.title}</p>
-                                                                    <p className="text-error text-[10px] font-semibold">Due: {new Date(task.due_date).toLocaleDateString()}</p>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Finished Sprint Tasks */}
-                                        {(() => {
-                                            const finishedSprintTasks = project_tasks.filter(t => t.status === 'done' && sprintTasks.find(st => st.id === t.id));
-                                            if (finishedSprintTasks.length === 0) return null;
-                                            return (
-                                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-4 mt-6">
-                                                    <h4 className="text-[#22c55e] text-xs font-bold uppercase mb-3 flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-sm">check_circle</span> Finished
-                                                    </h4>
-                                                    <div className="flex flex-col gap-2 opacity-60">
-                                                        {finishedSprintTasks.map(task => (
-                                                            <div key={`done-${task.id}`} className="p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors bg-[#191c21]">
-                                                                <div className="w-8 h-8 rounded bg-[#22c55e]/10 border border-[#22c55e]/30 flex items-center justify-center shrink-0">
-                                                                    <svg className="w-4 h-4 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                </div>
-                                                                <div 
-                                                                    className="flex-1 cursor-pointer"
-                                                                    onClick={() => setSelectedTask(task)}
-                                                                >
-                                                                    <p className="text-sm font-medium hover:underline text-[#8c947b] line-through">{task.title}</p>
-                                                                    {task.due_date && <p className="text-error text-[10px] font-semibold opacity-50">Due: {new Date(task.due_date).toLocaleDateString()}</p>}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-
-                                    </div>
-                                    {/* Right Column: Sprint Timer */}
-                                    <div className="lg:col-span-4 flex flex-col gap-lg">
-                                        <div className="bg-[#191c21] border border-[#2D3139] p-8 rounded-3xl shadow-sm flex flex-col items-center">
-                                            <h4 className="text-xs font-black uppercase tracking-[0.2em] text-[#8c947b] mb-8">Sprint Timer</h4>
-                                            <div className="flex items-center justify-center mb-10 w-full mt-4">
-                                                {isEditingTimer ? (() => {
-                                                    const parts = timerInputValue.split(':');
-                                                    const h = parts[0] || '00';
-                                                    const m = parts[1] || '00';
-                                                    const s = parts[2] || '00';
-                                                    return (
-                                                        <div 
-                                                            className="timer-wrapper"
-                                                            onBlur={(e) => {
-                                                                if (!e.currentTarget.contains(e.relatedTarget)) {
-                                                                    handleTimerInputBlur();
-                                                                }
-                                                            }}
-                                                        >
-                                                            <div className="timer-container">
-                                                                <div className="time-unit">
-                                                                    <input 
-                                                                        autoFocus
-                                                                        value={h}
-                                                                        onFocus={(e) => e.target.select()}
-                                                                        onChange={(e) => {
-                                                                            let val = e.target.value.replace(/[^0-9]/g, '');
-                                                                            if (val.length > 2) val = val.slice(-2);
-                                                                            setTimerInputValue(`${val}:${m}:${s}`);
-                                                                        }}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTimerInputBlur(); }}
-                                                                        className="timer-number bg-transparent outline-none w-20 text-center"
-                                                                    />
-                                                                    <span className="timer-label">Hours</span>
-                                                                </div>
-                                                                <span className="timer-separator">:</span>
-                                                                <div className="time-unit">
-                                                                    <input 
-                                                                        value={m}
-                                                                        onFocus={(e) => e.target.select()}
-                                                                        onChange={(e) => {
-                                                                            let val = e.target.value.replace(/[^0-9]/g, '');
-                                                                            if (val.length > 2) val = val.slice(-2);
-                                                                            setTimerInputValue(`${h}:${val}:${s}`);
-                                                                        }}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTimerInputBlur(); }}
-                                                                        className="timer-number bg-transparent outline-none w-20 text-center"
-                                                                    />
-                                                                    <span className="timer-label">Minutes</span>
-                                                                </div>
-                                                                <span className="timer-separator">:</span>
-                                                                <div className="time-unit">
-                                                                    <input 
-                                                                        value={s}
-                                                                        onFocus={(e) => e.target.select()}
-                                                                        onChange={(e) => {
-                                                                            let val = e.target.value.replace(/[^0-9]/g, '');
-                                                                            if (val.length > 2) val = val.slice(-2);
-                                                                            setTimerInputValue(`${h}:${m}:${val}`);
-                                                                        }}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTimerInputBlur(); }}
-                                                                        className="timer-number bg-transparent outline-none w-20 text-center"
-                                                                    />
-                                                                    <span className="timer-label">Seconds</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })() : (
-                                                    <div 
-                                                        className={`timer-wrapper ${!isTimerRunning ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
-                                                        onClick={() => {
-                                                            if (!isTimerRunning) {
-                                                                setTimerInputValue(formatTimerDisplay(sprintTimeRemaining));
-                                                                setIsEditingTimer(true);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <div className="timer-container">
-                                                            <div className="time-unit">
-                                                                <span className="timer-number">{Math.floor(sprintTimeRemaining / 3600).toString().padStart(2, '0')}</span>
-                                                                <span className="timer-label">Hours</span>
-                                                            </div>
-                                                            <span className="timer-separator">:</span>
-                                                            <div className="time-unit">
-                                                                <span className="timer-number">{Math.floor((sprintTimeRemaining % 3600) / 60).toString().padStart(2, '0')}</span>
-                                                                <span className="timer-label">Minutes</span>
-                                                            </div>
-                                                            <span className="timer-separator">:</span>
-                                                            <div className="time-unit">
-                                                                <span className="timer-number">{(sprintTimeRemaining % 60).toString().padStart(2, '0')}</span>
-                                                                <span className="timer-label">Seconds</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4 w-full mb-6">
-                                                <button onClick={handleTimerStart} className={`${isTimerRunning ? 'bg-[#e05252] hover:bg-[#ff5555]' : 'bg-[var(--primary-color)] hover:bg-[#c4ff4d]'} text-[#1C1F26] p-4 rounded-2xl flex flex-col items-center gap-2 transition-colors cursor-pointer`}>
-                                                    <span className="material-symbols-outlined text-[24px]">{isTimerRunning ? 'pause' : 'play_arrow'}</span>
-                                                    <span className="text-[10px] font-bold uppercase">{isTimerRunning ? 'Pause' : 'Start'}</span>
-                                                </button>
-                                                <button onClick={handleTimerReset} className="bg-[#2D3139] text-white p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-[#3D4149] transition-colors cursor-pointer">
-                                                    <span className="material-symbols-outlined text-[24px]">refresh</span>
-                                                    <span className="text-[10px] font-bold uppercase">Reset</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {sprintPhase === 'summary' && currentSprintReport && (
-                                <div className="max-w-2xl mx-auto mt-10">
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-3xl p-10 relative overflow-hidden shadow-2xl">
-                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary-color)] to-blue-500"></div>
-                                        <div className="flex justify-between items-start mb-8">
-                                            <div>
-                                                <h2 className="text-3xl font-black text-white mb-2">Sprint Report</h2>
-                                                <p className="text-[#8c947b]">
-                                                    {new Date(currentSprintReport.startTime).toLocaleTimeString()} - {new Date(currentSprintReport.endTime).toLocaleTimeString()}
-                                                </p>
-                                            </div>
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-5xl font-black text-white">{currentSprintReport.completionPercent}%</span>
-                                                <span className="text-[#8c947b] text-sm uppercase font-bold tracking-widest mt-1">Completed</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4 mb-8">
-                                            <div className="bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139]">
-                                                <span className="text-[#8c947b] text-xs uppercase font-bold">Time Elapsed</span>
-                                                <p className="text-xl font-bold text-white mt-1">
-                                                    {Math.floor(currentSprintReport.timeElapsed / 60)}m {currentSprintReport.timeElapsed % 60}s
-                                                </p>
-                                            </div>
-                                            <div className="bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139]">
-                                                <span className="text-[#8c947b] text-xs uppercase font-bold">Total Tasks</span>
-                                                <p className="text-xl font-bold text-white mt-1">{currentSprintReport.totalTasks}</p>
-                                            </div>
-                                        </div>
-
-                                        {currentSprintReport.completedTasks.length > 0 && (
-                                            <div className="mb-6">
-                                                <h4 className="text-[#22c55e] text-sm font-bold uppercase mb-3 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">check_circle</span> Completed Tasks
-                                                </h4>
-                                                <div className="flex flex-col gap-2">
-                                                    {currentSprintReport.completedTasks.map(t => (
-                                                        <div key={t.id} className="bg-[#1C1F26] px-4 py-3 rounded-lg border border-[#22c55e]/30 flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-[#22c55e] text-[18px]">done</span>
-                                                            <span className="text-[#8c947b] line-through text-sm font-medium">{t.title}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {currentSprintReport.incompleteTasks.length > 0 && (
-                                            <div className="mb-8">
-                                                <h4 className="text-[#e05252] text-sm font-bold uppercase mb-3 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">cancel</span> Left Incomplete
-                                                </h4>
-                                                <div className="flex flex-col gap-2">
-                                                    {currentSprintReport.incompleteTasks.map(t => (
-                                                        <div key={t.id} className="bg-[#1C1F26] px-4 py-3 rounded-lg border border-[#e05252]/30 flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-[#e05252] text-[18px]">close</span>
-                                                            <span className="text-white text-sm font-medium">{t.title}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <button 
-                                            onClick={handleExitSprint}
-                                            className="w-full bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] font-bold py-4 rounded-xl text-lg transition-colors cursor-pointer"
-                                        >
-                                            Continue
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
+                            <SprintTab projectId={project_id} tasks={project_tasks} canManage={canDeleteProject === true} onTasksChange={setProjectTasks} />
                         </div>
                     )}
 
@@ -1728,7 +1213,7 @@ function ProjectPage() {
                                         {sidebarActionMenuOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden">
+                                                <div className="font-body-md absolute right-0 top-full mt-1 w-48 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden">
                                                     {canCreateTasks && (
                                                         <button
                                                             className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
@@ -2222,7 +1707,7 @@ function ProjectPage() {
                                         {priorityDropdownOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
-                                                <div className="absolute left-0 top-full mt-1 w-32 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
+                                                <div className="font-body-md absolute left-0 top-full mt-1 w-32 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
                                                     {['low', 'medium', 'high', 'urgent'].map(p => (
                                                         <button
                                                             key={p}
