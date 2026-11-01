@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Avatar, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote } from "./GeneralParts"
 import { validateImage } from "./generalData"
+import Select from "../components/Select"
 
 const ROLE_NAMES = { admin: "Admin", team_lead: "Team lead", member: "Member", viewer: "Viewer", super_admin: "Super admin" }
 const MAX_TAGS = 2
@@ -63,18 +64,18 @@ export function FilterMenu({ teams, jobTitles, teamId, jobTitle, onTeamChange, o
                 )}
             </button>
             {isOpen && (
-                <div role="dialog" aria-label="Filter people" className="absolute right-0 top-full mt-2 z-30 w-72 bg-[#14161b] border border-[#2D3139] rounded-xl p-4 space-y-4 shadow-xl shadow-black/40">
+                <div role="dialog" aria-label="Filter people" className="font-body-md absolute right-0 top-full mt-2 z-30 w-72 bg-[#14161b] border border-[#2D3139] rounded-xl p-4 space-y-4 shadow-xl shadow-black/40">
                     <Field label="Team">
-                        <select className={INPUT_CLASS} value={teamId} onChange={(e) => onTeamChange(e.target.value)}>
+                        <Select className={INPUT_CLASS} value={teamId} onChange={(e) => onTeamChange(e.target.value)}>
                             <option value="all">All teams</option>
                             {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                     <Field label="Role">
-                        <select className={INPUT_CLASS} value={jobTitle} onChange={(e) => onJobTitleChange(e.target.value)}>
+                        <Select className={INPUT_CLASS} value={jobTitle} onChange={(e) => onJobTitleChange(e.target.value)}>
                             <option value="all">All roles</option>
                             {jobTitles.map((t) => <option key={t} value={t}>{t}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                     <div className="flex justify-between items-center pt-1">
                         <button type="button" onClick={onClear} disabled={activeCount === 0} className="text-xs text-[#8c947b] hover:text-white disabled:opacity-40 disabled:hover:text-[#8c947b] cursor-pointer disabled:cursor-default">
@@ -212,7 +213,7 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                     <dt className="text-[#8c947b]">Reports to</dt>
                     <dd className="text-[#c4c9b8] truncate">
                         {canSetManager ? (
-                            <select
+                            <Select
                                 aria-label={`Who ${person.name} reports to`}
                                 className={`${INPUT_CLASS} py-1`}
                                 value={person.reports_to || ""}
@@ -220,7 +221,7 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                             >
                                 <option value="">No one</option>
                                 {people.filter((p) => p.id !== person.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select>
+                            </Select>
                         ) : (manager?.name || "—")}
                     </dd>
                     <dt className="text-[#8c947b]">Department</dt><dd className="text-[#c4c9b8] truncate">{person.teams[0]?.name || "—"}</dd>
@@ -275,12 +276,12 @@ export function EditProfileForm({ person, onSave, onClose }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Location"><input className={INPUT_CLASS} value={form.location} onChange={set("location")} maxLength={100} placeholder="e.g. Lagos, Nigeria" /></Field>
                     <Field label="Time zone">
-                        <select className={INPUT_CLASS} value={form.timezone} onChange={set("timezone")}>
+                        <Select className={INPUT_CLASS} value={form.timezone} onChange={set("timezone")}>
                             <option value="">Not set</option>
                             {/* The browser's own zone (e.g. "UTC") can be missing from the list */}
                             {form.timezone && !TIME_ZONES.includes(form.timezone) && <option value={form.timezone}>{form.timezone}</option>}
                             {TIME_ZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                 </div>
                 <Field label="About"><textarea className={`${INPUT_CLASS} min-h-[90px]`} value={form.description} onChange={set("description")} maxLength={1000} /></Field>

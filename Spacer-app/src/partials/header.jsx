@@ -309,7 +309,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
 
                         {/* SEARCH DROPDOWN */}
                         {showDropdown && searchQuery.trim().length > 0 && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50">
+                            <div className="font-body-md absolute top-full left-0 right-0 mt-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50">
                                 {isSearching ? (
                                     <div className="p-4 text-center text-sm text-[#8c947b] flex items-center justify-center gap-2">
                                         <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
@@ -402,7 +402,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                             )}
                         </button>
                         {showNotifications && (
-                            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-[#2D3139] bg-[#191c21] shadow-xl p-3 z-50">
+                            <div className="font-body-md absolute right-0 mt-2 w-80 rounded-xl border border-[#2D3139] bg-[#191c21] shadow-xl p-3 z-50">
                                 <div className="flex items-center justify-between mb-3">
                                     <div>
                                         <p className="text-sm font-bold text-white">In-app notifications</p>

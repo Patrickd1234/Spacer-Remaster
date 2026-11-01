@@ -197,7 +197,7 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
                                             onToggle={() => setIsLeadListOpen((open) => !open)}
                                         />
                                         {isLeadListOpen && (
-                                            <div className="mt-2 max-h-48 overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-lg p-1">
+                                            <div className="font-body-md mt-2 max-h-48 overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-lg p-1">
                                                 {leadOptions.length === 0
                                                     ? <p className="text-xs text-[#8c947b] px-3 py-3">No matching members.</p>
                                                     : leadOptions.map((person) => (
@@ -222,7 +222,7 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
                                 />
                                 <div className="mt-2"><Chips labels={chipLabels} onRemove={removeChip} /></div>
                                 {isMemberGridOpen && (
-                                    <div className="mt-2 max-h-64 overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-lg p-2">
+                                    <div className="font-body-md mt-2 max-h-64 overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-lg p-2">
                                         {memberOptions.length === 0
                                             ? <p className="text-xs text-[#8c947b] px-2 py-3">No matching members.</p>
                                             : (

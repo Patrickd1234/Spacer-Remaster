@@ -49,7 +49,7 @@ export default function SidebarProfile({ name, email, isExpanded }) {
             </button>
 
             {isOpen && (
-                <div className={`absolute ${isExpanded ? "left-4 right-4" : "left-16 w-48"} bottom-full mb-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50`}>
+                <div className={`font-body-md absolute ${isExpanded ? "left-4 right-4" : "left-16 w-48"} bottom-full mb-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50`}>
                     <Link to="/profile" onClick={() => setIsOpen(false)} className="flex items-center gap-3 px-4 py-3 text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors">
                         <span className="material-symbols-outlined text-[20px]">person</span>
                         <span className="text-sm font-medium">Your Profile</span>

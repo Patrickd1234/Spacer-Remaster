@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase, getSessionUser } from "../supabase";
+import Select from "../components/Select";
 
 export default function CreateProjectModal({ onClose, onCreated }) {
     const [teamSpaces, setTeamSpaces] = useState([]);
@@ -151,7 +152,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                         <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
                             Team Space
                         </label>
-                        <select
+                        <Select
                             className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
                             value={teamSpaceId}
                             onChange={(e) => setTeamSpaceId(e.target.value)}
@@ -161,14 +162,14 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                                     {team.name}
                                 </option>
                             ))}
-                        </select>
+                        </Select>
                     </div>
 
                     <div className="space-y-xs">
                         <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
                             Team Lead
                         </label>
-                        <select
+                        <Select
                             className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
                             value={teamLeadId}
                             onChange={(e) => setTeamLeadId(e.target.value)}
@@ -177,7 +178,7 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                             {teamLeads.map((user) => (
                                 <option key={user.id} value={user.id}>{user.name}</option>
                             ))}
-                        </select>
+                        </Select>
                     </div>
 
                     <div className="space-y-xs">

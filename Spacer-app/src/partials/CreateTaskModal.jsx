@@ -51,7 +51,7 @@ const CustomDropdown = ({ options, value, onChange, placeholder, icon = null, is
                 <span className={`material-symbols-outlined text-[#8c947b] text-[18px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
             </button>
             {isOpen && (
-                <div className="absolute z-50 top-full mt-1 w-full min-w-[160px] bg-[#1c1f26] border border-[#2D3139] rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
+                <div className="font-body-md absolute z-50 top-full mt-1 w-full min-w-[160px] bg-[#1c1f26] border border-[#2D3139] rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
                     {options.length === 0 && <p className="px-3 py-2 text-xs text-[#8c947b]">Nothing to choose yet</p>}
                     {options.map((opt) => (
                         <button

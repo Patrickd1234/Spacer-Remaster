@@ -114,7 +114,7 @@ export default function DepartmentSwitcher({ variant = "page" }) {
                     role="listbox"
                     aria-label="Departments"
                     onKeyDown={handleListKeyDown}
-                    className={`reports-fade absolute z-50 mt-2 rounded-xl border border-[#2D3139] bg-[#16191F] p-1.5 shadow-2xl shadow-black/40 ${
+                    className={`font-body-md reports-fade absolute z-50 mt-2 rounded-xl border border-[#2D3139] bg-[#16191F] p-1.5 shadow-2xl shadow-black/40 ${
                         isSidebar ? "left-0 right-0" : "left-0 w-72"
                     }`}
                 >

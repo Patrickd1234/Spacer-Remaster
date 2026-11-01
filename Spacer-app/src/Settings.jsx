@@ -8,6 +8,7 @@ import { useRole } from "./RoleContext"
 import TwoFactorSettings from "./components/TwoFactorSettings"
 import ComingSoonCard from "./components/ComingSoonCard"
 import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
+import Select from "./components/Select"
 
 export default function Settings() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -386,7 +387,7 @@ export default function Settings() {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-md pt-md border-t border-outline-variant">
                                             <div>
                                                 <label className="block text-label-md font-semibold text-on-surface mb-2">Default Landing View</label>
-                                                <select
+                                                <Select
                                                     className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
                                                     value={workspace.defaultPage}
                                                     onChange={(e) => setWorkspace({ ...workspace, defaultPage: e.target.value })}
@@ -395,12 +396,12 @@ export default function Settings() {
                                                     <option value="/calendar">Calendar View</option>
                                                     <option value="/department">Department Overview</option>
                                                     <option value="/reports">Reports & Analytics</option>
-                                                </select>
+                                                </Select>
                                             </div>
 
                                             <div>
                                                 <label className="block text-label-md font-semibold text-on-surface mb-2">Default Project Privacy</label>
-                                                <select
+                                                <Select
                                                     className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
                                                     value={workspace.defaultVisibility}
                                                     onChange={(e) => setWorkspace({ ...workspace, defaultVisibility: e.target.value })}
@@ -408,14 +409,14 @@ export default function Settings() {
                                                     <option value="team">Team Members Only</option>
                                                     <option value="private">Private (Invite Only)</option>
                                                     <option value="public">Public to Workspace</option>
-                                                </select>
+                                                </Select>
                                             </div>
                                         </div>
 
                                         {/* Data Retention */}
                                         <div>
                                             <label className="block text-label-md font-semibold text-on-surface mb-2">Data & Activity Log Retention</label>
-                                            <select
+                                            <Select
                                                 className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
                                                 value={workspace.dataRetention}
                                                 onChange={(e) => setWorkspace({ ...workspace, dataRetention: e.target.value })}
@@ -424,7 +425,7 @@ export default function Settings() {
                                                 <option value="90_days">90 Days (Recommended)</option>
                                                 <option value="1_year">1 Year</option>
                                                 <option value="indefinite">Indefinite (Enterprise)</option>
-                                            </select>
+                                            </Select>
                                         </div>
                                     </div>
 
@@ -535,7 +536,7 @@ export default function Settings() {
 
                                     <div className="pt-md border-t border-outline-variant">
                                         <label className="block text-label-md font-semibold text-on-surface mb-2">Notification Delivery Frequency</label>
-                                        <select
+                                        <Select
                                             className="w-full bg-surface-container-highest border border-outline-variant rounded-xl px-md py-2.5 text-on-surface font-body-md focus:ring-2 focus:ring-primary-fixed focus:outline-none"
                                             value={notifications.frequency}
                                             onChange={(e) => {
@@ -546,7 +547,7 @@ export default function Settings() {
                                             <option value="realtime">Real-time (Immediate)</option>
                                             <option value="hourly">Hourly Summary Batch</option>
                                             <option value="daily">Daily Morning Digest</option>
-                                        </select>
+                                        </Select>
                                     </div>
                                 </div>
                             )}

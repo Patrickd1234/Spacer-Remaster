@@ -2,6 +2,7 @@ import { useState } from "react"
 import CreateTaskModal from "../partials/CreateTaskModal"
 import { parseSubtasks } from "../taskStatus"
 import { dayKey } from "../general/generalFormat"
+import Select from "./Select"
 
 // Side drawers for the personal Calendar page: one day's schedule, and a task's details
 
@@ -79,7 +80,7 @@ export function DayScheduleDrawer({ date, items, organizationId, canAddEvent, on
                         {isMenuOpen && (
                             <>
                                 <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)} />
-                                <div className="absolute right-0 top-full mt-1 w-44 bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl z-50 overflow-hidden">
+                                <div className="font-body-md absolute right-0 top-full mt-1 w-44 bg-[#1c1f26] border border-[#2D3139] rounded-xl shadow-2xl z-50 overflow-hidden">
                                     <button
                                         type="button"
                                         className="w-full text-left px-4 py-2.5 hover:bg-[#2D3139] transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
@@ -217,7 +218,7 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                     <div className="space-y-4 text-xs">
                         <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
                             <span className="text-[#8c947b]">Status</span>
-                            <select
+                            <Select
                                 value={task.status || "todo"}
                                 onChange={(e) => onStatusChange(task.id, e.target.value)}
                                 className="bg-[#181a20] border border-[#2D3139] text-white font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
@@ -225,11 +226,11 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                                 <option value="todo" className="bg-[#191c21]">Backlog / To Do</option>
                                 <option value="in_progress" className="bg-[#191c21]">Doing / In Progress</option>
                                 <option value="done" className="bg-[#191c21]">Done</option>
-                            </select>
+                            </Select>
                         </div>
                         <div className="flex items-center justify-between py-2 border-b border-[#2D3139]">
                             <span className="text-[#8c947b]">Priority</span>
-                            <select
+                            <Select
                                 value={task.priority || "medium"}
                                 onChange={(e) => onPriorityChange(task.id, e.target.value)}
                                 className="bg-[#181a20] border border-[#2D3139] text-[#aff82a] font-bold text-xs rounded-lg px-3 py-1.5 focus:outline-none focus:border-[#aff82a] uppercase cursor-pointer"
@@ -238,7 +239,7 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                                 <option value="medium" className="bg-[#191c21] text-white">Medium</option>
                                 <option value="high" className="bg-[#191c21] text-amber-400">High</option>
                                 <option value="urgent" className="bg-[#191c21] text-red-400">Urgent</option>
-                            </select>
+                            </Select>
                         </div>
                         <div className="flex justify-between items-center py-2 border-b border-[#2D3139]">
                             <span className="text-[#8c947b]">Due Date</span>

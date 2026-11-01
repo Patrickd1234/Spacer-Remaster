@@ -6,6 +6,7 @@ import { useMyProfile } from "./useMyProfile"
 import { GeneralShell, PageHeading, PrimaryButton, Chip, ErrorNote, COMPACT_SELECT_CLASS } from "./GeneralParts"
 import { PanelMessage } from "../components/DashboardParts"
 import { AnnouncementCard, AnnouncementRow, AnnouncementDetail, AnnouncementForm } from "./AnnouncementParts"
+import Select from "../components/Select"
 
 const FILTERS = [{ value: "all", label: "All" }, { value: "pinned", label: "Pinned" }, ...ANNOUNCEMENT_CATEGORIES]
 
@@ -82,10 +83,10 @@ export default function Announcements() {
                 </div>
                 <label className="flex items-center gap-2 text-xs text-[#8c947b]">
                     Sort
-                    <select className={`${COMPACT_SELECT_CLASS} py-1.5`} value={sort} onChange={(e) => setSort(e.target.value)}>
+                    <Select className={`${COMPACT_SELECT_CLASS} py-1.5`} value={sort} onChange={(e) => setSort(e.target.value)}>
                         <option value="latest">Latest</option>
                         <option value="oldest">Oldest</option>
-                    </select>
+                    </Select>
                 </label>
             </div>
 

@@ -2,5 +2,13 @@
    Imported AFTER index.css in main.jsx to keep the CDN's cascade order, where
    Tailwind's styles were injected after the app's own CSS. */
 @tailwind base;
+
+@layer base {
+  /* Native dropdowns and their option lists use the app font. Preflight makes
+     them inherit, and pages wrapped in `font-sans` would hand them the system font. */
+  select, option, optgroup {
+    font-family: 'Inter', sans-serif;
+  }
+}
 @tailwind components;
 @tailwind utilities;

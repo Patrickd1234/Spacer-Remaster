@@ -6,6 +6,7 @@ import Header from "./partials/header"
 import { useRole } from "./RoleContext"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DepartmentTaskGroups from "./components/DepartmentTaskGroups"
+import Select from "./components/Select"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -464,13 +465,13 @@ export default function Tasks() {
                                     {isSuperAdmin && departments.length > 0 && (
                                         <label className="flex items-center gap-2 text-xs text-[#8c947b]">
                                             Department
-                                            <select
+                                            <Select
                                                 value={standupDepartmentId ?? ""}
                                                 onChange={(e) => setStandupDeptChoice(e.target.value)}
                                                 className="bg-[#0F1115] border border-[#2D3139] rounded-lg px-3 py-1.5 text-white text-xs focus:outline-none focus:ring-1 focus:ring-[var(--primary-color)] cursor-pointer"
                                             >
                                                 {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                            </select>
+                                            </Select>
                                         </label>
                                     )}
                                     {isLocalFallback && (

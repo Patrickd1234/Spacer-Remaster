@@ -83,7 +83,7 @@ export default function CreateMenu({ isSuperAdmin }) {
                     <span className={`material-symbols-outlined text-[18px] text-[#8c947b] transition-transform ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
                 </button>
                 {isOpen && (
-                    <div role="menu" className="absolute right-0 mt-2 w-52 bg-[#191c21] border border-[#2D3139] rounded-xl shadow-xl p-1 z-50">
+                    <div role="menu" className="font-body-md absolute right-0 mt-2 w-52 bg-[#191c21] border border-[#2D3139] rounded-xl shadow-xl p-1 z-50">
                         {items.map(({ action, icon, label }) => (
                             <button
                                 key={action}

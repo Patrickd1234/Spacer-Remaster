@@ -11,6 +11,7 @@ import CreateDepartmentModal from "./partials/CreateDepartmentModal";
 import { deleteWorkspaceItem } from "./workspaceDelete";
 import { createdToast, failedToast } from "./createDepartment";
 import { DEPARTMENT_CREATED_EVENT } from "./appEvents";
+import Select from "./components/Select";
 
 function Department() {
     const [userId, setUserId] = useState(null)
@@ -786,7 +787,7 @@ return (
                             ) : (
                                 <div>
                                     <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Select User</label>
-                                    <select
+                                    <Select
                                         className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
                                         value={inviteEmail}
                                         onChange={(e) => setInviteEmail(e.target.value)}
@@ -796,7 +797,7 @@ return (
                                                 {user.name || user.email} ({user.email})
                                             </option>
                                         ))}
-                                    </select>
+                                    </Select>
                                 </div>
                             )
                         ) : (
@@ -820,14 +821,14 @@ return (
                         {(addMemberTab === "invite" || orgUsers.length > 0) && (
                             <div>
                                 <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Role in Department</label>
-                                <select
+                                <Select
                                     className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
                                     value={inviteRole}
                                     onChange={(e) => setInviteRole(e.target.value)}
                                 >
                                     <option value="member">Member</option>
                                     <option value="admin">Admin</option>
-                                </select>
+                                </Select>
                             </div>
                         )}
 

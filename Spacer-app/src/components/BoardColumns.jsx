@@ -100,7 +100,7 @@ export function BoardColumnHeader({
                         more_horiz
                     </button>
                     {menuOpen && (
-                        <div role="menu" className="reports-fade absolute right-0 top-full mt-1 z-30 w-44 rounded-xl border border-[#2D3139] bg-[#16191F] p-1 shadow-2xl shadow-black/40">
+                        <div role="menu" className="font-body-md reports-fade absolute right-0 top-full mt-1 z-30 w-44 rounded-xl border border-[#2D3139] bg-[#16191F] p-1 shadow-2xl shadow-black/40">
                             <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#6c765c]">
                                 Status: {STATUS_LABEL[column.base_status]}
                             </p>

@@ -4,6 +4,7 @@ import {
     dayKey, eventStart, isAllDay, validateEvent, CALENDAR_VIEWS, rangeLabel,
 } from "./generalFormat"
 import { DateBadge, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote, CategoryTag, Chip } from "./GeneralParts"
+import Select from "../components/Select"
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 const MAX_CHIPS_PER_DAY = 3
@@ -226,9 +227,9 @@ export function EventForm({ event, defaultDate, onSubmit, onClose }) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Date"><input type="date" className={INPUT_CLASS} value={form.date} onChange={set("date")} required /></Field>
                     <Field label="Category">
-                        <select className={INPUT_CLASS} value={form.category} onChange={set("category")}>
+                        <Select className={INPUT_CLASS} value={form.category} onChange={set("category")}>
                             {EVENT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                 </div>
                 <label className="flex items-center gap-2 text-sm text-[#c4c9b8]">

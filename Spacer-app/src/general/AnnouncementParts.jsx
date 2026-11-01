@@ -2,6 +2,7 @@ import { useState } from "react"
 import { ANNOUNCEMENT_CATEGORIES, meetingPlatform, validateAnnouncement } from "./generalFormat"
 import { validateImage } from "./generalData"
 import { Avatar, CategoryTag, PinnedTag, Modal, Field, INPUT_CLASS, PrimaryButton, ErrorNote } from "./GeneralParts"
+import Select from "../components/Select"
 
 const formatDate = (iso) => new Date(iso).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
 
@@ -155,9 +156,9 @@ export function AnnouncementForm({ onSubmit, onClose }) {
                 <Field label="Message"><textarea className={`${INPUT_CLASS} min-h-[120px]`} value={form.body} onChange={set("body")} required /></Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Field label="Category">
-                        <select className={INPUT_CLASS} value={form.category} onChange={set("category")}>
+                        <Select className={INPUT_CLASS} value={form.category} onChange={set("category")}>
                             {ANNOUNCEMENT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                        </select>
+                        </Select>
                     </Field>
                     <Field label="Cover image" hint="Optional. JPG, PNG, WebP or GIF, up to 5 MB.">
                         <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleCover} className="text-xs text-[#c4c9b8]" />
