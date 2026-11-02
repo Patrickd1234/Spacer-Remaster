@@ -167,7 +167,7 @@ export default function Select({ value, onChange, className = "", children, disa
                 className={`${className} flex items-center justify-between gap-2 text-left cursor-pointer disabled:cursor-not-allowed disabled:opacity-50`}
             >
                 <span className="truncate">{shown?.label ?? ""}</span>
-                <span className={`material-symbols-outlined text-[18px] text-[#8c947b] shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">
+                <span className={`material-symbols-outlined text-[18px] text-muted shrink-0 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">
                     expand_more
                 </span>
             </button>
@@ -180,7 +180,7 @@ export default function Select({ value, onChange, className = "", children, disa
                     onMouseDown={keepInside}
                     onClick={keepInside}
                     style={{ position: "fixed", ...position }}
-                    className="font-body-md reports-fade z-[1000] overflow-y-auto rounded-xl border border-[#2D3139] bg-[#16191F] p-1 shadow-2xl shadow-black/40"
+                    className="font-body-md reports-fade z-[1000] overflow-y-auto rounded-xl border border-line bg-panel p-1 shadow-2xl shadow-black/40"
                 >
                     {options.map((option, index) => {
                         const isSelected = index === selectedIndex
@@ -201,7 +201,7 @@ export default function Select({ value, onChange, className = "", children, disa
                                 } ${
                                     isSelected
                                         ? "bg-[rgba(var(--primary-color-rgb),0.12)] text-[var(--primary-color)] font-semibold"
-                                        : `text-[#e0e5d0] ${isActive ? "bg-white/5" : ""}`
+                                        : `text-soft ${isActive ? "bg-white/5" : ""}`
                                 } ${isSelected && isActive ? "ring-1 ring-[rgba(var(--primary-color-rgb),0.4)]" : ""}`}
                             >
                                 <span className={`flex-1 truncate ${isSelected ? "" : option.colorClass}`}>{option.label}</span>

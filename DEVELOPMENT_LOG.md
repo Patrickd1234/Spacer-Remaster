@@ -102,3 +102,7 @@ This log tracks development work and code changes made for this project.
   - Dropdowns: the files `22's` changed had native `<select>` again, and its sprint UI added three (story points, "Add to…", carry-over). All are `components/Select.jsx` again; no native `<select>` is left in `src`.
   - Kept both: `scopeDirectory` (Directory by role) and the `22's` `taskItem` tests; the `Select` import and the new project-permission imports in Create Project; both 2026-11-01 log sections. Removed a duplicate `SprintTab` import the merge left in `project_page.jsx`.
 - Checked: `npm test` 86/86, `vite build` succeeds, ESLint 0 errors (10 `exhaustive-deps` warnings, as on `22's`). Not checked in a browser.
+- After the merge, tried restoring the pre-merge page layout (with the palette colours) and the pre-Oct 30 personal calendar. Neither matched the wanted look, so both were discarded and the app was returned to the merged `22's` layout (`817720a`). A screenshot of My Space confirmed the target: its colours are exactly the palette roles (canvas `#0F1115`, sidebar `#1C1F26`, cards `#191C21`, accent `#AFF82A`).
+- `components/Select.jsx`: the three hard-coded colours left in the dropdown (chevron, menu panel, option text) now use the palette roles (`text-muted`, `border-line bg-panel`, `text-soft`). Same shades as before.
+- Started a personal record of my work on the project (commits, features, fixes, merges) as a separate Claude Doc.
+- Checked: `vite build` succeeds, ESLint clean on `Select.jsx`. Not checked in a browser.
