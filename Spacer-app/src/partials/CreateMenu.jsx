@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase"
+import { useRole } from "../RoleContext"
+import { canCreateProjects } from "../projectPermissions"
 import { createdToast, failedToast } from "../createDepartment"
 import { DEPARTMENT_CREATED_EVENT, TASK_CREATED_EVENT } from "../appEvents"
 import CreateDepartmentModal from "./CreateDepartmentModal"
@@ -9,6 +11,7 @@ import CreateTaskModal from "./CreateTaskModal"
 import Toast from "../components/Toast"
 
 const SUPER_ADMIN_ITEMS = [
+    { action: "task", icon: "add_task", label: "Create a Task" },
     { action: "department", icon: "domain_add", label: "Create Department" },
     { action: "project", icon: "create_new_folder", label: "Create a Project" },
     { action: "invite", icon: "person_add", label: "Invite Member" },
@@ -18,9 +21,14 @@ const MEMBER_ITEMS = [
     { action: "meeting", icon: "event", label: "Schedule meeting" },
 ]
 
-// Header "Create" dropdown. Super admins: department, project, invite.
-// Everyone else: a task, or a meeting (scheduled on the calendar page).
+const PROJECT_ITEM = SUPER_ADMIN_ITEMS.find((item) => item.action === "project")
+
+// Header "Create" dropdown, the app-wide place to create a task.
+// Super admins: task, department, project, invite.
+// Everyone else: a task or a meeting (scheduled on the calendar page), plus a
+// project for team leads and admins, who may create them in their departments.
 export default function CreateMenu({ isSuperAdmin }) {
+    const { departments } = useRole()
     const navigate = useNavigate()
     const menuRef = useRef(null)
     const [isOpen, setIsOpen] = useState(false)
@@ -66,7 +74,9 @@ export default function CreateMenu({ isSuperAdmin }) {
         window.dispatchEvent(new CustomEvent(TASK_CREATED_EVENT, { detail: task }))
     }
 
-    const items = isSuperAdmin ? SUPER_ADMIN_ITEMS : MEMBER_ITEMS
+    const items = isSuperAdmin
+        ? SUPER_ADMIN_ITEMS
+        : canCreateProjects({ isSuperAdmin, departments }) ? [MEMBER_ITEMS[0], PROJECT_ITEM, ...MEMBER_ITEMS.slice(1)] : MEMBER_ITEMS
 
     return (
         <>
@@ -76,23 +86,23 @@ export default function CreateMenu({ isSuperAdmin }) {
                     onClick={() => setIsOpen((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={isOpen}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#191c21] border border-[#2D3139] text-sm text-white hover:border-[#3d424d] transition-colors cursor-pointer"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-raised border border-line text-sm text-white hover:border-line-strong transition-colors cursor-pointer"
                 >
-                    <span className="material-symbols-outlined text-[18px] text-[#8c947b]">add_circle</span>
+                    <span className="material-symbols-outlined text-[18px] text-muted">add_circle</span>
                     Create
-                    <span className={`material-symbols-outlined text-[18px] text-[#8c947b] transition-transform ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
+                    <span className={`material-symbols-outlined text-[18px] text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
                 </button>
                 {isOpen && (
-                    <div role="menu" className="absolute right-0 mt-2 w-52 bg-[#191c21] border border-[#2D3139] rounded-xl shadow-xl p-1 z-50">
+                    <div role="menu" className="font-body-md absolute right-0 mt-2 w-52 bg-raised border border-line rounded-xl shadow-xl p-1 z-50">
                         {items.map(({ action, icon, label }) => (
                             <button
                                 key={action}
                                 type="button"
                                 role="menuitem"
                                 onClick={() => choose(action)}
-                                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[#c2caae] hover:text-white hover:bg-[#252a33] transition-colors cursor-pointer"
+                                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-soft hover:text-white hover:bg-surface2 transition-colors cursor-pointer"
                             >
-                                <span className="material-symbols-outlined text-[18px] text-[#8c947b]">{icon}</span>
+                                <span className="material-symbols-outlined text-[18px] text-muted">{icon}</span>
                                 {label}
                             </button>
                         ))}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { supabase } from '../supabase';
 
 export default function ChatMessage({ message, currentUserId, onReply }) {
@@ -52,8 +52,8 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
         <div className={`flex w-full ${isMine ? 'justify-end' : 'justify-start'} mb-4 group`}>
             <div className={`relative max-w-[70%] rounded-2xl px-4 py-2 ${
                 isMine 
-                    ? 'bg-[var(--primary-color)] text-white rounded-tr-none' 
-                    : 'bg-[#2a2d32] text-white rounded-tl-none border border-white/5'
+                    ? 'chat-bubble-mine rounded-tr-none' 
+                    : 'bg-surface2 text-white rounded-tl-none border border-white/5'
             }`}>
                 {!isMine && (
                     <div className="text-xs font-semibold mb-1 opacity-70">
@@ -124,7 +124,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                                     onClick={() => handleReaction(emoji)}
                                     className={`text-xs px-2 py-0.5 rounded-full border ${
                                         hasReacted 
-                                            ? 'bg-[var(--primary-color)]/20 border-[var(--primary-color)] text-[var(--primary-color)]' 
+                                            ? 'bg-[var(--primary-color)]/20 border-accent-ink text-accent-ink' 
                                             : 'bg-black/30 border-white/10 text-white/70 hover:bg-black/50'
                                     }`}
                                 >
@@ -136,7 +136,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                 )}
 
                 {/* Hover Actions */}
-                <div className={`absolute top-0 ${isMine ? 'left-[-70px]' : 'right-[-70px]'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-[#1a1c21] rounded-lg border border-white/10 p-1 shadow-lg`}>
+                <div className={`absolute top-0 ${isMine ? 'left-[-70px]' : 'right-[-70px]'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-panel rounded-lg border border-white/10 p-1 shadow-lg`}>
                     <button 
                         onClick={() => setShowReactions(!showReactions)}
                         className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white"
@@ -154,7 +154,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                     
                     {/* Reaction Picker Popup */}
                     {showReactions && (
-                        <div className={`absolute top-full mt-1 ${isMine ? 'right-0' : 'left-0'} flex gap-1 bg-[#2a2d32] p-2 rounded-lg shadow-xl border border-white/10 z-10`}>
+                        <div className={`absolute top-full mt-1 ${isMine ? 'right-0' : 'left-0'} flex gap-1 bg-surface2 p-2 rounded-lg shadow-xl border border-white/10 z-10`}>
                             {availableEmojis.map(emoji => (
                                 <button
                                     key={emoji}

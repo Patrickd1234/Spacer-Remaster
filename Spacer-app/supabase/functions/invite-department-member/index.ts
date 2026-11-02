@@ -27,13 +27,12 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 import { corsHeaders } from "../_shared/cors.ts"
 import { escapeHtml } from "../_shared/html.ts"
+import { sendEmail } from "../_shared/email.ts"
 import { callerHeaders, requireMfa } from "../_shared/mfa.ts"
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") // optional
-const EMAIL_FROM = Deno.env.get("EMAIL_FROM") || "Spacer <notifications@yourdomain.com>"
 const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:5173"
 
 const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
@@ -92,23 +91,21 @@ serve(async (req: Request) => {
         const inviterName = inviterProfile.name || inviterProfile.email || "A Spacer admin"
 
         // ── Permission check (server-side, can't be bypassed from the client).
-        //    Scoped to this org by the check above: a super admin of another
-        //    organization never gets this far.
-        const { data: callerMemberships, error: memErr } = await admin
-            .from("memberships")
-            .select("role, team_space_id")
-            .eq("user_id", callerId)
+        //    Org admins (a super admin, or an admin with no department) are
+        //    asked as the CALLER through is_admin_of_org(), the same rule the
+        //    memberships policies use; department admins by their membership.
+        const [{ data: isOrgAdmin, error: orgAdminErr }, { data: callerMemberships, error: memErr }] = await Promise.all([
+            callerClient.rpc("is_admin_of_org", { p_org_id: organization_id }),
+            admin.from("memberships").select("role, team_space_id").eq("user_id", callerId),
+        ])
 
-        if (memErr) return json({ error: "Could not verify permissions" }, 500)
+        if (orgAdminErr || memErr) return json({ error: "Could not verify permissions" }, 500)
 
-        const isSuperAdmin = (callerMemberships || []).some(
-            (m: { role: string; team_space_id: string }) => m.role === "super_admin" || m.role === "superadmin"
-        )
         const isAdminOnThisTeam = (callerMemberships || []).some(
             (m: { role: string; team_space_id: string }) => m.team_space_id === team_space_id && m.role === "admin"
         )
 
-        if (!isSuperAdmin && !isAdminOnThisTeam) {
+        if (!isOrgAdmin && !isAdminOnThisTeam) {
             return json({ error: "Only admins or super admins can add members to this department." }, 403)
         }
 
@@ -266,25 +263,6 @@ serve(async (req: Request) => {
         return json({ error: message }, 500)
     }
 })
-
-async function sendEmail({ to, subject, html }: { to: string; subject: string; html: string }) {
-    if (!RESEND_API_KEY) {
-        console.warn(`RESEND_API_KEY not set — skipping notify email to ${to}`)
-        return
-    }
-    try {
-        await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-                Authorization: `Bearer ${RESEND_API_KEY}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ from: EMAIL_FROM, to, subject, html }),
-        })
-    } catch (err) {
-        console.error("sendEmail failed (non-fatal):", err)
-    }
-}
 
 function addedToTeamEmailHtml({ recipientName, teamName, role, inviterName, loginUrl }: {
     recipientName: string;

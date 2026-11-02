@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import ChatMessage from './ChatMessage';
+import UploadingBubble from './UploadingBubble';
 import { createSignedLinks } from '../storageLinks';
 
 const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
@@ -10,7 +11,8 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
     const [activeChannel, setActiveChannel] = useState(activeChannelFromFab || null);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [loading, setLoading] = useState(true);
+    // The floating chat is handed its channel, so it has nothing to load
+    const [loading, setLoading] = useState(!fabMode);
     
     // Creating channel
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -36,24 +38,23 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
 
     // Attachments
     const [attachments, setAttachments] = useState([]);
+    // Files being uploaded for the message just sent; shown as a pending bubble
+    const [uploading, setUploading] = useState([]);
     const fileInputRef = useRef(null);
 
     const messagesEndRef = useRef(null);
 
     useEffect(() => {
-        if (!fabMode) {
-            fetchChannels();
-        } else {
-            setLoading(false);
-        }
+        if (!fabMode) fetchChannels();
     }, [projectId, departmentId, fabMode]);
 
-    // Sync from FAB
-    useEffect(() => {
-        if (fabMode && activeChannelFromFab) {
-            setActiveChannel(activeChannelFromFab);
-        }
-    }, [fabMode, activeChannelFromFab]);
+    // Follow the channel picked in the floating chat. Adjusted while rendering
+    // (React's pattern for state that follows a prop), not in an effect.
+    const [fabChannel, setFabChannel] = useState(activeChannelFromFab);
+    if (activeChannelFromFab !== fabChannel) {
+        setFabChannel(activeChannelFromFab);
+        if (fabMode && activeChannelFromFab) setActiveChannel(activeChannelFromFab);
+    }
 
     // Fetch messages when active channel changes
     useEffect(() => {
@@ -64,13 +65,17 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             return () => {
                 if (unsubscribe) unsubscribe();
             };
-        } else {
-            setMessages([]);
-            setActiveChannelMembers([]);
         }
     }, [activeChannel]);
 
-    const fetchChannelMembers = async (channel) => {
+    // Leaving or deleting a channel is the only way back to "no channel"
+    const closeActiveChannel = () => {
+        setActiveChannel(null);
+        setMessages([]);
+        setActiveChannelMembers([]);
+    };
+
+    async function fetchChannelMembers(channel) {
         if (!channel.is_private) {
             // Public channels include all members passed in
             setActiveChannelMembers(members);
@@ -94,11 +99,11 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         scrollToBottom();
     }, [messages]);
 
-    const scrollToBottom = () => {
+    function scrollToBottom() {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
 
-    const fetchChannels = async () => {
+    async function fetchChannels() {
         try {
             let query = supabase.from('chat_channels').select('id, name, is_private');
             if (projectId) query = query.eq('project_id', projectId);
@@ -120,7 +125,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         }
     };
 
-    const fetchMessages = async (channelId) => {
+    async function fetchMessages(channelId) {
         try {
             const { data, error } = await supabase
                 .from('messages')
@@ -154,7 +159,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         }
     };
 
-    const subscribeToMessages = (channelId) => {
+    function subscribeToMessages(channelId) {
         try {
             const channel = supabase
                 .channel(`messages:${channelId}`)
@@ -166,7 +171,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                         table: 'messages',
                         filter: `channel_id=eq.${channelId}`
                     },
-                    (payload) => {
+                    () => {
                         fetchMessages(channelId); // Re-fetch to get relations easily
                     }
                 )
@@ -177,7 +182,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                         schema: 'public',
                         table: 'message_reactions'
                     },
-                    (payload) => {
+                    () => {
                         fetchMessages(channelId);
                     }
                 )
@@ -195,7 +200,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
     const handleSendMessage = async (e) => {
         e.preventDefault();
         if (!newMessage.trim() && attachments.length === 0) return;
-        if (!activeChannel) return;
+        if (!activeChannel || uploading.length > 0) return;
 
         const content = newMessage;
         const parent_id = replyingTo?.id || null;
@@ -204,6 +209,10 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
         setNewMessage('');
         setReplyingTo(null);
         setAttachments([]);
+        if (currentAttachments.length > 0) {
+            setUploading(currentAttachments.map((att) => ({ name: att.name, type: att.type })));
+            scrollToBottom();
+        }
 
         try {
             // 1. Insert message
@@ -252,6 +261,8 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
 
         } catch (error) {
             console.error('Error sending message:', error);
+        } finally {
+            setUploading([]);
         }
     };
 
@@ -373,7 +384,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             if (error) throw error;
 
             setChannels(prev => prev.filter(c => c.id !== activeChannel.id));
-            setActiveChannel(null);
+            closeActiveChannel();
             setShowSettingsModal(false);
         } catch (error) {
             console.error('Error leaving channel:', error);
@@ -392,7 +403,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             if (error) throw error;
 
             setChannels(prev => prev.filter(c => c.id !== activeChannel.id));
-            setActiveChannel(null);
+            closeActiveChannel();
             setShowSettingsModal(false);
         } catch (error) {
             console.error('Error deleting channel:', error);
@@ -405,10 +416,10 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
     }
 
     return (
-        <div className={`flex ${fabMode ? 'h-full bg-transparent' : 'h-[calc(100vh-140px)] bg-[#191c21] rounded-2xl overflow-hidden border border-white/5'}`}>
+        <div className={`flex ${fabMode ? 'h-full bg-transparent' : 'h-[calc(100vh-140px)] bg-raised rounded-2xl overflow-hidden border border-white/5'}`}>
             {/* Sidebar: Channels (Hidden in FAB Mode) */}
             {!fabMode && (
-                <div className="w-64 bg-[#1e2126] border-r border-white/5 flex flex-col">
+                <div className="w-64 bg-surface1 border-r border-white/5 flex flex-col">
                     <div className="p-4 border-b border-white/5 flex items-center justify-between">
                         <h3 className="font-semibold text-white/90">Channels</h3>
                         <button 
@@ -430,7 +441,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 onClick={() => setActiveChannel(channel)}
                                 className={`w-full flex items-center gap-2 p-2 rounded-lg mb-1 text-sm transition-colors ${
                                     activeChannel?.id === channel.id 
-                                        ? 'bg-[var(--primary-color)]/20 text-[var(--primary-color)] font-medium' 
+                                        ? 'bg-[var(--primary-color)]/20 text-accent-ink font-medium' 
                                         : 'text-white/70 hover:bg-white/5'
                                 }`}
                             >
@@ -449,7 +460,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {activeChannel ? (
                     <>
                         {/* Chat Header */}
-                        <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-[#1e2126]">
+                        <div className="h-14 border-b border-white/5 flex items-center justify-between px-6 bg-surface1">
                             <div className="flex items-center gap-3">
                                 <span className="material-symbols-outlined text-white/50">
                                     {activeChannel.is_private ? 'lock' : 'tag'}
@@ -494,14 +505,15 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     onReply={setReplyingTo}
                                 />
                             ))}
+                            <UploadingBubble files={uploading} />
                             <div ref={messagesEndRef} />
                         </div>
 
                         {/* Input Area */}
-                        <div className="p-4 bg-[#1e2126] border-t border-white/5">
+                        <div className="p-4 bg-surface1 border-t border-white/5">
                             {/* Reply Indicator */}
                             {replyingTo && (
-                                <div className="flex items-center justify-between bg-black/20 p-2 rounded-t-lg border-l-2 border-[var(--primary-color)] mb-[-1px]">
+                                <div className="flex items-center justify-between bg-black/20 p-2 rounded-t-lg border-l-2 border-accent-ink mb-[-1px]">
                                     <div className="text-xs text-white/70">
                                         Replying to <span className="font-semibold">{replyingTo.users?.name || 'User'}</span>: 
                                         <span className="ml-1 opacity-70 truncate inline-block max-w-[200px] align-bottom">
@@ -542,7 +554,8 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 <button 
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="p-3 rounded-xl bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors"
+                                    disabled={uploading.length > 0}
+                                    className="p-3 rounded-xl bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <span className="material-symbols-outlined">attach_file</span>
                                 </button>
@@ -559,14 +572,15 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder={`Message ${activeChannel.name}...`}
-                                    className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 text-white placeholder-white/30 focus:outline-none focus:border-[var(--primary-color)] transition-colors ${replyingTo ? 'rounded-tl-none' : ''}`}
+                                    className={`flex-1 bg-white/5 border border-white/10 rounded-xl px-4 text-white placeholder-white/30 focus:outline-none focus:border-accent-ink transition-colors ${replyingTo ? 'rounded-tl-none' : ''}`}
                                 />
                                 <button 
                                     type="submit"
-                                    disabled={!newMessage.trim() && attachments.length === 0}
-                                    className="p-3 rounded-xl bg-[var(--primary-color)] text-white disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 transition-all flex items-center justify-center"
+                                    disabled={uploading.length > 0 || (!newMessage.trim() && attachments.length === 0)}
+                                    aria-label={uploading.length > 0 ? "Uploading" : "Send"}
+                                    className="p-3 rounded-xl bg-[var(--primary-color)] text-on-accent disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 transition-all flex items-center justify-center"
                                 >
-                                    <span className="material-symbols-outlined text-[20px] ml-1">send</span>
+                                    <span className={`material-symbols-outlined text-[20px] ${uploading.length > 0 ? "animate-spin" : "ml-1"}`}>{uploading.length > 0 ? "progress_activity" : "send"}</span>
                                 </button>
                             </form>
                         </div>
@@ -580,7 +594,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* Create Channel Modal Overlay */}
                 {showCreateModal && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                        <div className="bg-surface1 border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
                             <h3 className="text-lg font-semibold text-white/90 mb-4">Create Channel</h3>
                             
                             {createError && (
@@ -595,7 +609,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 value={newChannelName}
                                 onChange={(e) => setNewChannelName(e.target.value)}
                                 placeholder="e.g. general, design-team"
-                                className="w-full bg-[#141518] border border-white/10 rounded-xl px-4 py-2 text-white placeholder-white/20 focus:outline-none focus:border-[var(--primary-color)] mb-4"
+                                className="w-full bg-panel border border-white/10 rounded-xl px-4 py-2 text-white placeholder-white/20 focus:outline-none focus:border-accent-ink mb-4"
                             />
 
                             <label className="flex items-center gap-2 text-sm text-white/70 mb-4 cursor-pointer">
@@ -611,7 +625,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                             {isPrivate && members.length > 0 && (
                                 <div className="mb-4">
                                     <label className="block text-sm text-white/70 mb-2">Select Members</label>
-                                    <div className="max-h-40 overflow-y-auto space-y-1 bg-[#141518] border border-white/5 rounded-xl p-2">
+                                    <div className="max-h-40 overflow-y-auto space-y-1 bg-panel border border-white/5 rounded-xl p-2">
                                         {members.filter(m => (m.id || m.user_id) !== currentUserId).map(member => {
                                             const memberId = member.id || member.user_id;
                                             return (
@@ -642,7 +656,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 <button 
                                     onClick={createChannel}
                                     disabled={!newChannelName.trim()}
-                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-white disabled:opacity-50 transition-colors"
+                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-on-accent disabled:opacity-50 transition-colors"
                                 >
                                     Create
                                 </button>
@@ -654,7 +668,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* View Members Modal */}
                 {showMembersModal && activeChannel && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                        <div className="bg-surface1 border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="text-lg font-semibold text-white/90">
                                     Members in #{activeChannel.name}
@@ -680,13 +694,13 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 </button>
                             )}
                             
-                            <div className="max-h-60 overflow-y-auto space-y-2 bg-[#141518] border border-white/5 rounded-xl p-3">
+                            <div className="max-h-60 overflow-y-auto space-y-2 bg-panel border border-white/5 rounded-xl p-3">
                                 {activeChannelMembers.length === 0 ? (
                                     <div className="text-sm text-white/50 text-center py-4">No members found.</div>
                                 ) : (
                                     activeChannelMembers.map(member => (
                                         <div key={member.id || member.user_id} className="flex items-center gap-3 text-sm text-white/90 p-2 hover:bg-white/5 rounded-lg transition-colors">
-                                            <div className="w-8 h-8 rounded-full bg-[var(--primary-color)]/20 text-[var(--primary-color)] flex items-center justify-center font-bold">
+                                            <div className="w-8 h-8 rounded-full bg-[var(--primary-color)]/20 text-accent-ink flex items-center justify-center font-bold">
                                                 {(member.name || member.email || '?').charAt(0).toUpperCase()}
                                             </div>
                                             <div className="flex flex-col">
@@ -704,10 +718,10 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* Add Member to Private Channel Modal */}
                 {showAddMemberModal && activeChannel && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                        <div className="bg-surface1 border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
                             <h3 className="text-lg font-semibold text-white/90 mb-4">Add Members</h3>
                             
-                            <div className="max-h-40 overflow-y-auto space-y-1 bg-[#141518] border border-white/5 rounded-xl p-2 mb-6">
+                            <div className="max-h-40 overflow-y-auto space-y-1 bg-panel border border-white/5 rounded-xl p-2 mb-6">
                                 {members
                                     .filter(m => {
                                         const uid = m.id || m.user_id;
@@ -746,7 +760,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 <button 
                                     onClick={handleAddMembersToChannel}
                                     disabled={newMembersToAdd.length === 0}
-                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-white disabled:opacity-50 transition-colors"
+                                    className="px-4 py-2 rounded-xl bg-[var(--primary-color)] text-on-accent disabled:opacity-50 transition-colors"
                                 >
                                     Add Selected
                                 </button>
@@ -758,7 +772,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 {/* Channel Settings Modal */}
                 {showSettingsModal && activeChannel && (
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-[#1e2126] border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
+                        <div className="bg-surface1 border border-white/10 rounded-2xl p-6 w-[400px] max-w-[90%] shadow-2xl">
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="text-lg font-semibold text-white/90">Channel Settings</h3>
                                 <button onClick={() => setShowSettingsModal(false)} className="text-white/50 hover:text-white">
@@ -774,7 +788,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                             type="text"
                                             value={editChannelName}
                                             onChange={(e) => setEditChannelName(e.target.value)}
-                                            className="flex-1 bg-[#141518] border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-[var(--primary-color)]"
+                                            className="flex-1 bg-panel border border-white/10 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-accent-ink"
                                         />
                                         <button 
                                             onClick={handleRenameChannel}

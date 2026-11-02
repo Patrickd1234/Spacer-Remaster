@@ -58,6 +58,8 @@ export const fetchNotificationActivities = async ({ userId, email, isSuperAdmin,
         .from("activity_log")
         .select(ACTIVITY_COLUMNS)
         .or(`actor_id.is.null,actor_id.neq.${quote(userId)}`)
+        // A task created for this user already arrives as "X assigned you to …" (fetchPersonalNotifications)
+        .or(`action.neq.created,new_state->>assignee_id.is.null,new_state->>assignee_id.neq.${quote(userId)}`)
         .order("created_at", { ascending: false })
         .limit(limit)
 
@@ -67,6 +69,39 @@ export const fetchNotificationActivities = async ({ userId, email, isSuperAdmin,
     }
 
     const { data, error } = await query
+    return { data: data || [], error }
+}
+
+// Notifications the database wrote for this user: assigned a task, added to a
+// project, a status change on a task they created (tasks_notify, project_members_notify)
+export const fetchPersonalNotifications = async (userId, limit = NOTIFICATION_LIMIT) => {
+    if (!userId) return { data: [], error: null }
+    const { data, error } = await supabase
+        .from("notifications")
+        .select("id, type, reference_type, reference_id, body, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+    return { data: data || [], error }
+}
+
+// Where a personal notification leads; tasks need their project, looked up on click
+export const personalNotificationPath = async (notification) => {
+    if (notification.reference_type === "project") return `/project_page/${notification.reference_id}`
+    if (notification.reference_type !== "task") return null
+    const { data, error } = await supabase.from("tasks").select("project_id").eq("id", notification.reference_id).maybeSingle()
+    if (error) console.warn("Unable to find the task's project", error)
+    return data?.project_id ? `/project_page/${data.project_id}?task_id=${notification.reference_id}` : "/tasks"
+}
+
+// Open tasks assigned to the user, for the daily and deadline reminders (taskReminders.js)
+export const fetchOpenAssignedTasks = async (userId) => {
+    if (!userId) return { data: [], error: null }
+    const { data, error } = await supabase
+        .from("tasks")
+        .select("id, title, due_date, status")
+        .eq("assignee_id", userId)
+        .neq("status", "done")
     return { data: data || [], error }
 }
 
