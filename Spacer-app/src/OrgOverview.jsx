@@ -21,11 +21,11 @@ const TEAM_ICONS = {
 function TeamStat({ icon, label, value }) {
     return (
         <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-[#252a33] flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[14px] text-[#8c947b]">{icon}</span>
+            <div className="w-7 h-7 rounded-full bg-surface2 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[14px] text-muted">{icon}</span>
             </div>
             <div className="min-w-0">
-                <p className="text-[10px] text-[#8c947b]">{label}</p>
+                <p className="text-[10px] text-muted">{label}</p>
                 <p className="text-sm text-white truncate">{value}</p>
             </div>
         </div>
@@ -35,7 +35,7 @@ function TeamStat({ icon, label, value }) {
 // No status row: departments have no status data (it always read "ON TRACK")
 function TeamCard({ team }) {
     return (
-        <div className="bg-[#191c21] border border-[#2D3139] rounded-lg p-3 flex flex-col gap-3 hover:border-[#3d424d] transition-colors">
+        <div className="bg-raised border border-line rounded-lg p-3 flex flex-col gap-3 hover:border-line-strong transition-colors">
             <TeamStat icon={TEAM_ICONS[team.name] || TEAM_ICONS.default} label="Team" value={team.name} />
             <TeamStat icon="person" label="Members" value={team.member_count ?? "—"} />
             <TeamStat icon="folder" label="Projects" value={team.project_count ?? "—"} />
@@ -139,7 +139,7 @@ export default function OrgOverview({ userId, orgId }) {
                     title="Team Overview"
                     className="col-span-12 lg:col-span-7"
                     action={totalTeamPages > 1 && (
-                        <div className="flex items-center gap-1 text-[#8c947b] text-xs">
+                        <div className="flex items-center gap-1 text-muted text-xs">
                             <button type="button" onClick={() => setTeamPage(p => Math.max(0, p - 1))} disabled={teamPage === 0} aria-label="Previous teams" className="p-0.5 rounded hover:text-white disabled:opacity-30 transition-colors cursor-pointer">
                                 <span className="material-symbols-outlined text-[16px]">chevron_left</span>
                             </button>
@@ -152,8 +152,8 @@ export default function OrgOverview({ userId, orgId }) {
                 >
                     {teams.length === 0 ? (
                         <div className="flex flex-col items-center justify-center text-center min-h-[180px] gap-3">
-                            <span className="material-symbols-outlined text-4xl text-[#8c947b]">groups</span>
-                            <p className="text-[#8c947b] text-sm">No teams in the organization yet. Use Create → Create Department.</p>
+                            <span className="material-symbols-outlined text-4xl text-muted">groups</span>
+                            <p className="text-muted text-sm">No teams in the organization yet. Use Create → Create Department.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -166,36 +166,36 @@ export default function OrgOverview({ userId, orgId }) {
                     title="Recent Activity"
                     className="col-span-12 lg:col-span-5"
                     action={activities.length > COLLAPSED_ACTIVITY_COUNT && (
-                        <button type="button" onClick={() => setIsShowingAllActivity(v => !v)} className="text-xs text-[#8c947b] underline hover:text-white cursor-pointer">
+                        <button type="button" onClick={() => setIsShowingAllActivity(v => !v)} className="text-xs text-muted underline hover:text-white cursor-pointer">
                             {isShowingAllActivity ? "Show less" : "See recent activities"}
                         </button>
                     )}
                 >
-                    <div className="bg-[#191c21] border border-[#2D3139] rounded-lg p-3 space-y-4 flex-1">
-                        {activities.length === 0 && <p className="text-xs text-[#8c947b]">No activity yet. Create a project or task to get started.</p>}
+                    <div className="bg-raised border border-line rounded-lg p-3 space-y-4 flex-1">
+                        {activities.length === 0 && <p className="text-xs text-muted">No activity yet. Create a project or task to get started.</p>}
                         {visibleActivities.map(act => (
                             <div key={act.id} className="flex gap-3 items-start">
-                                <div className="w-7 h-7 rounded-full bg-[#252a33] flex items-center justify-center shrink-0 font-semibold text-[10px] text-[#8c947b]">{act.initials}</div>
+                                <div className="w-7 h-7 rounded-full bg-surface2 flex items-center justify-center shrink-0 font-semibold text-[10px] text-muted">{act.initials}</div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs text-white">{act.title}</p>
-                                    <p className="text-[11px] text-[#8c947b] mt-0.5">{act.sub}</p>
+                                    <p className="text-[11px] text-muted mt-0.5">{act.sub}</p>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </Panel>
 
-                <Panel title="Upcoming" className="col-span-12" action={<Link to="/calendar" className="text-xs text-[#8c947b] underline hover:text-white">Open Calendar</Link>}>
+                <Panel title="Upcoming" className="col-span-12" action={<Link to="/calendar" className="text-xs text-muted underline hover:text-white">Open Calendar</Link>}>
                     {upcomingEvents.length === 0 ? (
-                        <p className="text-xs text-[#8c947b]">No upcoming events. Events added to the calendar will appear here.</p>
+                        <p className="text-xs text-muted">No upcoming events. Events added to the calendar will appear here.</p>
                     ) : (
-                        <ul className="bg-[#191c21] border border-[#2D3139] rounded-lg p-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                        <ul className="bg-raised border border-line rounded-lg p-3 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                             {upcomingEvents.map(event => (
                                 <li key={event.id} className="flex gap-3 items-start">
-                                    <span className="material-symbols-outlined text-[16px] text-[#8c947b] mt-0.5">event</span>
+                                    <span className="material-symbols-outlined text-[16px] text-muted mt-0.5">event</span>
                                     <div className="min-w-0">
                                         <p className="text-xs text-white truncate">{event.title}</p>
-                                        <p className="text-[11px] text-[#8c947b]">
+                                        <p className="text-[11px] text-muted">
                                             {new Date(`${event.event_date}T00:00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
                                         </p>
                                     </div>

@@ -107,12 +107,12 @@ export default function Directory() {
             <PageHeading
                 title="People Directory"
                 subtitle="Find colleagues and learn more about the people across your organization."
-                actions={status === "ready" && <span className="text-xs text-[#8c947b]">{people.length} member{people.length === 1 ? "" : "s"}</span>}
+                actions={status === "ready" && <span className="text-xs text-muted">{people.length} member{people.length === 1 ? "" : "s"}</span>}
             />
 
             <div className="flex flex-wrap items-center gap-2">
                 <div className="relative flex-1 min-w-[220px]">
-                    <span className="material-symbols-outlined absolute left-3 top-2 text-[18px] text-[#8c947b]">search</span>
+                    <span className="material-symbols-outlined absolute left-3 top-2 text-[18px] text-muted">search</span>
                     <input
                         type="search"
                         aria-label="Search by name, role, or team"
@@ -135,7 +135,7 @@ export default function Directory() {
                     <option value="az">A–Z</option>
                     <option value="za">Z–A</option>
                 </select>
-                <div className="flex rounded-lg border border-[#2D3139] overflow-hidden" role="group" aria-label="Layout">
+                <div className="flex rounded-lg border border-line overflow-hidden" role="group" aria-label="Layout">
                     {[["grid", "grid_view"], ["list", "view_list"]].map(([value, icon]) => (
                         <button
                             key={value}
@@ -143,7 +143,7 @@ export default function Directory() {
                             aria-label={`${value} layout`}
                             aria-pressed={layout === value}
                             onClick={() => changeLayout(value)}
-                            className={`px-2.5 py-1.5 cursor-pointer ${layout === value ? "bg-[#aff82a] text-[#1C1F26]" : "text-[#8c947b] hover:text-white"}`}
+                            className={`px-2.5 py-1.5 cursor-pointer ${layout === value ? "bg-accent text-on-accent" : "text-muted hover:text-white"}`}
                         >
                             <span className="material-symbols-outlined text-[18px]">{icon}</span>
                         </button>
@@ -158,7 +158,7 @@ export default function Directory() {
 
             <div className="grid grid-cols-12 gap-4 items-start">
                 <section className={selected ? "col-span-12 lg:col-span-8" : "col-span-12"}>
-                    {status === "loading" && <p className="text-sm text-[#8c947b] py-6">Loading…</p>}
+                    {status === "loading" && <p className="text-sm text-muted py-6">Loading…</p>}
                     {status === "ready" && visible.length === 0 && (
                         <PanelMessage icon="person_search" title="No one matches" text="Try a different name, team or role." />
                     )}
@@ -168,7 +168,7 @@ export default function Directory() {
                         </div>
                     ) : (
                         visible.length > 0 && (
-                            <div className="rounded-xl border border-[#2D3139] bg-[#14161b] overflow-hidden">
+                            <div className="rounded-xl border border-line bg-panel overflow-hidden">
                                 {visible.map((p) => <PersonRow key={p.id} person={p} isSelected={selected?.id === p.id} onOpen={() => open(p.id)} />)}
                             </div>
                         )

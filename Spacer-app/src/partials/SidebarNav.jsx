@@ -3,12 +3,12 @@ import { Link } from "react-router-dom"
 
 // Building blocks for WorkspaceSidebar
 
-const ACTIVE_ITEM ="bg-primary-accent text-[#0F1115] font-semibold"
-const INACTIVE_ITEM = "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+const ACTIVE_ITEM ="bg-primary-accent text-on-accent font-semibold"
+const INACTIVE_ITEM = "text-muted hover:text-white hover:bg-line"
 const ROW = "rounded-lg flex items-center gap-3 px-3 py-2 cursor-pointer transition-colors w-full text-left"
 // Nested items (Directory, projects, departments): tinted background + accent text
 const SUB_ACTIVE = "bg-primary-accent-dim text-primary-accent font-semibold"
-const SUB_INACTIVE = "text-[#8c947b] hover:text-white hover:bg-[#2D3139]"
+const SUB_INACTIVE = "text-muted hover:text-white hover:bg-line"
 
 export function NavLink({ to, icon, label, isActive, isExpanded, badge = 0 }) {
     return (
@@ -34,7 +34,7 @@ export function NavButton({ icon, label, onClick, isActive = false, isExpanded, 
 
 function Badge({ count }) {
     return (
-        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-[#ffffff] text-[10px] font-bold flex items-center justify-center">
             {count > 99 ? "99+" : count}
         </span>
     )
@@ -56,7 +56,7 @@ export function NavSection({ icon, label, isExpanded, defaultOpen = false, actio
                 )}
             </div>
             {isExpanded && isOpen && (
-                <div className="ml-5 pl-3 border-l border-[#2D3139] mt-1 space-y-0.5">{children}</div>
+                <div className="ml-5 pl-3 border-l border-line mt-1 space-y-0.5">{children}</div>
             )}
         </div>
     )
@@ -71,7 +71,7 @@ export function SubLink({ to, label, isActive }) {
 }
 
 export function EmptyNote({ children }) {
-    return <p className="px-3 py-1.5 text-[12px] text-[#8c947b] italic">{children}</p>
+    return <p className="px-3 py-1.5 text-[12px] text-muted italic">{children}</p>
 }
 
 // A department row that opens its projects; the name itself opens the department
@@ -79,16 +79,16 @@ export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, i
     const [isOpen, setIsOpen] = useState(false)
     return (
         <div>
-            <div className={`flex items-center rounded-md transition-colors ${isActive ? "bg-primary-accent-dim" : "hover:bg-[#2D3139]"}`}>
-                <button type="button" onClick={onOpenDepartment} aria-current={isActive ? "page" : undefined} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-[13px] truncate cursor-pointer ${isActive ? "text-primary-accent font-semibold" : "text-[#8c947b] hover:text-white"}`}>
+            <div className={`flex items-center rounded-md transition-colors ${isActive ? "bg-primary-accent-dim" : "hover:bg-line"}`}>
+                <button type="button" onClick={onOpenDepartment} aria-current={isActive ? "page" : undefined} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-[13px] truncate cursor-pointer ${isActive ? "text-primary-accent font-semibold" : "text-muted hover:text-white"}`}>
                     {name}
                 </button>
-                <button type="button" onClick={() => setIsOpen((open) => !open)} aria-label={`${isOpen ? "Hide" : "Show"} ${name} projects`} aria-expanded={isOpen} className="px-1.5 text-[#8c947b] hover:text-white cursor-pointer">
+                <button type="button" onClick={() => setIsOpen((open) => !open)} aria-label={`${isOpen ? "Hide" : "Show"} ${name} projects`} aria-expanded={isOpen} className="px-1.5 text-muted hover:text-white cursor-pointer">
                     <span className={`material-symbols-outlined text-[16px] transition-transform ${isOpen ? "rotate-90" : ""}`}>chevron_right</span>
                 </button>
             </div>
             {isOpen && (
-                <div className="ml-3 pl-3 border-l border-[#2D3139] space-y-0.5">
+                <div className="ml-3 pl-3 border-l border-line space-y-0.5">
                     {projects.length === 0
                         ? <EmptyNote>No projects yet</EmptyNote>
                         : projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={activePath === `/project_page/${p.id}`} />)}

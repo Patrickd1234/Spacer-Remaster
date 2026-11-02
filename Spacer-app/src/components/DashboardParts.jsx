@@ -7,11 +7,11 @@ const ACCENTS = {
 
 export function StatCard({ value, label, sub, subIcon, accent = null, onRetry = null }) {
     return (
-        <div className={`bg-[#191c21] border border-[#2D3139] ${ACCENTS[accent] || ""} rounded-xl px-5 pt-5 pb-3 flex flex-col cursor-default hover:border-[#3d424d] transition-colors`}>
+        <div className={`bg-raised border border-line ${ACCENTS[accent] || ""} rounded-xl px-5 pt-5 pb-3 flex flex-col cursor-default hover:border-line-strong transition-colors`}>
             <p className="text-3xl font-semibold text-white tracking-tight">{value}</p>
             <p className="text-white text-[13px] mt-1">{label}</p>
             {sub && (
-                <p className="flex items-center gap-1 text-[11px] text-[#8c947b] mt-4 pt-3 border-t border-[#2D3139]">
+                <p className="flex items-center gap-1 text-[11px] text-muted mt-4 pt-3 border-t border-line">
                     {subIcon && <span className="material-symbols-outlined text-[13px]">{subIcon}</span>}
                     <span className="truncate">{sub}</span>
                     {onRetry && (
@@ -25,22 +25,22 @@ export function StatCard({ value, label, sub, subIcon, accent = null, onRetry = 
 
 export function StatCardSkeleton() {
     return (
-        <div className="bg-[#191c21] border border-[#2D3139] rounded-xl px-5 pt-5 pb-3 animate-pulse" aria-hidden="true">
+        <div className="bg-raised border border-line rounded-xl px-5 pt-5 pb-3 animate-pulse" aria-hidden="true">
             <SkeletonLine className="w-16 h-3" />
             <SkeletonLine className="w-24 h-3 mt-2" />
-            <div className="mt-6 pt-3 border-t border-[#2D3139]"><SkeletonLine className="w-28 h-2.5" /></div>
+            <div className="mt-6 pt-3 border-t border-line"><SkeletonLine className="w-28 h-2.5" /></div>
         </div>
     )
 }
 
 export function SkeletonLine({ className = "" }) {
-    return <div className={`rounded bg-[#252a33] ${className}`} />
+    return <div className={`rounded bg-surface2 ${className}`} />
 }
 
 // Bordered section with a title row
 export function Panel({ title, action, children, className = "" }) {
     return (
-        <section className={`bg-[#14161b] border border-[#2D3139] rounded-xl p-4 flex flex-col gap-4 ${className}`}>
+        <section className={`bg-panel border border-line rounded-xl p-4 flex flex-col gap-4 ${className}`}>
             <div className="flex items-center justify-between gap-3">
                 <h2 className="text-[15px] font-semibold text-white">{title}</h2>
                 {action}
@@ -52,7 +52,7 @@ export function Panel({ title, action, children, className = "" }) {
 
 export function PanelLink({ onClick, children }) {
     return (
-        <button type="button" onClick={onClick} className="text-xs text-[#8c947b] underline hover:text-white cursor-pointer">{children}</button>
+        <button type="button" onClick={onClick} className="text-xs text-muted underline hover:text-white cursor-pointer">{children}</button>
     )
 }
 
@@ -60,11 +60,11 @@ export function PanelLink({ onClick, children }) {
 export function PanelMessage({ icon, title, text, onRetry = null }) {
     return (
         <div className="flex-1 flex flex-col items-center justify-center text-center gap-1.5 py-10 px-4" role={onRetry ? "alert" : undefined}>
-            <span className="material-symbols-outlined text-[28px] text-[#8c947b] mb-1">{icon}</span>
+            <span className="material-symbols-outlined text-[28px] text-muted mb-1">{icon}</span>
             <p className="text-sm font-semibold text-white">{title}</p>
-            <p className="text-xs text-[#8c947b] max-w-xs">{text}</p>
+            <p className="text-xs text-muted max-w-xs">{text}</p>
             {onRetry && (
-                <button type="button" onClick={onRetry} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#2D3139] text-xs text-[#8c947b] hover:text-white hover:border-[#3d424d] cursor-pointer">
+                <button type="button" onClick={onRetry} className="mt-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-line text-xs text-muted hover:text-white hover:border-line-strong cursor-pointer">
                     <span className="material-symbols-outlined text-[14px]">refresh</span> Retry
                 </button>
             )}

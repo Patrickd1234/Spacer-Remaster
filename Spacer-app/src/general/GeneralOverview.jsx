@@ -13,7 +13,7 @@ const PREVIEW_EVENTS = 4
 const PREVIEW_PEOPLE = 5
 const UPCOMING_DAYS = 30
 
-const ViewLink = ({ to, children }) => <Link to={to} className="text-xs text-[#8c947b] underline hover:text-white">{children}</Link>
+const ViewLink = ({ to, children }) => <Link to={to} className="text-xs text-muted underline hover:text-white">{children}</Link>
 
 async function loadOverview(profile) {
     const today = startOfDay(new Date())
@@ -38,14 +38,14 @@ function UpdateRow({ row }) {
     const { title, icon } = describeActivity(row)
     return (
         <li className="flex items-start gap-3 py-2">
-            <span className="w-8 h-8 shrink-0 rounded-full bg-[#191c21] border border-[#2D3139] flex items-center justify-center">
-                <span className="material-symbols-outlined text-[16px] text-[#aff82a]">{icon}</span>
+            <span className="w-8 h-8 shrink-0 rounded-full bg-raised border border-line flex items-center justify-center">
+                <span className="material-symbols-outlined text-[16px] text-accent-ink">{icon}</span>
             </span>
             <div className="min-w-0 flex-1">
                 <p className="text-sm text-white truncate">{title}</p>
-                <p className="text-[11px] text-[#8c947b] truncate">{row.actor?.name || "Someone"}</p>
+                <p className="text-[11px] text-muted truncate">{row.actor?.name || "Someone"}</p>
             </div>
-            <span className="text-[11px] text-[#8c947b] whitespace-nowrap">{timeAgo(row.created_at)}</span>
+            <span className="text-[11px] text-muted whitespace-nowrap">{timeAgo(row.created_at)}</span>
         </li>
     )
 }
@@ -76,7 +76,7 @@ export default function GeneralOverview() {
             <PageHeading
                 title="General Space"
                 subtitle="Stay up to date with what's happening across your organization."
-                actions={<span className="flex items-center gap-2 text-xs text-[#c4c9b8] border border-[#2D3139] rounded-lg px-3 py-2"><span className="material-symbols-outlined text-[16px]">calendar_today</span>{today}</span>}
+                actions={<span className="flex items-center gap-2 text-xs text-soft border border-line rounded-lg px-3 py-2"><span className="material-symbols-outlined text-[16px]">calendar_today</span>{today}</span>}
             />
 
             {profileError && <ErrorNote>Couldn't load your profile.</ErrorNote>}
@@ -105,11 +105,11 @@ export default function GeneralOverview() {
                         {data.upcoming.length === 0
                             ? <PanelMessage icon="event" title="No upcoming events" text={`Nothing scheduled in the next ${UPCOMING_DAYS} days.`} />
                             : data.upcoming.slice(0, PREVIEW_EVENTS).map((e) => (
-                                <Link key={e.id} to="/general/calendar" className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#191c21]">
+                                <Link key={e.id} to="/general/calendar" className="flex items-center gap-3 p-2 rounded-lg hover:bg-raised">
                                     <DateBadge event={e} />
                                     <div className="min-w-0 flex-1">
                                         <p className="text-sm font-medium text-white truncate">{e.title}</p>
-                                        <p className="text-[11px] text-[#8c947b]">{formatEventTime(e)}{meetingPlatform(e.external_url) ? ` · ${meetingPlatform(e.external_url)}` : ""}</p>
+                                        <p className="text-[11px] text-muted">{formatEventTime(e)}{meetingPlatform(e.external_url) ? ` · ${meetingPlatform(e.external_url)}` : ""}</p>
                                     </div>
                                     <CategoryTag categories={EVENT_CATEGORIES} value={e.category} />
                                 </Link>
@@ -119,18 +119,18 @@ export default function GeneralOverview() {
                     <Panel title="Organization Updates" className="col-span-12 lg:col-span-7">
                         {data.updates.length === 0
                             ? <PanelMessage icon="history" title="Nothing yet" text="Activity across your organization will appear here." />
-                            : <ul className="divide-y divide-[#2D3139]">{data.updates.map((row) => <UpdateRow key={row.id} row={row} />)}</ul>}
+                            : <ul className="divide-y divide-line">{data.updates.map((row) => <UpdateRow key={row.id} row={row} />)}</ul>}
                     </Panel>
 
                     <Panel title="People Directory (Preview)" className="col-span-12 lg:col-span-5" action={<ViewLink to="/general/directory">View directory</ViewLink>}>
                         {data.people.slice(0, PREVIEW_PEOPLE).map((p) => (
-                            <Link key={p.id} to={`/general/directory?person=${p.id}`} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[#191c21]">
+                            <Link key={p.id} to={`/general/directory?person=${p.id}`} className="flex items-center gap-3 p-2 rounded-lg hover:bg-raised">
                                 <Avatar name={p.name} url={p.avatarUrl} />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                                    <p className="text-[11px] text-[#8c947b] truncate">{p.job_title || "No title yet"}</p>
+                                    <p className="text-[11px] text-muted truncate">{p.job_title || "No title yet"}</p>
                                 </div>
-                                {p.teams[0] && <span className="px-2 py-0.5 rounded-md border border-[#2D3139] text-[11px] text-[#c4c9b8]">{p.teams[0].name}</span>}
+                                {p.teams[0] && <span className="px-2 py-0.5 rounded-md border border-line text-[11px] text-soft">{p.teams[0].name}</span>}
                             </Link>
                         ))}
                     </Panel>

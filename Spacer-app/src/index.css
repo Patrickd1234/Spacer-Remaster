@@ -1,6 +1,44 @@
+/* ── App palette ──────────────────────────────────────────────────────────────
+   Every color in the app comes from these roles (tailwind.config.js names them:
+   bg-canvas, bg-panel, border-line, text-muted, text-accent-ink…). Values are
+   RGB triplets so Tailwind's /opacity modifiers work. `white` in class names is
+   the foreground role. Only the dark palette exists for now; a light mode can be
+   added later by giving these roles light values under a class such as html.light. */
+:root {
+  color-scheme: dark;
+  --c-canvas: 15 17 21;        /* page background */
+  --c-panel: 20 22 27;         /* cards, panels */
+  --c-field: 17 19 24;         /* inputs */
+  --c-raised: 25 28 33;        /* items inside panels */
+  --c-surface: 28 31 38;       /* sidebar, secondary buttons */
+  --c-surface-2: 37 42 51;     /* hover, higher surfaces */
+  --c-line: 45 49 57;          /* borders, dividers */
+  --c-line-strong: 61 66 77;   /* hovered borders */
+  --c-fg: 255 255 255;         /* primary text */
+  --c-soft: 196 201 184;       /* secondary text, labels */
+  --c-muted: 140 148 123;      /* muted text */
+  --c-faint: 90 95 82;         /* disabled, decorative */
+  --c-accent: 175 248 42;      /* lime fills */
+  --c-accent-hover: 157 224 34;
+  --c-accent-ink: 175 248 42;  /* lime as text, icons, borders */
+  --c-on-accent: 28 31 38;     /* text on lime */
+
+  /* Older names, still used by Tailwind tokens and CSS below */
+  --bg-base: rgb(var(--c-canvas));
+  --bg-surface: rgb(var(--c-raised));
+  --bg-lowest: rgb(var(--c-canvas));
+  --bg-border: rgb(var(--c-line));
+  --bg-surface-high: rgb(var(--c-surface));
+  --bg-highest: rgb(var(--c-surface-2));
+  --bg-surface-low: rgb(var(--c-panel));
+  --primary-color: rgb(var(--c-accent));
+  --primary-color-dim: rgb(var(--c-accent-hover));
+  --primary-color-rgb: 175, 248, 42;
+}
+
 body {
-  background-color: #0F1115;
-  color: #e0e5d0;
+  background-color: rgb(var(--c-canvas));
+  color: rgb(var(--c-soft));
   font-family: 'Inter', sans-serif;
   overflow-x: hidden;
 }
@@ -10,13 +48,13 @@ body {
 }
 
 .glass-card {
-  background: #1C1F26;
-  border: 1px solid #2D3139;
+  background: rgb(var(--c-surface));
+  border: 1px solid rgb(var(--c-line));
   transition: all 0.2s ease;
 }
 
 .glass-card:hover {
-  border-color: #424934;
+  border-color: rgb(var(--c-line-strong));
 }
 
 ::-webkit-scrollbar {
@@ -24,11 +62,11 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0F1115;
+  background: rgb(var(--c-canvas));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #2D3139;
+  background: rgb(var(--c-line));
   border-radius: 10px;
 }
 
@@ -49,18 +87,18 @@ body {
 }
 
 .glass-card {
-  background: rgba(28, 33, 21, 0.4);
+  background: rgb(var(--c-surface) / 0.4);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(182, 255, 51, 0.1);
+  border: 1px solid rgba(var(--primary-color-rgb), 0.1);
 }
 
 .inner-glow {
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 1px 1px 0 rgb(var(--c-fg) / 0.05);
 }
 
 /* Hierarchy visualization styling */
 .hierarchy-line {
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid rgb(var(--c-fg) / 0.1);
   margin-left: 20px;
   padding-left: 24px;
   position: relative;
@@ -73,30 +111,30 @@ body {
   left: 0;
   width: 16px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(var(--c-fg) / 0.1);
 }
 
 /* Glassmorphism card */
 .glass-card {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgb(var(--c-fg) / 0.03);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgb(var(--c-fg) / 0.08);
 }
 
 /* Launch Organization page (used there but never defined before) */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgb(var(--c-fg) / 0.03);
   backdrop-filter: blur(8px);
 }
 
 .neon-glow {
-  box-shadow: 0 0 15px rgba(182, 255, 51, 0.15);
-  border-color: rgba(182, 255, 51, 0.3);
+  box-shadow: 0 0 15px rgba(var(--primary-color-rgb), 0.15);
+  border-color: rgba(var(--primary-color-rgb), 0.3);
 }
 
 .vertical-divider {
   width: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgb(var(--c-fg) / 0.08);
 }
 
 /* Atmospheric glow */
@@ -107,7 +145,7 @@ body {
   transform: translate(-50%, -50%);
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at 30% 30%, rgba(182, 255, 51, 0.05) 0%, transparent 50%);
+  background: radial-gradient(circle at 30% 30%, rgba(var(--primary-color-rgb), 0.05) 0%, transparent 50%);
   pointer-events: none;
   z-index: -1;
 }
@@ -225,21 +263,38 @@ body {
 /* Custom Preference Classes */
 .nav-item-active {
   background-color: rgba(var(--primary-color-rgb), 0.1) !important;
-  color: var(--primary-color) !important;
+  color: rgb(var(--c-accent-ink)) !important;
   font-weight: 600;
 }
 
 .text-primary-accent {
-  color: var(--primary-color) !important;
+  color: rgb(var(--c-accent-ink)) !important;
 }
 
 .bg-primary-accent-dim {
   background-color: rgba(var(--primary-color-rgb), 0.2) !important;
 }
 
+/* Indeterminate upload bar (components/UploadingBubble.jsx) */
+@keyframes upload-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="upload-slide"] { animation: none !important; width: 100%; opacity: 0.5; }
+}
+
+/* The signed-in user's own chat messages: a soft accent tint, readable with every accent */
+.chat-bubble-mine {
+  background-color: rgba(var(--primary-color-rgb), 0.14);
+  border: 1px solid rgba(var(--primary-color-rgb), 0.3);
+  color: rgb(var(--c-fg));
+}
+
 .btn-primary-accent {
   background-color: var(--primary-color) !important;
-  color: #0F1115 !important;
+  color: rgb(var(--c-on-accent)) !important;
   font-weight: 600;
   transition: all 0.2s ease;
 }
@@ -336,7 +391,7 @@ body {
 /* Glassmorphism strength overrides */
 .glass-card {
   backdrop-filter: blur(var(--glass-blur, 8px)) !important;
-  background: rgba(255, 255, 255, var(--glass-opacity, 0.03)) !important;
+  background: rgb(var(--c-fg) / var(--glass-opacity, 0.03)) !important;
 }
 
 :root.flat-theme .glass-card {

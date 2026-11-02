@@ -17,7 +17,7 @@ export default function PieChart({ slices = [], size = 180, showLegend = true })
   const paths = [];
   let startAngle = -Math.PI / 2; // start at top
 
-  slices.forEach((slice, i) => {
+  slices.forEach((slice) => {
     const fraction = total === 0 ? 1 / slices.length : slice.value / total;
     const angle = fraction * 2 * Math.PI;
     const endAngle = startAngle + angle;
@@ -111,8 +111,8 @@ export default function PieChart({ slices = [], size = 180, showLegend = true })
                 className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
                 style={{ background: s.color }}
               />
-              <span className="text-on-surface-variant">{s.label}</span>
-              <span className="font-semibold text-on-surface">{s.value}</span>
+              <span className="text-muted">{s.label}</span>
+              <span className="font-semibold text-white">{s.value}</span>
             </div>
           ))}
         </div>

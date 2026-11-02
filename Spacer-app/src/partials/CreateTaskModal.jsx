@@ -14,7 +14,7 @@ const PRIORITY_OPTIONS = [
     { value: "urgent", label: "Urgent" },
 ];
 
-const fieldClass = "w-full bg-[#14161b] border border-[#2D3139] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[var(--primary-color)] transition-colors placeholder-[#8c947b]/60";
+const fieldClass = "w-full bg-panel border border-line rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-accent-ink transition-colors placeholder-muted/60";
 
 const Label = ({ htmlFor, children, isRequired = false }) => (
     <label htmlFor={htmlFor} className="block text-xs font-medium text-white mb-2">
@@ -44,20 +44,20 @@ const CustomDropdown = ({ options, value, onChange, placeholder, icon = null, is
                 type="button"
                 disabled={isDisabled}
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full bg-[#14161b] border rounded-lg px-3 py-2.5 text-sm text-white flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isOpen ? "border-[var(--primary-color)]" : "border-[#2D3139] hover:border-[#3d424d]"}`}
+                className={`w-full bg-panel border rounded-lg px-3 py-2.5 text-sm text-white flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${isOpen ? "border-accent-ink" : "border-line hover:border-line-strong"}`}
             >
-                {icon && <span className="material-symbols-outlined text-[16px] text-[#8c947b]">{icon}</span>}
-                <span className={`flex-1 text-left truncate ${!selectedOption ? "text-[#8c947b]" : ""}`}>{selectedOption ? selectedOption.label : placeholder}</span>
-                <span className={`material-symbols-outlined text-[#8c947b] text-[18px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
+                {icon && <span className="material-symbols-outlined text-[16px] text-muted">{icon}</span>}
+                <span className={`flex-1 text-left truncate ${!selectedOption ? "text-muted" : ""}`}>{selectedOption ? selectedOption.label : placeholder}</span>
+                <span className={`material-symbols-outlined text-muted text-[18px] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
             </button>
             {isOpen && (
-                <div className="absolute z-50 top-full mt-1 w-full min-w-[160px] bg-[#1c1f26] border border-[#2D3139] rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
-                    {options.length === 0 && <p className="px-3 py-2 text-xs text-[#8c947b]">Nothing to choose yet</p>}
+                <div className="absolute z-50 top-full mt-1 w-full min-w-[160px] bg-surface1 border border-line rounded-lg shadow-2xl max-h-60 overflow-y-auto p-1">
+                    {options.length === 0 && <p className="px-3 py-2 text-xs text-muted">Nothing to choose yet</p>}
                     {options.map((opt) => (
                         <button
                             type="button"
                             key={opt.value}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${String(value) === String(opt.value) ? "bg-[#252a33] text-white font-semibold" : "text-[#c2caae] hover:bg-[#252a33] hover:text-white"}`}
+                            className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${String(value) === String(opt.value) ? "bg-surface2 text-white font-semibold" : "text-soft hover:bg-surface2 hover:text-white"}`}
                             onClick={() => {
                                 onChange(opt.value);
                                 setIsOpen(false);
@@ -245,15 +245,15 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
 
     const content = (
         <div
-            className={`@container bg-[#191c21] border border-[#2D3139] flex flex-col text-white ${isInline ? "w-full h-full border-none rounded-none" : "w-full max-w-[600px] rounded-2xl shadow-2xl overflow-visible"}`}
+            className={`@container bg-raised border border-line flex flex-col text-white ${isInline ? "w-full h-full border-none rounded-none" : "w-full max-w-[600px] rounded-2xl shadow-2xl overflow-visible"}`}
             onClick={(e) => !isInline && e.stopPropagation()}
         >
-            <div className={`px-6 pt-5 pb-4 border-b border-[#2D3139] flex justify-between items-start shrink-0 ${isInline ? "hidden" : ""}`}>
+            <div className={`px-6 pt-5 pb-4 border-b border-line flex justify-between items-start shrink-0 ${isInline ? "hidden" : ""}`}>
                 <div>
                     <h2 className="text-base font-semibold text-white">Create Task</h2>
-                    <p className="text-[#8c947b] text-xs mt-1">Add a task, choose where it belongs, and assign it to someone.</p>
+                    <p className="text-muted text-xs mt-1">Add a task, choose where it belongs, and assign it to someone.</p>
                 </div>
-                <button type="button" aria-label="Close" className="text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
+                <button type="button" aria-label="Close" className="text-muted hover:text-white transition-colors cursor-pointer" onClick={onClose}>
                     <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
             </div>
@@ -265,7 +265,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 </div>
 
                 <div>
-                    <Label htmlFor="task-description">Task Description <span className="text-[#8c947b]">(optional)</span></Label>
+                    <Label htmlFor="task-description">Task Description <span className="text-muted">(optional)</span></Label>
                     <textarea
                         id="task-description"
                         className={`${fieldClass} min-h-[80px] resize-y`}
@@ -332,8 +332,8 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 )}
             </div>
 
-            <div className="px-6 py-4 border-t border-[#2D3139] flex justify-end gap-3">
-                <button type="button" className="flex items-center gap-1 px-3 py-2 text-xs text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
+            <div className="px-6 py-4 border-t border-line flex justify-end gap-3">
+                <button type="button" className="flex items-center gap-1 px-3 py-2 text-xs text-muted hover:text-white transition-colors cursor-pointer" onClick={onClose}>
                     <span className="material-symbols-outlined text-[14px]">close</span> Cancel
                 </button>
                 <button

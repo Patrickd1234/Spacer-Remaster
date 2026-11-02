@@ -11,11 +11,11 @@ export function GeneralShell({ page, section = "General Space", icon = "workspac
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const inset = sidebarCollapsed ? 72 : 260
     return (
-        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex">
+        <div className="bg-canvas min-h-screen text-white font-sans antialiased flex">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <div className="flex-1 flex flex-col min-w-0">
                 <Header breadcrumb={{ icon, label: section ? `${section} › ${page}` : page }} insetLeft={inset} />
-                <main className="flex-1 flex flex-col pt-16 transition-all duration-300 ease-out" style={{ marginLeft: inset }}>
+                <main className="flex-1 flex flex-col transition-all duration-300 ease-out" style={{ marginLeft: inset }}>
                     <div className="p-8 space-y-6 max-w-[1400px] w-full mx-auto">{children}</div>
                 </main>
             </div>
@@ -28,7 +28,7 @@ export function PageHeading({ title, subtitle, actions = null }) {
         <section className="flex flex-wrap items-start justify-between gap-4">
             <div>
                 <h1 className="text-2xl font-semibold text-white">{title}</h1>
-                {subtitle && <p className="text-[#8c947b] text-sm mt-1">{subtitle}</p>}
+                {subtitle && <p className="text-muted text-sm mt-1">{subtitle}</p>}
             </div>
             {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
         </section>
@@ -37,7 +37,7 @@ export function PageHeading({ title, subtitle, actions = null }) {
 
 export function PrimaryButton({ icon, children, ...props }) {
     return (
-        <button type="button" {...props} className="flex items-center gap-2 bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-semibold text-sm px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50">
+        <button type="button" {...props} className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-on-accent font-semibold text-sm px-4 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50">
             {icon && <span className="material-symbols-outlined text-[18px]">{icon}</span>}
             {children}
         </button>
@@ -46,7 +46,7 @@ export function PrimaryButton({ icon, children, ...props }) {
 
 export function SecondaryButton({ icon, children, ...props }) {
     return (
-        <button type="button" {...props} className="flex items-center gap-2 border border-[#2D3139] hover:border-[#3d424d] text-white text-sm px-3 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50">
+        <button type="button" {...props} className="flex items-center gap-2 border border-line hover:border-line-strong text-white text-sm px-3 py-2 rounded-lg transition-colors cursor-pointer disabled:opacity-50">
             {icon && <span className="material-symbols-outlined text-[18px]">{icon}</span>}
             {children}
         </button>
@@ -60,7 +60,7 @@ export function Chip({ isActive, onClick, children }) {
             type="button"
             aria-pressed={isActive}
             onClick={onClick}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${isActive ? "bg-[#aff82a] text-[#1C1F26] border-[#aff82a]" : "border-[#2D3139] text-[#c4c9b8] hover:text-white hover:border-[#3d424d]"}`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors cursor-pointer ${isActive ? "bg-accent text-on-accent border-accent-ink" : "border-line text-soft hover:text-white hover:border-line-strong"}`}
         >
             {children}
         </button>
@@ -78,7 +78,7 @@ export function CategoryTag({ categories, value }) {
 
 export function PinnedTag() {
     return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#aff82a]/10 text-[#aff82a] border border-[#aff82a]/30 text-[11px] font-medium">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-accent/10 text-accent-ink border border-accent-ink/30 text-[11px] font-medium">
             <span className="material-symbols-outlined text-[12px]">push_pin</span>
             Pinned
         </span>
@@ -88,7 +88,7 @@ export function PinnedTag() {
 const AVATAR_SIZES = { sm: "w-7 h-7 text-[10px]", md: "w-10 h-10 text-xs", lg: "w-16 h-16 text-lg" }
 
 export function Avatar({ name, url, size = "md" }) {
-    const classes = `${AVATAR_SIZES[size]} rounded-full shrink-0 overflow-hidden bg-[#2D3139] flex items-center justify-center font-semibold text-[#c4c9b8]`
+    const classes = `${AVATAR_SIZES[size]} rounded-full shrink-0 overflow-hidden bg-line flex items-center justify-center font-semibold text-soft`
     if (url) return <img src={url} alt="" className={`${classes} object-cover`} />
     return <span className={classes} aria-hidden="true">{initials(name)}</span>
 }
@@ -97,8 +97,8 @@ export function Avatar({ name, url, size = "md" }) {
 export function DateBadge({ event }) {
     const start = eventStart(event)
     return (
-        <div className="w-12 shrink-0 rounded-lg border border-[#2D3139] bg-[#191c21] py-1 text-center">
-            <p className="text-[10px] font-semibold uppercase text-[#aff82a]">{start.toLocaleDateString([], { month: "short" })}</p>
+        <div className="w-12 shrink-0 rounded-lg border border-line bg-raised py-1 text-center">
+            <p className="text-[10px] font-semibold uppercase text-accent-ink">{start.toLocaleDateString([], { month: "short" })}</p>
             <p className="text-lg font-semibold text-white leading-tight">{start.getDate()}</p>
         </div>
     )
@@ -129,11 +129,11 @@ export function Modal({ title, onClose, children, wide = false }) {
                 aria-modal="true"
                 aria-label={title}
                 onClick={(e) => e.stopPropagation()}
-                className={`w-full ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-xl p-6`}
+                className={`w-full ${wide ? "max-w-2xl" : "max-w-lg"} max-h-[90vh] overflow-y-auto bg-panel border border-line rounded-xl p-6`}
             >
                 <div className="flex items-center justify-between mb-5">
                     <h2 className="text-lg font-semibold text-white">{title}</h2>
-                    <button type="button" onClick={onClose} aria-label="Close" className="text-[#8c947b] hover:text-white cursor-pointer">
+                    <button type="button" onClick={onClose} aria-label="Close" className="text-muted hover:text-white cursor-pointer">
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -143,16 +143,16 @@ export function Modal({ title, onClose, children, wide = false }) {
     )
 }
 
-export const INPUT_CLASS = "w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-lg px-3 py-2 text-white text-sm placeholder-[#8c947b] focus:outline-none transition-colors"
+export const INPUT_CLASS = "w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors"
 // Toolbar select that sizes to its content (INPUT_CLASS's w-full beats an added w-auto)
-export const COMPACT_SELECT_CLASS = "bg-[#111318] border border-[#2D3139] hover:border-[#3d424d] focus:border-[#aff82a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none transition-colors cursor-pointer"
+export const COMPACT_SELECT_CLASS = "bg-field border border-line hover:border-line-strong focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm focus:outline-none transition-colors cursor-pointer"
 
 export function Field({ label, children, hint = null }) {
     return (
         <label className="block space-y-1.5">
-            <span className="text-xs font-medium text-[#c4c9b8]">{label}</span>
+            <span className="text-xs font-medium text-soft">{label}</span>
             {children}
-            {hint && <span className="block text-[11px] text-[#8c947b]">{hint}</span>}
+            {hint && <span className="block text-[11px] text-muted">{hint}</span>}
         </label>
     )
 }

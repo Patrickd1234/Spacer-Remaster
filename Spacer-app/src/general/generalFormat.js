@@ -21,10 +21,10 @@ export const EVENT_CATEGORIES = [
 export const TONE_CLASSES = {
     blue: "bg-blue-500/10 text-blue-300 border-blue-500/30",
     orange: "bg-orange-500/10 text-orange-300 border-orange-500/30",
-    green: "bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30",
+    green: "bg-accent/10 text-accent-ink border-accent-ink/30",
     purple: "bg-purple-500/10 text-purple-300 border-purple-500/30",
     pink: "bg-pink-500/10 text-pink-300 border-pink-500/30",
-    gray: "bg-[#2D3139] text-[#c4c9b8] border-[#3d424d]",
+    gray: "bg-line text-soft border-line-strong",
 }
 
 export const TITLE_MAX = 200
@@ -147,6 +147,18 @@ export function eventsByDay(events) {
     }
     return byDay
 }
+
+// A task due on a day, shaped like an all-day calendar item so the shared views
+// can place it. Only for tasks that have a due_date.
+export const taskItem = (task) => ({
+    id: `task-${task.id}`,
+    kind: "task",
+    title: task.title,
+    description: task.description,
+    event_date: task.due_date.slice(0, 10),
+    starts_at: null,
+    task,
+})
 
 // Six Sunday-first weeks covering the month of `date`
 export function monthGrid(date) {

@@ -11,7 +11,7 @@ const matchesPerson = (person, query) => {
 }
 
 const labelClass = "block text-xs font-medium text-white mb-2"
-const inputClass = "w-full bg-[#14161b] border border-[#2D3139] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#8c947b]/60 focus:outline-none focus:border-[var(--primary-color)]"
+const inputClass = "w-full bg-panel border border-line rounded-lg px-3 py-2.5 text-sm text-white placeholder-muted/60 focus:outline-none focus:border-accent-ink"
 
 function InvitePopover({ onInvite, onClose }) {
     const [email, setEmail] = useState("")
@@ -27,10 +27,10 @@ function InvitePopover({ onInvite, onClose }) {
     }
 
     return (
-        <div className="mt-2 bg-[#191c21] border border-[#2D3139] rounded-xl p-4 shadow-2xl space-y-3">
+        <div className="mt-2 bg-raised border border-line rounded-xl p-4 shadow-2xl space-y-3">
             <div>
                 <p className="text-sm font-semibold text-white">Invite Members</p>
-                <p className="text-[11px] text-[#8c947b] mt-0.5">
+                <p className="text-[11px] text-muted mt-0.5">
                     Invite someone to join your organization. Once they accept, they can be assigned to departments and projects.
                 </p>
             </div>
@@ -45,7 +45,7 @@ function InvitePopover({ onInvite, onClose }) {
             />
             {error && <p className="text-[11px] text-red-400">{error}</p>}
             <div className="flex justify-end gap-2">
-                <button type="button" onClick={onClose} className="flex items-center gap-1 px-3 py-1.5 text-xs text-[#8c947b] hover:text-white cursor-pointer">
+                <button type="button" onClick={onClose} className="flex items-center gap-1 px-3 py-1.5 text-xs text-muted hover:text-white cursor-pointer">
                     <span className="material-symbols-outlined text-[14px]">close</span> Cancel
                 </button>
                 <button type="button" onClick={handleSend} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold btn-primary-accent cursor-pointer">
@@ -58,7 +58,7 @@ function InvitePopover({ onInvite, onClose }) {
 
 function InviteLink({ onClick }) {
     return (
-        <p className="text-[11px] text-[#8c947b] mt-2">
+        <p className="text-[11px] text-muted mt-2">
             Can't find the right person?{" "}
             <button type="button" onClick={onClick} className="text-primary-fixed underline hover:no-underline cursor-pointer">Invite new members</button>
         </p>
@@ -154,13 +154,13 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <form onSubmit={handleSubmit} className="bg-[#191c21] rounded-2xl w-full max-w-[640px] max-h-[92vh] flex flex-col border border-[#2D3139] shadow-2xl">
-                <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-[#2D3139]">
+            <form onSubmit={handleSubmit} className="bg-raised rounded-2xl w-full max-w-[640px] max-h-[92vh] flex flex-col border border-line shadow-2xl">
+                <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-line">
                     <div>
                         <h3 className="text-base font-semibold text-white">Create Department</h3>
-                        <p className="text-xs text-[#8c947b] mt-1">Create a new department by assigning a lead and organizing members.</p>
+                        <p className="text-xs text-muted mt-1">Create a new department by assigning a lead and organizing members.</p>
                     </div>
-                    <button type="button" onClick={onClose} aria-label="Close" className="text-[#8c947b] hover:text-white cursor-pointer">
+                    <button type="button" onClick={onClose} aria-label="Close" className="text-muted hover:text-white cursor-pointer">
                         <span className="material-symbols-outlined text-[20px]">close</span>
                     </button>
                 </div>
@@ -175,7 +175,7 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
 
                     <div>
                         <label htmlFor="dept-description" className={labelClass}>
-                            Department Description <span className={wordCount > DESCRIPTION_WORD_LIMIT ? "text-red-400" : "text-[#8c947b]"}>({wordCount}/{DESCRIPTION_WORD_LIMIT} words)</span>
+                            Department Description <span className={wordCount > DESCRIPTION_WORD_LIMIT ? "text-red-400" : "text-muted"}>({wordCount}/{DESCRIPTION_WORD_LIMIT} words)</span>
                         </label>
                         <textarea id="dept-description" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What does this department do?" className={`${inputClass} resize-none`} />
                     </div>
@@ -197,9 +197,9 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
                                             onToggle={() => setIsLeadListOpen((open) => !open)}
                                         />
                                         {isLeadListOpen && (
-                                            <div className="mt-2 max-h-48 overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-lg p-1">
+                                            <div className="mt-2 max-h-48 overflow-y-auto bg-panel border border-line rounded-lg p-1">
                                                 {leadOptions.length === 0
-                                                    ? <p className="text-xs text-[#8c947b] px-3 py-3">No matching members.</p>
+                                                    ? <p className="text-xs text-muted px-3 py-3">No matching members.</p>
                                                     : leadOptions.map((person) => (
                                                         <PersonRow key={person.id} person={person} onSelect={(p) => { setLead(p); setLeadQuery(""); setIsLeadListOpen(false) }} />
                                                     ))}
@@ -222,9 +222,9 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
                                 />
                                 <div className="mt-2"><Chips labels={chipLabels} onRemove={removeChip} /></div>
                                 {isMemberGridOpen && (
-                                    <div className="mt-2 max-h-64 overflow-y-auto bg-[#14161b] border border-[#2D3139] rounded-lg p-2">
+                                    <div className="mt-2 max-h-64 overflow-y-auto bg-panel border border-line rounded-lg p-2">
                                         {memberOptions.length === 0
-                                            ? <p className="text-xs text-[#8c947b] px-2 py-3">No matching members.</p>
+                                            ? <p className="text-xs text-muted px-2 py-3">No matching members.</p>
                                             : (
                                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                     {memberOptions.map((person) => (
@@ -248,8 +248,8 @@ export default function CreateDepartmentModal({ organizationId, canAssignPeople,
                     )}
                 </div>
 
-                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[#2D3139]">
-                    <button type="button" onClick={onClose} disabled={isSaving} className="flex items-center gap-1 px-3 py-2 text-xs text-[#8c947b] hover:text-white cursor-pointer disabled:opacity-50">
+                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-line">
+                    <button type="button" onClick={onClose} disabled={isSaving} className="flex items-center gap-1 px-3 py-2 text-xs text-muted hover:text-white cursor-pointer disabled:opacity-50">
                         <span className="material-symbols-outlined text-[14px]">close</span> Cancel
                     </button>
                     <button type="submit" disabled={isSaving} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold btn-primary-accent cursor-pointer disabled:opacity-50">

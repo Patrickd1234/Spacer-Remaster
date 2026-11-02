@@ -15,6 +15,10 @@ import {
     saveColumnOrder, deleteColumn, fallbackColumn, columnKeyForTask,
 } from "./projectColumns"
 import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./components/BoardColumns"
+import ProjectCalendar from "./components/ProjectCalendar"
+import SprintTab from "./sprints/SprintTab"
+import ProjectMembers from "./components/ProjectMembers"
+import ProjectDeadline from "./components/ProjectDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 
 const ACCEPTED = [
@@ -28,10 +32,14 @@ const ACCEPTED = [
 // How long a Kanban board message stays visible
 const BOARD_NOTICE_MS = 5000
 
+const TASK_COLUMNS = "id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by"
+// Added by migration 20261031090000_sprints
+const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
+
 // Board column names for each task status
 const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
 // Column dot colour by the status a column stands for
-const STATUS_DOT = { todo: "bg-[#2D3139]", in_progress: "bg-[#3b82f6]", done: "bg-primary-fixed-dim" }
+const STATUS_DOT = { todo: "bg-line", in_progress: "bg-[#3b82f6]", done: "bg-primary-fixed-dim" }
 
 const MAX_FILE_SIZE_MB = 50
 const MAX_FILE_SIZE    = MAX_FILE_SIZE_MB * 1024 * 1024   // 50 MB in bytes
@@ -148,12 +156,12 @@ function getFileStyle(type = "") {
     if (type.startsWith("image/")) return { icon: "image", color: "text-primary-fixed-dim", bg: "bg-primary-container/20" }
     if (type === "application/pdf") return { icon: "picture_as_pdf", color: "text-error", bg: "bg-error-container/20" }
     if (type.includes("word") || type === "application/msword")
-        return { icon: "description", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
+        return { icon: "description", color: "text-muted", bg: "bg-raised" }
     if (type.includes("sheet") || type === "application/vnd.ms-excel")
-        return { icon: "table", color: "text-[var(--primary-color)]", bg: "bg-[var(--primary-color)]/10" }
-    if (type.includes("zip")) return { icon: "folder_zip", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
-    if (type.startsWith("text/")) return { icon: "article", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
-    return { icon: "insert_drive_file", color: "text-[#8c947b]", bg: "bg-[#191c21]" }
+        return { icon: "table", color: "text-accent-ink", bg: "bg-[var(--primary-color)]/10" }
+    if (type.includes("zip")) return { icon: "folder_zip", color: "text-muted", bg: "bg-raised" }
+    if (type.startsWith("text/")) return { icon: "article", color: "text-muted", bg: "bg-raised" }
+    return { icon: "insert_drive_file", color: "text-muted", bg: "bg-raised" }
 }
 
 function formatBytes(bytes) {
@@ -167,8 +175,6 @@ function formatBytes(bytes) {
 function ProjectPage() {
     const { project_id } = useParams()
     const [project_name, setProjectName] = useState("Loading...")
-    const [project_description, setProjectDescription] = useState("")
-    const [project_status, setProjectStatus] = useState("In Progress")
     const [project_due_date, setProjectDueDate] = useState("")
     const [project_tasks, setProjectTasks] = useState([])
     const [activityLog, setActivityLog] = useState([])
@@ -181,19 +187,16 @@ function ProjectPage() {
     const [selectedTask, setSelectedTask] = useState(null)
     const [orgUsers, setOrgUsers] = useState([])
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const [calendarMonth, setCalendarMonth] = useState(new Date())
     const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
     const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
     const [selectedDateEvents, setSelectedDateEvents] = useState(null)
     const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
-    const [project_events, setProjectEvents] = useState([])
     const [currentUserId, setCurrentUserId] = useState(null)
 
     // ── Role comes from the global RoleContext — no local fetch needed
     const { isSuperAdmin, isAdmin } = useRole()
-    const canCreateTasks = isSuperAdmin || isAdmin
-    const canEditTaskDetails = canCreateTasks || (selectedTask && selectedTask.assignee_id === currentUserId)
+    const canEditTaskDetails = isSuperAdmin || isAdmin || (selectedTask && selectedTask.assignee_id === currentUserId)
 
     // ── Delete project
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -201,6 +204,8 @@ function ProjectPage() {
     const [deleteProjectError, setDeleteProjectError] = useState("")
     // null while checking; then whether the server's can_manage_project allows a delete
     const [canDeleteProject, setCanDeleteProject] = useState(null)
+    // null while checking; then can_edit_project, the rule for adding tasks here
+    const [canAddTasks, setCanAddTasks] = useState(null)
     const [projectDepartmentName, setProjectDepartmentName] = useState(null)
 
     // Same rule the delete-workspace-item function enforces: team lead or higher in
@@ -209,13 +214,15 @@ function ProjectPage() {
         if (!project_id) return undefined
         let cancelled = false
         const checkDeletePermission = async () => {
-            const [{ data: allowed, error: rpcError }, { data: project }] = await Promise.all([
+            const [{ data: allowed, error: rpcError }, { data: canEdit, error: editError }, { data: project }] = await Promise.all([
                 supabase.rpc("can_manage_project", { p_project_id: project_id }),
+                supabase.rpc("can_edit_project", { p_project_id: project_id }),
                 supabase.from("project_spaces").select("team_space:team_spaces(name)").eq("id", project_id).maybeSingle(),
             ])
             if (cancelled) return
-            if (rpcError) console.error("Error checking project permissions:", rpcError)
+            if (rpcError || editError) console.error("Error checking project permissions:", rpcError || editError)
             setCanDeleteProject(Boolean(allowed) && !rpcError)
+            setCanAddTasks(Boolean(canEdit) && !editError)
             setProjectDepartmentName(project?.team_space?.name || null)
         }
         checkDeletePermission()
@@ -263,201 +270,6 @@ function ProjectPage() {
     const [taskUploading, setTaskUploading] = useState(false)
     const [taskUploadError, setTaskUploadError] = useState("")
     const taskFileInputRef = useRef()
-
-    // ── Sprint Timer state
-    const [sprintTotalTime, setSprintTotalTime] = useState(15 * 60);
-    const [sprintTimeRemaining, setSprintTimeRemaining] = useState(15 * 60);
-    const [isTimerRunning, setIsTimerRunning] = useState(false);
-    const [isEditingTimer, setIsEditingTimer] = useState(false);
-    const [timerInputValue, setTimerInputValue] = useState("00:15:00");
-
-    // ── Sprint Lifecycle state
-    const [sprintPhase, setSprintPhase] = useState('idle'); // 'idle' | 'active' | 'summary'
-    const [currentSprintReport, setCurrentSprintReport] = useState(null);
-    const [sprintStartTime, setSprintStartTime] = useState(null);
-
-    const formatTimerDisplay = (totalSeconds) => {
-        const h = Math.floor(totalSeconds / 3600);
-        const m = Math.floor((totalSeconds % 3600) / 60);
-        const s = totalSeconds % 60;
-        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    };
-
-    const handleTimerInputBlur = () => {
-        const parts = timerInputValue.split(':').map(n => parseInt(n, 10) || 0);
-        let totalSeconds = 0;
-        if (parts.length === 3) {
-            totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        } else if (parts.length === 2) {
-            totalSeconds = parts[0] * 60 + parts[1];
-        } else if (parts.length === 1) {
-            totalSeconds = parts[0];
-        }
-        
-        const finalSeconds = totalSeconds > 0 ? totalSeconds : 1;
-        setSprintTotalTime(finalSeconds);
-        setSprintTimeRemaining(finalSeconds);
-        setTimerInputValue(formatTimerDisplay(finalSeconds));
-        setIsEditingTimer(false);
-    };
-
-    const [sprintTasks, setSprintTasks] = useState([]);
-
-    // ── Sprint Lifecycle handlers
-    const handleStartNewSprint = () => {
-        setSprintPhase('active');
-        setSprintStartTime(new Date().toISOString());
-        setSprintTasks([]);
-        setSprintTotalTime(15 * 60);
-        setSprintTimeRemaining(15 * 60);
-        setTimerInputValue("00:15:00");
-        setIsTimerRunning(false);
-        setIsEditingTimer(false);
-        setCurrentSprintReport(null);
-    };
-
-    const handleEndSprint = async () => {
-        setIsTimerRunning(false);
-        const endTime = new Date().toISOString();
-        const timeElapsed = sprintTotalTime - sprintTimeRemaining;
-
-        const completedTasks = sprintTasks.filter(st => {
-            const current = project_tasks.find(t => t.id === st.id);
-            return current && current.status === 'done';
-        });
-        const incompleteTasks = sprintTasks.filter(st => {
-            const current = project_tasks.find(t => t.id === st.id);
-            return !current || current.status !== 'done';
-        });
-
-        const report = {
-            id: Math.random().toString(36).substring(2, 11),
-            startTime: sprintStartTime,
-            endTime,
-            timerSet: sprintTotalTime,
-            timeElapsed,
-            totalTasks: sprintTasks.length,
-            completedCount: completedTasks.length,
-            incompleteCount: incompleteTasks.length,
-            completionPercent: sprintTasks.length > 0 ? Math.round((completedTasks.length / sprintTasks.length) * 100) : 0,
-            completedTasks: completedTasks.map(t => {
-                const current = project_tasks.find(pt => pt.id === t.id);
-                return { id: t.id, title: current?.title || t.title };
-            }),
-            incompleteTasks: incompleteTasks.map(t => {
-                const current = project_tasks.find(pt => pt.id === t.id);
-                return { id: t.id, title: current?.title || t.title };
-            }),
-        };
-
-        setCurrentSprintReport(report);
-        setSprintPhase('summary');
-
-        const userData = { user: await getSessionUser() };
-        const logEntry = {
-            entity_type: "sprint",
-            entity_id: report.id,
-            actor_id: userData?.user?.id,
-            action: "sprint_completed",
-            new_state: { 
-                project_id: project_id, 
-                completionPercent: report.completionPercent,
-                completedCount: report.completedCount,
-                totalTasks: report.totalTasks
-            }
-        };
-        const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single();
-        if (newLog) setActivityLog(prev => [newLog, ...prev]);
-    };
-
-    useEffect(() => {
-        let interval;
-        if (isTimerRunning && sprintTimeRemaining > 0) {
-            interval = setInterval(() => {
-                setSprintTimeRemaining(prev => prev - 1);
-            }, 1000);
-        } else if (sprintTimeRemaining === 0 && sprintPhase === 'active') {
-            // The timer running out isn't a user event, so the sprint ends from here
-            // eslint-disable-next-line react-hooks/set-state-in-effect
-            handleEndSprint();
-        }
-        return () => clearInterval(interval);
-    }, [isTimerRunning, sprintTimeRemaining, sprintPhase]);
-
-    useEffect(() => {
-        if (sprintPhase === 'active' && sprintTasks.length > 0) {
-            const allDone = sprintTasks.every(st => {
-                const current = project_tasks.find(t => t.id === st.id);
-                return current && current.status === 'done';
-            });
-            if (allDone) {
-                // Tasks can be finished elsewhere (board, realtime), so this watches for it
-                // eslint-disable-next-line react-hooks/set-state-in-effect
-                handleEndSprint();
-            }
-        }
-    }, [project_tasks, sprintTasks, sprintPhase]);
-
-    const handleTimerStart = async () => setIsTimerRunning(prev => !prev);
-    const handleTimerReset = async () => {
-        setIsTimerRunning(false);
-        setSprintTimeRemaining(sprintTotalTime);
-    };
-
-    const handleExitSprint = () => {
-        setSprintPhase('idle');
-        setSprintTasks([]);
-        setCurrentSprintReport(null);
-        setSprintStartTime(null);
-        setSprintTotalTime(15 * 60);
-        setSprintTimeRemaining(15 * 60);
-        setTimerInputValue("00:15:00");
-        setIsTimerRunning(false);
-        setIsEditingTimer(false);
-    };
-
-    const handleToggleTaskInSprint = (task) => {
-        const isSelected = !!sprintTasks.find(st => st.id === task.id);
-        
-        let allSubtasksDone = true;
-        let hasSubtasks = false;
-        if (task.sub_tasks) {
-            if (Array.isArray(task.sub_tasks)) {
-                if (task.sub_tasks.length > 0) {
-                    hasSubtasks = true;
-                    allSubtasksDone = task.sub_tasks.every(st => Boolean(st?.done));
-                }
-            } else if (typeof task.sub_tasks === "string") {
-                const trimmed = task.sub_tasks.trim();
-                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                    try {
-                        const parsed = JSON.parse(trimmed);
-                        if (Array.isArray(parsed) && parsed.length > 0) {
-                            hasSubtasks = true;
-                            allSubtasksDone = parsed.every(st => Boolean(st?.done));
-                        }
-                    } catch (e) {
-                        console.warn("Malformed sub_tasks for task", task.id, e);
-                    }
-                }
-            }
-        }
-        const isLocked = isTimerRunning && isSelected && hasSubtasks && !allSubtasksDone;
-
-        if (isLocked) {
-            alert("This task is locked! Complete all subtasks first.");
-            return;
-        }
-
-        setSprintTasks(prev => {
-            const exists = prev.find(st => st.id === task.id);
-            if (exists) {
-                return prev.filter(st => st.id !== task.id);
-            } else {
-                return [...prev, task];
-            }
-        });
-    };
 
     const updateTaskPriority = async (taskId, newPriority) => {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
@@ -714,11 +526,16 @@ function ProjectPage() {
         }
     }
 
-    //     const handleDragOver = (e) => {
-    //         e.preventDefault()
-    // }
-
-    const handleDragOver = (e) => { e.preventDefault() }
+    // Resolves to an error message for ProjectDeadline, or null once saved
+    const handleDeadlineSave = async (nextDate) => {
+        const { error } = await supabase.from("project_spaces").update({ due_date: nextDate }).eq("id", project_id)
+        if (error) {
+            console.error("Error saving project deadline:", error)
+            return "Couldn't save the deadline."
+        }
+        setProjectDueDate(nextDate || "")
+        return null
+    }
 
     // ── File handlers
     const fetchFiles = useCallback(async () => {
@@ -741,6 +558,17 @@ function ProjectPage() {
     }
 
     // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
+    // Resolves to the error, or null once the member list is refreshed
+    const removeProjectMember = async (userId) => {
+        const { error } = await supabase.from("project_members").delete().eq("project_id", project_id).eq("user_id", userId)
+        if (error) {
+            console.error("Error removing project member:", error)
+            return error
+        }
+        await fetchProjectMembers()
+        return null
+    }
+
     // App.jsx keys this page by project_id, so switching projects starts from
     // fresh state instead of resetting it here
     useEffect(() => {
@@ -754,8 +582,6 @@ function ProjectPage() {
                 console.error("Error fetching project:", error)
             } else if (data && data.length > 0) {
                 if (data[0].name) setProjectName(data[0].name)
-                if (data[0].description) setProjectDescription(data[0].description)
-                if (data[0].status) setProjectStatus(data[0].status)
                 if (data[0].due_date) setProjectDueDate(data[0].due_date)
                 if (data[0].team_spaces?.organization_id) {
                     setOrganizationId(data[0].team_spaces.organization_id)
@@ -771,7 +597,7 @@ function ProjectPage() {
             if (!orgId) return
             const { data, error } = await supabase
                 .from("users")
-                .select("id, name, email, organization_id")
+                .select("id, name, email, organization_id, job_title")
                 .eq("organization_id", orgId)
             if (error) {
                 console.error("Error fetching org users:", error)
@@ -782,11 +608,14 @@ function ProjectPage() {
 
         const fetchTasks = async () => {
             if (!project_id) return
-            const { data, error } = await supabase
+            const queryTasks = (columns) => supabase
                 .from("tasks")
-                .select("id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by")
+                .select(columns)
                 .eq("project_id", project_id)
                 .order("created_at", { ascending: false })
+            let { data, error } = await queryTasks(`${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`)
+            // 42703: the sprints migration isn't applied yet; load tasks without its columns
+            if (error?.code === "42703") ({ data, error } = await queryTasks(TASK_COLUMNS))
             if (error) { console.error("Error fetching tasks:", error) }
             else {
                 // Show statuses as stored; they're only derived when subtasks are edited
@@ -973,8 +802,8 @@ function ProjectPage() {
         const isPDF = pendingFile?.type === "application/pdf"
         const { icon, color, bg } = getFileStyle(pendingFile?.type)
         return (
-            <div className="mt-lg border border-[#2D3139]/40 rounded-xl overflow-hidden">
-                <div className="bg-[#1C1F26] flex items-center justify-center" style={{ minHeight: 220 }}>
+            <div className="mt-lg border border-line/40 rounded-xl overflow-hidden">
+                <div className="bg-surface1 flex items-center justify-center" style={{ minHeight: 220 }}>
                     {isImage && <img src={pendingUrl} alt={pendingFile.name} className="max-w-full max-h-[220px] object-contain rounded" />}
                     {isPDF && <iframe src={pendingUrl} title={pendingFile.name} className="w-full border-0" style={{ height: 220 }} />}
                     {!isImage && !isPDF && (
@@ -982,18 +811,18 @@ function ProjectPage() {
                             <div className={`w-16 h-16 ${bg} flex items-center justify-center rounded-2xl`}>
                                 <span className={`material-symbols-outlined text-4xl ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
                             </div>
-                            <p className="text-[#8c947b] text-sm">No visual preview for this file type</p>
+                            <p className="text-muted text-sm">No visual preview for this file type</p>
                         </div>
                     )}
                 </div>
-                <div className="bg-[#191c21] px-md py-sm flex items-center justify-between gap-md border-t border-[#2D3139]/30">
+                <div className="bg-raised px-md py-sm flex items-center justify-between gap-md border-t border-line/30">
                     <div className="min-w-0">
-                        <p className="font-body-md text-white font-semibold truncate">{pendingFile?.name}</p>
-                        <p className="text-[11px] text-[#8c947b]">{formatBytes(pendingFile?.size)}</p>
+                        <p className="text-sm text-white font-semibold truncate">{pendingFile?.name}</p>
+                        <p className="text-[11px] text-muted">{formatBytes(pendingFile?.size)}</p>
                     </div>
                     <div className="flex items-center gap-sm shrink-0">
-                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
-                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[var(--primary-color)] text-[#1C1F26] font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
+                        <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-line text-muted hover:bg-line text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
+                        <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[var(--primary-color)] text-on-accent font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
                             {uploading
                                 ? <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Uploading…</>
                                 : <><span className="material-symbols-outlined text-[16px]">cloud_upload</span> Confirm Upload</>}
@@ -1005,14 +834,15 @@ function ProjectPage() {
     }
 
     return (
-        <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased">
+        <div className="bg-canvas min-h-screen text-white font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <Header />
-            <main className="ml-[260px] mt-16 p-lg h-[calc(100vh-64px)] overflow-y-auto scroll-hide">
+            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} p-lg h-[calc(100vh-64px)] overflow-y-auto scroll-hide transition-all duration-300 ease-out`}>
                 {/* Project Header */}
                 <div className="mb-lg">
-                    <div className="flex items-center justify-between gap-xl">
-                        <h2 className="font-headline-xl text-headline-xl text-primary leading-tight shrink-0">{project_name || "Website Redesign"}</h2>
+                    <div className="flex items-center gap-md flex-wrap">
+                        <h2 className="font-headline-xl text-2xl text-primary leading-tight shrink-0">{project_name || "Website Redesign"}</h2>
+                        <ProjectDeadline dueDate={project_due_date} canEdit={canDeleteProject === true} onSave={handleDeadlineSave} />
                     </div>
                     {/* Sub-Tabs Navigation */}
                     <div className="flex items-center gap-sm mt-xl mb-lg">
@@ -1029,9 +859,9 @@ function ProjectPage() {
                                 key={tab.id}
                                 type="button"
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-label-md transition-colors cursor-pointer ${activeTab === tab.id
-                                    ? "bg-primary-accent text-[#0F1115] font-bold shadow-sm"
-                                    : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]/50"
+                                className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-xs transition-colors cursor-pointer ${activeTab === tab.id
+                                    ? "bg-primary-accent text-on-accent font-bold shadow-sm"
+                                    : "text-muted hover:text-white hover:bg-line/50"
                                     }`}
                             >
                                 <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
@@ -1045,7 +875,7 @@ function ProjectPage() {
                                 type="button"
                                 title="Delete this project"
                                 onClick={() => setShowDeleteConfirm(true)}
-                                className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-[#8c947b] hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
+                                className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-muted hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
                             >
                                 <span className="material-symbols-outlined text-[18px]">delete</span>
                                 Delete project
@@ -1056,14 +886,14 @@ function ProjectPage() {
                             <span
                                 tabIndex={0}
                                 aria-describedby="delete-locked-reason"
-                                className="group relative ml-auto shrink-0 flex items-center gap-1.5 whitespace-nowrap rounded-md border border-[#2D3139] bg-[#14161b] px-2.5 py-1.5 text-[12px] font-medium text-[#8c947b] cursor-help outline-none hover:text-red-400 hover:border-red-500/40 hover:bg-red-950/20 focus-visible:text-red-400 focus-visible:border-red-500/40 focus-visible:bg-red-950/20 focus-visible:ring-2 focus-visible:ring-red-500/30 transition-colors"
+                                className="group relative ml-auto shrink-0 flex items-center gap-1.5 whitespace-nowrap rounded-md border border-line bg-panel px-2.5 py-1.5 text-[12px] font-medium text-muted cursor-help outline-none hover:text-red-400 hover:border-red-500/40 hover:bg-red-950/20 focus-visible:text-red-400 focus-visible:border-red-500/40 focus-visible:bg-red-950/20 focus-visible:ring-2 focus-visible:ring-red-500/30 transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[15px]" aria-hidden="true">lock</span>
                                 Delete locked
                                 <span
                                     id="delete-locked-reason"
                                     role="tooltip"
-                                    className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 whitespace-normal rounded-lg border border-[#2D3139] bg-[#1C1F26] px-3 py-2 text-left text-[12px] font-normal leading-relaxed text-[#c4c6d0] shadow-xl opacity-0 translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100 group-focus-visible:translate-y-0"
+                                    className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 whitespace-normal rounded-lg border border-line bg-surface1 px-3 py-2 text-left text-[12px] font-normal leading-relaxed text-soft shadow-xl opacity-0 translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100 group-focus-visible:translate-y-0"
                                 >
                                     {projectDepartmentName
                                         ? <>Only team leads and admins of <span className="text-white font-semibold">{projectDepartmentName}</span> can delete this project.</>
@@ -1080,23 +910,23 @@ function ProjectPage() {
                         <div className="tab-pane block" id="section-summary">
                             <div className="bento-grid">
                                 {/* Task Status Overview */}
-                                <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-xl rounded-xl mb-lg">
-                                    <h3 className="font-headline-lg text-headline-lg mb-xl text-white">Task Overview</h3>
+                                <div className="col-span-12 bg-raised border border-line p-xl rounded-xl mb-lg">
+                                    <h3 className="font-headline-lg text-xl mb-xl text-white">Task Overview</h3>
                                     <div className="space-y-lg max-w-3xl">
                                         {/* Same columns and counts as the Tasks board, custom columns included */}
                                         {[...boardColumns, OVERDUE_COLUMN].map(column => ({
                                             key: column.key,
                                             label: column.name,
                                             count: (tasksByColumn[column.key] ?? []).length,
-                                            color: column.isOverdue ? 'text-error' : column.base_status === 'done' ? 'text-[var(--primary-color)]' : 'text-white',
-                                            barColor: column.isOverdue ? 'bg-error' : column.base_status === 'done' ? 'bg-[var(--primary-color)]' : 'bg-[#8c947b]',
+                                            color: column.isOverdue ? 'text-error' : column.base_status === 'done' ? 'text-accent-ink' : 'text-white',
+                                            barColor: column.isOverdue ? 'bg-error' : column.base_status === 'done' ? 'bg-[var(--primary-color)]' : 'bg-muted',
                                         })).map(stat => {
                                             const total = Math.max(1, project_tasks.length);
                                             const percent = (stat.count / total) * 100;
                                             return (
                                                 <div key={stat.key} className="flex items-center gap-6">
                                                     <span className={`w-28 text-right font-headline-sm tracking-wide ${stat.color}`}>{stat.label}</span>
-                                                    <div className="flex-1 h-3.5 bg-[#2D3139] rounded-full overflow-hidden">
+                                                    <div className="flex-1 h-3.5 bg-line rounded-full overflow-hidden">
                                                         <div className={`h-full ${stat.barColor} rounded-full transition-all duration-1000`} style={{ width: `${percent}%` }}></div>
                                                     </div>
                                                     <span className="w-12 font-headline-sm text-white">{stat.count}</span>
@@ -1107,19 +937,19 @@ function ProjectPage() {
                                 </div>
 
                                 {/* Recent Activity Feed (Full Width) */}
-                                <div className="col-span-12 bg-[#191c21] border border-[#2D3139] p-lg rounded-xl">
-                                    <h3 className="font-headline-md text-headline-md mb-lg text-white">Recent Activity</h3>
+                                <div className="col-span-12 bg-raised border border-line p-lg rounded-xl">
+                                    <h3 className="font-headline-md text-lg mb-lg text-white">Recent Activity</h3>
                                     <div className="space-y-lg overflow-y-auto max-h-[600px] scroll-hide">
                                         {activityLog.length === 0 ? (
-                                            <p className="text-[#8c947b] font-body-md">No recent activity found.</p>
+                                            <p className="text-muted text-sm">No recent activity found.</p>
                                         ) : (
                                             activityLog.map(activity => (
                                                 <div key={activity.id} className="flex gap-sm">
-                                                    <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-[#2D3139] flex items-center justify-center font-bold text-xs text-[#8c947b] uppercase">
+                                                    <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-line flex items-center justify-center font-bold text-xs text-muted uppercase">
                                                         {activity.actor?.name?.charAt(0) || '?'}
                                                     </div>
                                                     <div className="flex-1">
-                                                        <p className="text-body-sm font-body-sm leading-snug">
+                                                        <p className="text-xs leading-snug">
                                                             <span className="text-primary font-bold">{activity.actor?.name || 'Unknown User'}</span>
                                                             {' '}
                                                             {activity.action === "created" && (
@@ -1129,10 +959,10 @@ function ProjectPage() {
                                                                 <>deleted task <span className="text-error font-bold">{activity.new_state?.title}</span></>
                                                             )}
                                                             {activity.action === "status_changed" && (
-                                                                <>moved task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-[#2D3139] rounded px-1">{activity.new_state?.status?.replace("_", " ")}</span></>
+                                                                <>moved task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-line rounded px-1">{activity.new_state?.status?.replace("_", " ")}</span></>
                                                             )}
                                                             {activity.action === "priority_changed" && (
-                                                                <>changed priority of task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-[#2D3139] rounded px-1">{activity.new_state?.priority}</span></>
+                                                                <>changed priority of task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span> to <span className="text-white capitalize border border-line rounded px-1">{activity.new_state?.priority}</span></>
                                                             )}
                                                             {activity.action === "file_added" && (
                                                                 <>uploaded file <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span></>
@@ -1140,11 +970,14 @@ function ProjectPage() {
                                                             {activity.action === "file_removed" && (
                                                                 <>deleted file <span className="text-error font-bold">{activity.new_state?.name}</span></>
                                                             )}
+                                                            {activity.action === "sprint_started" && (
+                                                                <>started <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span> with {activity.new_state?.totalTasks} task{activity.new_state?.totalTasks === 1 ? "" : "s"}{activity.new_state?.committedPoints > 0 && ` (${activity.new_state.committedPoints} pts)`}</>
+                                                            )}
                                                             {activity.action === "sprint_completed" && (
-                                                                <>completed a sprint with <span className="text-[var(--primary-color)] font-bold">{activity.new_state?.completionPercent}%</span> success ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
+                                                                <>completed {activity.new_state?.name ? <span className="text-primary-fixed-dim font-bold">{activity.new_state.name}</span> : "a sprint"} with <span className="text-accent-ink font-bold">{activity.new_state?.completionPercent}%</span> done ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
                                                             )}
                                                         </p>
-                                                        <p className="text-[#8c947b] text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
+                                                        <p className="text-muted text-[10px] mt-xs">{new Date(activity.created_at).toLocaleString()}</p>
                                                     </div>
                                                 </div>
                                             ))
@@ -1157,333 +990,14 @@ function ProjectPage() {
 
                     {/* Sprint Tab */}
                     {activeTab === "sprint" && (
-                        <div className="tab-pane block" id="section-sprint">
-                            {sprintPhase === 'idle' && (
-                                <div className="flex flex-col gap-8 max-w-4xl mx-auto items-center pt-10">
-                                    <div className="text-center space-y-4">
-                                        <h2 className="text-3xl font-black text-white">Sprint Lobby</h2>
-                                        <p className="text-[#8c947b]">Start a new sprint or review your past sprint history.</p>
-                                    </div>
-                                    <button 
-                                        onClick={handleStartNewSprint}
-                                        className="bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] px-8 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(var(--primary-color-rgb),0.3)] flex items-center gap-3"
-                                    >
-                                        <span className="material-symbols-outlined">rocket_launch</span>
-                                        Start New Sprint
-                                    </button>
-                                </div>
-                            )}
-
-                            {sprintPhase === 'active' && (
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
-                                    {/* Left Column: Backlog */}
-                                    <div className="lg:col-span-8 flex flex-col gap-lg">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-sm">
-                                                <h3 className="font-headline-xl text-white">Active Sprint</h3>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <span className="px-3 py-1 bg-[#1C1F26] text-[#8c947b] border border-[#2D3139] rounded-full text-sm font-medium">{sprintTasks.length} Tasks</span>
-                                                {(isTimerRunning || sprintTimeRemaining < sprintTotalTime) && (
-                                                    <button onClick={handleEndSprint} className="px-4 py-1 bg-error text-white rounded-full text-sm font-bold hover:bg-error/80 transition-colors shadow-lg">End Sprint</button>
-                                                )}
-                                            </div>
-                                        </div>
-                                        
-                                        {/* Task Add From Overdue */}
-                                        {project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).length > 0 && (
-                                            <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-4">
-                                                <h4 className="text-error text-xs font-bold uppercase mb-3 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">assignment_late</span> Overdue Tasks
-                                                </h4>
-                                                <div className="flex flex-col gap-2">
-                                                    {project_tasks.filter(t => t.status !== 'done' && t.due_date && new Date(t.due_date) < new Date()).map(task => {
-                                                        const isSelected = !!sprintTasks.find(st => st.id === task.id);
-                                                        
-                                                        let allSubtasksDone = true;
-                                                        let hasSubtasks = false;
-                                                        if (task.sub_tasks) {
-                                                            if (Array.isArray(task.sub_tasks)) {
-                                                                if (task.sub_tasks.length > 0) {
-                                                                    hasSubtasks = true;
-                                                                    allSubtasksDone = task.sub_tasks.every(st => Boolean(st?.done));
-                                                                }
-                                                            } else if (typeof task.sub_tasks === "string") {
-                                                                const trimmed = task.sub_tasks.trim();
-                                                                if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                                                    try {
-                                                                        const parsed = JSON.parse(trimmed);
-                                                                        if (Array.isArray(parsed) && parsed.length > 0) {
-                                                                            hasSubtasks = true;
-                                                                            allSubtasksDone = parsed.every(st => Boolean(st?.done));
-                                                                        }
-                                                                    } catch (e) {
-                                                                        console.warn("Malformed sub_tasks for task", task.id, e);
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-
-                                                        const sprintHasStarted = isTimerRunning || sprintTimeRemaining < sprintTotalTime;
-                                                        if (sprintHasStarted && !isSelected) return null;
-
-                                                        const cantSelect = !hasSubtasks && !isSelected;
-                                                        const isLocked = sprintHasStarted && isSelected && hasSubtasks && !allSubtasksDone;
-                                                        const buttonDisabled = isLocked || cantSelect;
-
-                                                        return (
-                                                            <div key={`overdue-${task.id}`} className={`p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors ${isSelected ? 'bg-[var(--primary-color)]/5 border-[var(--primary-color)]/30' : 'bg-[#191c21]'}`}>
-                                                                <button 
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        if (cantSelect) return;
-                                                                        handleToggleTaskInSprint(task);
-                                                                    }}
-                                                                    className={`check-btn flex items-center justify-center ${!isSelected ? '!bg-transparent !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} ${buttonDisabled ? '!bg-[#191c21] !border-[#2D3139] opacity-50 cursor-not-allowed hover:!bg-[#191c21]' : ''}`}
-                                                                    title={cantSelect ? "Requires sub-tasks" : (isLocked ? "Locked - Complete all subtasks" : (isSelected ? "Remove from Sprint" : "Add to Sprint"))}
-                                                                >
-                                                                    {cantSelect ? (
-                                                                        <span className="material-symbols-outlined text-[14px] text-[#8c947b] opacity-100 block">block</span>
-                                                                    ) : isLocked ? (
-                                                                        <svg className="check-icon opacity-100 text-[#8c947b]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                                                        </svg>
-                                                                    ) : (
-                                                                        <svg className={`check-icon transition-opacity ${!isSelected ? 'opacity-0' : 'opacity-100'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                                        </svg>
-                                                                    )}
-                                                                </button>
-                                                                <div 
-                                                                    className="flex-1 cursor-pointer"
-                                                                    onClick={() => setSelectedTask(task)}
-                                                                >
-                                                                    <p className={`text-sm font-medium hover:underline ${isSelected ? 'text-white' : 'text-[#8c947b]'}`}>{task.title}</p>
-                                                                    <p className="text-error text-[10px] font-semibold">Due: {new Date(task.due_date).toLocaleDateString()}</p>
-                                                                </div>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Finished Sprint Tasks */}
-                                        {(() => {
-                                            const finishedSprintTasks = project_tasks.filter(t => t.status === 'done' && sprintTasks.find(st => st.id === t.id));
-                                            if (finishedSprintTasks.length === 0) return null;
-                                            return (
-                                                <div className="bg-[#1C1F26] border border-[#2D3139] rounded-xl p-4 mt-6">
-                                                    <h4 className="text-[#22c55e] text-xs font-bold uppercase mb-3 flex items-center gap-2">
-                                                        <span className="material-symbols-outlined text-sm">check_circle</span> Finished
-                                                    </h4>
-                                                    <div className="flex flex-col gap-2 opacity-60">
-                                                        {finishedSprintTasks.map(task => (
-                                                            <div key={`done-${task.id}`} className="p-3 border border-[#2D3139] rounded-lg flex items-center gap-3 transition-colors bg-[#191c21]">
-                                                                <div className="w-8 h-8 rounded bg-[#22c55e]/10 border border-[#22c55e]/30 flex items-center justify-center shrink-0">
-                                                                    <svg className="w-4 h-4 text-[#22c55e]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                </div>
-                                                                <div 
-                                                                    className="flex-1 cursor-pointer"
-                                                                    onClick={() => setSelectedTask(task)}
-                                                                >
-                                                                    <p className="text-sm font-medium hover:underline text-[#8c947b] line-through">{task.title}</p>
-                                                                    {task.due_date && <p className="text-error text-[10px] font-semibold opacity-50">Due: {new Date(task.due_date).toLocaleDateString()}</p>}
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            );
-                                        })()}
-
-                                    </div>
-                                    {/* Right Column: Sprint Timer */}
-                                    <div className="lg:col-span-4 flex flex-col gap-lg">
-                                        <div className="bg-[#191c21] border border-[#2D3139] p-8 rounded-3xl shadow-sm flex flex-col items-center">
-                                            <h4 className="text-xs font-black uppercase tracking-[0.2em] text-[#8c947b] mb-8">Sprint Timer</h4>
-                                            <div className="flex items-center justify-center mb-10 w-full mt-4">
-                                                {isEditingTimer ? (() => {
-                                                    const parts = timerInputValue.split(':');
-                                                    const h = parts[0] || '00';
-                                                    const m = parts[1] || '00';
-                                                    const s = parts[2] || '00';
-                                                    return (
-                                                        <div 
-                                                            className="timer-wrapper"
-                                                            onBlur={(e) => {
-                                                                if (!e.currentTarget.contains(e.relatedTarget)) {
-                                                                    handleTimerInputBlur();
-                                                                }
-                                                            }}
-                                                        >
-                                                            <div className="timer-container">
-                                                                <div className="time-unit">
-                                                                    <input 
-                                                                        autoFocus
-                                                                        value={h}
-                                                                        onFocus={(e) => e.target.select()}
-                                                                        onChange={(e) => {
-                                                                            let val = e.target.value.replace(/[^0-9]/g, '');
-                                                                            if (val.length > 2) val = val.slice(-2);
-                                                                            setTimerInputValue(`${val}:${m}:${s}`);
-                                                                        }}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTimerInputBlur(); }}
-                                                                        className="timer-number bg-transparent outline-none w-20 text-center"
-                                                                    />
-                                                                    <span className="timer-label">Hours</span>
-                                                                </div>
-                                                                <span className="timer-separator">:</span>
-                                                                <div className="time-unit">
-                                                                    <input 
-                                                                        value={m}
-                                                                        onFocus={(e) => e.target.select()}
-                                                                        onChange={(e) => {
-                                                                            let val = e.target.value.replace(/[^0-9]/g, '');
-                                                                            if (val.length > 2) val = val.slice(-2);
-                                                                            setTimerInputValue(`${h}:${val}:${s}`);
-                                                                        }}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTimerInputBlur(); }}
-                                                                        className="timer-number bg-transparent outline-none w-20 text-center"
-                                                                    />
-                                                                    <span className="timer-label">Minutes</span>
-                                                                </div>
-                                                                <span className="timer-separator">:</span>
-                                                                <div className="time-unit">
-                                                                    <input 
-                                                                        value={s}
-                                                                        onFocus={(e) => e.target.select()}
-                                                                        onChange={(e) => {
-                                                                            let val = e.target.value.replace(/[^0-9]/g, '');
-                                                                            if (val.length > 2) val = val.slice(-2);
-                                                                            setTimerInputValue(`${h}:${m}:${val}`);
-                                                                        }}
-                                                                        onKeyDown={(e) => { if (e.key === 'Enter') handleTimerInputBlur(); }}
-                                                                        className="timer-number bg-transparent outline-none w-20 text-center"
-                                                                    />
-                                                                    <span className="timer-label">Seconds</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })() : (
-                                                    <div 
-                                                        className={`timer-wrapper ${!isTimerRunning ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
-                                                        onClick={() => {
-                                                            if (!isTimerRunning) {
-                                                                setTimerInputValue(formatTimerDisplay(sprintTimeRemaining));
-                                                                setIsEditingTimer(true);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <div className="timer-container">
-                                                            <div className="time-unit">
-                                                                <span className="timer-number">{Math.floor(sprintTimeRemaining / 3600).toString().padStart(2, '0')}</span>
-                                                                <span className="timer-label">Hours</span>
-                                                            </div>
-                                                            <span className="timer-separator">:</span>
-                                                            <div className="time-unit">
-                                                                <span className="timer-number">{Math.floor((sprintTimeRemaining % 3600) / 60).toString().padStart(2, '0')}</span>
-                                                                <span className="timer-label">Minutes</span>
-                                                            </div>
-                                                            <span className="timer-separator">:</span>
-                                                            <div className="time-unit">
-                                                                <span className="timer-number">{(sprintTimeRemaining % 60).toString().padStart(2, '0')}</span>
-                                                                <span className="timer-label">Seconds</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-4 w-full mb-6">
-                                                <button onClick={handleTimerStart} className={`${isTimerRunning ? 'bg-[#e05252] hover:bg-[#ff5555]' : 'bg-[var(--primary-color)] hover:bg-[#c4ff4d]'} text-[#1C1F26] p-4 rounded-2xl flex flex-col items-center gap-2 transition-colors cursor-pointer`}>
-                                                    <span className="material-symbols-outlined text-[24px]">{isTimerRunning ? 'pause' : 'play_arrow'}</span>
-                                                    <span className="text-[10px] font-bold uppercase">{isTimerRunning ? 'Pause' : 'Start'}</span>
-                                                </button>
-                                                <button onClick={handleTimerReset} className="bg-[#2D3139] text-white p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-[#3D4149] transition-colors cursor-pointer">
-                                                    <span className="material-symbols-outlined text-[24px]">refresh</span>
-                                                    <span className="text-[10px] font-bold uppercase">Reset</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-
-                            {sprintPhase === 'summary' && currentSprintReport && (
-                                <div className="max-w-2xl mx-auto mt-10">
-                                    <div className="bg-[#191c21] border border-[#2D3139] rounded-3xl p-10 relative overflow-hidden shadow-2xl">
-                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[var(--primary-color)] to-blue-500"></div>
-                                        <div className="flex justify-between items-start mb-8">
-                                            <div>
-                                                <h2 className="text-3xl font-black text-white mb-2">Sprint Report</h2>
-                                                <p className="text-[#8c947b]">
-                                                    {new Date(currentSprintReport.startTime).toLocaleTimeString()} - {new Date(currentSprintReport.endTime).toLocaleTimeString()}
-                                                </p>
-                                            </div>
-                                            <div className="flex flex-col items-end">
-                                                <span className="text-5xl font-black text-white">{currentSprintReport.completionPercent}%</span>
-                                                <span className="text-[#8c947b] text-sm uppercase font-bold tracking-widest mt-1">Completed</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 gap-4 mb-8">
-                                            <div className="bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139]">
-                                                <span className="text-[#8c947b] text-xs uppercase font-bold">Time Elapsed</span>
-                                                <p className="text-xl font-bold text-white mt-1">
-                                                    {Math.floor(currentSprintReport.timeElapsed / 60)}m {currentSprintReport.timeElapsed % 60}s
-                                                </p>
-                                            </div>
-                                            <div className="bg-[#1C1F26] p-4 rounded-xl border border-[#2D3139]">
-                                                <span className="text-[#8c947b] text-xs uppercase font-bold">Total Tasks</span>
-                                                <p className="text-xl font-bold text-white mt-1">{currentSprintReport.totalTasks}</p>
-                                            </div>
-                                        </div>
-
-                                        {currentSprintReport.completedTasks.length > 0 && (
-                                            <div className="mb-6">
-                                                <h4 className="text-[#22c55e] text-sm font-bold uppercase mb-3 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">check_circle</span> Completed Tasks
-                                                </h4>
-                                                <div className="flex flex-col gap-2">
-                                                    {currentSprintReport.completedTasks.map(t => (
-                                                        <div key={t.id} className="bg-[#1C1F26] px-4 py-3 rounded-lg border border-[#22c55e]/30 flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-[#22c55e] text-[18px]">done</span>
-                                                            <span className="text-[#8c947b] line-through text-sm font-medium">{t.title}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {currentSprintReport.incompleteTasks.length > 0 && (
-                                            <div className="mb-8">
-                                                <h4 className="text-[#e05252] text-sm font-bold uppercase mb-3 flex items-center gap-2">
-                                                    <span className="material-symbols-outlined text-sm">cancel</span> Left Incomplete
-                                                </h4>
-                                                <div className="flex flex-col gap-2">
-                                                    {currentSprintReport.incompleteTasks.map(t => (
-                                                        <div key={t.id} className="bg-[#1C1F26] px-4 py-3 rounded-lg border border-[#e05252]/30 flex items-center gap-3">
-                                                            <span className="material-symbols-outlined text-[#e05252] text-[18px]">close</span>
-                                                            <span className="text-white text-sm font-medium">{t.title}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <button 
-                                            onClick={handleExitSprint}
-                                            className="w-full bg-[var(--primary-color)] hover:bg-[#c4ff4d] text-[#1C1F26] font-bold py-4 rounded-xl text-lg transition-colors cursor-pointer"
-                                        >
-                                            Continue
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <SprintTab
+                            projectId={project_id}
+                            tasks={project_tasks}
+                            onTasksChange={setProjectTasks}
+                            canManage={canDeleteProject === true}
+                            members={projectMembers}
+                            onOpenTask={setSelectedTask}
+                        />
                     )}
 
                     {/* Messages Tab */}
@@ -1500,13 +1014,23 @@ function ProjectPage() {
                     {/* Tasks Tab — Kanban Board */}
                     {activeTab === "tasks" && (
                         <div className="tab-pane block" id="section-tasks">
+                            <div className="flex justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 btn-primary-accent rounded-lg text-sm font-semibold cursor-pointer"
+                                >
+                                    <span className="material-symbols-outlined text-[18px]">add</span>
+                                    Add Task
+                                </button>
+                            </div>
                             {boardNotice && (
-                                <div role="status" className="mt-md px-md py-sm rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#f59e0b] text-body-sm">
+                                <div role="status" className="mt-md px-md py-sm rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#f59e0b] text-xs">
                                     {boardNotice}
                                 </div>
                             )}
                             {canDeleteProject === true && !columnsAvailable && (
-                                <p className="mt-md text-[12px] text-[#8c947b]">
+                                <p className="mt-md text-[12px] text-muted">
                                     Custom columns need a database update: run the <span className="text-white">20261026100000_project_columns</span> migration in Supabase.
                                 </p>
                             )}
@@ -1539,7 +1063,7 @@ function ProjectPage() {
                                                     handleDrop(e, column)
                                                 }
                                             } : undefined}
-                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-[#191c21]/50 border ${isDropTarget ? 'border-[var(--primary-color)] bg-[var(--primary-color)]/5' : 'border-[#2D3139]/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
+                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-raised/50 border ${isDropTarget ? 'border-accent-ink bg-[var(--primary-color)]/5' : 'border-line/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
                                         >
                                             {/* Column Header */}
                                             <BoardColumnHeader
@@ -1571,7 +1095,7 @@ function ProjectPage() {
                                                         onDragStart={(e) => handleDragStart(e, task.id)}
                                                         onDragEnd={() => setDragOverColumn(null)}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-[#191c21] border border-[#2D3139] rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-[var(--primary-color)]/50 transition-all group"
+                                                        className="bg-raised border border-line rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-accent-ink/50 transition-all group"
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
@@ -1589,21 +1113,21 @@ function ProjectPage() {
                                                             </span>
                                                             {/* In the Overdue column, show the task's real status */}
                                                             {column.key === "overdue" && STATUS_LABELS[task.status] && (
-                                                                <span className="ml-xs inline-flex items-center px-sm py-[2px] rounded text-[10px] font-bold uppercase bg-[#2D3139] text-[#c2cab0]">
+                                                                <span className="ml-xs inline-flex items-center px-sm py-[2px] rounded text-[10px] font-bold uppercase bg-line text-soft">
                                                                     {STATUS_LABELS[task.status]}
                                                                 </span>
                                                             )}
                                                         </div>
 
                                                         {/* Project Name */}
-                                                        <p className="text-[11px] text-[#8c947b] mb-[2px]">{project_name}</p>
+                                                        <p className="text-[11px] text-muted mb-[2px]">{project_name}</p>
 
                                                         {/* Task Title */}
-                                                        <h4 className="font-body-md text-white font-bold leading-snug mb-xs">{task.title}</h4>
+                                                        <h4 className="text-sm text-white font-bold leading-snug mb-xs">{task.title}</h4>
 
                                                         {/* Description */}
                                                         {task.description && (
-                                                            <p className="text-[11px] text-[#8c947b]/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
+                                                            <p className="text-[11px] text-muted/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
                                                         )}
 
                                                         {/* Sub-tasks Progress Bar */}
@@ -1638,14 +1162,14 @@ function ProjectPage() {
 
                                                             return (
                                                                 <div className="mb-md">
-                                                                    <div className="flex items-center justify-between text-[10px] text-[#8c947b] mb-1 font-medium">
+                                                                    <div className="flex items-center justify-between text-[10px] text-muted mb-1 font-medium">
                                                                         <span className="flex items-center gap-xs">
                                                                             <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
                                                                             Sub-tasks
                                                                         </span>
                                                                         <span>{completedCount}/{totalCount}</span>
                                                                     </div>
-                                                                    <div className="w-full bg-[#1e222b] rounded-full h-1 overflow-hidden">
+                                                                    <div className="w-full bg-surface1 rounded-full h-1 overflow-hidden">
                                                                         <div
                                                                             className="bg-[var(--primary-color)] h-full transition-all duration-300"
                                                                             style={{ width: `${percent}%` }}
@@ -1656,20 +1180,20 @@ function ProjectPage() {
                                                         })()}
 
                                                         {/* Footer */}
-                                                        <div className="flex items-center justify-between mt-auto pt-sm border-t border-[#2D3139]/20">
-                                                            <div className="flex items-center gap-sm text-[#8c947b]">
+                                                        <div className="flex items-center justify-between mt-auto pt-sm border-t border-line/20">
+                                                            <div className="flex items-center gap-sm text-muted">
                                                                 {(() => {
                                                                     const assignee = orgUsers.find(u => u.id === task.assignee_id);
                                                                     return task.assignee_id ? (
-                                                                        <div className="w-5 h-5 rounded-full bg-[#1C1F26] border border-[#2D3139] flex items-center justify-center" title={assignee?.name || 'Assigned'}>
-                                                                            <span className="text-[9px] font-bold text-[#8c947b] uppercase">
+                                                                        <div className="w-5 h-5 rounded-full bg-surface1 border border-line flex items-center justify-center" title={assignee?.name || 'Assigned'}>
+                                                                            <span className="text-[9px] font-bold text-muted uppercase">
                                                                                 {assignee?.name?.charAt(0) || '?'}
                                                                             </span>
                                                                         </div>
                                                                     ) : null;
                                                                 })()}
                                                             </div>
-                                                            <div className="flex items-center gap-sm text-[#8c947b]">
+                                                            <div className="flex items-center gap-sm text-muted">
                                                                 {task.due_date && (
                                                                     <span className="flex items-center gap-[3px] text-[10px]">
                                                                         <span className="material-symbols-outlined text-[13px]">calendar_today</span>
@@ -1681,7 +1205,7 @@ function ProjectPage() {
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id, task.title); }}
-                                                                    className="text-[#8c947b] hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                                                                    className="text-muted hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
                                                                     title="Delete Task"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">delete</span>
@@ -1692,8 +1216,8 @@ function ProjectPage() {
                                                 ))}
                                                 {columnTasks.length === 0 && (
                                                     <div className="flex flex-col items-center justify-center py-xl text-center opacity-40">
-                                                        <span className="material-symbols-outlined text-[32px] text-[#8c947b] mb-xs">drag_indicator</span>
-                                                        <p className="text-[11px] text-[#8c947b]">{column.isOverdue ? "No overdue tasks" : "Drag tasks here"}</p>
+                                                        <span className="material-symbols-outlined text-[32px] text-muted mb-xs">drag_indicator</span>
+                                                        <p className="text-[11px] text-muted">{column.isOverdue ? "No overdue tasks" : "Drag tasks here"}</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -1713,14 +1237,14 @@ function ProjectPage() {
                                 onClick={() => setSelectedDateEvents(null)}
                             ></div>
                             {/* Sidebar */}
-                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-[#191c21] border-l border-[#2D3139] shadow-2xl flex flex-col transform transition-transform duration-300">
-                                <div className="flex items-center justify-between p-lg border-b border-[#2D3139]/20 shrink-0">
+                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-raised border-l border-line shadow-2xl flex flex-col transform transition-transform duration-300">
+                                <div className="flex items-center justify-between p-lg border-b border-line/20 shrink-0">
                                     <h2 className="font-headline-md text-white">
                                         Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
                                     </h2>
                                     <div className="flex items-center gap-sm relative">
                                         <button
-                                            className="text-[#8c947b] hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#2D3139] transition-colors relative"
+                                            className="text-muted hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-line transition-colors relative"
                                             onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
                                         >
                                             <span className="material-symbols-outlined">add</span>
@@ -1728,17 +1252,17 @@ function ProjectPage() {
                                         {sidebarActionMenuOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                                <div className="absolute right-0 top-full mt-1 w-48 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden">
-                                                    {canCreateTasks && (
+                                                <div className="absolute right-0 top-full mt-1 w-48 bg-surface1 border border-line rounded-lg shadow-xl z-[70] overflow-hidden">
+                                                    {canAddTasks === true && (
                                                         <button
-                                                            className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
+                                                            className="w-full text-left px-4 py-3 hover:bg-line transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
                                                             onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
                                                         >
                                                             <span className="material-symbols-outlined text-[18px]">task</span> Add Task
                                                         </button>
                                                     )}
                                                     <button
-                                                        className="w-full text-left px-4 py-3 hover:bg-[#2D3139] transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
+                                                        className="w-full text-left px-4 py-3 hover:bg-line transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
                                                         onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
                                                     >
                                                         <span className="material-symbols-outlined text-[18px]">event</span> Add Meeting
@@ -1746,7 +1270,7 @@ function ProjectPage() {
                                                 </div>
                                             </>
                                         )}
-                                        <button className="text-[#8c947b] hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-[#2D3139] transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
+                                        <button className="text-muted hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-line transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
                                             <span className="material-symbols-outlined">close</span>
                                         </button>
                                     </div>
@@ -1754,7 +1278,7 @@ function ProjectPage() {
                                 <div className="p-lg overflow-y-auto flex-1 scroll-hide space-y-md">
                                     {creatingInSidebar === 'task' ? (
                                         <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-[#8c947b] flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-muted flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
                                             <CreateTaskModal
@@ -1773,11 +1297,11 @@ function ProjectPage() {
                                         </div>
                                     ) : creatingInSidebar === 'meeting' ? (
                                         <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-[#8c947b] flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
+                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-muted flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
-                                            <div className="flex-1 flex items-center justify-center bg-[#191c21] rounded-xl border border-[#2D3139]/20 border-dashed p-6 text-center">
-                                                <p className="text-[#8c947b] italic">Meeting creation functionality coming soon...</p>
+                                            <div className="flex-1 flex items-center justify-center bg-raised rounded-xl border border-line/20 border-dashed p-6 text-center">
+                                                <p className="text-muted italic">Meeting creation functionality coming soon...</p>
                                             </div>
                                         </div>
                                     ) : (() => {
@@ -1790,15 +1314,12 @@ function ProjectPage() {
                                         }
                                         const dateString = formatYMD(selectedDateEvents);
                                         const dayTasks = project_tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString);
-                                        const dayEvents = project_events.filter(e => e.event_date && e.event_date.substring(0, 10) === dateString);
-
                                         const combined = [
-                                            ...dayEvents.map(e => ({ ...e, isEvent: true, sortTime: new Date(e.event_date).getTime(), originalDateStr: e.event_date })),
                                             ...dayTasks.map(t => ({ ...t, isTask: true, sortTime: new Date(t.due_date).getTime(), originalDateStr: t.due_date }))
                                         ].sort((a, b) => a.sortTime - b.sortTime);
 
                                         if (combined.length === 0) {
-                                            return <p className="text-[#8c947b] text-center italic py-md">Nothing scheduled for this day.</p>;
+                                            return <p className="text-muted text-center italic py-md">Nothing scheduled for this day.</p>;
                                         }
 
                                         return combined.map(item => (
@@ -1809,7 +1330,7 @@ function ProjectPage() {
                                                         setSelectedTask(item);
                                                     }
                                                 }}
-                                                className={`bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
+                                                className={`bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
                                             >
                                                 <div className="flex items-center justify-between">
                                                     <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${item.isEvent ? 'bg-[#9c27b0]/20 text-[#9c27b0]' : 'bg-primary-fixed-dim/20 text-primary-fixed-dim'
@@ -1817,14 +1338,14 @@ function ProjectPage() {
                                                         <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
                                                         {item.isEvent ? 'Event' : 'Task'}
                                                     </span>
-                                                    <span className="text-xs text-[#8c947b] font-medium">
+                                                    <span className="text-xs text-muted font-medium">
                                                         {(item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))
                                                             ? new Date(item.sortTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
                                                             : 'All Day'}
                                                     </span>
                                                 </div>
-                                                <h3 className="font-body-lg text-white font-semibold mt-1">{item.title}</h3>
-                                                {item.description && <p className="text-body-sm text-[#8c947b] line-clamp-2">{item.description}</p>}
+                                                <h3 className="text-base text-white font-semibold mt-1">{item.title}</h3>
+                                                {item.description && <p className="text-xs text-muted line-clamp-2">{item.description}</p>}
                                             </div>
                                         ));
                                     })()}
@@ -1836,19 +1357,19 @@ function ProjectPage() {
                     {/* Public Files Tab */}
                     {activeTab === "files" && (
                         <div className="tab-pane block" id="section-files">
-                            <div className="bg-[#191c21] p-lg rounded-xl glass-panel">
+                            <div className="bg-raised p-lg rounded-xl glass-panel">
                                 {/* Header */}
                                 <div className="flex items-center justify-between mb-lg">
                                     <div className="flex items-center gap-sm">
                                         <span className="material-symbols-outlined text-primary-fixed-dim">move_to_inbox</span>
-                                        <h3 className="font-headline-md text-headline-md">Project Files</h3>
-                                        <span className="text-[11px] text-[#8c947b]">
+                                        <h3 className="font-headline-md text-lg">Project Files</h3>
+                                        <span className="text-[11px] text-muted">
                                             {projectFiles.length} file{projectFiles.length !== 1 ? "s" : ""}
                                         </span>
                                     </div>
                                     <button type="button"
                                         onClick={() => { if (showUploadZone) { cancelPending(); setShowUploadZone(false) } else setShowUploadZone(true) }}
-                                        className="flex items-center gap-xs text-label-sm text-primary-fixed-dim font-label-md uppercase tracking-wide hover:underline cursor-pointer">
+                                        className="flex items-center gap-xs text-[11px] text-primary-fixed-dim font-label-md uppercase tracking-wide hover:underline cursor-pointer">
                                         <span className="material-symbols-outlined text-[16px]">{showUploadZone ? "close" : "upload"}</span>
                                         {showUploadZone ? "Close" : "Upload"}
                                     </button>
@@ -1861,15 +1382,15 @@ function ProjectPage() {
                                             onChange={(e) => handleFilePick(e.target.files[0])} />
                                         {!pendingFile && (
                                             <div
-                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-[var(--primary-color)] bg-[var(--primary-color)]/10" : "border-[#2D3139] hover:border-outline hover:bg-[#2D3139]/50"}`}
+                                                className={`rounded-xl border-2 border-dashed p-10 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors ${dragOver ? "border-accent-ink bg-[var(--primary-color)]/10" : "border-line hover:border-outline hover:bg-line/50"}`}
                                                 onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
                                                 onDragLeave={() => setDragOver(false)}
                                                 onDrop={(e) => { e.preventDefault(); setDragOver(false); handleFilePick(e.dataTransfer.files[0]) }}
                                                 onClick={() => fileInputRef.current?.click()}>
-                                                <span className="material-symbols-outlined text-[#8c947b] text-6xl">upload_file</span>
-                                                <p className="font-body-md text-white font-semibold">Drop a file here or click to browse</p>
-                                                <p className="text-[12px] text-[#8c947b] text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
-                                                <p className="text-[11px] text-[#8c947b]/70 text-center">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
+                                                <span className="material-symbols-outlined text-muted text-6xl">upload_file</span>
+                                                <p className="text-sm text-white font-semibold">Drop a file here or click to browse</p>
+                                                <p className="text-[12px] text-muted text-center">JPG · PNG · PDF · DOCX · XLSX · ZIP · CSV and more</p>
+                                                <p className="text-[11px] text-muted/70 text-center">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
                                             </div>
                                         )}
                                         {pendingFile && renderPreUploadPreview()}
@@ -1880,9 +1401,9 @@ function ProjectPage() {
                                 {/* File list */}
                                 {projectFiles.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-                                        <span className="material-symbols-outlined text-[#8c947b] text-5xl">folder_open</span>
-                                        <p className="text-[#8c947b] font-body-md">No files uploaded yet.</p>
-                                        <p className="text-[12px] text-[#8c947b]">Click <strong>Upload</strong> above to add the first file.</p>
+                                        <span className="material-symbols-outlined text-muted text-5xl">folder_open</span>
+                                        <p className="text-muted text-sm">No files uploaded yet.</p>
+                                        <p className="text-[12px] text-muted">Click <strong>Upload</strong> above to add the first file.</p>
                                     </div>
                                 ) : (
                                     <div className="space-y-sm">
@@ -1892,7 +1413,7 @@ function ProjectPage() {
                                             return (
                                                 <div key={f.id} className="rounded-lg overflow-hidden">
                                                     <div
-                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-[#2D3139]"}`}
+                                                        className={`flex items-center justify-between p-sm transition-colors group cursor-pointer ${isConfirming ? "bg-error/5" : "hover:bg-line"}`}
                                                         onClick={() => { if (!isConfirming) setReviewFile(f) }}>
                                                         <div className="flex items-center gap-md">
                                                             {f.type?.startsWith("image/") ? (
@@ -1903,8 +1424,8 @@ function ProjectPage() {
                                                                 </div>
                                                             )}
                                                             <div>
-                                                                <p className={`font-body-md text-body-md ${isConfirming ? "text-error" : "text-primary"}`}>{f.name}</p>
-                                                                <p className="text-[#8c947b] text-[11px]">
+                                                                <p className={`text-sm ${isConfirming ? "text-error" : "text-primary"}`}>{f.name}</p>
+                                                                <p className="text-muted text-[11px]">
                                                                     {f.uploaded_by ? `Added by ${f.uploaded_by}` : "Uploaded"}
                                                                     {f.size ? ` · ${formatBytes(f.size)}` : ""}
                                                                     {f.created_at ? ` · ${new Date(f.created_at).toLocaleDateString()}` : ""}
@@ -1915,13 +1436,13 @@ function ProjectPage() {
                                                             <div className="flex items-center gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button type="button" title="Preview"
                                                                     onClick={(e) => { e.stopPropagation(); setReviewFile(f) }}
-                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[18px]">visibility</button>
+                                                                    className="material-symbols-outlined text-muted hover:text-white transition-colors text-[18px]">visibility</button>
                                                                 <a href={f.url} download={f.name} target="_blank" rel="noreferrer"
                                                                     title="Download" onClick={(e) => e.stopPropagation()}
-                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[18px]">download</a>
+                                                                    className="material-symbols-outlined text-muted hover:text-white transition-colors text-[18px]">download</a>
                                                                 <button type="button" title="Delete"
                                                                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(f.id) }}
-                                                                    className="material-symbols-outlined text-[#8c947b] hover:text-error transition-colors text-[18px]">delete</button>
+                                                                    className="material-symbols-outlined text-muted hover:text-error transition-colors text-[18px]">delete</button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1934,7 +1455,7 @@ function ProjectPage() {
                                                             <div className="flex items-center gap-sm">
                                                                 <button type="button"
                                                                     onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null) }}
-                                                                    className="px-md py-[5px] rounded-lg border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
+                                                                    className="px-md py-[5px] rounded-lg border border-line text-muted hover:bg-line text-[12px] font-semibold transition-colors cursor-pointer">No, keep it</button>
                                                                 <button type="button"
                                                                     onClick={(e) => { e.stopPropagation(); deleteFile(f) }}
                                                                     className="px-md py-[5px] rounded-lg bg-error text-white text-[12px] font-bold hover:opacity-90 cursor-pointer flex items-center gap-xs">
@@ -1953,200 +1474,31 @@ function ProjectPage() {
                     )}
 
                     {/* Members Tab */}
-                    {activeTab === "members" && (() => {
-                        // Merge explicitly added project_members with task-assigned members, no duplicates
-                        const explicitIds = new Set(projectMembers.map(pm => pm.user_id))
-                        const explicitUsers = projectMembers.map(pm => pm.user).filter(Boolean)
-                        const taskOnlyMembers = assignedMembers.filter(u => !explicitIds.has(u.id))
-                        const allMembers = [...explicitUsers, ...taskOnlyMembers]
-                        const removeMember = async (userId) => {
-                            await supabase.from("project_members").delete().eq("project_id", project_id).eq("user_id", userId)
-                            fetchProjectMembers()
-                        }
-                        return (
-                        <div className="tab-pane block" id="section-members">
-                            {allMembers.length === 0 ? (
-                                <div className="bg-[#191c21] rounded-xl p-xl flex flex-col items-center justify-center text-center border border-[#2D3139]/30">
-                                    <span className="material-symbols-outlined text-4xl text-[#8c947b] mb-md opacity-50">group_off</span>
-                                    <p className="font-headline-sm text-white mb-xs">No Members Yet</p>
-                                    <p className="font-body-md text-[#8c947b] max-w-md">Tap the <strong className="text-white">+</strong> button to add team members to this project.</p>
-                                </div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-lg">
-                                    {allMembers.map((member) => (
-                                        <div
-                                            key={member.id}
-                                            className="bg-[#191c21] border border-[#2D3139]/30 rounded-xl p-md flex flex-col h-full relative group transition-colors hover:border-[#2D3139]/60"
-                                        >
-                                            <div className="flex items-start justify-between mb-sm">
-                                                <div className="relative">
-                                                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-[#2D3139] bg-[#1C1F26] flex items-center justify-center text-[#8c947b] font-bold text-lg uppercase">
-                                                        {member.name?.charAt(0) || "?"}
-                                                    </div>
-                                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-primary-fixed-dim border-2 border-[#191c21] rounded-full"></div>
-                                                </div>
-                                                <div className="flex gap-1">
-                                                    <span className="px-1.5 py-0.5 rounded bg-secondary-container text-on-secondary-container text-[9px] font-bold uppercase tracking-tighter">
-                                                        MEMBER
-                                                    </span>
-                                                    <button className="w-6 h-6 rounded-lg flex items-center justify-center hover:bg-[#2D3139] text-[#8c947b] transition-colors cursor-pointer">
-                                                        <span className="material-symbols-outlined text-xs">more_vert</span>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <div className="mb-md">
-                                                <h4 className="font-headline-md text-body-lg text-white font-bold">
-                                                    {member.name}
-                                                </h4>
-                                                <p className="font-body-sm text-[11px] text-[#8c947b]">
-                                                    member
-                                                </p>
-                                            </div>
-                                            <div className="mt-auto flex items-center gap-2">
-                                                <button className="flex-1 bg-[#1C1F26] text-white font-semibold py-1.5 rounded-lg flex items-center justify-center gap-1.5 hover:bg-[#2D3139] transition-all text-body-sm cursor-pointer">
-                                                    <span className="material-symbols-outlined text-sm">chat_bubble</span>
-                                                    Message
-                                                </button>
-                                                {explicitIds.has(member.id) && (
-                                                    <button
-                                                        title="Remove from project"
-                                                        onClick={() => removeMember(member.id)}
-                                                        className="w-8 h-8 bg-red-950/20 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-950/40 transition-all cursor-pointer"
-                                                    >
-                                                        <span className="material-symbols-outlined text-sm">person_remove</span>
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                        )
-                    })()}
+                    {activeTab === "members" && (
+                        <ProjectMembers
+                            projectMembers={projectMembers}
+                            assignedUsers={assignedMembers}
+                            currentUserId={currentUserId}
+                            canManage={canDeleteProject === true}
+                            onRemove={removeProjectMember}
+                        />
+                    )}
 
                     {/* Calendar Tab */}
-                    {activeTab === "calendar" && (() => {
-                        const startOfCurrentMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-                        const endOfCurrentMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
-                        const startDayOfWeek = startOfCurrentMonth.getDay(); // 0 = Sunday, 1 = Monday...
-                        const daysInMonth = endOfCurrentMonth.getDate();
-
-                        const calendarDays = [];
-                        // Pad start of month
-                        for (let i = 0; i < startDayOfWeek; i++) {
-                            calendarDays.push(null);
-                        }
-                        // Add days
-                        for (let i = 1; i <= daysInMonth; i++) {
-                            calendarDays.push(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), i));
-                        }
-
-                        const formatYMD = (date) => {
-                            if (!date) return "";
-                            const y = date.getFullYear();
-                            const m = String(date.getMonth() + 1).padStart(2, '0');
-                            const d = String(date.getDate()).padStart(2, '0');
-                            return `${y}-${m}-${d}`;
-                        };
-
-                        const handlePrevMonth = () => {
-                            setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
-                        };
-
-                        const handleNextMonth = () => {
-                            setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1));
-                        };
-
-                        return (
-                            <div className="tab-pane block h-full min-h-[600px] flex flex-col" id="section-calendar">
-                                {/* Calendar Header */}
-                                <div className="flex items-center justify-between pb-4 border-b border-[#2D3139] shrink-0">
-                                    <h3 className="text-lg font-bold text-white capitalize">
-                                        {calendarMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                                    </h3>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={handlePrevMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
-                                            <span className="material-symbols-outlined text-[18px]">chevron_left</span>
-                                        </button>
-                                        <button onClick={handleNextMonth} className="w-8 h-8 rounded-lg bg-[#1e2025] hover:bg-[#2D3139] text-[#8c947b] hover:text-white flex items-center justify-center transition-colors cursor-pointer border border-[#2D3139]">
-                                            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                {/* Calendar Grid */}
-                                <div className="flex-1 overflow-y-auto min-h-0 mt-4">
-                                    <div className="grid grid-cols-7 gap-px bg-[#2D3139] overflow-hidden rounded-lg border border-[#2D3139]">
-                                        {/* Day Names */}
-                                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
-                                            <div key={day} className="bg-[#181a20] p-3 text-center text-xs font-bold text-[#8c947b] uppercase tracking-wider">
-                                                {day}
-                                            </div>
-                                        ))}
-                                        {/* Day Cells */}
-                                        {calendarDays.map((date, idx) => {
-                                            const dateString = formatYMD(date);
-                                            const dayTasks = date ? project_tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString) : [];
-                                            const dayEvents = date ? project_events.filter(e => e.event_date && e.event_date.substring(0, 10) === dateString) : [];
-                                            const isToday = dateString === formatYMD(new Date());
-
-                                            return (
-                                                <div
-                                                    key={idx}
-                                                    onClick={() => date && setSelectedDateEvents(date)}
-                                                    className={`min-h-[120px] p-3 transition-colors cursor-pointer ${date ? 'bg-[#191c21] hover:bg-[#1C1F26]' : 'bg-[#111318]'}`}
-                                                >
-                                                    {date && (
-                                                        <>
-                                                            <div className={`text-right mb-2 flex items-center justify-end gap-1 text-xs ${isToday ? 'font-bold' : 'text-[#8c947b]'}`}>
-                                                                {dayEvents.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-purple-400" title={`${dayEvents.length} event(s)`}></span>}
-                                                                {dayTasks.length > 0 && <span className="w-1.5 h-1.5 rounded-full bg-[var(--primary-color)]" title={`${dayTasks.length} task(s)`}></span>}
-                                                                <span className={isToday ? 'inline-flex items-center justify-center w-6 h-6 bg-[#5b644d] text-white font-bold rounded-full text-[11px]' : ''}>
-                                                                    {date.getDate()}
-                                                                </span>
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                {dayEvents.map(event => (
-                                                                    <div
-                                                                        key={`evt-${event.id}`}
-                                                                        className="px-2 py-1 text-[10px] font-medium rounded truncate bg-purple-500/10 text-purple-400 border border-purple-500/30"
-                                                                        title={event.title}
-                                                                    >
-                                                                        {event.title}
-                                                                    </div>
-                                                                ))}
-                                                                {dayTasks.map(task => (
-                                                                    <div
-                                                                        key={task.id}
-                                                                        onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
-                                                                        className={`px-2 py-1 text-[10px] font-medium rounded truncate border ${task.status === 'done' ? 'bg-green-500/10 text-green-400 border-green-500/30' :
-                                                                            'bg-[var(--primary-color)]/10 text-[var(--primary-color)] border-[var(--primary-color)]/30'
-                                                                            }`}
-                                                                        title={task.title}
-                                                                    >
-                                                                        {task.title}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
+                    {activeTab === "calendar" && (
+                        <ProjectCalendar tasks={project_tasks} onPickDay={setSelectedDateEvents} onOpenTask={setSelectedTask} />
+                    )}
                 </div>
             </main>
-            {/* ── Context-aware FAB ── */}
+            {/* ── Floating button: only where the tab's main action has no other home.
+                 Tasks are added from the Tasks tab or the header's Create menu. ── */}
             {(() => {
                 const fabConfig = {
                     files:   { icon: "upload",      label: "Upload File",    action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
                     members: { icon: "person_add",  label: "Add Member",     action: () => setShowAddMemberModal(true) },
                 }
-                const cfg = fabConfig[activeTab] || { icon: "add", label: "Quick Add Task", action: () => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) } }
+                const cfg = fabConfig[activeTab]
+                if (!cfg) return null
                 return (
                     <button
                         type="button"
@@ -2154,7 +1506,7 @@ function ProjectPage() {
                         className="fixed bottom-[96px] right-lg w-14 h-14 bg-primary-fixed-dim text-on-primary rounded-full shadow-[0_8px_32px_rgba(182,255,51,0.3)] flex items-center justify-center hover:scale-105 transition-transform active:scale-95 group z-30 cursor-pointer"
                     >
                         <span className="material-symbols-outlined text-[28px] font-bold">{cfg.icon}</span>
-                        <span className="absolute right-full mr-md px-md py-sm bg-[#191c21] text-white font-label-md text-label-md rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-[#2D3139]">
+                        <span className="absolute right-full mr-md px-md py-sm bg-raised text-white font-label-md text-xs rounded shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap border border-line">
                             {cfg.label}
                         </span>
                     </button>
@@ -2171,20 +1523,20 @@ function ProjectPage() {
                 <div className="fixed inset-0 z-[60] flex justify-end">
                     {/* Backdrop */}
                     <div
-                        className="absolute inset-0 bg-background/80 backdrop-blur-sm transition-opacity"
+                        className="absolute inset-0 bg-canvas/80 backdrop-blur-sm transition-opacity"
                         onClick={() => setSelectedTask(null)}
                     ></div>
 
                     {/* Sidebar */}
-                    <div className="relative w-1/2 bg-[#191c21] shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-[#2D3139]">
+                    <div className="relative w-1/2 bg-raised shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-line">
                         {/* Header */}
-                        <div className="flex items-center justify-between p-lg border-b border-[#2D3139]/30 bg-[#1C1F26]">
+                        <div className="flex items-center justify-between p-lg border-b border-line/30 bg-surface1">
                             <h2 className="font-headline-md text-white font-bold flex items-center gap-sm">
                                 <span className="material-symbols-outlined">task</span>
                                 Task Details
                             </h2>
                             <button
-                                className="text-[#8c947b] hover:text-white hover:bg-[#2D3139] w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
+                                className="text-muted hover:text-white hover:bg-line w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
                                 onClick={() => setSelectedTask(null)}
                             >
                                 <span className="material-symbols-outlined">close</span>
@@ -2200,7 +1552,7 @@ function ProjectPage() {
                                         const isOverdue = isTaskOverdue(selectedTask);
                                         const displayStatus = isOverdue ? 'overdue' : selectedTask.status;
                                         return (
-                                            <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-[#1C1F26] border border-[#2D3139]/50 text-[#8c947b]'
+                                            <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-surface1 border border-line/50 text-muted'
                                                 }`}>
                                                 <span className="material-symbols-outlined text-[14px]">{isOverdue ? 'error' : 'flag'}</span>
                                                 {displayStatus.replace('_', ' ')}
@@ -2222,11 +1574,11 @@ function ProjectPage() {
                                         {priorityDropdownOpen && (
                                             <>
                                                 <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
-                                                <div className="absolute left-0 top-full mt-1 w-32 bg-[#1C1F26] border border-[#2D3139] rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
+                                                <div className="absolute left-0 top-full mt-1 w-32 bg-surface1 border border-line rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
                                                     {['low', 'medium', 'high', 'urgent'].map(p => (
                                                         <button
                                                             key={p}
-                                                            className={`text-left px-4 py-2 hover:bg-[#2D3139] transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-white'}`}
+                                                            className={`text-left px-4 py-2 hover:bg-line transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-white'}`}
                                                             onClick={() => {
                                                                 updateTaskPriority(selectedTask.id, p);
                                                                 setPriorityDropdownOpen(false);
@@ -2243,22 +1595,22 @@ function ProjectPage() {
                             </div>
 
                             <div>
-                                <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider mb-sm flex items-center gap-xs">
+                                <h3 className="font-label-md text-muted uppercase tracking-wider mb-sm flex items-center gap-xs">
                                     <span className="material-symbols-outlined text-[16px]">description</span>
                                     Description
                                 </h3>
                                 {selectedTask.description ? (
-                                    <p className="font-body-md text-white whitespace-pre-wrap leading-relaxed bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">{selectedTask.description}</p>
+                                    <p className="text-sm text-white whitespace-pre-wrap leading-relaxed bg-panel p-md rounded-xl border border-line/20">{selectedTask.description}</p>
                                 ) : (
-                                    <div className="bg-[#0F1115] p-md rounded-xl border border-[#2D3139]/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
-                                        <span className="material-symbols-outlined text-[#8c947b]/50 text-3xl">notes</span>
-                                        <p className="font-body-sm text-[#8c947b]/70 italic">No description provided for this task.</p>
+                                    <div className="bg-canvas p-md rounded-xl border border-line/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
+                                        <span className="material-symbols-outlined text-muted/50 text-3xl">notes</span>
+                                        <p className="text-xs text-muted/70 italic">No description provided for this task.</p>
                                     </div>
                                 )}
                             </div>
 
                             <div>
-                                <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider mb-sm flex items-center gap-xs">
+                                <h3 className="font-label-md text-muted uppercase tracking-wider mb-sm flex items-center gap-xs">
                                     <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
                                     Sub-tasks
                                 </h3>
@@ -2312,7 +1664,7 @@ function ProjectPage() {
                                     };
 
                                     return (
-                                        <div className="space-y-sm bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">
+                                        <div className="space-y-sm bg-panel p-md rounded-xl border border-line/20">
                                             {subtasksList.length > 0 ? (
                                                 <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
                                                     {subtasksList.map(st => (
@@ -2322,14 +1674,14 @@ function ProjectPage() {
                                                                     type="button"
                                                                     onClick={() => { if (canEditSubtasks) handleToggleSubtask(st.id) }}
                                                                     disabled={!canEditSubtasks}
-                                                                    className={`check-btn ${!st.done ? '!bg-transparent !shadow-none !border !border-[#2D3139] hover:!bg-[#2D3139]' : ''} disabled:opacity-50 disabled:cursor-not-allowed !p-0 !w-4 !h-4 !rounded flex items-center justify-center shrink-0`}
+                                                                    className={`check-btn ${!st.done ? '!bg-transparent !shadow-none !border !border-line hover:!bg-line' : ''} disabled:opacity-50 disabled:cursor-not-allowed !p-0 !w-4 !h-4 !rounded flex items-center justify-center shrink-0`}
                                                                     title={st.done ? "Mark as incomplete" : "Mark as done"}
                                                                 >
                                                                     <svg className={`check-icon transition-opacity ${!st.done ? 'opacity-0' : 'opacity-100'} !w-3 !h-3`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
                                                                     </svg>
                                                                 </button>
-                                                                <span className={`text-sm text-white leading-tight transition-all ${st.done ? 'line-through text-[#8c947b]/50' : ''}`}>
+                                                                <span className={`text-sm text-white leading-tight transition-all ${st.done ? 'line-through text-muted/50' : ''}`}>
                                                                     {st.title}
                                                                 </span>
                                                             </label>
@@ -2337,7 +1689,7 @@ function ProjectPage() {
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleDeleteSubtask(st.id)}
-                                                                    className="text-[#8c947b] hover:text-white opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer flex items-center justify-center p-0.5 rounded hover:bg-[#2D3139]"
+                                                                    className="text-muted hover:text-white opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer flex items-center justify-center p-0.5 rounded hover:bg-line"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[16px]">delete</span>
                                                                 </button>
@@ -2346,16 +1698,16 @@ function ProjectPage() {
                                                     ))}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs text-[#8c947b]/60 italic pb-xs">No sub-tasks yet.</p>
+                                                <p className="text-xs text-muted/60 italic pb-xs">No sub-tasks yet.</p>
                                             )}
                                             {canEditSubtasks && (
-                                                <form onSubmit={handleAddSubtask} className="flex items-center gap-xs pt-xs border-t border-[#2D3139]/10">
+                                                <form onSubmit={handleAddSubtask} className="flex items-center gap-xs pt-xs border-t border-line/10">
                                                     <input
                                                         type="text"
                                                         placeholder="Add a sub-task..."
                                                         value={newSubtaskTitle}
                                                         onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                                                        className="flex-1 bg-[#0F1115] border border-[#2D3139]/20 rounded px-sm py-[5px] text-sm text-white placeholder-[#8c947b]/40 focus:outline-none focus:border-primary/50"
+                                                        className="flex-1 bg-canvas border border-line/20 rounded px-sm py-[5px] text-sm text-white placeholder-muted/40 focus:outline-none focus:border-primary/50"
                                                     />
                                                     <button
                                                         type="submit"
@@ -2372,7 +1724,7 @@ function ProjectPage() {
 
                             <div>
                                 <div className="flex items-center justify-between mb-sm">
-                                    <h3 className="font-label-md text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                    <h3 className="font-label-md text-muted uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[16px]">attach_file</span>
                                         Attachments
                                     </h3>
@@ -2414,18 +1766,18 @@ function ProjectPage() {
                                     <p className="text-xs text-error mb-xs">{taskUploadError}</p>
                                 )}
                                 {canEditTaskDetails && !taskUploadError && (
-                                    <p className="text-[10px] text-[#8c947b]/60 mb-xs">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
+                                    <p className="text-[10px] text-muted/60 mb-xs">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
                                 )}
                                 {(() => {
                                     const taskFiles = projectFiles.filter(f => String(f.task_id) === String(selectedTask.id));
                                     return (
-                                        <div className="space-y-xs bg-[#14171d] p-md rounded-xl border border-[#2D3139]/20">
+                                        <div className="space-y-xs bg-panel p-md rounded-xl border border-line/20">
                                             {taskFiles.length > 0 ? (
                                                 <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
                                                     {taskFiles.map(f => {
                                                         const { icon, color, bg } = getFileStyle(f.type);
                                                         return (
-                                                            <div key={f.id} className="flex items-center justify-between gap-sm group/file p-1 hover:bg-[#2D3139]/30 rounded transition-colors">
+                                                            <div key={f.id} className="flex items-center justify-between gap-sm group/file p-1 hover:bg-line/30 rounded transition-colors">
                                                                 <div
                                                                     onClick={() => setReviewFile(f)}
                                                                     className="flex items-center gap-sm cursor-pointer min-w-0 flex-1"
@@ -2435,7 +1787,7 @@ function ProjectPage() {
                                                                     </div>
                                                                     <div className="min-w-0">
                                                                         <p className="text-sm font-semibold text-white truncate" title={f.name}>{f.name}</p>
-                                                                        <p className="text-[10px] text-[#8c947b]">
+                                                                        <p className="text-[10px] text-muted">
                                                                             {f.size ? formatBytes(f.size) : ""} {f.uploaded_by ? `· by ${f.uploaded_by}` : ""}
                                                                         </p>
                                                                     </div>
@@ -2445,7 +1797,7 @@ function ProjectPage() {
                                                                         type="button"
                                                                         title="Preview"
                                                                         onClick={() => setReviewFile(f)}
-                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[16px] cursor-pointer"
+                                                                        className="material-symbols-outlined text-muted hover:text-white transition-colors text-[16px] cursor-pointer"
                                                                     >
                                                                         visibility
                                                                     </button>
@@ -2455,7 +1807,7 @@ function ProjectPage() {
                                                                         target="_blank"
                                                                         rel="noreferrer"
                                                                         title="Download"
-                                                                        className="material-symbols-outlined text-[#8c947b] hover:text-white transition-colors text-[16px] cursor-pointer"
+                                                                        className="material-symbols-outlined text-muted hover:text-white transition-colors text-[16px] cursor-pointer"
                                                                     >
                                                                         download
                                                                     </a>
@@ -2464,7 +1816,7 @@ function ProjectPage() {
                                                                             type="button"
                                                                             title="Delete"
                                                                             onClick={() => deleteFile(f)}
-                                                                            className="material-symbols-outlined text-[#8c947b] hover:text-error transition-colors text-[16px] cursor-pointer"
+                                                                            className="material-symbols-outlined text-muted hover:text-error transition-colors text-[16px] cursor-pointer"
                                                                         >
                                                                             delete
                                                                         </button>
@@ -2475,7 +1827,7 @@ function ProjectPage() {
                                                     })}
                                                 </div>
                                             ) : (
-                                                <p className="text-xs text-[#8c947b]/60 italic">No attachments yet.</p>
+                                                <p className="text-xs text-muted/60 italic">No attachments yet.</p>
                                             )}
                                         </div>
                                     );
@@ -2483,29 +1835,29 @@ function ProjectPage() {
                             </div>
 
                             <div className="grid grid-cols-2 gap-md">
-                                <div className="bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                <div className="bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs">
+                                    <h3 className="font-label-sm text-muted uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">person</span> Assignee
                                     </h3>
                                     {(() => {
                                         const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
                                         return assignee ? (
                                             <div className="flex items-center gap-sm mt-1">
-                                                <div className="w-6 h-6 rounded-full bg-[#1C1F26] border border-[#2D3139]/50 flex items-center justify-center text-[10px] font-bold text-[#8c947b] uppercase">
+                                                <div className="w-6 h-6 rounded-full bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
                                                     {assignee.name.charAt(0)}
                                                 </div>
-                                                <p className="font-body-md text-white font-semibold">{assignee.name}</p>
+                                                <p className="text-sm text-white font-semibold">{assignee.name}</p>
                                             </div>
                                         ) : (
-                                            <p className="font-body-md text-white mt-1 italic opacity-70">Unassigned</p>
+                                            <p className="text-sm text-white mt-1 italic opacity-70">Unassigned</p>
                                         );
                                     })()}
                                 </div>
-                                <div className="bg-[#191c21] p-md rounded-xl border border-[#2D3139]/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-[#8c947b] uppercase tracking-wider flex items-center gap-xs">
+                                <div className="bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs">
+                                    <h3 className="font-label-sm text-muted uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
                                     </h3>
-                                    <p className="font-body-md text-white font-semibold mt-1">
+                                    <p className="text-sm text-white font-semibold mt-1">
                                         {selectedTask.due_date ? (
                                             selectedTask.due_date.includes('T') || selectedTask.due_date.includes(' ')
                                                 ? new Date(selectedTask.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
@@ -2515,7 +1867,7 @@ function ProjectPage() {
                                 </div>
                             </div>
 
-                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-[#8c947b] border-t border-[#2D3139]/20">
+                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-muted border-t border-line/20">
                                 <span>ID: <span className="font-mono text-white opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
                                 <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
                             </div>
@@ -2550,7 +1902,7 @@ function ProjectPage() {
                     onClick={() => !deletingProject && setShowDeleteConfirm(false)}
                 >
                     <div
-                        className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                        className="bg-surface1 border border-line rounded-2xl shadow-2xl w-full max-w-sm p-6"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Icon */}
@@ -2560,9 +1912,9 @@ function ProjectPage() {
 
                         {/* Text */}
                         <h2 className="text-white font-bold text-[18px] text-center mb-2">Delete this project?</h2>
-                        <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
+                        <p className="text-muted text-[13px] text-center mb-1">You are about to permanently delete</p>
                         <p className="text-white font-bold text-[15px] text-center mb-3">"{project_name}"</p>
-                        <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                        <p className="text-muted text-[12px] text-center mb-6">
                             All tasks, files, and chat channels in this project will also be removed. This cannot be undone.
                         </p>
                         {deleteProjectError && (
@@ -2575,7 +1927,7 @@ function ProjectPage() {
                                 type="button"
                                 onClick={() => { setShowDeleteConfirm(false); setDeleteProjectError("") }}
                                 disabled={deletingProject}
-                                className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                                className="flex-1 py-2.5 rounded-xl border border-line text-muted hover:bg-line hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                             >
                                 No, keep it
                             </button>
@@ -2583,7 +1935,7 @@ function ProjectPage() {
                                 type="button"
                                 onClick={handleDeleteProject}
                                 disabled={deletingProject}
-                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                                className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                             >
                                 {deletingProject ? (
                                     <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Deleting…</>
@@ -2627,16 +1979,16 @@ function ProjectPage() {
                         onClick={() => setShowAddMemberModal(false)}
                     >
                         <div
-                            className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                            className="bg-surface1 border border-line rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
                             onClick={(e) => e.stopPropagation()}
                         >
                             {/* Header */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-[#2D3139]">
+                            <div className="flex items-center justify-between px-6 py-4 border-b border-line">
                                 <div>
                                     <h2 className="text-white font-bold text-[16px]">Add Members</h2>
-                                    <p className="text-[#8c947b] text-[12px]">Pick team members to add to this project</p>
+                                    <p className="text-muted text-[12px]">Pick team members to add to this project</p>
                                 </div>
-                                <button onClick={() => setShowAddMemberModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-colors cursor-pointer">
+                                <button onClick={() => setShowAddMemberModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-line transition-colors cursor-pointer">
                                     <span className="material-symbols-outlined text-[20px]">close</span>
                                 </button>
                             </div>
@@ -2645,24 +1997,24 @@ function ProjectPage() {
                             <div className="max-h-80 overflow-y-auto p-4 space-y-2">
                                 {available.length === 0 ? (
                                     <div className="text-center py-8">
-                                        <span className="material-symbols-outlined text-[#8c947b] text-4xl mb-2 block">group</span>
-                                        <p className="text-[#8c947b] text-[13px]">All team space members are already in this project.</p>
+                                        <span className="material-symbols-outlined text-muted text-4xl mb-2 block">group</span>
+                                        <p className="text-muted text-[13px]">All team space members are already in this project.</p>
                                     </div>
                                 ) : (
                                     available.map(user => (
-                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-[#191c21] border border-[#2D3139]/50 hover:border-[var(--primary-color)]/30 transition-colors group">
+                                        <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-raised border border-line/50 hover:border-accent-ink/30 transition-colors group">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-[#2D3139] flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
+                                                <div className="w-9 h-9 rounded-full bg-line flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
                                                     {user.name?.charAt(0) || "?"}
                                                 </div>
                                                 <div>
                                                     <p className="text-white text-[13px] font-semibold">{user.name}</p>
-                                                    <p className="text-[#8c947b] text-[11px]">{user.email}</p>
+                                                    <p className="text-muted text-[11px]">{user.email}</p>
                                                 </div>
                                             </div>
                                             <button
                                                 onClick={() => addMember(user)}
-                                                className="px-3 py-1.5 rounded-lg bg-[var(--primary-color)]/10 border border-[var(--primary-color)]/30 text-[var(--primary-color)] text-[12px] font-bold hover:bg-[var(--primary-color)]/20 transition-colors cursor-pointer flex items-center gap-1"
+                                                className="px-3 py-1.5 rounded-lg bg-[var(--primary-color)]/10 border border-accent-ink/30 text-accent-ink text-[12px] font-bold hover:bg-[var(--primary-color)]/20 transition-colors cursor-pointer flex items-center gap-1"
                                             >
                                                 <span className="material-symbols-outlined text-[14px]">add</span>
                                                 Add
@@ -2672,8 +2024,8 @@ function ProjectPage() {
                                 )}
                             </div>
 
-                            <div className="px-6 py-4 border-t border-[#2D3139]">
-                                <button onClick={() => setShowAddMemberModal(false)} className="w-full py-2.5 rounded-xl bg-[#2D3139] text-white text-[13px] font-semibold hover:bg-[#3a3f4a] transition-colors cursor-pointer">
+                            <div className="px-6 py-4 border-t border-line">
+                                <button onClick={() => setShowAddMemberModal(false)} className="w-full py-2.5 rounded-xl bg-line text-white text-[13px] font-semibold hover:bg-line-strong transition-colors cursor-pointer">
                                     Done
                                 </button>
                             </div>

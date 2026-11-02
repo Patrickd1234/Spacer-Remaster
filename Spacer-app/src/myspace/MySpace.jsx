@@ -129,7 +129,7 @@ export default function MySpace({ userId, displayName }) {
         <>
             <section>
                 <h1 className="text-2xl font-semibold text-white">{greeting}, {displayName} 👋</h1>
-                <p className="text-[#8c947b] text-sm mt-1">Here's what's happening with your work today.</p>
+                <p className="text-muted text-sm mt-1">Here's what's happening with your work today.</p>
             </section>
 
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

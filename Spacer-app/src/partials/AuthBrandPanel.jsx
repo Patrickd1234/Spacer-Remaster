@@ -13,7 +13,7 @@ export default function AuthBrandPanel({ tagline, quote, showThirdGlow = false, 
             {/* Branding */}
             <div className="relative z-10 mb-12">
                 <div className="flex items-center gap-2 mb-8">
-                    <span className="material-symbols-outlined text-[var(--primary-color)] font-bold text-[24px]">token</span>
+                    <span className="material-symbols-outlined text-accent-ink font-bold text-[24px]">token</span>
                     <h1 className="text-[16px] font-bold tracking-widest text-white">Spacer</h1>
                 </div>
                 {tagline}
@@ -21,8 +21,8 @@ export default function AuthBrandPanel({ tagline, quote, showThirdGlow = false, 
 
             {children}
 
-            <div className={`relative z-10 mt-auto ${children ? "pt-8 " : ""}border-l-2 border-[var(--primary-color)] pl-4`}>
-                <p className="text-sm text-[#8c947b] italic">
+            <div className={`relative z-10 mt-auto ${children ? "pt-8 " : ""}border-l-2 border-accent-ink pl-4`}>
+                <p className="text-sm text-muted italic">
                     &quot;{quote}&quot;
                 </p>
             </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase"
 import { useRole } from "../RoleContext"
+import { canCreateProjects } from "../projectPermissions"
 import CreateProjectModal from "./CreateProjectModal"
 import SidebarProfile from "./SidebarProfile"
 import { NavLink, NavButton, NavSection, SubLink, EmptyNote, TeamSpaceGroup } from "./SidebarNav"
@@ -100,12 +101,12 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
     return (
         <>
             <aside
-                className={`fixed left-0 top-0 h-full ${isExpanded ? "w-[260px]" : "w-[72px]"} border-r border-[#2D3139] bg-[#1C1F26] flex flex-col pt-5 pb-3 z-50 transition-all duration-300 ease-out overflow-hidden`}
+                className={`fixed left-0 top-0 h-full ${isExpanded ? "w-[260px]" : "w-[72px]"} border-r border-line bg-surface1 flex flex-col pt-5 pb-3 z-50 transition-all duration-300 ease-out overflow-hidden`}
                 onMouseEnter={() => { if (collapsed) setHovered(true) }}
                 onMouseLeave={() => setHovered(false)}
                 onClick={() => { if (collapsed && hovered) setCollapsedState(false) }}
             >
-                <div className={`px-4 pb-4 mb-3 border-b border-[#2D3139] flex items-center ${isExpanded ? "justify-between" : "justify-center"}`}>
+                <div className={`px-4 pb-4 mb-3 border-b border-line flex items-center ${isExpanded ? "justify-between" : "justify-center"}`}>
                     {isExpanded && (
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="w-7 h-7 rounded-md bg-primary-accent-dim text-primary-accent flex items-center justify-center font-bold text-[13px] shrink-0">
@@ -117,7 +118,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                     <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); setCollapsedState(!collapsed) }}
-                        className="flex h-7 w-7 items-center justify-center rounded-md border border-[#2D3139] text-[#8c947b] hover:text-white transition-colors cursor-pointer"
+                        className="flex h-7 w-7 items-center justify-center rounded-md border border-line text-muted hover:text-white transition-colors cursor-pointer"
                         aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
                     >
                         <span className="material-symbols-outlined text-[16px]">{collapsed ? "left_panel_open" : "left_panel_close"}</span>
@@ -155,7 +156,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                         label="Projects"
                         isExpanded={isExpanded}
                         defaultOpen={pathname.startsWith("/project_page")}
-                        action={(
+                        action={canCreateProjects({ isSuperAdmin, departments }) && (
                             <span
                                 role="button"
                                 tabIndex={0}

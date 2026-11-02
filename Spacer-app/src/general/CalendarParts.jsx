@@ -16,8 +16,8 @@ export function CalendarToolbar({ view, cursor, onViewChange, onToday, onShift }
                 {CALENDAR_VIEWS.map((v) => <Chip key={v.value} isActive={view === v.value} onClick={() => onViewChange(v.value)}>{v.label}</Chip>)}
             </div>
             <SecondaryButton onClick={onToday}>Today</SecondaryButton>
-            <button type="button" aria-label="Previous" onClick={() => onShift(-1)} className="text-[#8c947b] hover:text-white cursor-pointer"><span className="material-symbols-outlined">chevron_left</span></button>
-            <button type="button" aria-label="Next" onClick={() => onShift(1)} className="text-[#8c947b] hover:text-white cursor-pointer"><span className="material-symbols-outlined">chevron_right</span></button>
+            <button type="button" aria-label="Previous" onClick={() => onShift(-1)} className="text-muted hover:text-white cursor-pointer"><span className="material-symbols-outlined">chevron_left</span></button>
+            <button type="button" aria-label="Next" onClick={() => onShift(1)} className="text-muted hover:text-white cursor-pointer"><span className="material-symbols-outlined">chevron_right</span></button>
             <h2 className="text-sm font-semibold text-white">{rangeLabel(view, cursor)}</h2>
         </div>
     )
@@ -45,9 +45,9 @@ const defaultRenderItem = (onOpenEvent) => (event) => <EventChip key={event.id} 
 
 export function MonthView({ cursor, byDay, todayKey, onOpenEvent, onPickDay, renderItem = defaultRenderItem(onOpenEvent) }) {
     return (
-        <div className="rounded-xl border border-[#2D3139] overflow-hidden">
-            <div className="grid grid-cols-7 bg-[#14161b] border-b border-[#2D3139]">
-                {WEEKDAYS.map((d) => <div key={d} className="px-2 py-2 text-[11px] font-medium text-[#8c947b] text-center">{d}</div>)}
+        <div className="rounded-xl border border-line overflow-hidden">
+            <div className="grid grid-cols-7 bg-panel border-b border-line">
+                {WEEKDAYS.map((d) => <div key={d} className="px-2 py-2 text-[11px] font-medium text-muted text-center">{d}</div>)}
             </div>
             <div className="grid grid-cols-7">
                 {monthGrid(cursor).map((day) => {
@@ -58,13 +58,13 @@ export function MonthView({ cursor, byDay, todayKey, onOpenEvent, onPickDay, ren
                         <div
                             key={key}
                             onClick={() => onPickDay(day)}
-                            className={`min-h-[104px] p-1.5 border-r border-b border-[#2D3139] space-y-1 cursor-pointer hover:bg-[#191c21] ${inMonth ? "" : "bg-[#0c0d10]"}`}
+                            className={`min-h-[104px] p-1.5 border-r border-b border-line space-y-1 cursor-pointer hover:bg-raised ${inMonth ? "" : "bg-canvas"}`}
                         >
-                            <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs ${key === todayKey ? "bg-[#aff82a] text-[#1C1F26] font-semibold" : inMonth ? "text-[#c4c9b8]" : "text-[#5a5f52]"}`}>
+                            <span className={`inline-flex w-6 h-6 items-center justify-center rounded-full text-xs ${key === todayKey ? "bg-accent text-on-accent font-semibold" : inMonth ? "text-soft" : "text-faint"}`}>
                                 {day.getDate()}
                             </span>
                             {events.slice(0, MAX_CHIPS_PER_DAY).map(renderItem)}
-                            {events.length > MAX_CHIPS_PER_DAY && <p className="text-[10px] text-[#8c947b] px-1">+{events.length - MAX_CHIPS_PER_DAY} more</p>}
+                            {events.length > MAX_CHIPS_PER_DAY && <p className="text-[10px] text-muted px-1">+{events.length - MAX_CHIPS_PER_DAY} more</p>}
                         </div>
                     )
                 })}
@@ -75,13 +75,13 @@ export function MonthView({ cursor, byDay, todayKey, onOpenEvent, onPickDay, ren
 
 export function WeekView({ days, byDay, todayKey, onOpenEvent, renderItem = defaultRenderItem(onOpenEvent) }) {
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-7 rounded-xl border border-[#2D3139] overflow-hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-7 rounded-xl border border-line overflow-hidden">
             {days.map((day) => {
                 const key = dayKey(day)
                 const events = byDay.get(key) || []
                 return (
-                    <div key={key} className="min-h-[320px] p-2 border-r border-[#2D3139] last:border-r-0 space-y-1.5">
-                        <p className={`text-xs font-medium ${key === todayKey ? "text-[#aff82a]" : "text-[#8c947b]"}`}>
+                    <div key={key} className="min-h-[320px] p-2 border-r border-line last:border-r-0 space-y-1.5">
+                        <p className={`text-xs font-medium ${key === todayKey ? "text-accent-ink" : "text-muted"}`}>
                             {WEEKDAYS[day.getDay()]} {day.getDate()}
                         </p>
                         {events.map(renderItem)}
@@ -95,11 +95,11 @@ export function WeekView({ days, byDay, todayKey, onOpenEvent, renderItem = defa
 export function EventListItem({ event, onOpen }) {
     const platform = meetingPlatform(event.external_url)
     return (
-        <button type="button" onClick={() => onOpen(event)} className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-[#191c21] cursor-pointer">
+        <button type="button" onClick={() => onOpen(event)} className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-raised cursor-pointer">
             <DateBadge event={event} />
             <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-white truncate">{event.title}</p>
-                <p className="text-[11px] text-[#8c947b] flex items-center gap-2">
+                <p className="text-[11px] text-muted flex items-center gap-2">
                     <span>{formatEventTime(event)}</span>
                     {platform && <span className="flex items-center gap-1"><span className="material-symbols-outlined text-[13px]">videocam</span>{platform}</span>}
                 </p>
@@ -113,12 +113,12 @@ export function EventListItem({ event, onOpen }) {
 // renderItem draws one row; defaults to an event row
 export function AgendaView({ events, onOpenEvent, renderItem = (e) => <EventListItem key={e.id} event={e} onOpen={onOpenEvent} /> }) {
     const days = [...new Set(events.map((e) => dayKey(eventStart(e))))]
-    if (days.length === 0) return <p className="text-sm text-[#8c947b] py-8 text-center">No events in this period.</p>
+    if (days.length === 0) return <p className="text-sm text-muted py-8 text-center">No events in this period.</p>
     return (
         <div className="space-y-4">
             {days.map((key) => (
                 <section key={key} className="space-y-1">
-                    <h3 className="text-xs font-semibold text-[#8c947b]">
+                    <h3 className="text-xs font-semibold text-muted">
                         {eventStart(events.find((e) => dayKey(eventStart(e)) === key)).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" })}
                     </h3>
                     {events.filter((e) => dayKey(eventStart(e)) === key).map(renderItem)}
@@ -134,12 +134,12 @@ export function MiniMonth({ cursor, todayKey, onPick, onShift }) {
             <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-white">{cursor.toLocaleDateString([], { month: "long", year: "numeric" })}</p>
                 <div className="flex">
-                    <button type="button" aria-label="Previous month" onClick={() => onShift(-1)} className="text-[#8c947b] hover:text-white cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_left</span></button>
-                    <button type="button" aria-label="Next month" onClick={() => onShift(1)} className="text-[#8c947b] hover:text-white cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_right</span></button>
+                    <button type="button" aria-label="Previous month" onClick={() => onShift(-1)} className="text-muted hover:text-white cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_left</span></button>
+                    <button type="button" aria-label="Next month" onClick={() => onShift(1)} className="text-muted hover:text-white cursor-pointer"><span className="material-symbols-outlined text-[18px]">chevron_right</span></button>
                 </div>
             </div>
             <div className="grid grid-cols-7 gap-y-1 text-center">
-                {WEEKDAYS.map((d) => <span key={d} className="text-[10px] text-[#8c947b]">{d.slice(0, 2)}</span>)}
+                {WEEKDAYS.map((d) => <span key={d} className="text-[10px] text-muted">{d.slice(0, 2)}</span>)}
                 {monthGrid(cursor).map((day) => {
                     const key = dayKey(day)
                     return (
@@ -148,7 +148,7 @@ export function MiniMonth({ cursor, todayKey, onPick, onShift }) {
                             type="button"
                             onClick={() => onPick(day)}
                             aria-label={day.toDateString()}
-                            className={`mx-auto w-7 h-7 rounded-full text-[11px] cursor-pointer ${key === todayKey ? "bg-[#aff82a] text-[#1C1F26] font-semibold" : day.getMonth() === cursor.getMonth() ? "text-[#c4c9b8] hover:bg-[#2D3139]" : "text-[#5a5f52] hover:bg-[#2D3139]"}`}
+                            className={`mx-auto w-7 h-7 rounded-full text-[11px] cursor-pointer ${key === todayKey ? "bg-accent text-on-accent font-semibold" : day.getMonth() === cursor.getMonth() ? "text-soft hover:bg-line" : "text-faint hover:bg-line"}`}
                         >
                             {day.getDate()}
                         </button>
@@ -163,18 +163,18 @@ export function EventDetail({ event, canEdit, onEdit, onDelete, onClose }) {
     const platform = meetingPlatform(event.external_url)
     return (
         <Modal title={event.title} onClose={onClose}>
-            <div className="space-y-3 text-sm text-[#c4c9b8]">
+            <div className="space-y-3 text-sm text-soft">
                 <CategoryTag categories={EVENT_CATEGORIES} value={event.category} />
                 <p className="flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">calendar_today</span>{eventStart(event).toLocaleDateString([], { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
                 <p className="flex items-center gap-2"><span className="material-symbols-outlined text-[16px]">schedule</span>{formatEventTime(event)}</p>
                 {platform && (
-                    <a href={event.external_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-[#aff82a] hover:underline">
+                    <a href={event.external_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-accent-ink hover:underline">
                         <span className="material-symbols-outlined text-[16px]">videocam</span>Join on {platform}
                     </a>
                 )}
-                {event.description && <p className="whitespace-pre-line pt-2 border-t border-[#2D3139]">{event.description}</p>}
+                {event.description && <p className="whitespace-pre-line pt-2 border-t border-line">{event.description}</p>}
                 {canEdit && (
-                    <div className="flex gap-2 pt-3 border-t border-[#2D3139]">
+                    <div className="flex gap-2 pt-3 border-t border-line">
                         <button type="button" onClick={onEdit} className="text-xs hover:text-white flex items-center gap-1 cursor-pointer"><span className="material-symbols-outlined text-[16px]">edit</span>Edit</button>
                         <button type="button" onClick={onDelete} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer ml-auto"><span className="material-symbols-outlined text-[16px]">delete</span>Delete</button>
                     </div>
@@ -231,7 +231,7 @@ export function EventForm({ event, defaultDate, onSubmit, onClose }) {
                         </select>
                     </Field>
                 </div>
-                <label className="flex items-center gap-2 text-sm text-[#c4c9b8]">
+                <label className="flex items-center gap-2 text-sm text-soft">
                     <input type="checkbox" checked={form.allDay} onChange={set("allDay")} className="accent-[#aff82a]" />
                     All day
                 </label>

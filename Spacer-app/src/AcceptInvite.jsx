@@ -43,16 +43,16 @@ function AcceptInvite() {
     }
 
     return (
-        <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-6">
+        <div className="min-h-screen bg-panel flex items-center justify-center px-6">
             <div className="w-full max-w-[420px]">
                 <div className="w-10 h-10 mb-6 flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
+                    <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
                 </div>
 
                 {status === "checking" && (
                     <div className="text-center py-10">
-                        <span className="material-symbols-outlined animate-spin text-4xl text-[#aff82a]">progress_activity</span>
-                        <p className="text-[#8c947b] text-sm mt-4">Verifying your invite…</p>
+                        <span className="material-symbols-outlined animate-spin text-4xl text-accent-ink">progress_activity</span>
+                        <p className="text-muted text-sm mt-4">Verifying your invite…</p>
                     </div>
                 )}
 
@@ -60,11 +60,11 @@ function AcceptInvite() {
                     <div className="text-center py-6 space-y-3">
                         <span className="material-symbols-outlined text-4xl text-red-400">link_off</span>
                         <h2 className="text-xl font-bold text-white">This invite link isn't valid</h2>
-                        <p className="text-[#8c947b] text-sm leading-relaxed">
+                        <p className="text-muted text-sm leading-relaxed">
                             It may have already been used, or it's expired. Ask whoever invited you to send a new one,
                             or log in below if you've already set your password.
                         </p>
-                        <Link to="/login" className="inline-block mt-2 text-[#aff82a] font-semibold hover:underline text-sm">
+                        <Link to="/login" className="inline-block mt-2 text-accent-ink font-semibold hover:underline text-sm">
                             Go to Login
                         </Link>
                     </div>
@@ -73,7 +73,7 @@ function AcceptInvite() {
                 {status === "ready" && (
                     <>
                         <h2 className="text-[28px] font-bold text-white mb-2 tracking-tight text-center">Welcome to Spacer</h2>
-                        <p className="text-[#8c947b] text-[14px] mb-8 leading-relaxed text-center">
+                        <p className="text-muted text-[14px] mb-8 leading-relaxed text-center">
                             You've been added to your team already — just set a password for
                             <span className="text-white font-medium"> {email}</span> to finish signing in.
                         </p>
@@ -84,9 +84,9 @@ function AcceptInvite() {
 
                 {status === "success" && (
                     <div className="text-center py-10 space-y-3">
-                        <span className="material-symbols-outlined text-4xl text-[#aff82a]">check_circle</span>
+                        <span className="material-symbols-outlined text-4xl text-accent-ink">check_circle</span>
                         <h2 className="text-xl font-bold text-white">You're all set!</h2>
-                        <p className="text-[#8c947b] text-sm">Taking you into Spacer…</p>
+                        <p className="text-muted text-sm">Taking you into Spacer…</p>
                     </div>
                 )}
             </div>

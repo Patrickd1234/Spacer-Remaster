@@ -117,17 +117,17 @@ function Signup() {
 
     if (status === "check_email") {
         return (
-            <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-8">
+            <div className="min-h-screen bg-panel flex items-center justify-center px-8">
                 {errorMsg && (
                     <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm">
-                        <span className="material-symbols-outlined text-white text-[18px]">error</span>
-                        <div className="text-white text-[14px] leading-tight">{errorMsg}</div>
+                        <span className="material-symbols-outlined text-[#ffffff] text-[18px]">error</span>
+                        <div className="text-[#ffffff] text-[14px] leading-tight">{errorMsg}</div>
                     </div>
                 )}
                 <div className="w-full max-w-[420px] text-center">
-                    <span className="material-symbols-outlined text-[#aff82a] text-[48px] mb-4">mark_email_unread</span>
+                    <span className="material-symbols-outlined text-accent-ink text-[48px] mb-4">mark_email_unread</span>
                     <h2 className="text-[32px] font-bold text-white mb-3 tracking-tight">Check your inbox</h2>
-                    <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
+                    <p className="text-muted text-[15px] mb-8 leading-relaxed">
                         We sent a confirmation link to <span className="text-white font-semibold">{email}</span>.
                         Click it to activate your account, then sign in.
                     </p>
@@ -135,15 +135,15 @@ function Signup() {
                         type="button"
                         onClick={handleResend}
                         disabled={resendState !== "idle"}
-                        className="w-full border border-[#2D3139] bg-[#111318] hover:bg-[#1C1F26] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        className="w-full border border-line bg-field hover:bg-surface1 text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
                         {resendState === "sending" ? "Sending..." : resendState === "sent" ? "Email sent — check your inbox" : "Resend confirmation email"}
                     </button>
-                    <p className="text-[#8c947b] text-[13px] mt-4">
+                    <p className="text-muted text-[13px] mt-4">
                         Didn't get it? Check your spam folder.
                     </p>
-                    <p className="text-[#8c947b] text-[14px] mt-6">
-                        Already confirmed? <Link to="/login" className="text-[#aff82a] font-semibold hover:underline">Sign In</Link>
+                    <p className="text-muted text-[14px] mt-6">
+                        Already confirmed? <Link to="/login" className="text-accent-ink font-semibold hover:underline">Sign In</Link>
                     </p>
                 </div>
             </div>
@@ -159,9 +159,9 @@ function Signup() {
             {errorMsg && (
                 <div className="fixed top-8 right-8 z-50 flex items-center gap-4 bg-[#8C2A32]/90 backdrop-blur-md border border-[#C53F4A] rounded-xl p-4 shadow-2xl max-w-sm animate-in fade-in slide-in-from-top-10">
                     <div className="w-8 h-8 rounded border border-white/20 flex items-center justify-center shrink-0">
-                        <span className="material-symbols-outlined text-white text-[18px]">error</span>
+                        <span className="material-symbols-outlined text-[#ffffff] text-[18px]">error</span>
                     </div>
-                    <div className="text-white text-[14px] leading-tight">
+                    <div className="text-[#ffffff] text-[14px] leading-tight">
                         {errorMsg}
                     </div>
                 </div>
@@ -174,9 +174,9 @@ function Signup() {
                     <>
                         <h2 className="text-4xl font-bold leading-tight mb-4 text-white">
                             One workspace for <br />
-                            <span className="text-[var(--primary-color)]">every team.</span>
+                            <span className="text-accent-ink">every team.</span>
                         </h2>
-                        <p className="text-[#8c947b] text-base mb-8 max-w-md">
+                        <p className="text-muted text-base mb-8 max-w-md">
                             HR, Design, Development, and Marketing — bring all company operations into one unified platform.
                         </p>
                     </>
@@ -187,11 +187,11 @@ function Signup() {
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[var(--bg-surface)] relative z-10 overflow-y-auto py-12">
                 <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[var(--primary-color)] text-[36px]">token</span>
+                        <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
                     </div>
 
                     <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Create Account</h2>
-                    <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
+                    <p className="text-muted text-[15px] mb-8 leading-relaxed">
                         Join your team and start collaborating on Spacer.
                     </p>
 
@@ -202,7 +202,7 @@ function Signup() {
                                 type="text" 
                                 id="fullname"
                                 placeholder="Full Name" 
-                                className="w-full bg-[var(--bg-surface-low)] border border-[var(--bg-border)] focus:border-[var(--primary-color)] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                className="w-full bg-[var(--bg-surface-low)] border border-[var(--bg-border)] focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                                 value={fullName} 
                                 onChange={(e) => setFullName(e.target.value)} 
                                 required 
@@ -215,7 +215,7 @@ function Signup() {
                                 type="email" 
                                 id="email"
                                 placeholder="Email address" 
-                                className={`w-full bg-[var(--bg-surface-low)] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-[var(--primary-color)]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[var(--bg-surface-low)] border ${isEmailError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-accent-ink'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors`}
                                 value={email} 
                                 onChange={(e) => setEmail(e.target.value)} 
                                 required 
@@ -228,7 +228,7 @@ function Signup() {
                                 type={showPassword ? "text" : "password"} 
                                 id="password"
                                 placeholder="Password" 
-                                className={`w-full bg-[var(--bg-surface-low)] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-[var(--primary-color)]'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors`}
+                                className={`w-full bg-[var(--bg-surface-low)] border ${isPasswordError ? 'border-red-500 focus:border-red-500' : 'border-[var(--bg-border)] focus:border-accent-ink'} rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors`}
                                 value={password} 
                                 onChange={(e) => setPassword(e.target.value)} 
                                 required 
@@ -236,7 +236,7 @@ function Signup() {
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
+                                className="absolute right-4 top-[14px] text-muted hover:text-white transition-colors"
                             >
                                 <span className="material-symbols-outlined text-[20px]">
                                     {showPassword ? "visibility_off" : "visibility"}
@@ -246,8 +246,8 @@ function Signup() {
 
                         {/* Terms Checkbox */}
                         <div className="flex items-start gap-3 pt-2">
-                            <input id="terms" name="terms" required type="checkbox" className="mt-0.5 rounded border-[var(--bg-border)] bg-[var(--bg-surface-low)] text-[var(--primary-color)] focus:ring-[var(--primary-color)]" />
-                            <label htmlFor="terms" className="text-[#8c947b] text-[13px] leading-normal">
+                            <input id="terms" name="terms" required type="checkbox" className="mt-0.5 rounded border-[var(--bg-border)] bg-[var(--bg-surface-low)] text-accent-ink focus:ring-accent-ink" />
+                            <label htmlFor="terms" className="text-muted text-[13px] leading-normal">
                                 I agree to the Terms &amp; Conditions and Privacy Policy
                             </label>
                         </div>
@@ -270,7 +270,7 @@ function Signup() {
 
                         <div className="flex items-center gap-4 my-4">
                             <div className="h-px bg-[var(--bg-border)] flex-1"></div>
-                            <span className="text-[#8c947b] text-xs">or</span>
+                            <span className="text-muted text-xs">or</span>
                             <div className="h-px bg-[var(--bg-border)] flex-1"></div>
                         </div>
 
@@ -278,7 +278,7 @@ function Signup() {
                             type="button"
                             onClick={handleGoogleSignUp}
                             disabled={isGoogleLoading || !googleAuthReady}
-                            className="w-full flex items-center justify-center gap-3 border border-[var(--bg-border)] bg-[var(--bg-surface-low)] hover:bg-[var(--bg-surface-high)] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:border-[#4B5563]"
+                            className="w-full flex items-center justify-center gap-3 border border-[var(--bg-border)] bg-[var(--bg-surface-low)] hover:bg-[var(--bg-surface-high)] text-white font-medium text-sm py-3.5 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:border-line-strong"
                         >
                             <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -290,14 +290,14 @@ function Signup() {
                         </button>
 
                         {!googleAuthReady && (
-                            <p className="text-center text-xs text-[#8c947b] mt-3">
+                            <p className="text-center text-xs text-muted mt-3">
                                 Google sign-in is currently unavailable until Supabase Google auth is configured.
                             </p>
                         )}
 
                         <div className="text-center mt-6">
-                            <p className="text-[#8c947b] text-[14px]">
-                                Already have an account? <Link to="/login" className="text-[var(--primary-color)] font-semibold hover:underline">Sign In</Link>
+                            <p className="text-muted text-[14px]">
+                                Already have an account? <Link to="/login" className="text-accent-ink font-semibold hover:underline">Sign In</Link>
                             </p>
                         </div>
                     </form>

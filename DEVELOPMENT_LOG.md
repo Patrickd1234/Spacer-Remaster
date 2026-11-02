@@ -43,3 +43,27 @@ This log tracks development work and code changes made for this project.
   - `daily_standups.team_space_id` exists (uuid, nullable) with its foreign key to `team_spaces` (on delete cascade) and the `daily_standups_team_space_date_idx` index.
   - 4 of 8 stand-ups have a department. The other 4 have none, so they don't show on any department's sheet; no remaining stand-up's author is in exactly one department, so the backfill has nothing left to fill.
 - Updated the class1 tutorial doc to match: Lesson 2 and self-check question 6 now say the migration is applied.
+
+## 2026-10-31
+
+- Directory (`general/Directory.jsx`): fixed the crash on open. The React Compiler re-checks what handlers read on every render, so `selected.id` threw while no profile was open. Team and Role filters moved into a Filters menu. Migration `20261030150000_org_team_memberships` lets members see everyone's teams.
+- Repository: `.env` and the root `node_modules` are no longer tracked; Vercel builds stop with a clear message when the Supabase settings are missing. React Compiler lint errors cleared (pushed as `16c2cd3`).
+- Sprints (`src/sprints/`): real sprints replace the 15-minute timer on the project Sprint tab. Story points, start/complete with a committed baseline, burndown, velocity, retrospective, history. Project managers (`can_manage_project`) run sprints. Migration `20261031090000_sprints` (sprints table; `tasks.sprint_id`, `story_points`, `completed_at`; `start_sprint` / `complete_sprint`).
+- Project page: Members tab (buttons now work), Calendar tab on the shared calendar views, floating add button only on Files and Members, gap under the nav bar removed.
+- Notifications: in-app and email notifications for task assigned, added to a project, and task due soon. Migration `20261031100000_notifications` (Vault-based webhook secret, `task_due_reminders`, daily `due-soon-reminders` job at 07:00 UTC). Edge functions accept the `x-webhook-secret` header and link to `SITE_URL`.
+- Messages: upload progress in direct messages and group chats; own bubbles readable; the floating chat closes on an outside click.
+- One palette: colors are CSS variables in `src/index.css` exposed as Tailwind roles (`bg-canvas`, `text-muted`, `accent`…); Settings matches the rest of the app. A trial light mode was removed until a designer provides light screens.
+
+## 2026-11-01
+
+- Verified on the live database: the webhook secret in Vault matches the functions' `WEBHOOK_SECRET`; assignment and project emails delivered; the first `due-soon-reminders` run (07:00 UTC) succeeded and its 3 emails returned 200.
+- Project deadlines: migration `20261101090000_project_due_date` adds `project_spaces.due_date` (applied). Create Project saves it; `components/ProjectDeadline.jsx` shows it beside the project name and lets managers change it; wording in `components/deadlineLabel.js` (7 tests).
+- Project page: the main area follows the collapsed sidebar instead of leaving a 260px gap.
+- Lint: 29 errors to 0 (unused code in Profile, Settings, project page and others; Node globals for `vite.config.js`). 10 `exhaustive-deps` warnings left on purpose.
+- Loading screen: the startup loader is a CSS ring, and the icon font uses `display=block`, so icon names like "progress_activity" no longer flash as text while the font loads.
+- Checked: `npm test` 75/75, `vite build` succeeds, ESLint 0 errors. All 25 migrations on `22's` are applied to the live database.
+- Wrote `Spacer_Changes_Roles_Sprints.docx` (next to the repository folder): all changes on `22's` since `main`, super admin vs admin, and how sprints work.
+- Role gaps fixed (the app was stricter than the database):
+  - `invite-department-member` checks org admins with `is_admin_of_org` (as the caller), so an admin with no department can add department members. **Needs a deploy:** `npx supabase functions deploy invite-department-member`.
+  - New `src/projectPermissions.js` (5 tests): team leads and admins see Create a Project in the header Create menu and the sidebar +; members no longer see the +; Create Project lists only departments where the user can create projects. `RoleContext` now ranks team lead above member.
+  - Project page: the day drawer's Add Task follows `can_edit_project` instead of being admin-only.
