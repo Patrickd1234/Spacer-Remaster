@@ -1,97 +1,209 @@
+import { useState } from "react"
 import Select from "../components/Select"
-import { STORY_POINT_OPTIONS } from "./sprintMath"
+import { Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote } from "../general/GeneralParts"
+import { POINT_OPTIONS, NAME_MAX, GOAL_MAX, validateSprint, sprintTotals, dateRange } from "./sprintMath"
+
+// Pieces of the Sprint tab. They only render and report clicks; SprintTab owns the data.
 
 const STATUS_STYLES = {
-    todo: { label: "To do", dot: "bg-[#8c947b]" },
-    in_progress: { label: "In progress", dot: "bg-amber-400" },
-    done: { label: "Done", dot: "bg-[#22c55e]" },
+    planned: "bg-line text-soft border-line-strong",
+    active: "bg-accent/10 text-accent-ink border-accent-ink/30",
+    completed: "bg-green-500/10 text-green-400 border-green-500/30",
+}
+const STATUS_LABELS = { planned: "Planned", active: "Active", completed: "Completed" }
+const TASK_GROUPS = [
+    { status: "todo", label: "To do" },
+    { status: "in_progress", label: "In progress" },
+    { status: "done", label: "Done" },
+]
+
+export function StatusPill({ status }) {
+    return <span className={`inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-medium ${STATUS_STYLES[status]}`}>{STATUS_LABELS[status]}</span>
 }
 
-const SMALL_SELECT_CLASS = "bg-[#111318] border border-[#2D3139] hover:border-[#3d424d] focus:border-[var(--primary-color)] rounded-lg px-2 py-1 text-white text-xs focus:outline-none transition-colors"
-
-export const CARD_CLASS = "rounded-2xl border border-[#2D3139] bg-[#191c21] p-5"
-
-export function StatTile({ label, value, hint = null }) {
+export function PointsSelect({ value, disabled, onChange }) {
     return (
-        <div className="rounded-xl border border-[#2D3139] bg-[#1C1F26] px-4 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#8c947b]">{label}</p>
-            <p className="mt-1 text-xl font-bold text-white">{value}</p>
-            {hint && <p className="text-[11px] text-[#8c947b]">{hint}</p>}
+        <Select
+            aria-label="Story points"
+            disabled={disabled}
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+            className="w-14 shrink-0 bg-field border border-line rounded-md px-1 py-0.5 text-xs text-white text-center focus:outline-none focus:border-accent-ink disabled:opacity-60 cursor-pointer disabled:cursor-default"
+        >
+            <option value="">–</option>
+            {POINT_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+        </Select>
+    )
+}
+
+// One task: title (opens the task), who has it, points, and an optional action
+export function TaskLine({ task, assignee, canEstimate, onPoints, onOpen, action = null }) {
+    const isDone = task.status === "done"
+    return (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-raised border border-line hover:border-line-strong transition-colors">
+            <button type="button" onClick={() => onOpen(task)} className="min-w-0 flex-1 text-left cursor-pointer">
+                <p className={`text-sm truncate ${isDone ? "text-muted line-through" : "text-white"}`}>{task.title}</p>
+                {assignee && <p className="text-[11px] text-muted truncate">{assignee}</p>}
+            </button>
+            <PointsSelect value={task.story_points} disabled={!canEstimate} onChange={(p) => onPoints(task, p)} />
+            {action}
         </div>
     )
 }
 
-export function SprintStatusChip({ status }) {
-    const styles = {
-        active: "bg-[rgba(var(--primary-color-rgb),0.12)] text-[var(--primary-color)]",
-        planned: "bg-sky-500/10 text-sky-300",
-        completed: "bg-white/5 text-[#8c947b]",
-    }
-    return <span className={`rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${styles[status] || styles.completed}`}>{status}</span>
-}
-
-// One task in a sprint or the backlog. moveOptions: [{ value, label }] where
-// "" is the backlog; leave it empty to hide the move control.
-export function SprintTaskRow({ task, moveOptions = [], onMove, onPoints, isBusy = false }) {
-    const status = STATUS_STYLES[task.status] || STATUS_STYLES.todo
-    const points = task.story_points ?? ""
+// The active sprint's tasks in three status groups
+export function TasksByStatus({ tasks, renderTask }) {
     return (
-        <li className="flex flex-wrap items-center gap-3 rounded-xl border border-[#2D3139] bg-[#1C1F26] px-3 py-2.5">
-            <span className={`h-2 w-2 shrink-0 rounded-full ${status.dot}`} aria-hidden="true" />
-            <span className="flex-1 min-w-[140px]">
-                <span className={`block truncate text-sm font-medium ${task.status === "done" ? "text-[#8c947b] line-through" : "text-white"}`}>{task.title}</span>
-                <span className="block text-[11px] text-[#8c947b]">{status.label}</span>
-            </span>
-            <Select aria-label={`Story points for ${task.title}`} className={`${SMALL_SELECT_CLASS} w-[88px]`} value={String(points)} disabled={isBusy} onChange={(e) => onPoints(e.target.value === "" ? null : Number(e.target.value))}>
-                <option value="">No estimate</option>
-                {STORY_POINT_OPTIONS.map((p) => <option key={p} value={String(p)}>{p} pt{p === 1 ? "" : "s"}</option>)}
-            </Select>
-            {moveOptions.length > 0 && (
-                <Select aria-label={`Move ${task.title}`} className={`${SMALL_SELECT_CLASS} w-[150px]`} value="__move" disabled={isBusy} onChange={(e) => onMove(e.target.value || null)}>
-                    <option value="__move" disabled>Move to…</option>
-                    {moveOptions.map((o) => <option key={o.value || "backlog"} value={o.value}>{o.label}</option>)}
-                </Select>
-            )}
-        </li>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {TASK_GROUPS.map((group) => {
+                const inGroup = tasks.filter((t) => t.status === group.status)
+                return (
+                    <section key={group.status} className="space-y-2 min-w-0">
+                        <h4 className="flex items-center justify-between text-xs font-medium text-muted">
+                            {group.label}<span className="tabular-nums">{inGroup.length}</span>
+                        </h4>
+                        {inGroup.length === 0
+                            ? <p className="text-xs text-faint px-1 py-3">Nothing here.</p>
+                            : inGroup.map(renderTask)}
+                    </section>
+                )
+            })}
+        </div>
     )
 }
 
-const CHART_WIDTH = 600
-const CHART_HEIGHT = 160
-const CHART_PAD = 8
+// Create or edit; `sprint` null creates with `defaults` ({ name, startsOn, endsOn })
+export function SprintFormModal({ sprint, defaults, onSubmit, onClose }) {
+    const [form, setForm] = useState(() => sprint
+        ? { name: sprint.name, goal: sprint.goal || "", startsOn: sprint.starts_on, endsOn: sprint.ends_on }
+        : { ...defaults, goal: "" })
+    const [errorMsg, setErrorMsg] = useState("")
+    const [isSaving, setIsSaving] = useState(false)
+    const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
-// Work left per day (solid) against the even ideal (dashed)
-export function BurndownChart({ chart }) {
-    const { days, total, unit } = chart
-    if (days.length < 2 || total === 0) {
-        return <p className="text-xs text-[#8c947b]">The burndown appears once the sprint has estimated or planned work and lasts more than a day.</p>
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        const invalid = validateSprint(form)
+        if (invalid) return setErrorMsg(invalid)
+        setIsSaving(true)
+        const error = await onSubmit(form)
+        setIsSaving(false)
+        if (error) setErrorMsg(error)
     }
-    const x = (i) => CHART_PAD + (i * (CHART_WIDTH - 2 * CHART_PAD)) / (days.length - 1)
-    const y = (value) => CHART_PAD + (1 - value / total) * (CHART_HEIGHT - 2 * CHART_PAD)
-    const line = (points) => points.map(([px, py], i) => `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`).join(" ")
-    const ideal = line(days.map((d, i) => [x(i), y(d.ideal)]))
-    const actualDays = days.map((d, i) => [i, d.remaining]).filter(([, r]) => r !== null)
-    const actual = line(actualDays.map(([i, r]) => [x(i), y(r)]))
-    const last = actualDays[actualDays.length - 1]
-    const fmt = (key) => new Date(`${key}T00:00:00`).toLocaleDateString([], { day: "numeric", month: "short" })
+
     return (
-        <figure>
-            <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} className="w-full h-40" role="img" aria-label={`Burndown: ${last ? last[1] : total} of ${total} ${unit} left`}>
-                {[0, 0.5, 1].map((f) => (
-                    <line key={f} x1={CHART_PAD} x2={CHART_WIDTH - CHART_PAD} y1={y(total * f)} y2={y(total * f)} stroke="#2D3139" strokeWidth="1" />
-                ))}
-                <path d={ideal} fill="none" stroke="#8c947b" strokeWidth="2" strokeDasharray="6 6" />
-                {actual && <path d={actual} fill="none" stroke="var(--primary-color)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />}
-                {last && <circle cx={x(last[0])} cy={y(last[1])} r="5" fill="var(--primary-color)" />}
-            </svg>
-            <figcaption className="mt-1 flex items-center justify-between text-[11px] text-[#8c947b]">
-                <span>{fmt(days[0].date)}</span>
-                <span className="flex items-center gap-3">
-                    <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-[var(--primary-color)]" />{unit} left</span>
-                    <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t-2 border-dashed border-[#8c947b]" />ideal</span>
+        <Modal title={sprint ? "Edit sprint" : "New sprint"} onClose={onClose}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <Field label="Name"><input className={INPUT_CLASS} value={form.name} onChange={set("name")} maxLength={NAME_MAX} required /></Field>
+                <Field label="Sprint goal" hint="One sentence the team can check its work against.">
+                    <textarea className={`${INPUT_CLASS} min-h-[72px]`} value={form.goal} onChange={set("goal")} maxLength={GOAL_MAX} placeholder="e.g. Customers can pay by card at checkout" />
+                </Field>
+                <div className="grid grid-cols-2 gap-4">
+                    <Field label="Starts"><input type="date" className={INPUT_CLASS} value={form.startsOn} onChange={set("startsOn")} required /></Field>
+                    <Field label="Ends"><input type="date" className={INPUT_CLASS} value={form.endsOn} onChange={set("endsOn")} required /></Field>
+                </div>
+                {errorMsg && <ErrorNote>{errorMsg}</ErrorNote>}
+                <div className="flex justify-end gap-2">
+                    <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+                    <PrimaryButton type="submit" icon="save" disabled={isSaving}>{isSaving ? "Saving…" : sprint ? "Save" : "Create sprint"}</PrimaryButton>
+                </div>
+            </form>
+        </Modal>
+    )
+}
+
+// Review what got done, decide where unfinished work goes, and hold the retrospective
+export function CompleteSprintDialog({ sprint, tasks, plannedSprints, onSubmit, onClose }) {
+    const totals = sprintTotals(tasks)
+    const openCount = totals.totalTasks - totals.doneTasks
+    const [carryOverTo, setCarryOverTo] = useState(plannedSprints[0]?.id ?? "")
+    const [retro, setRetro] = useState({ wentWell: "", toImprove: "", actions: "" })
+    const [errorMsg, setErrorMsg] = useState("")
+    const [isSaving, setIsSaving] = useState(false)
+    const set = (key) => (e) => setRetro((r) => ({ ...r, [key]: e.target.value }))
+
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        setIsSaving(true)
+        const error = await onSubmit({ carryOverTo: carryOverTo || null, ...retro })
+        setIsSaving(false)
+        if (error) setErrorMsg(error)
+    }
+
+    return (
+        <Modal title={`Complete ${sprint.name}`} onClose={onClose} wide>
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <div className="grid grid-cols-3 gap-3">
+                    <Figure label="Completed" value={totals.usesPoints ? `${totals.done} pts` : totals.doneTasks} />
+                    <Figure label="Committed at start" value={sprint.committed_points != null && totals.usesPoints ? `${sprint.committed_points} pts` : `${sprint.committed_tasks ?? totals.totalTasks} tasks`} />
+                    <Figure label="Unfinished" value={`${openCount} task${openCount === 1 ? "" : "s"}`} />
+                </div>
+                {openCount > 0 && (
+                    <Field label={`Move the ${openCount} unfinished task${openCount === 1 ? "" : "s"} to`}>
+                        <Select className={INPUT_CLASS} value={carryOverTo} onChange={(e) => setCarryOverTo(e.target.value)}>
+                            {plannedSprints.map((s) => <option key={s.id} value={s.id}>{s.name} ({dateRange(s)})</option>)}
+                            <option value="">The backlog</option>
+                        </Select>
+                    </Field>
+                )}
+                <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-white">Retrospective <span className="font-normal text-muted">(optional)</span></h3>
+                    <Field label="What went well"><textarea className={`${INPUT_CLASS} min-h-[60px]`} value={retro.wentWell} onChange={set("wentWell")} maxLength={2000} /></Field>
+                    <Field label="What to improve"><textarea className={`${INPUT_CLASS} min-h-[60px]`} value={retro.toImprove} onChange={set("toImprove")} maxLength={2000} /></Field>
+                    <Field label="Action items for next sprint"><textarea className={`${INPUT_CLASS} min-h-[60px]`} value={retro.actions} onChange={set("actions")} maxLength={2000} /></Field>
+                </div>
+                {errorMsg && <ErrorNote>{errorMsg}</ErrorNote>}
+                <div className="flex justify-end gap-2">
+                    <SecondaryButton onClick={onClose}>Cancel</SecondaryButton>
+                    <PrimaryButton type="submit" icon="flag" disabled={isSaving}>{isSaving ? "Completing…" : "Complete sprint"}</PrimaryButton>
+                </div>
+            </form>
+        </Modal>
+    )
+}
+
+export function Figure({ label, value, sub = null }) {
+    return (
+        <div className="rounded-lg border border-line bg-raised px-3 py-2.5">
+            <p className="text-[11px] text-muted">{label}</p>
+            <p className="text-lg font-semibold text-white">{value}</p>
+            {sub && <p className="text-[11px] text-muted">{sub}</p>}
+        </div>
+    )
+}
+
+function RetroNote({ title, text }) {
+    if (!text) return null
+    return (
+        <div>
+            <p className="text-[11px] font-medium text-muted">{title}</p>
+            <p className="text-sm text-soft whitespace-pre-line">{text}</p>
+        </div>
+    )
+}
+
+// A finished sprint: outcome on one line, goal and retrospective when opened
+export function HistoryItem({ sprint }) {
+    const hasRetro = sprint.retro_went_well || sprint.retro_to_improve || sprint.retro_actions
+    return (
+        <details className="group rounded-lg border border-line bg-raised">
+            <summary className="flex items-center gap-3 px-3 py-2.5 cursor-pointer list-none">
+                <span className="material-symbols-outlined text-[16px] text-muted transition-transform group-open:rotate-90">chevron_right</span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-white truncate">{sprint.name}</span>
+                    <span className="block text-[11px] text-muted">{dateRange(sprint)}</span>
                 </span>
-                <span>{fmt(days[days.length - 1].date)}</span>
-            </figcaption>
-        </figure>
+                <span className="text-xs text-soft tabular-nums whitespace-nowrap">
+                    {sprint.completed_points ?? 0} / {sprint.committed_points ?? 0} pts · {sprint.completed_tasks ?? 0} task{sprint.completed_tasks === 1 ? "" : "s"} done
+                </span>
+            </summary>
+            <div className="px-3 pb-3 pl-10 space-y-2">
+                {sprint.goal && <RetroNote title="Goal" text={sprint.goal} />}
+                <RetroNote title="What went well" text={sprint.retro_went_well} />
+                <RetroNote title="What to improve" text={sprint.retro_to_improve} />
+                <RetroNote title="Action items" text={sprint.retro_actions} />
+                {!sprint.goal && !hasRetro && <p className="text-xs text-muted">No goal or retrospective notes were recorded.</p>}
+            </div>
+        </details>
     )
 }

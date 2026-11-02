@@ -3,7 +3,6 @@ import Header from "./partials/header"
 import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
-import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
 import { describeActivity, timeAgo } from "./activityLabels"
 
 function initials(name, email) {
@@ -43,26 +42,6 @@ function Profile() {
     const [isEditing, setIsEditing] = useState(false)
     const [draft, setDraft] = useState(profile)
     const [saving, setSaving] = useState(false)
-
-    // Security tab states
-    const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
-    const [showPasswordForm, setShowPasswordForm] = useState(false)
-    const [passwordForm, setPasswordForm] = useState({ current: "", next: "", confirm: "" })
-    const [passwordSaving, setPasswordSaving] = useState(false)
-    const [passwordMsg, setPasswordMsg] = useState(null)
-    const [signingOutOthers, setSigningOutOthers] = useState(false)
-    const [othersSignedOut, setOthersSignedOut] = useState(false)
-
-    // Preferences tab states
-    const [preferences, setPreferences] = useState({
-        emailAlerts: true,
-        taskUpdates: true,
-        weeklyDigest: false,
-        marketingEmails: false,
-        theme: "dark",
-        timezone: "UTC-8 (Pacific Time)",
-        language: "English (US)"
-    })
 
     const showToast = (message, type = "success") => {
         setToast({ message, type })
@@ -207,56 +186,6 @@ function Profile() {
         showToast("Profile details updated successfully!", "success")
     }
 
-    const handlePasswordSubmit = async (e) => {
-        e.preventDefault()
-        setPasswordMsg(null)
-
-        if (!passwordForm.current) {
-            setPasswordMsg({ type: "error", text: "Enter your current password." })
-            return
-        }
-
-        if (!passwordForm.next || passwordForm.next.length < MIN_PASSWORD_LENGTH) {
-            setPasswordMsg({ type: "error", text: `New password must be at least ${MIN_PASSWORD_LENGTH} characters.` })
-            return
-        }
-
-        if (passwordForm.next !== passwordForm.confirm) {
-            setPasswordMsg({ type: "error", text: "Passwords do not match." })
-            return
-        }
-
-        setPasswordSaving(true)
-        // Server checks the current password, then signs out other devices
-        const { error } = await changePassword(passwordForm.current, passwordForm.next)
-        setPasswordSaving(false)
-
-        if (error) {
-            setPasswordMsg({ type: "error", text: error })
-        } else {
-            setPasswordMsg({ type: "success", text: "Password updated. You've been signed out on your other devices." })
-            setPasswordForm({ current: "", next: "", confirm: "" })
-            setTimeout(() => setShowPasswordForm(false), 2000)
-            showToast("Password updated successfully!", "success")
-        }
-    }
-
-    const signOutOtherSessions = async () => {
-        setSigningOutOthers(true)
-        const { error } = await supabase.auth.signOut({ scope: "others" })
-        setSigningOutOthers(false)
-        if (error) {
-            if (import.meta.env.DEV) {
-                console.error("Error signing out other sessions:", error)
-            }
-            showToast("Could not sign out other sessions: " + error.message, "error")
-        } else {
-            setOthersSignedOut(true)
-            showToast("Signed out of all other device sessions.", "success")
-        }
-    }
-
-    // Overview cards, from the user's real data ("–" while loading)
     const stats = [
         { label: "Projects", value: overview?.projects ?? "–", icon: "folder_open", color: "text-secondary-fixed" },
         { label: "Open Tasks", value: overview?.openTasks ?? "–", icon: "pending_actions", color: "text-amber-400" },
@@ -268,7 +197,7 @@ function Profile() {
         <>
             <Sidebar />
             <Header />
-            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-[#e0e5d0]">
+            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-soft">
                 {/* Toast Notification */}
                 {toast && (
                     <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-bounce ${toast.type === "error" ? "bg-red-950/80 border-red-500/50 text-red-200" : "bg-emerald-950/80 border-emerald-500/50 text-emerald-200"}`}>
@@ -311,7 +240,7 @@ function Profile() {
                                             <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">
                                                 {profile.name || "Unnamed User"}
                                             </h1>
-                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-[var(--primary-color)]/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-blue-400/20' : 'bg-neutral-400/10 text-neutral-400 border border-neutral-400/20'}`}>
+                                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-accent-ink/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-blue-400/20' : 'bg-neutral-400/10 text-neutral-400 border border-neutral-400/20'}`}>
                                                 {isSuperAdmin ? 'Superadmin' : isAdmin ? 'Admin' : membershipData?.role || 'Member'}
                                             </span>
                                         </div>
@@ -351,7 +280,7 @@ function Profile() {
                                     key={tab.id}
                                     onClick={() => setActiveTab(tab.id)}
                                     className={`flex items-center gap-2 px-5 py-3 rounded-xl font-medium text-sm transition-all whitespace-nowrap ${activeTab === tab.id
-                                        ? "bg-white/10 text-primary-accent border border-[var(--primary-color)]/30 shadow-md"
+                                        ? "bg-white/10 text-primary-accent border border-accent-ink/30 shadow-md"
                                         : "text-neutral-400 hover:text-white hover:bg-white/5"
                                         }`}
                                 >

@@ -44,8 +44,29 @@ This log tracks development work and code changes made for this project.
   - 4 of 8 stand-ups have a department. The other 4 have none, so they don't show on any department's sheet; no remaining stand-up's author is in exactly one department, so the backfill has nothing left to fill.
 - Updated the class1 tutorial doc to match: Lesson 2 and self-check question 6 now say the migration is applied.
 
+## 2026-10-31
+
+- Directory (`general/Directory.jsx`): fixed the crash on open. The React Compiler re-checks what handlers read on every render, so `selected.id` threw while no profile was open. Team and Role filters moved into a Filters menu. Migration `20261030150000_org_team_memberships` lets members see everyone's teams.
+- Repository: `.env` and the root `node_modules` are no longer tracked; Vercel builds stop with a clear message when the Supabase settings are missing. React Compiler lint errors cleared (pushed as `16c2cd3`).
+- Sprints (`src/sprints/`): real sprints replace the 15-minute timer on the project Sprint tab. Story points, start/complete with a committed baseline, burndown, velocity, retrospective, history. Project managers (`can_manage_project`) run sprints. Migration `20261031090000_sprints` (sprints table; `tasks.sprint_id`, `story_points`, `completed_at`; `start_sprint` / `complete_sprint`).
+- Project page: Members tab (buttons now work), Calendar tab on the shared calendar views, floating add button only on Files and Members, gap under the nav bar removed.
+- Notifications: in-app and email notifications for task assigned, added to a project, and task due soon. Migration `20261031100000_notifications` (Vault-based webhook secret, `task_due_reminders`, daily `due-soon-reminders` job at 07:00 UTC). Edge functions accept the `x-webhook-secret` header and link to `SITE_URL`.
+- Messages: upload progress in direct messages and group chats; own bubbles readable; the floating chat closes on an outside click.
+- One palette: colors are CSS variables in `src/index.css` exposed as Tailwind roles (`bg-canvas`, `text-muted`, `accent`…); Settings matches the rest of the app. A trial light mode was removed until a designer provides light screens.
+
 ## 2026-11-01
 
+- Verified on the live database: the webhook secret in Vault matches the functions' `WEBHOOK_SECRET`; assignment and project emails delivered; the first `due-soon-reminders` run (07:00 UTC) succeeded and its 3 emails returned 200.
+- Project deadlines: migration `20261101090000_project_due_date` adds `project_spaces.due_date` (applied). Create Project saves it; `components/ProjectDeadline.jsx` shows it beside the project name and lets managers change it; wording in `components/deadlineLabel.js` (7 tests).
+- Project page: the main area follows the collapsed sidebar instead of leaving a 260px gap.
+- Lint: 29 errors to 0 (unused code in Profile, Settings, project page and others; Node globals for `vite.config.js`). 10 `exhaustive-deps` warnings left on purpose.
+- Loading screen: the startup loader is a CSS ring, and the icon font uses `display=block`, so icon names like "progress_activity" no longer flash as text while the font loads.
+- Checked: `npm test` 75/75, `vite build` succeeds, ESLint 0 errors. All 25 migrations on `22's` are applied to the live database.
+- Wrote `Spacer_Changes_Roles_Sprints.docx` (next to the repository folder): all changes on `22's` since `main`, super admin vs admin, and how sprints work.
+- Role gaps fixed (the app was stricter than the database):
+  - `invite-department-member` checks org admins with `is_admin_of_org` (as the caller), so an admin with no department can add department members. **Needs a deploy:** `npx supabase functions deploy invite-department-member`.
+  - New `src/projectPermissions.js` (5 tests): team leads and admins see Create a Project in the header Create menu and the sidebar +; members no longer see the +; Create Project lists only departments where the user can create projects. `RoleContext` now ranks team lead above member.
+  - Project page: the day drawer's Add Task follows `can_edit_project` instead of being admin-only.
 - Reviewed all 21 migrations in `Spacer-app/supabase/migrations` by hand and checked the live database (project "Spacer") with read-only queries through the Supabase CLI. Findings:
   - The live database has three migrations that `Test-phase` did not: `20261030150000 org_team_memberships` (on the `22's` branch), and `20261031090000 sprints` and `20261031100000 notifications`, which are in no git branch. Until those two files are committed, `supabase db push` refuses to run.
   - There is no baseline migration: the first file expects `public.users` and the existing policies, so `supabase db reset`, a fresh local stack or a Supabase branch fails. The base schema is only in the read-only `supabase/schema/schema.sql` snapshot.
@@ -71,3 +92,13 @@ This log tracks development work and code changes made for this project.
   - The Sprint tab now uses it (`src/sprints/`): active sprint (goal, days left, totals, burndown), planned sprints (plan, edit, start, delete), backlog (move to a sprint, story points), complete with carry-over and retrospective, and past sprints with finished tasks and retro notes. Permissions follow `can_manage_project`; members can only set story points. The browser-only 15-minute timer was removed. `sprintMath.js` has 10 tests.
   - The project page task query now loads `sprint_id`, `story_points` and `completed_at`; the activity feed shows `sprint_started` and names completed sprints.
 - Checked: `npm test` passes 69/69 and `vite build` succeeds. The new files lint clean; existing lint problems in `project_page.jsx`, `Department.jsx`, `Settings.jsx` and `Tasks.jsx` are unchanged (`project_page.jsx` went from 9 to 7). None of the three changes was exercised in a browser.
+
+## 2026-11-02
+
+- Merged `22's` (`fb40460`: sprints, notifications, project tabs, deadlines, one palette, role fixes) into `Test-phase`. 23 files conflicted:
+  - Sprints: both branches built a Sprint tab on the same `20261031090000_sprints` migration. Kept the `22's` version (`src/sprints/`, with velocity and the members/open-task wiring) and its rollback; removed `SprintSections.jsx` and `SprintModals.jsx` from `Test-phase`. The migration files were identical apart from blank lines.
+  - Notifications: `20261031100000_notifications` and its rollback come from `22's` (the copies pulled from the live database matched apart from blank lines). This also brings the edge function changes (`x-webhook-secret`, `deadline_incoming`, `project_added`) and `20261101090000_project_due_date`, so the repo now has all 25 live migrations.
+  - Styling: took the `22's` palette classes everywhere and put back the `font-body-md` class on the 13 dropdown panels.
+  - Dropdowns: the files `22's` changed had native `<select>` again, and its sprint UI added three (story points, "Add to…", carry-over). All are `components/Select.jsx` again; no native `<select>` is left in `src`.
+  - Kept both: `scopeDirectory` (Directory by role) and the `22's` `taskItem` tests; the `Select` import and the new project-permission imports in Create Project; both 2026-11-01 log sections. Removed a duplicate `SprintTab` import the merge left in `project_page.jsx`.
+- Checked: `npm test` 86/86, `vite build` succeeds, ESLint 0 errors (10 `exhaustive-deps` warnings, as on `22's`). Not checked in a browser.

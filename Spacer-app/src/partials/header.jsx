@@ -4,6 +4,8 @@ import { supabase, getSessionUser } from "../supabase";
 import {
     fetchNotificationActivities,
     fetchOpenAssignedTasks,
+    fetchPersonalNotifications,
+    personalNotificationPath,
     loadReadState,
     isActivityRead,
     markActivityRead,
@@ -16,6 +18,15 @@ import CreateMenu from "./CreateMenu";
 
 // `breadcrumb` ({ icon, label }) is optional; pages that show their own keep it off.
 // The header sits under the fixed sidebar, so `insetLeft` (px) moves the breadcrumb clear of it.
+// Second line and icon for notifications the database wrote for this user
+const PERSONAL_MESSAGES = {
+    assignment: "A task was assigned to you.",
+    project_added: "You can now see this project's tasks and files.",
+    status_change: "A task you created changed status.",
+    mention: "You were mentioned.",
+}
+const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email" }
+
 function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();
     const navigate = useNavigate();
@@ -32,6 +43,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const [searchIndex, setSearchIndex] = useState(-1);
     const [activities, setActivities] = useState([]);
     const [reminders, setReminders] = useState([]);
+    const [personal, setPersonal] = useState([]);
     const [notifyUserId, setNotifyUserId] = useState(null);
     const [readState, setReadState] = useState({ lastReadAt: null, ids: [] });
     const [notificationsLoading, setNotificationsLoading] = useState(false);
@@ -207,13 +219,14 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
             if (!sessionUser) {
                 setActivities([]);
                 setReminders([]);
+                setPersonal([]);
                 return;
             }
             setNotificationsLoading(true);
             setNotifyUserId(sessionUser.id);
             setReadState(loadReadState(sessionUser.id));
             try {
-                const [{ data, error }, assigned] = await Promise.all([
+                const [{ data, error }, assigned, mine] = await Promise.all([
                     fetchNotificationActivities({
                         userId: sessionUser.id,
                         email: sessionUser.email,
@@ -221,8 +234,11 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                         isAdmin,
                     }),
                     remindersEnabled ? fetchOpenAssignedTasks(sessionUser.id) : Promise.resolve({ data: [], error: null }),
+                    fetchPersonalNotifications(sessionUser.id),
                 ]);
                 if (cancelled) return;
+                if (mine.error) console.warn("Unable to load your notifications", mine.error);
+                setPersonal(mine.data.map((row) => ({ ...row, timeLabel: formatTime(row.created_at) })));
                 if (assigned.error) console.warn("Unable to load task reminders", assigned.error);
                 setReminders(buildTaskReminders(assigned.data));
                 if (error) {
@@ -239,7 +255,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
         return () => { cancelled = true; };
     }, [showNotifications, inAppEnabled, remindersEnabled, roleLoading, isSuperAdmin, isAdmin]);
 
-    // Today's task reminders sit above the activity feed
+    // Today's task reminders, then what happened to you, then the activity feed
     const notifications = useMemo(() => [
         ...reminders.map((reminder) => ({
             id: reminder.id,
@@ -249,6 +265,16 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
             type: reminder.kind === "due" ? "deadline" : "reminder",
             unread: !isActivityRead(readState, reminder),
         })),
+        ...personal.map((row) => ({
+            id: row.id,
+            title: row.body,
+            message: PERSONAL_MESSAGES[row.type] || "Open it to see the details.",
+            time: row.timeLabel,
+            type: "personal",
+            icon: PERSONAL_ICONS[row.type],
+            source: row,
+            unread: !isActivityRead(readState, row),
+        })),
         ...activities.map((activity) => ({
             id: activity.id,
             title: formatActivityTitle(activity),
@@ -257,20 +283,26 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
             type: activity.action === "deleted" ? "error" : activity.action === "created" ? "success" : "info",
             unread: !isActivityRead(readState, activity),
         })),
-    ], [reminders, activities, readState]);
+    ], [reminders, personal, activities, readState]);
 
     const handleMarkAllRead = () => {
         if (!notifyUserId) return;
         // Timestamps come in different formats, so compare them as dates
-        const newest = [activities[0]?.created_at, reminders[0]?.created_at]
+        const newest = [activities[0]?.created_at, reminders[0]?.created_at, personal[0]?.created_at]
             .filter(Boolean)
             .reduce((a, b) => (!a || new Date(b) > new Date(a) ? b : a), null);
         setReadState(markAllActivitiesRead(notifyUserId, newest));
     };
 
-    const handleNotificationClick = (notificationId) => {
+    const handleNotificationClick = async (notification) => {
         if (!notifyUserId) return;
-        setReadState((prev) => markActivityRead(notifyUserId, prev, notificationId));
+        setReadState((prev) => markActivityRead(notifyUserId, prev, notification.id));
+        if (!notification.source) return;
+        const path = await personalNotificationPath(notification.source);
+        if (path) {
+            setShowNotifications(false);
+            navigate(path);
+        }
     };
 
     const hasResults = searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0;
@@ -279,10 +311,10 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     return (
         <>
             {/* HEADER */}
-            <header className="h-16 flex items-center justify-between gap-3 px-3 sm:px-lg w-full border-b border-[#2D3139] bg-[#0F1115] sticky top-0 z-40">
+            <header className="h-16 flex items-center justify-between gap-3 px-3 sm:px-lg w-full border-b border-line bg-canvas sticky top-0 z-40">
                 {breadcrumb && (
                     <div className="flex items-center gap-2 text-sm text-white font-medium transition-[margin] duration-300" style={{ marginLeft: insetLeft }}>
-                        <span className="material-symbols-outlined text-[18px] text-[#8c947b]">{breadcrumb.icon}</span>
+                        <span className="material-symbols-outlined text-[18px] text-muted">{breadcrumb.icon}</span>
                         {breadcrumb.label}
                     </div>
                 )}
@@ -292,9 +324,9 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                     
                     {/* SEARCH BAR CONTAINER */}
                     <div className="relative w-full max-w-[220px] sm:max-w-[260px]" ref={searchRef}>
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8c947b]">search</span>
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted">search</span>
                         <input
-                            className="w-full bg-[#191c21] border border-[#2D3139] rounded-lg pl-10 pr-4 py-2 text-white font-body-sm focus:ring-1 focus:ring-[var(--primary-color)] focus:outline-none transition-colors"
+                            className="w-full bg-raised border border-line rounded-lg pl-10 pr-4 py-2 text-white text-xs focus:ring-1 focus:ring-accent-ink focus:outline-none transition-colors"
                             placeholder="Search workspace..."
                             type="text"
                             value={searchQuery}
@@ -309,27 +341,27 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
 
                         {/* SEARCH DROPDOWN */}
                         {showDropdown && searchQuery.trim().length > 0 && (
-                            <div className="font-body-md absolute top-full left-0 right-0 mt-2 bg-[#1C1F26] border border-[#2D3139] rounded-xl shadow-xl overflow-hidden z-50">
+                            <div className="font-body-md absolute top-full left-0 right-0 mt-2 bg-surface1 border border-line rounded-xl shadow-xl overflow-hidden z-50">
                                 {isSearching ? (
-                                    <div className="p-4 text-center text-sm text-[#8c947b] flex items-center justify-center gap-2">
+                                    <div className="p-4 text-center text-sm text-muted flex items-center justify-center gap-2">
                                         <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
                                         Searching...
                                     </div>
                                 ) : !hasResults ? (
-                                    <div className="p-4 text-center text-sm text-[#8c947b]">
+                                    <div className="p-4 text-center text-sm text-muted">
                                         No results found for "{searchQuery}"
                                     </div>
                                 ) : (
                                     <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
                                         {searchResults.projects.length > 0 && (
                                             <div className="py-2">
-                                                <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">Projects</div>
+                                                <div className="px-3 py-1 text-xs font-bold text-muted uppercase tracking-wider">Projects</div>
                                                 {searchResults.projects.map((p) => {
                                                     const itemIndex = searchItems.findIndex((item) => item.id === `project-${p.id}`);
                                                     return (
                                                         <div
                                                             key={p.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-line" : "hover:bg-line"}`}
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
@@ -341,14 +373,14 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                             </div>
                                         )}
                                         {searchResults.tasks.length > 0 && (
-                                            <div className="py-2 border-t border-[#2D3139]/50">
-                                                <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">Tasks</div>
+                                            <div className="py-2 border-t border-line/50">
+                                                <div className="px-3 py-1 text-xs font-bold text-muted uppercase tracking-wider">Tasks</div>
                                                 {searchResults.tasks.map((t) => {
                                                     const itemIndex = searchItems.findIndex((item) => item.id === `task-${t.id}`);
                                                     return (
                                                         <div
                                                             key={t.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-line" : "hover:bg-line"}`}
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
@@ -360,18 +392,18 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                             </div>
                                         )}
                                         {searchResults.users.length > 0 && (
-                                            <div className="py-2 border-t border-[#2D3139]/50">
-                                                <div className="px-3 py-1 text-xs font-bold text-[#8c947b] uppercase tracking-wider">People</div>
+                                            <div className="py-2 border-t border-line/50">
+                                                <div className="px-3 py-1 text-xs font-bold text-muted uppercase tracking-wider">People</div>
                                                 {searchResults.users.map((u) => {
                                                     const itemIndex = searchItems.findIndex((item) => item.id === `user-${u.id}`);
                                                     return (
                                                         <div
                                                             key={u.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-[#2D3139]" : "hover:bg-[#2D3139]"}`}
+                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-line" : "hover:bg-line"}`}
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
-                                                            <div className="w-5 h-5 rounded-full bg-[#3d424d] flex items-center justify-center text-[10px] font-bold">
+                                                            <div className="w-5 h-5 rounded-full bg-line-strong flex items-center justify-center text-[10px] font-bold">
                                                                 {u.name.charAt(0).toUpperCase()}
                                                             </div>
                                                             <div className="flex flex-col truncate">
@@ -390,43 +422,43 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
 
                     <div className="relative" ref={notificationRef}>
                         <button
-                            className="p-2 text-[#8c947b] hover:text-white hover:bg-[#2D3139] rounded-full transition-colors relative"
+                            className="p-2 text-muted hover:text-white hover:bg-line rounded-full transition-colors relative"
                             onClick={() => setShowNotifications((prev) => !prev)}
                             aria-label="Notifications"
                         >
                             <span className="material-symbols-outlined">notifications</span>
                             {unreadCount > 0 && (
-                                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center border border-[#0F1115]">
+                                <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold text-[#ffffff] flex items-center justify-center border border-canvas">
                                     {unreadCount > 9 ? "9+" : unreadCount}
                                 </span>
                             )}
                         </button>
                         {showNotifications && (
-                            <div className="font-body-md absolute right-0 mt-2 w-80 rounded-xl border border-[#2D3139] bg-[#191c21] shadow-xl p-3 z-50">
+                            <div className="font-body-md absolute right-0 mt-2 w-80 rounded-xl border border-line bg-raised shadow-xl p-3 z-50">
                                 <div className="flex items-center justify-between mb-3">
                                     <div>
                                         <p className="text-sm font-bold text-white">In-app notifications</p>
-                                        <p className="text-xs text-[#8c947b]">{unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}</p>
+                                        <p className="text-xs text-muted">{unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         {unreadCount > 0 && (
                                             <button
-                                                className="text-xs text-[var(--primary-color)] hover:underline"
+                                                className="text-xs text-accent-ink hover:underline"
                                                 onClick={handleMarkAllRead}
                                             >
                                                 Mark all read
                                             </button>
                                         )}
-                                        <button className="text-xs text-[#8c947b] hover:underline" onClick={() => setShowNotifications(false)}>Close</button>
+                                        <button className="text-xs text-muted hover:underline" onClick={() => setShowNotifications(false)}>Close</button>
                                     </div>
                                 </div>
                                 {notificationsLoading ? (
-                                    <div className="flex items-center justify-center py-6 text-sm text-[#8c947b]">
+                                    <div className="flex items-center justify-center py-6 text-sm text-muted">
                                         <span className="material-symbols-outlined animate-spin text-[16px] mr-2">progress_activity</span>
                                         Loading notifications...
                                     </div>
                                 ) : notifications.length === 0 ? (
-                                    <div className="rounded-lg bg-[#252a33] p-3 border border-[#2D3139] text-sm text-[#8c947b]">
+                                    <div className="rounded-lg bg-surface2 p-3 border border-line text-sm text-muted">
                                         No notifications right now.
                                     </div>
                                 ) : (
@@ -435,20 +467,20 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                             <button
                                                 type="button"
                                                 key={notification.id}
-                                                onClick={() => handleNotificationClick(notification.id)}
+                                                onClick={() => handleNotificationClick(notification)}
                                                 aria-label={notification.unread ? `Mark as read: ${notification.title}` : notification.title}
-                                                className={`w-full text-left rounded-lg p-3 border flex gap-2 transition-colors cursor-pointer ${notification.unread ? "bg-[#252a33] border-[#2D3139] hover:border-[#424934]" : "bg-[#1C1F26] border-[#2D3139]/60 opacity-75 hover:opacity-100"}`}
+                                                className={`w-full text-left rounded-lg p-3 border flex gap-2 transition-colors cursor-pointer ${notification.unread ? "bg-surface2 border-line hover:border-line-strong" : "bg-surface1 border-line/60 opacity-75 hover:opacity-100"}`}
                                             >
-                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" ? "text-[var(--primary-color)]" : notification.type === "deadline" ? "text-amber-400" : "text-[#8c947b]"}`}>
-                                                    {notification.type === "success" ? "check_circle" : notification.type === "deadline" ? "schedule" : notification.type === "reminder" ? "assignment" : "notifications_active"}
+                                                <span className={`material-symbols-outlined mt-0.5 text-sm ${notification.type === "success" || notification.type === "personal" ? "text-accent-ink" : notification.type === "deadline" ? "text-amber-400" : "text-muted"}`}>
+                                                    {notification.icon || (notification.type === "success" ? "check_circle" : notification.type === "deadline" ? "schedule" : notification.type === "reminder" ? "assignment" : "notifications_active")}
                                                 </span>
                                                 <div className="flex-1">
                                                     <div className="flex items-start justify-between gap-2">
                                                         <p className="text-sm text-white">{notification.title}</p>
                                                         {notification.unread && <span className="w-2 h-2 rounded-full bg-[var(--primary-color)] mt-1.5 flex-shrink-0" />}
                                                     </div>
-                                                    <p className="text-xs text-[#8c947b] mt-1">{notification.message}</p>
-                                                    <p className="text-[11px] text-[#6b7280] mt-2">{notification.time}</p>
+                                                    <p className="text-xs text-muted mt-1">{notification.message}</p>
+                                                    <p className="text-[11px] text-muted mt-2">{notification.time}</p>
                                                 </div>
                                             </button>
                                         ))}

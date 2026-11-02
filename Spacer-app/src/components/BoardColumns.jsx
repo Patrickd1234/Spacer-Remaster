@@ -50,7 +50,7 @@ export function BoardColumnHeader({
             <div className="flex items-center gap-sm min-w-0 flex-1">
                 {editable && (
                     <span
-                        className="material-symbols-outlined text-[16px] text-[#6c765c] cursor-grab opacity-0 group-hover/header:opacity-100 transition-opacity -ml-1"
+                        className="material-symbols-outlined text-[16px] text-faint cursor-grab opacity-0 group-hover/header:opacity-100 transition-opacity -ml-1"
                         title="Drag to reorder"
                         aria-hidden="true"
                     >
@@ -70,21 +70,21 @@ export function BoardColumnHeader({
                             if (e.key === "Escape") setIsEditing(false)
                         }}
                         aria-label="Column name"
-                        className="min-w-0 flex-1 bg-[#0F1115] border border-[var(--primary-color)] rounded-md px-2 py-0.5 text-[13px] font-bold text-white outline-none"
+                        className="min-w-0 flex-1 bg-canvas border border-accent-ink rounded-md px-2 py-0.5 text-[13px] font-bold text-white outline-none"
                     />
                 ) : editable ? (
                     <button
                         type="button"
                         onClick={startEditing}
                         title="Rename column"
-                        className="font-label-md text-label-md text-white font-bold truncate text-left hover:text-[var(--primary-color)] transition-colors cursor-text"
+                        className="font-label-md text-xs text-white font-bold truncate text-left hover:text-accent-ink transition-colors cursor-text"
                     >
                         {column.name}
                     </button>
                 ) : (
-                    <span className="font-label-md text-label-md text-white font-bold truncate">{column.name}</span>
+                    <span className="font-label-md text-xs text-white font-bold truncate">{column.name}</span>
                 )}
-                <span className="text-[10px] text-[#8c947b] bg-[#1C1F26] border border-[#2D3139]/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center shrink-0">{count}</span>
+                <span className="text-[10px] text-muted bg-surface1 border border-line/50 rounded-full px-[6px] py-[1px] min-w-[18px] text-center shrink-0">{count}</span>
             </div>
 
             {editable && (
@@ -95,25 +95,25 @@ export function BoardColumnHeader({
                         aria-haspopup="menu"
                         aria-expanded={menuOpen}
                         aria-label={`Options for ${column.name}`}
-                        className="material-symbols-outlined text-[18px] text-[#8c947b] hover:text-white rounded-md p-0.5 hover:bg-white/5 transition-colors cursor-pointer"
+                        className="material-symbols-outlined text-[18px] text-muted hover:text-white rounded-md p-0.5 hover:bg-white/5 transition-colors cursor-pointer"
                     >
                         more_horiz
                     </button>
                     {menuOpen && (
-                        <div role="menu" className="font-body-md reports-fade absolute right-0 top-full mt-1 z-30 w-44 rounded-xl border border-[#2D3139] bg-[#16191F] p-1 shadow-2xl shadow-black/40">
-                            <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#6c765c]">
+                        <div role="menu" className="font-body-md reports-fade absolute right-0 top-full mt-1 z-30 w-44 rounded-xl border border-line bg-panel p-1 shadow-2xl shadow-black/40">
+                            <p className="px-3 pt-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-faint">
                                 Status: {STATUS_LABEL[column.base_status]}
                             </p>
-                            <button type="button" role="menuitem" onClick={startEditing} className={`${menuItem} text-[#e0e5d0] hover:bg-white/5`}>
+                            <button type="button" role="menuitem" onClick={startEditing} className={`${menuItem} text-soft hover:bg-white/5`}>
                                 <span className="material-symbols-outlined text-[16px]" aria-hidden="true">edit</span>Rename
                             </button>
-                            <button type="button" role="menuitem" disabled={!canMoveLeft} onClick={() => { setMenuOpen(false); onMoveLeft() }} className={`${menuItem} text-[#e0e5d0] hover:bg-white/5`}>
+                            <button type="button" role="menuitem" disabled={!canMoveLeft} onClick={() => { setMenuOpen(false); onMoveLeft() }} className={`${menuItem} text-soft hover:bg-white/5`}>
                                 <span className="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>Move left
                             </button>
-                            <button type="button" role="menuitem" disabled={!canMoveRight} onClick={() => { setMenuOpen(false); onMoveRight() }} className={`${menuItem} text-[#e0e5d0] hover:bg-white/5`}>
+                            <button type="button" role="menuitem" disabled={!canMoveRight} onClick={() => { setMenuOpen(false); onMoveRight() }} className={`${menuItem} text-soft hover:bg-white/5`}>
                                 <span className="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_forward</span>Move right
                             </button>
-                            <div className="my-1 h-px bg-[#2D3139]" />
+                            <div className="my-1 h-px bg-line" />
                             <button
                                 type="button"
                                 role="menuitem"
@@ -142,7 +142,7 @@ const COLUMN_SUGGESTIONS = [
 ]
 
 const STATUS_OPTIONS = [
-    { value: "todo", label: "To do", dot: "bg-[#8c947b]", hint: "Cards here count as not started." },
+    { value: "todo", label: "To do", dot: "bg-muted", hint: "Cards here count as not started." },
     { value: "in_progress", label: "In progress", dot: "bg-[#3b82f6]", hint: "Cards here count as being worked on." },
     { value: "done", label: "Done", dot: "bg-[var(--primary-color)]", hint: "Cards here count as finished and never show as overdue." },
 ]
@@ -189,7 +189,7 @@ export function AddColumnTile({ columns, onAdd, saving }) {
             <button
                 type="button"
                 onClick={open}
-                className="flex-shrink-0 w-[280px] h-[52px] flex items-center justify-center gap-2 rounded-xl border border-dashed border-[#2D3139] text-[#8c947b] text-[13px] font-semibold hover:text-white hover:border-[var(--primary-color)] hover:bg-[rgba(var(--primary-color-rgb),0.05)] transition-colors cursor-pointer"
+                className="flex-shrink-0 w-[280px] h-[52px] flex items-center justify-center gap-2 rounded-xl border border-dashed border-line text-muted text-[13px] font-semibold hover:text-white hover:border-accent-ink hover:bg-[rgba(var(--primary-color-rgb),0.05)] transition-colors cursor-pointer"
             >
                 <span className="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>
                 Add column
@@ -202,14 +202,14 @@ export function AddColumnTile({ columns, onAdd, saving }) {
             onSubmit={submit}
             onKeyDown={(e) => { if (e.key === "Escape") close() }}
             aria-label="Add a column"
-            className="reports-fade flex-shrink-0 w-[300px] self-start rounded-xl border border-[#2D3139] bg-[#191c21] p-4 space-y-4 shadow-xl shadow-black/30"
+            className="reports-fade flex-shrink-0 w-[300px] self-start rounded-xl border border-line bg-raised p-4 space-y-4 shadow-xl shadow-black/30"
         >
             <div className="flex items-center justify-between">
                 <h3 className="text-[13px] font-bold text-white flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-[17px] text-[var(--primary-color)]" aria-hidden="true">view_column</span>
+                    <span className="material-symbols-outlined text-[17px] text-accent-ink" aria-hidden="true">view_column</span>
                     New column
                 </h3>
-                <button type="button" onClick={close} aria-label="Close" className="material-symbols-outlined text-[18px] text-[#8c947b] hover:text-white rounded-md p-0.5 hover:bg-white/5 cursor-pointer">
+                <button type="button" onClick={close} aria-label="Close" className="material-symbols-outlined text-[18px] text-muted hover:text-white rounded-md p-0.5 hover:bg-white/5 cursor-pointer">
                     close
                 </button>
             </div>
@@ -217,8 +217,8 @@ export function AddColumnTile({ columns, onAdd, saving }) {
             {/* Name */}
             <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                    <label htmlFor="new-column-name" className="text-[11px] font-semibold uppercase tracking-wider text-[#8c947b]">Name</label>
-                    <span className={`text-[10px] ${trimmed.length >= COLUMN_NAME_MAX ? "text-amber-400" : "text-[#6c765c]"}`}>{trimmed.length}/{COLUMN_NAME_MAX}</span>
+                    <label htmlFor="new-column-name" className="text-[11px] font-semibold uppercase tracking-wider text-muted">Name</label>
+                    <span className={`text-[10px] ${trimmed.length >= COLUMN_NAME_MAX ? "text-amber-400" : "text-faint"}`}>{trimmed.length}/{COLUMN_NAME_MAX}</span>
                 </div>
                 <input
                     id="new-column-name"
@@ -230,8 +230,8 @@ export function AddColumnTile({ columns, onAdd, saving }) {
                     placeholder="e.g. Review"
                     aria-invalid={isDuplicate}
                     aria-describedby={isDuplicate ? "new-column-name-error" : undefined}
-                    className={`w-full bg-[#0F1115] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#8c947b]/60 outline-none transition-colors ${
-                        isDuplicate ? "border-amber-500/60 focus:border-amber-500" : "border-[#2D3139] focus:border-[var(--primary-color)]"
+                    className={`w-full bg-canvas border rounded-lg px-3 py-2 text-[13px] text-white placeholder-muted/60 outline-none transition-colors ${
+                        isDuplicate ? "border-amber-500/60 focus:border-amber-500" : "border-line focus:border-accent-ink"
                     }`}
                 />
                 {isDuplicate && (
@@ -244,7 +244,7 @@ export function AddColumnTile({ columns, onAdd, saving }) {
                                 key={sug.name}
                                 type="button"
                                 onClick={() => { setName(sug.name); setBaseStatus(sug.baseStatus); inputRef.current?.focus() }}
-                                className="rounded-full border border-[#2D3139] px-2.5 py-0.5 text-[11px] text-[#8c947b] hover:text-white hover:border-[var(--primary-color)] transition-colors cursor-pointer"
+                                className="rounded-full border border-line px-2.5 py-0.5 text-[11px] text-muted hover:text-white hover:border-accent-ink transition-colors cursor-pointer"
                             >
                                 {sug.name}
                             </button>
@@ -255,7 +255,7 @@ export function AddColumnTile({ columns, onAdd, saving }) {
 
             {/* Status the column stands for */}
             <fieldset className="space-y-1.5">
-                <legend className="text-[11px] font-semibold uppercase tracking-wider text-[#8c947b] mb-1.5">Cards count as</legend>
+                <legend className="text-[11px] font-semibold uppercase tracking-wider text-muted mb-1.5">Cards count as</legend>
                 <div className="grid grid-cols-3 gap-1.5" role="radiogroup">
                     {STATUS_OPTIONS.map((opt) => {
                         const selected = baseStatus === opt.value
@@ -268,8 +268,8 @@ export function AddColumnTile({ columns, onAdd, saving }) {
                                 onClick={() => setBaseStatus(opt.value)}
                                 className={`flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors cursor-pointer ${
                                     selected
-                                        ? "border-[var(--primary-color)] bg-[rgba(var(--primary-color-rgb),0.1)] text-white"
-                                        : "border-[#2D3139] text-[#8c947b] hover:text-white hover:border-[#424934]"
+                                        ? "border-accent-ink bg-[rgba(var(--primary-color-rgb),0.1)] text-white"
+                                        : "border-line text-muted hover:text-white hover:border-line-strong"
                                 }`}
                             >
                                 <span className={`w-2 h-2 rounded-full ${opt.dot}`} aria-hidden="true" />
@@ -278,17 +278,17 @@ export function AddColumnTile({ columns, onAdd, saving }) {
                         )
                     })}
                 </div>
-                <p className="text-[11px] text-[#6c765c]">{statusHint}</p>
+                <p className="text-[11px] text-faint">{statusHint}</p>
             </fieldset>
 
             <div className="flex items-center gap-2 pt-1">
-                <button type="button" onClick={close} className="flex-1 py-2 rounded-lg border border-[#2D3139] text-[#8c947b] hover:text-white hover:bg-[#2D3139] text-[12px] font-semibold transition-colors cursor-pointer">
+                <button type="button" onClick={close} className="flex-1 py-2 rounded-lg border border-line text-muted hover:text-white hover:bg-line text-[12px] font-semibold transition-colors cursor-pointer">
                     {addedCount > 0 ? "Done" : "Cancel"}
                 </button>
                 <button
                     type="submit"
                     disabled={saving || !trimmed || isDuplicate}
-                    className="flex-1 py-2 rounded-lg bg-[var(--primary-color)] text-[#0F1115] text-[12px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
+                    className="flex-1 py-2 rounded-lg bg-[var(--primary-color)] text-on-accent text-[12px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
                 >
                     {saving
                         ? <><span className="material-symbols-outlined text-[15px] animate-spin" aria-hidden="true">progress_activity</span>Adding…</>
@@ -296,7 +296,7 @@ export function AddColumnTile({ columns, onAdd, saving }) {
                 </button>
             </div>
             {addedCount > 0 && (
-                <p role="status" className="text-[11px] text-[var(--primary-color)] -mt-2">
+                <p role="status" className="text-[11px] text-accent-ink -mt-2">
                     {addedCount} column{addedCount !== 1 ? "s" : ""} added. Add another or press Done.
                 </p>
             )}
@@ -316,7 +316,7 @@ export function DeleteColumnModal({ column, target, taskCount, deleting, error, 
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="delete-column-title"
-                className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                className="bg-surface1 border border-line rounded-2xl shadow-2xl w-full max-w-sm p-6"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
@@ -324,7 +324,7 @@ export function DeleteColumnModal({ column, target, taskCount, deleting, error, 
                 </div>
                 <h2 id="delete-column-title" className="text-white font-bold text-[18px] text-center mb-2">Delete this column?</h2>
                 <p className="text-white font-bold text-[15px] text-center mb-3">"{column.name}"</p>
-                <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                <p className="text-muted text-[12px] text-center mb-6">
                     {taskCount > 0
                         ? <>Its {taskCount} task{taskCount !== 1 ? "s" : ""} will move to <span className="text-white font-semibold">{target?.name}</span>. No tasks are deleted.</>
                         : "This column has no tasks. No tasks are deleted."}
@@ -335,7 +335,7 @@ export function DeleteColumnModal({ column, target, taskCount, deleting, error, 
                         type="button"
                         onClick={onCancel}
                         disabled={deleting}
-                        className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                        className="flex-1 py-2.5 rounded-xl border border-line text-muted hover:bg-line hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                     >
                         No, keep it
                     </button>
@@ -343,7 +343,7 @@ export function DeleteColumnModal({ column, target, taskCount, deleting, error, 
                         type="button"
                         onClick={onConfirm}
                         disabled={deleting}
-                        className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                        className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                     >
                         {deleting
                             ? <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Deleting…</>

@@ -81,7 +81,7 @@ export default function Announcements() {
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Filter announcements">
                     {FILTERS.map((f) => <Chip key={f.value} isActive={filter === f.value} onClick={() => setFilter(f.value)}>{f.label}</Chip>)}
                 </div>
-                <label className="flex items-center gap-2 text-xs text-[#8c947b]">
+                <label className="flex items-center gap-2 text-xs text-muted">
                     Sort
                     <Select className={`${COMPACT_SELECT_CLASS} py-1.5`} value={sort} onChange={(e) => setSort(e.target.value)}>
                         <option value="latest">Latest</option>
@@ -105,11 +105,11 @@ export default function Announcements() {
             )}
 
             <div className="grid grid-cols-12 gap-4">
-                <section className="col-span-12 lg:col-span-7 bg-[#14161b] border border-[#2D3139] rounded-xl p-3 space-y-1">
+                <section className="col-span-12 lg:col-span-7 bg-panel border border-line rounded-xl p-3 space-y-1">
                     <h2 className="text-sm font-semibold text-white px-2 py-1">
                         {filter === "all" ? "All Announcements" : FILTERS.find((f) => f.value === filter).label} ({visible.length})
                     </h2>
-                    {status === "loading" && <p className="text-sm text-[#8c947b] px-2 py-6">Loading…</p>}
+                    {status === "loading" && <p className="text-sm text-muted px-2 py-6">Loading…</p>}
                     {status === "ready" && visible.length === 0 && (
                         <PanelMessage icon="campaign" title="No announcements yet" text={canManage ? "Share news with everyone using Create Announcement." : "Announcements from your organization will appear here."} />
                     )}

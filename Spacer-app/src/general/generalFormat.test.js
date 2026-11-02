@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import {
     meetingPlatform, filterAnnouncements, sortAnnouncements, validateAnnouncement,
     upcomingEvents, eventsByDay, monthGrid, weekDays, dayKey, validateEvent,
-    filterPeople, sortPeople, scopeDirectory, initials, eventDayKey,
+    filterPeople, sortPeople, scopeDirectory, initials, eventDayKey, taskItem,
 } from "./generalFormat.js";
 
 test("meetingPlatform names known hosts and rejects non-https links", () => {
@@ -162,4 +162,15 @@ test("agendaItems keeps the period's items in time order", async () => {
         { id: "after", event_date: "2026-12-30" },
     ];
     assert.deepEqual(agendaItems(items, new Date(2026, 9, 28)).map((e) => e.id), ["soon", "late"]);
+});
+
+test("taskItem places a task as an all-day item on its due date", () => {
+    const task = { id: 7, title: "Ship it", description: "v1", due_date: "2026-11-03T17:00:00+00:00", status: "todo" };
+    const item = taskItem(task);
+    assert.equal(item.id, "task-7");
+    assert.equal(item.kind, "task");
+    assert.equal(item.event_date, "2026-11-03");
+    assert.equal(item.starts_at, null);
+    assert.equal(item.task, task);
+    assert.deepEqual([...eventsByDay([item]).keys()], ["2026-11-03"]);
 });

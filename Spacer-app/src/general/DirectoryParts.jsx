@@ -22,9 +22,9 @@ function TeamTags({ teams }) {
     return (
         <div className="flex flex-wrap gap-1">
             {teams.slice(0, MAX_TAGS).map((t) => (
-                <span key={t.id} className="px-2 py-0.5 rounded-md border border-[#2D3139] bg-[#191c21] text-[11px] text-[#c4c9b8]">{t.name}</span>
+                <span key={t.id} className="px-2 py-0.5 rounded-md border border-line bg-raised text-[11px] text-soft">{t.name}</span>
             ))}
-            {teams.length > MAX_TAGS && <span className="px-1 text-[11px] text-[#8c947b]">+{teams.length - MAX_TAGS}</span>}
+            {teams.length > MAX_TAGS && <span className="px-1 text-[11px] text-muted">+{teams.length - MAX_TAGS}</span>}
         </div>
     )
 }
@@ -55,16 +55,16 @@ export function FilterMenu({ teams, jobTitles, teamId, jobTitle, onTeamChange, o
                 onClick={() => setIsOpen((open) => !open)}
                 aria-haspopup="dialog"
                 aria-expanded={isOpen}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors cursor-pointer ${activeCount > 0 ? "border-[#aff82a]/60 text-white" : "border-[#2D3139] text-[#c4c9b8] hover:text-white hover:border-[#3d424d]"}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-colors cursor-pointer ${activeCount > 0 ? "border-accent-ink/60 text-white" : "border-line text-soft hover:text-white hover:border-line-strong"}`}
             >
                 <span className="material-symbols-outlined text-[18px]">filter_list</span>
                 Filters
                 {activeCount > 0 && (
-                    <span className="min-w-5 h-5 px-1 rounded-full bg-[#aff82a] text-[#1C1F26] text-[11px] font-semibold flex items-center justify-center">{activeCount}</span>
+                    <span className="min-w-5 h-5 px-1 rounded-full bg-accent text-on-accent text-[11px] font-semibold flex items-center justify-center">{activeCount}</span>
                 )}
             </button>
             {isOpen && (
-                <div role="dialog" aria-label="Filter people" className="font-body-md absolute right-0 top-full mt-2 z-30 w-72 bg-[#14161b] border border-[#2D3139] rounded-xl p-4 space-y-4 shadow-xl shadow-black/40">
+                <div role="dialog" aria-label="Filter people" className="font-body-md absolute right-0 top-full mt-2 z-30 w-72 bg-panel border border-line rounded-xl p-4 space-y-4 shadow-xl shadow-black/40">
                     <Field label="Team">
                         <Select className={INPUT_CLASS} value={teamId} onChange={(e) => onTeamChange(e.target.value)}>
                             <option value="all">All teams</option>
@@ -78,10 +78,10 @@ export function FilterMenu({ teams, jobTitles, teamId, jobTitle, onTeamChange, o
                         </Select>
                     </Field>
                     <div className="flex justify-between items-center pt-1">
-                        <button type="button" onClick={onClear} disabled={activeCount === 0} className="text-xs text-[#8c947b] hover:text-white disabled:opacity-40 disabled:hover:text-[#8c947b] cursor-pointer disabled:cursor-default">
+                        <button type="button" onClick={onClear} disabled={activeCount === 0} className="text-xs text-muted hover:text-white disabled:opacity-40 disabled:hover:text-muted cursor-pointer disabled:cursor-default">
                             Clear filters
                         </button>
-                        <button type="button" onClick={() => setIsOpen(false)} className="text-xs font-medium text-[#aff82a] hover:underline cursor-pointer">Done</button>
+                        <button type="button" onClick={() => setIsOpen(false)} className="text-xs font-medium text-accent-ink hover:underline cursor-pointer">Done</button>
                     </div>
                 </div>
             )}
@@ -95,15 +95,15 @@ export function ActiveFilters({ filters, onClearAll }) {
     return (
         <div className="flex flex-wrap items-center gap-2">
             {filters.map((f) => (
-                <span key={f.key} className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-[#aff82a]/10 border border-[#aff82a]/30 text-xs text-[#aff82a]">
+                <span key={f.key} className="inline-flex items-center gap-1 pl-3 pr-1.5 py-1 rounded-full bg-accent/10 border border-accent-ink/30 text-xs text-accent-ink">
                     {f.label}
-                    <button type="button" onClick={f.onRemove} aria-label={`Remove filter ${f.label}`} className="flex items-center rounded-full hover:bg-[#aff82a]/20 cursor-pointer">
+                    <button type="button" onClick={f.onRemove} aria-label={`Remove filter ${f.label}`} className="flex items-center rounded-full hover:bg-accent/20 cursor-pointer">
                         <span className="material-symbols-outlined text-[14px]">close</span>
                     </button>
                 </span>
             ))}
             {filters.length > 1 && (
-                <button type="button" onClick={onClearAll} className="text-xs text-[#8c947b] hover:text-white cursor-pointer">Clear all</button>
+                <button type="button" onClick={onClearAll} className="text-xs text-muted hover:text-white cursor-pointer">Clear all</button>
             )}
         </div>
     )
@@ -115,12 +115,12 @@ export function PersonCard({ person, isSelected, onOpen }) {
             type="button"
             onClick={onOpen}
             aria-current={isSelected ? "true" : undefined}
-            className={`w-full text-left p-4 rounded-xl border bg-[#14161b] transition-colors cursor-pointer flex flex-col items-start gap-2 ${isSelected ? "border-[#aff82a]/60" : "border-[#2D3139] hover:border-[#3d424d]"}`}
+            className={`w-full text-left p-4 rounded-xl border bg-panel transition-colors cursor-pointer flex flex-col items-start gap-2 ${isSelected ? "border-accent-ink/60" : "border-line hover:border-line-strong"}`}
         >
             <Avatar name={person.name} url={person.avatarUrl} size="lg" />
             <div className="min-w-0 w-full">
                 <p className="text-sm font-semibold text-white truncate">{person.name}</p>
-                <p className="text-xs text-[#8c947b] truncate">{person.job_title || "No title yet"}</p>
+                <p className="text-xs text-muted truncate">{person.job_title || "No title yet"}</p>
             </div>
             <TeamTags teams={person.teams} />
         </button>
@@ -133,12 +133,12 @@ export function PersonRow({ person, isSelected, onOpen }) {
             type="button"
             onClick={onOpen}
             aria-current={isSelected ? "true" : undefined}
-            className={`w-full text-left px-4 py-3 flex items-center gap-3 border-b border-[#2D3139] last:border-b-0 transition-colors cursor-pointer ${isSelected ? "bg-[#191c21]" : "hover:bg-[#191c21]"}`}
+            className={`w-full text-left px-4 py-3 flex items-center gap-3 border-b border-line last:border-b-0 transition-colors cursor-pointer ${isSelected ? "bg-raised" : "hover:bg-raised"}`}
         >
             <Avatar name={person.name} url={person.avatarUrl} />
             <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-white truncate">{person.name}</p>
-                <p className="text-xs text-[#8c947b] truncate">{person.job_title || "No title yet"}</p>
+                <p className="text-xs text-muted truncate">{person.job_title || "No title yet"}</p>
             </div>
             <div className="hidden md:block"><TeamTags teams={person.teams} /></div>
         </button>
@@ -147,15 +147,15 @@ export function PersonRow({ person, isSelected, onOpen }) {
 
 function DrawerSection({ title, children }) {
     return (
-        <section className="space-y-2 pt-4 border-t border-[#2D3139]">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-[#8c947b]">{title}</h3>
+        <section className="space-y-2 pt-4 border-t border-line">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
             {children}
         </section>
     )
 }
 
 function InfoLine({ icon, children }) {
-    return <p className="flex items-center gap-2 text-sm text-[#c4c9b8] min-w-0"><span className="material-symbols-outlined text-[16px] text-[#8c947b]">{icon}</span><span className="truncate">{children}</span></p>
+    return <p className="flex items-center gap-2 text-sm text-soft min-w-0"><span className="material-symbols-outlined text-[16px] text-muted">{icon}</span><span className="truncate">{children}</span></p>
 }
 
 // Right-side profile drawer. Shows only what the viewer's access returns.
@@ -171,16 +171,16 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
     }, [onClose])
 
     return (
-        <aside aria-label={`${person.name}'s profile`} className="bg-[#14161b] border border-[#2D3139] rounded-xl p-5 space-y-4 lg:sticky lg:top-20">
+        <aside aria-label={`${person.name}'s profile`} className="bg-panel border border-line rounded-xl p-5 space-y-4 lg:sticky lg:top-20">
             <div className="flex items-start justify-between">
                 <Avatar name={person.name} url={person.avatarUrl} size="lg" />
-                <button type="button" onClick={onClose} aria-label="Close profile" className="text-[#8c947b] hover:text-white cursor-pointer">
+                <button type="button" onClick={onClose} aria-label="Close profile" className="text-muted hover:text-white cursor-pointer">
                     <span className="material-symbols-outlined">close</span>
                 </button>
             </div>
             <div>
                 <h2 className="text-lg font-semibold text-white">{person.name}</h2>
-                <p className="text-sm text-[#8c947b]">{person.job_title || "No title yet"}</p>
+                <p className="text-sm text-muted">{person.job_title || "No title yet"}</p>
             </div>
             <TeamTags teams={person.teams} />
             <div className="flex gap-2">
@@ -190,7 +190,7 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
             </div>
 
             <DrawerSection title="About">
-                {person.description && <p className="text-sm text-[#c4c9b8] whitespace-pre-line">{person.description}</p>}
+                {person.description && <p className="text-sm text-soft whitespace-pre-line">{person.description}</p>}
                 <InfoLine icon="mail"><a href={`mailto:${person.email}`} className="hover:text-white hover:underline">{person.email}</a></InfoLine>
                 {person.location && <InfoLine icon="location_on">{person.location}</InfoLine>}
                 {time && <InfoLine icon="schedule">Local time {time}</InfoLine>}
@@ -199,9 +199,9 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
             {person.teams.length > 0 && (
                 <DrawerSection title={`Team Spaces (${person.teams.length})`}>
                     {person.teams.map((t) => (
-                        <p key={t.id} className="flex items-center justify-between text-sm text-[#c4c9b8]">
+                        <p key={t.id} className="flex items-center justify-between text-sm text-soft">
                             <span className="truncate">{t.name}</span>
-                            <span className="text-[11px] text-[#8c947b]">{ROLE_NAMES[t.role] || t.role}</span>
+                            <span className="text-[11px] text-muted">{ROLE_NAMES[t.role] || t.role}</span>
                         </p>
                     ))}
                 </DrawerSection>
@@ -209,9 +209,9 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
 
             <DrawerSection title="Role & Reporting">
                 <dl className="grid grid-cols-[100px_1fr] gap-y-1.5 text-sm">
-                    <dt className="text-[#8c947b]">Role</dt><dd className="text-[#c4c9b8] truncate">{person.job_title || "—"}</dd>
-                    <dt className="text-[#8c947b]">Reports to</dt>
-                    <dd className="text-[#c4c9b8] truncate">
+                    <dt className="text-muted">Role</dt><dd className="text-soft truncate">{person.job_title || "—"}</dd>
+                    <dt className="text-muted">Reports to</dt>
+                    <dd className="text-soft truncate">
                         {canSetManager ? (
                             <Select
                                 aria-label={`Who ${person.name} reports to`}
@@ -224,7 +224,7 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                             </Select>
                         ) : (manager?.name || "—")}
                     </dd>
-                    <dt className="text-[#8c947b]">Department</dt><dd className="text-[#c4c9b8] truncate">{person.teams[0]?.name || "—"}</dd>
+                    <dt className="text-muted">Department</dt><dd className="text-soft truncate">{person.teams[0]?.name || "—"}</dd>
                 </dl>
             </DrawerSection>
         </aside>
@@ -269,7 +269,7 @@ export function EditProfileForm({ person, onSave, onClose }) {
         <Modal title="Edit your profile" onClose={onClose}>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Field label="Photo" hint="JPG, PNG, WebP or GIF, up to 5 MB.">
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatar} className="text-xs text-[#c4c9b8]" />
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatar} className="text-xs text-soft" />
                 </Field>
                 <Field label="Name"><input className={INPUT_CLASS} value={form.name} onChange={set("name")} maxLength={100} required /></Field>
                 <Field label="Job title"><input className={INPUT_CLASS} value={form.job_title} onChange={set("job_title")} maxLength={100} placeholder="e.g. Product Designer" /></Field>

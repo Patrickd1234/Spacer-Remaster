@@ -4,60 +4,22 @@ import { statusFromSubtasks } from "./taskStatus"
 import { useRole } from "./RoleContext"
 import { createEvent } from "./general/generalData"
 import {
-    dayKey, startOfDay, weekDays, eventsByDay, upcomingEvents, shiftCursor, agendaItems,
+    dayKey, startOfDay, weekDays, eventsByDay, upcomingEvents, shiftCursor, agendaItems, taskItem,
 } from "./general/generalFormat"
-import { GeneralShell, PageHeading, PrimaryButton, DateBadge } from "./general/GeneralParts"
+import { GeneralShell, PageHeading, PrimaryButton } from "./general/GeneralParts"
 import { MonthView, WeekView, AgendaView, MiniMonth, EventChip, EventListItem, EventDetail, EventForm, CalendarToolbar } from "./general/CalendarParts"
 import { Panel } from "./components/DashboardParts"
 import { DayScheduleDrawer, TaskDetailsDrawer } from "./components/CalendarTaskDrawers"
+import { TaskChip, TaskRow } from "./components/CalendarTaskItems"
 
 const UPCOMING_DAYS = 30
 const UPCOMING_LIMIT = 6
 
-// A task due on a day, shaped like an all-day calendar item so the shared views can place it
-const taskItem = (task) => ({
-    id: `task-${task.id}`,
-    kind: "task",
-    title: task.title,
-    description: task.description,
-    event_date: task.due_date.slice(0, 10),
-    starts_at: null,
-    task,
-})
-
-function TaskChip({ task, onOpen }) {
-    const isDone = task.status === "done"
-    return (
-        <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onOpen(task) }}
-            title={`Task: ${task.title}`}
-            className={`w-full text-left px-1.5 py-1 rounded-md border text-[11px] leading-tight truncate cursor-pointer flex items-center gap-1 ${isDone ? "bg-green-500/10 text-green-400 border-green-500/30 line-through" : "bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30"}`}
-        >
-            <span className="material-symbols-outlined text-[12px] shrink-0">{isDone ? "task_alt" : "radio_button_unchecked"}</span>
-            <span className="truncate">{task.title}</span>
-        </button>
-    )
-}
-
-function TaskRow({ item, onOpen }) {
-    return (
-        <button type="button" onClick={() => onOpen(item.task)} className="w-full text-left flex items-center gap-3 p-2 rounded-lg hover:bg-[#191c21] cursor-pointer">
-            <DateBadge event={item} />
-            <div className="min-w-0 flex-1">
-                <p className={`text-sm font-medium truncate ${item.task.status === "done" ? "text-[#8c947b] line-through" : "text-white"}`}>{item.title}</p>
-                <p className="text-[11px] text-[#8c947b]">Task due</p>
-            </div>
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md border text-[11px] font-medium bg-[#aff82a]/10 text-[#aff82a] border-[#aff82a]/30">Task</span>
-        </button>
-    )
-}
-
 function Legend() {
     return (
         <Panel title="Legend">
-            <p className="flex items-center gap-2 text-xs text-[#c4c9b8]"><span className="w-3 h-3 rounded-sm bg-[#aff82a]/30 border border-[#aff82a]/50" />Your tasks (by due date)</p>
-            <p className="flex items-center gap-2 text-xs text-[#c4c9b8]"><span className="w-3 h-3 rounded-sm bg-blue-500/30 border border-blue-500/50" />Company events (coloured by category)</p>
+            <p className="flex items-center gap-2 text-xs text-soft"><span className="w-3 h-3 rounded-sm bg-accent/30 border border-accent-ink/50" />Your tasks (by due date)</p>
+            <p className="flex items-center gap-2 text-xs text-soft"><span className="w-3 h-3 rounded-sm bg-blue-500/30 border border-blue-500/50" />Company events (coloured by category)</p>
         </Panel>
     )
 }
@@ -255,7 +217,7 @@ export default function CalendarView() {
                 </section>
 
                 <aside className="col-span-12 xl:col-span-3 space-y-4">
-                    <section className="bg-[#14161b] border border-[#2D3139] rounded-xl p-4">
+                    <section className="bg-panel border border-line rounded-xl p-4">
                         <MiniMonth
                             cursor={miniCursor}
                             todayKey={todayKey}
@@ -265,7 +227,7 @@ export default function CalendarView() {
                     </section>
                     <Panel title="Coming Up">
                         {upcoming.length === 0
-                            ? <p className="text-xs text-[#8c947b]">Nothing in the next {UPCOMING_DAYS} days.</p>
+                            ? <p className="text-xs text-muted">Nothing in the next {UPCOMING_DAYS} days.</p>
                             : upcoming.map(renderRow)}
                     </Panel>
                     <Legend />

@@ -43,9 +43,10 @@ function PasswordGate({ needsPassword, email, onPasswordSet, children }) {
   return children
 }
 
+// A CSS ring, not an icon: the icon font may not have loaded yet at startup
 const PageLoader = () => (
-  <div className="bg-background text-on-background min-h-screen flex items-center justify-center">
-    <span className="material-symbols-outlined animate-spin text-4xl text-primary-fixed">progress_activity</span>
+  <div className="bg-canvas min-h-screen flex items-center justify-center">
+    <span role="status" aria-label="Loading" className="w-9 h-9 rounded-full border-[3px] border-line border-t-accent animate-spin" />
   </div>
 )
 

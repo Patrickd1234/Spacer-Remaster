@@ -91,23 +91,21 @@ serve(async (req: Request) => {
         const inviterName = inviterProfile.name || inviterProfile.email || "A Spacer admin"
 
         // ── Permission check (server-side, can't be bypassed from the client).
-        //    Scoped to this org by the check above: a super admin of another
-        //    organization never gets this far.
-        const { data: callerMemberships, error: memErr } = await admin
-            .from("memberships")
-            .select("role, team_space_id")
-            .eq("user_id", callerId)
+        //    Org admins (a super admin, or an admin with no department) are
+        //    asked as the CALLER through is_admin_of_org(), the same rule the
+        //    memberships policies use; department admins by their membership.
+        const [{ data: isOrgAdmin, error: orgAdminErr }, { data: callerMemberships, error: memErr }] = await Promise.all([
+            callerClient.rpc("is_admin_of_org", { p_org_id: organization_id }),
+            admin.from("memberships").select("role, team_space_id").eq("user_id", callerId),
+        ])
 
-        if (memErr) return json({ error: "Could not verify permissions" }, 500)
+        if (orgAdminErr || memErr) return json({ error: "Could not verify permissions" }, 500)
 
-        const isSuperAdmin = (callerMemberships || []).some(
-            (m: { role: string; team_space_id: string }) => m.role === "super_admin" || m.role === "superadmin"
-        )
         const isAdminOnThisTeam = (callerMemberships || []).some(
             (m: { role: string; team_space_id: string }) => m.team_space_id === team_space_id && m.role === "admin"
         )
 
-        if (!isSuperAdmin && !isAdminOnThisTeam) {
+        if (!isOrgAdmin && !isAdminOnThisTeam) {
             return json({ error: "Only admins or super admins can add members to this department." }, 403)
         }
 

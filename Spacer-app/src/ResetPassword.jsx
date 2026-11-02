@@ -122,16 +122,16 @@ function ResetPassword() {
     }
 
     return (
-        <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-6">
+        <div className="min-h-screen bg-panel flex items-center justify-center px-6">
             <div className="w-full max-w-[420px]">
                 <div className="w-10 h-10 mb-6 flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-[#aff82a] text-[36px]">token</span>
+                    <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
                 </div>
 
                 {status === "checking" && (
                     <div className="text-center py-10 space-y-3">
-                        <span className="material-symbols-outlined animate-spin text-4xl text-[#aff82a]">progress_activity</span>
-                        <p className="text-[#8c947b] text-sm">Verifying password reset request…</p>
+                        <span className="material-symbols-outlined animate-spin text-4xl text-accent-ink">progress_activity</span>
+                        <p className="text-muted text-sm">Verifying password reset request…</p>
                     </div>
                 )}
 
@@ -141,19 +141,19 @@ function ResetPassword() {
                             <span className="material-symbols-outlined text-[32px]">link_off</span>
                         </div>
                         <h2 className="text-2xl font-bold text-white">Invalid or Expired Link</h2>
-                        <p className="text-[#8c947b] text-sm leading-relaxed">
+                        <p className="text-muted text-sm leading-relaxed">
                             {errorMsg || "This password reset link is invalid or has expired. Please request a new link to reset your password."}
                         </p>
                         <div className="pt-2 flex flex-col gap-2">
                             <Link
                                 to="/forgot-password"
-                                className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[14px] py-3 rounded-xl transition-all inline-block"
+                                className="w-full bg-accent hover:bg-accent-hover text-on-accent font-bold text-[14px] py-3 rounded-xl transition-all inline-block"
                             >
                                 Request New Reset Link
                             </Link>
                             <Link
                                 to="/login"
-                                className="text-sm text-[#8c947b] hover:text-white transition-colors py-2"
+                                className="text-sm text-muted hover:text-white transition-colors py-2"
                             >
                                 Back to Login
                             </Link>
@@ -165,7 +165,7 @@ function ResetPassword() {
                     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200">
                         <div className="text-center space-y-2">
                             <h2 className="text-[28px] font-bold text-white tracking-tight">Set New Password</h2>
-                            <p className="text-[#8c947b] text-[14px] leading-relaxed">
+                            <p className="text-muted text-[14px] leading-relaxed">
                                 Enter a new secure password for{" "}
                                 <span className="text-white font-medium">{email || "your account"}</span>.
                             </p>
@@ -177,7 +177,7 @@ function ResetPassword() {
                                     type={showPassword ? "text" : "password"}
                                     id="new-password"
                                     placeholder="New password (min. 8 characters)"
-                                    className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                    className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
@@ -187,7 +187,7 @@ function ResetPassword() {
                                     type="button"
                                     aria-label="Toggle password visibility"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
+                                    className="absolute right-4 top-[14px] text-muted hover:text-white transition-colors"
                                 >
                                     <span className="material-symbols-outlined text-[20px]">
                                         {showPassword ? "visibility_off" : "visibility"}
@@ -200,7 +200,7 @@ function ResetPassword() {
                                     type={showPassword ? "text" : "password"}
                                     id="confirm-password"
                                     placeholder="Confirm new password"
-                                    className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                                    className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                                     value={confirmPassword}
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
@@ -217,7 +217,7 @@ function ResetPassword() {
                             <button
                                 type="submit"
                                 disabled={submitting || !password || !confirmPassword}
-                                className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+                                className="w-full bg-accent hover:bg-accent-hover text-on-accent font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed mt-2"
                             >
                                 {submitting ? (
                                     <>
@@ -234,11 +234,11 @@ function ResetPassword() {
 
                 {status === "success" && (
                     <div className="text-center py-10 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-                        <div className="w-14 h-14 rounded-2xl bg-[#aff82a]/10 border border-[#aff82a]/30 flex items-center justify-center text-[#aff82a] mx-auto">
+                        <div className="w-14 h-14 rounded-2xl bg-accent/10 border border-accent-ink/30 flex items-center justify-center text-accent-ink mx-auto">
                             <span className="material-symbols-outlined text-[32px]">check_circle</span>
                         </div>
                         <h2 className="text-2xl font-bold text-white">Password Updated!</h2>
-                        <p className="text-[#8c947b] text-sm">
+                        <p className="text-muted text-sm">
                             Your password has been changed successfully. Redirecting you to sign in…
                         </p>
                     </div>

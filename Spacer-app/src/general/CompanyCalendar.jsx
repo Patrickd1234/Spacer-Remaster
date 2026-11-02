@@ -108,7 +108,7 @@ export default function CompanyCalendar() {
                 </section>
 
                 <aside className="col-span-12 xl:col-span-3 space-y-4">
-                    <section className="bg-[#14161b] border border-[#2D3139] rounded-xl p-4">
+                    <section className="bg-panel border border-line rounded-xl p-4">
                         <MiniMonth
                             cursor={miniCursor}
                             todayKey={todayKey}
@@ -118,11 +118,11 @@ export default function CompanyCalendar() {
                     </section>
                     <Panel title="Upcoming Events">
                         {upcoming.length === 0
-                            ? <p className="text-xs text-[#8c947b]">Nothing in the next {UPCOMING_DAYS} days.</p>
+                            ? <p className="text-xs text-muted">Nothing in the next {UPCOMING_DAYS} days.</p>
                             : upcoming.map((e) => <EventListItem key={e.id} event={e} onOpen={setOpenEvent} />)}
                     </Panel>
                     <Panel title="Calendar Integrations">
-                        <p className="text-xs text-[#8c947b]">Sync with your external calendar to keep all your events in one place.</p>
+                        <p className="text-xs text-muted">Sync with your external calendar to keep all your events in one place.</p>
                         <SecondaryButton icon="link" disabled title="Coming soon">Connect Calendar (coming soon)</SecondaryButton>
                     </Panel>
                 </aside>

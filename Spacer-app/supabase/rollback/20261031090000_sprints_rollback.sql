@@ -1,16 +1,21 @@
--- Rollback for 20261031090000_sprints.sql
--- Removes sprints and the task columns that belong to them (sprint_id,
--- story_points, completed_at), and restores the activity trigger that logs
--- every task update. Sprint history and story points are lost.
+-- Undo 20261031090000_sprints.sql
+-- Deploy a front end without the Sprint tab first: it reads these columns.
+-- Sprint history and story points are lost.
 
-revoke execute on function public.complete_sprint(uuid, uuid, text, text, text) from authenticated;
-revoke execute on function public.start_sprint(uuid) from authenticated;
 drop function if exists public.complete_sprint(uuid, uuid, text, text, text);
 drop function if exists public.start_sprint(uuid);
 
 drop trigger if exists tasks_sprint_rules on public.tasks;
 drop function if exists public.tasks_sprint_rules();
 
+alter table public.tasks
+  drop column if exists completed_at,
+  drop column if exists story_points,
+  drop column if exists sprint_id;
+
+drop table if exists public.sprints;
+
+-- The activity logger as it was: every task update makes an entry
 create or replace function public.tasks_log_activity()
 returns trigger
 language plpgsql
@@ -28,11 +33,3 @@ begin
   return new;
 end;
 $$;
-
-drop index if exists public.tasks_sprint_id_idx;
-alter table public.tasks
-  drop column if exists sprint_id,
-  drop column if exists story_points,
-  drop column if exists completed_at;
-
-drop table if exists public.sprints;

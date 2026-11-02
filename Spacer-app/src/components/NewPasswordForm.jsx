@@ -36,7 +36,7 @@ function NewPasswordForm({ submitLabel, onSuccess }) {
                     type={showPassword ? "text" : "password"}
                     placeholder="Create a password"
                     autoComplete="new-password"
-                    className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                    className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -45,7 +45,7 @@ function NewPasswordForm({ submitLabel, onSuccess }) {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="absolute right-4 top-[14px] text-[#8c947b] hover:text-white transition-colors"
+                    className="absolute right-4 top-[14px] text-muted hover:text-white transition-colors"
                 >
                     <span className="material-symbols-outlined text-[20px]">
                         {showPassword ? "visibility_off" : "visibility"}
@@ -57,7 +57,7 @@ function NewPasswordForm({ submitLabel, onSuccess }) {
                 type={showPassword ? "text" : "password"}
                 placeholder="Confirm password"
                 autoComplete="new-password"
-                className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-[#8c947b] focus:outline-none transition-colors"
+                className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -73,7 +73,7 @@ function NewPasswordForm({ submitLabel, onSuccess }) {
             <button
                 type="submit"
                 disabled={submitting}
-                className="w-full bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                className="w-full bg-accent hover:bg-accent-hover text-on-accent font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
             >
                 {submitting ? (
                     <>

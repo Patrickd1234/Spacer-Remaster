@@ -38,14 +38,12 @@ create table public.sprints (
 );
 
 create index sprints_project_id_idx on public.sprints (project_id);
-
 create unique index sprints_one_active_per_project on public.sprints (project_id) where status = 'active';
 
 create trigger sprints_set_updated_at before update on public.sprints
   for each row execute function public.set_updated_at();
 
 alter table public.sprints enable row level security;
-
 revoke all on public.sprints from anon;
 
 create policy mfa_required on public.sprints as restrictive for all to authenticated
@@ -262,9 +260,6 @@ end;
 $$;
 
 revoke execute on function public.start_sprint(uuid) from public, anon;
-
 revoke execute on function public.complete_sprint(uuid, uuid, text, text, text) from public, anon;
-
 grant execute on function public.start_sprint(uuid) to authenticated;
-
 grant execute on function public.complete_sprint(uuid, uuid, text, text, text) to authenticated;

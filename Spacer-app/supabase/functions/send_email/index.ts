@@ -130,6 +130,25 @@ serve(async (req: Request) => {
                 break;
             }
 
+            // Queued once a day by public.queue_due_soon_reminders() for tasks due today or tomorrow
+            case "deadline_incoming": {
+                const task_name = payload.task_name ?? "A task";
+                const due_label = payload.due_label === "today" ? "today" : "tomorrow";
+                const isId = (value?: string) => /^[0-9a-f-]{36}$/i.test(value ?? "");
+                const taskLink = isId(payload.project_id) && isId(payload.task_id)
+                    ? `${SITE_URL.replace(/\/$/, "")}/project_page/${payload.project_id}?task_id=${payload.task_id}`
+                    : SITE_URL;
+                subject = `${task_name} is due ${due_label}`;
+                html = `
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; line-height: 1.5; padding: 20px;">
+                    <h2>Deadline coming up</h2>
+                    <p><strong>${task_name}</strong>${payload.project_name ? ` in <strong>${payload.project_name}</strong>` : ""} is due <strong>${due_label}</strong>${payload.due_date ? ` (${payload.due_date})` : ""}.</p>
+                    <p><a href="${taskLink}" style="display: inline-block; background-color: #aff82a; color: #1C1F26; font-weight: bold; padding: 10px 18px; border-radius: 8px; text-decoration: none;">Open the task</a></p>
+                    <p style="color: #666; font-size: 13px;">You get this because the task is assigned to you. Turn these emails off in Settings → Notifications.</p>
+                </div>`;
+                break;
+            }
+
             case "org_invite": {
                 const orgName = payload.organization_name ?? "an organization";
                 const spaceName = payload.team_space_name ?? "a team space";

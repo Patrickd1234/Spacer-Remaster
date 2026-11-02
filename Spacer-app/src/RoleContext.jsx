@@ -4,7 +4,7 @@ import { supabase, getSessionUser } from './supabase';
 const RoleContext = createContext();
 
 const isSuperAdminRole = (role) => role === "super_admin" || role === "superadmin";
-const ROLE_RANK = { super_admin: 3, superadmin: 3, admin: 2 };
+const ROLE_RANK = { super_admin: 4, superadmin: 4, admin: 3, team_lead: 2 };
 const roleRank = (role) => ROLE_RANK[role] ?? 1;
 
 // The user's chosen department is remembered per user in this browser
@@ -121,7 +121,7 @@ export function RoleProvider({ children }) {
 
         fetchRole();
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
             if (event === 'SIGNED_IN') {
                 fetchRole();
             } else if (event === 'SIGNED_OUT') {
@@ -173,6 +173,7 @@ export function RoleProvider({ children }) {
     );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useRole() {
     return useContext(RoleContext);
 }
