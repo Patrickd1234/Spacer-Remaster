@@ -588,6 +588,24 @@ function ProjectPage() {
         return null
     }
 
+    // Adds someone to the project and logs it. Resolves to the error, or null once
+    // the member list is refreshed (project_members_insert: project managers only)
+    const addProjectMember = async (user) => {
+        const { error } = await supabase.from("project_members").insert({ project_id, user_id: user.id })
+        if (error) {
+            console.error("Error adding project member:", error)
+            return error
+        }
+        await fetchProjectMembers()
+        const sessionUser = await getSessionUser()
+        await supabase.from("activity_log").insert({
+            entity_type: "member", entity_id: user.id,
+            actor_id: sessionUser?.id, action: "member_added",
+            new_state: { project_id, name: user.name }
+        })
+        return null
+    }
+
     // App.jsx keys this page by project_id, so switching projects starts from
     // fresh state instead of resetting it here
     useEffect(() => {
@@ -1542,6 +1560,7 @@ function ProjectPage() {
                             currentUserId={currentUserId}
                             canManage={canDeleteProject === true}
                             onRemove={removeProjectMember}
+                            onAdd={addProjectMember}
                         />
                     )}
 
@@ -2017,21 +2036,7 @@ function ProjectPage() {
                 ])
                 const available = orgUsers.filter(u => !alreadyIn.has(u.id))
 
-                const addMember = async (user) => {
-                    const { error } = await supabase.from("project_members").insert({
-                        project_id,
-                        user_id: user.id,
-                    })
-                    if (!error) {
-                        fetchProjectMembers()
-                        const userData = { user: await getSessionUser() }
-                        await supabase.from("activity_log").insert({
-                            entity_type: "member", entity_id: user.id,
-                            actor_id: userData?.user?.id, action: "member_added",
-                            new_state: { project_id, name: user.name }
-                        })
-                    }
-                }
+                const addMember = (user) => addProjectMember(user)
 
                 return (
                     <div
