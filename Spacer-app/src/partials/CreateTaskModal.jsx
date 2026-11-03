@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
+import Select from "../components/Select";
+
+const byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
 
 const STATUS_OPTIONS = [
     { value: "todo", label: "To-do" },
@@ -122,6 +125,8 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
     }, [projectId, selectedTeamSpaceId]);
 
     useEffect(() => {
+        // A slower, older request must not replace the list for the current choice
+        let active = true;
         const fetchTeamMembers = async () => {
             let activeTeamSpaceId = teamSpaceId || selectedTeamSpaceId;
 
@@ -142,15 +147,15 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                         .from("users")
                         .select("id, name")
                         .eq("organization_id", organizationId);
-                    if (data) {
-                        setUsers(data);
+                    if (data && active) {
+                        setUsers([...data].sort(byName));
                     }
                 }
                 return;
             }
 
             // Assignable = the project's department members + people added to this project directly
-            const [{ data: deptMembers }, { data: projectMembers }] = await Promise.all([
+            const [{ data: deptMembers, error: deptError }, { data: projectMembers, error: projectError }] = await Promise.all([
                 supabase
                     .from("memberships")
                     .select("user:users(id, name)")
@@ -163,14 +168,19 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     : Promise.resolve({ data: [] }),
             ]);
 
+            if (deptError) console.error("Loading department members for task modal failed:", deptError);
+            if (projectError) console.error("Loading project members for task modal failed:", projectError);
+            if (!active) return;
+
             const byId = new Map();
             [...(deptMembers || []), ...(projectMembers || [])]
                 .map(m => m.user)
                 .filter(Boolean)
                 .forEach(u => byId.set(u.id, u));
-            setUsers([...byId.values()]);
+            setUsers([...byId.values()].sort(byName));
         };
         fetchTeamMembers();
+        return () => { active = false; };
     }, [teamSpaceId, selectedTeamSpaceId, selectedProjectId, organizationId]);
 
     const chooseTeamSpace = (id) => {
@@ -221,24 +231,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
             return;
         }
 
-        try {
-            await supabase.from("activity_log").insert({
-                entity_type: "task",
-                entity_id: data.id,
-                actor_id: userData?.user?.id || null,
-                action: "created",
-                new_state: {
-                    project_id: finalProjectId,
-                    title: data.title,
-                    assignee_id: assigneeId || null,
-                    priority,
-                    status
-                }
-            });
-        } catch (logError) {
-            console.error("Error logging task creation:", logError);
-        }
-
+        // No activity entry here: the database logs every new task itself (tasks_log_activity)
         onCreated?.(data);
         onClose();
     };
@@ -307,13 +300,16 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                     </div>
                     <div>
                         <Label>Assignee</Label>
-                        <CustomDropdown
-                            options={[{ value: "", label: "Unassigned" }, ...users.map(u => ({ value: u.id, label: u.name }))]}
+                        {/* The shared Select floats above the page, so a long list isn't cut off by this window or a side panel */}
+                        <Select
+                            aria-label="Assignee"
                             value={assigneeId}
-                            onChange={setAssigneeId}
-                            placeholder="Assign to someone"
-                            icon="person"
-                        />
+                            onChange={(e) => setAssigneeId(e.target.value)}
+                            className={fieldClass}
+                        >
+                            <option value="">Unassigned</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        </Select>
                     </div>
                     <div>
                         <Label htmlFor="task-due-date">Due Date</Label>
