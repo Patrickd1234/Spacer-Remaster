@@ -463,3 +463,190 @@ body {
     animation: none;
   }
 }
+
+/* Orbit board columns: a quiet space backdrop behind the cards. A lime nebula
+   glowing in from the top corner, stars, a large cratered moon ringed by small
+   asteroids, and an orbit ring with a small planet near the bottom. Static and
+   low-contrast so cards stay readable. */
+.orbit-column {
+  background-image:
+    /* asteroids around the moon */
+    radial-gradient(circle 2.5px at calc(24% + 56px) calc(42% - 34px), rgb(var(--c-soft) / 0.30) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(24% + 64px) calc(42% - 12px), rgb(var(--c-soft) / 0.28) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(24% + 60px) calc(42% + 16px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
+    radial-gradient(circle 3px at calc(24% + 48px) calc(42% + 42px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(24% + 22px) calc(42% + 60px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(24% - 12px) calc(42% + 62px), rgb(var(--c-soft) / 0.22) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(24% + 30px) calc(42% - 58px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(24% - 6px) calc(42% - 60px), rgb(var(--c-soft) / 0.20) 0 60%, transparent),
+    /* moon: craters, a soft highlight, then the disc */
+    radial-gradient(circle 8px at calc(24% - 14px) calc(42% + 8px), rgb(var(--c-canvas) / 0.40) 0 70%, transparent),
+    radial-gradient(circle 5px at calc(24% + 12px) calc(42% - 16px), rgb(var(--c-canvas) / 0.36) 0 70%, transparent),
+    radial-gradient(circle 4px at calc(24% + 16px) calc(42% + 18px), rgb(var(--c-canvas) / 0.34) 0 70%, transparent),
+    radial-gradient(circle 3px at calc(24% - 4px) calc(42% - 24px), rgb(var(--c-canvas) / 0.32) 0 70%, transparent),
+    radial-gradient(circle 30px at calc(24% - 12px) calc(42% - 12px), rgb(var(--c-fg) / 0.08), transparent),
+    radial-gradient(circle 44px at 24% 42%, rgb(var(--c-soft) / 0.20) 0, rgb(var(--c-soft) / 0.14) 80%, rgb(var(--c-soft) / 0.08) 97%, transparent 100%),
+    /* planet on the orbit ring */
+    radial-gradient(circle at 78% 73%, rgb(var(--c-accent) / 0.75) 0 3.5px, transparent 4.5px),
+    radial-gradient(ellipse 150% 34% at 50% 92%, transparent 57%, rgb(var(--c-accent) / 0.20) 58%, transparent 59.5%),
+    /* stars */
+    radial-gradient(1.5px 1.5px at 14% 12%, rgb(var(--c-fg) / 0.75), transparent),
+    radial-gradient(1px 1px at 72% 7%, rgb(var(--c-fg) / 0.65), transparent),
+    radial-gradient(2px 2px at 38% 26%, rgb(var(--c-fg) / 0.60), transparent),
+    radial-gradient(1px 1px at 88% 34%, rgb(var(--c-fg) / 0.60), transparent),
+    radial-gradient(1.5px 1.5px at 56% 44%, rgb(var(--c-fg) / 0.50), transparent),
+    radial-gradient(1.5px 1.5px at 66% 58%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 8% 40%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 46% 92%, rgb(var(--c-fg) / 0.50), transparent),
+    radial-gradient(1.5px 1.5px at 92% 70%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 82% 18%, rgb(var(--c-fg) / 0.50), transparent),
+    radial-gradient(1px 1px at 28% 4%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 6% 88%, rgb(var(--c-fg) / 0.50), transparent),
+    /* nebula: a lime glow with a soft white core, rising from the top corner */
+    radial-gradient(60% 30% at 92% 6%, rgb(var(--c-fg) / 0.05), transparent 70%),
+    radial-gradient(130% 65% at 100% 0%, rgb(var(--c-accent) / 0.14), rgb(var(--c-accent) / 0.05) 45%, transparent 75%);
+  background-repeat: no-repeat;
+}
+
+/* The sun (morning, afternoon) or moon (evening) beside the My Space greeting.
+   Its colours are roles like the app palette: dark values here, light values
+   under html.light, so it follows the theme when light mode is switched on. */
+:root {
+  --sky-ink: 28 31 38;                /* brows, mouth, glasses */
+  --sky-glint: 255 255 255 / 0.55;
+  --sky-cheek: 255 140 140 / 0.35;
+  --sky-outline: 0 0 0 / 0;           /* none on dark backgrounds */
+  --sun-body: 251 146 60;            /* morning: orange */
+  --sun-ray: 251 146 60 / 0.35;     /* long but faint */
+  --sun-noon-body: 250 204 21;       /* afternoon: yellow */
+  --sun-noon-ray: 250 204 21 / 0.35;
+  --moon-body: 150 148 138;
+  --moon-crater: 118 116 107;
+  --moon-z: var(--c-accent-ink);
+}
+html.light {
+  --sky-ink: 28 31 38;
+  --sky-glint: 255 255 255 / 0.70;
+  --sky-cheek: 235 110 110 / 0.35;
+  --sky-outline: 28 31 38 / 0.25;     /* a soft edge so it doesn't fade into the page */
+  --sun-body: 234 118 20;             /* deeper orange, readable on white */
+  --sun-ray: 234 118 20 / 0.45;
+  --sun-noon-body: 234 179 8;         /* deeper yellow, readable on white */
+  --sun-noon-ray: 234 179 8 / 0.50;
+  --moon-body: 196 194 184;           /* lighter grey, still distinct from a white page */
+  --moon-crater: 164 161 150;
+}
+/* The afternoon sun is yellow, the morning sun orange */
+.greeting-sky--afternoon {
+  --sun-body: var(--sun-noon-body);
+  --sun-ray: var(--sun-noon-ray);
+}
+.greeting-sky .sun-body { fill: rgb(var(--sun-body)); stroke: rgb(var(--sky-outline)); stroke-width: 0.8; }
+.greeting-sky .sun-ray { fill: none; stroke: rgb(var(--sun-ray)); }
+.greeting-sky .moon-body { fill: rgb(var(--moon-body)); stroke: rgb(var(--sky-outline)); stroke-width: 0.8; }
+.greeting-sky .moon-crater { fill: rgb(var(--moon-crater)); }
+.greeting-sky .moon-z { fill: rgb(var(--moon-z)); }
+.greeting-sky .sky-cheek { fill: rgb(var(--sky-cheek)); }
+.greeting-sky .sky-ink { fill: rgb(var(--sky-ink)); }
+.greeting-sky .sky-line { fill: none; stroke: rgb(var(--sky-ink)); }
+.greeting-sky .sky-glint { fill: none; stroke: rgb(var(--sky-glint)); }
+
+/* A little wave in the morning, a gentle bob in the afternoon, a slow sway in
+   the evening */
+.greeting-sky {
+  transform-origin: 50% 80%;
+}
+.greeting-sky--morning {
+  animation: sky-wave 2.4s ease-in-out infinite;
+}
+.greeting-sky--afternoon {
+  animation: sky-bob 3s ease-in-out infinite;
+}
+.greeting-sky--evening {
+  animation: sky-sway 5s ease-in-out infinite;
+}
+@keyframes sky-wave {
+  0%, 60%, 100% { transform: rotate(0deg); }
+  10%, 30% { transform: rotate(14deg); }
+  20%, 40% { transform: rotate(-8deg); }
+}
+@keyframes sky-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+@keyframes sky-sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .greeting-sky { animation: none; }
+}
+
+/* TRIAL: the Orbit space design across the whole app. main.jsx adds the
+   orbit-app class to <body>; to revert, remove that line and this block.
+   The space sits behind every page (fixed, so it stays put while scrolling);
+   page backgrounds turn see-through so it shows, while the sidebar, header,
+   cards, panels and windows keep their solid surfaces. */
+body.orbit-app {
+  background-color: rgb(var(--c-canvas));
+  background-image:
+    radial-gradient(circle 3px at calc(82% + 74px) calc(30% - 44px), rgb(var(--c-soft) / 0.3) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% + 84px) calc(30% - 16px), rgb(var(--c-soft) / 0.28) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(82% + 80px) calc(30% + 22px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
+    radial-gradient(circle 3.5px at calc(82% + 62px) calc(30% + 56px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% + 28px) calc(30% + 80px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(82% - 16px) calc(30% + 82px), rgb(var(--c-soft) / 0.22) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% + 40px) calc(30% - 76px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(82% - 8px) calc(30% - 80px), rgb(var(--c-soft) / 0.2) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(82% + 96px) calc(30% + 40px), rgb(var(--c-soft) / 0.22) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% - 60px) calc(30% + 64px), rgb(var(--c-soft) / 0.2) 0 60%, transparent),
+    radial-gradient(circle 11px at calc(82% - 18px) calc(30% + 10px), rgb(var(--c-canvas) / 0.4) 0 70%, transparent),
+    radial-gradient(circle 7px at calc(82% + 16px) calc(30% - 22px), rgb(var(--c-canvas) / 0.36) 0 70%, transparent),
+    radial-gradient(circle 5px at calc(82% + 22px) calc(30% + 24px), rgb(var(--c-canvas) / 0.34) 0 70%, transparent),
+    radial-gradient(circle 4px at calc(82% - 6px) calc(30% - 32px), rgb(var(--c-canvas) / 0.32) 0 70%, transparent),
+    radial-gradient(circle 3px at calc(82% - 30px) calc(30% - 10px), rgb(var(--c-canvas) / 0.3) 0 70%, transparent),
+    radial-gradient(circle 40px at calc(82% - 16px) calc(30% - 16px), rgb(var(--c-fg) / 0.08), transparent),
+    radial-gradient(circle 58px at 82% 30%, rgb(var(--c-soft) / 0.20) 0, rgb(var(--c-soft) / 0.14) 80%, rgb(var(--c-soft) / 0.08) 97%, transparent 100%),
+    radial-gradient(circle at 78% 73%, rgb(var(--c-accent) / 0.75) 0 3.5px, transparent 4.5px),
+    radial-gradient(ellipse 150% 34% at 50% 92%, transparent 57%, rgb(var(--c-accent) / 0.20) 58%, transparent 59.5%),
+    radial-gradient(1.5px 1.5px at 12% 18%, rgb(var(--c-fg) / 0.75), transparent),
+    radial-gradient(1px 1px at 64% 9%, rgb(var(--c-fg) / 0.65), transparent),
+    radial-gradient(2px 2px at 38% 44%, rgb(var(--c-fg) / 0.6), transparent),
+    radial-gradient(1px 1px at 86% 62%, rgb(var(--c-fg) / 0.6), transparent),
+    radial-gradient(1px 1px at 22% 80%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1.5px 1.5px at 70% 88%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 8% 40%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1.5px 1.5px at 52% 22%, rgb(var(--c-fg) / 0.5), transparent),
+    radial-gradient(1px 1px at 90% 30%, rgb(var(--c-fg) / 0.5), transparent),
+    radial-gradient(1px 1px at 30% 66%, rgb(var(--c-fg) / 0.5), transparent),
+    radial-gradient(1.5px 1.5px at 74% 52%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 58% 94%, rgb(var(--c-fg) / 0.45), transparent),
+    radial-gradient(40% 22% at 92% 6%, rgb(var(--c-fg) / 0.05), transparent 70%),
+    radial-gradient(70% 55% at 100% 0%, rgb(var(--c-accent) / 0.14), rgb(var(--c-accent) / 0.05) 45%, transparent 75%),
+    radial-gradient(50% 40% at 0% 100%, rgb(var(--c-accent) / 0.06), transparent 70%);
+  background-size: auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, 310px 310px, 310px 310px, 310px 310px, 310px 310px, 310px 310px, 310px 310px, 470px 470px, 470px 470px, 470px 470px, 470px 470px, 470px 470px, 470px 470px, auto, auto, auto;
+  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
+  background-attachment: fixed;
+}
+
+body.orbit-app .min-h-screen {
+  background-color: transparent;
+}
+
+/* The sidebar: see-through so the page's space shows behind it, with its own
+   few stars and a lime nebula rising from the bottom. The tint keeps its links
+   readable. */
+body.orbit-app aside.fixed.left-0 {
+  background-color: rgb(var(--c-surface) / 0.72);
+  background-image:
+    radial-gradient(1.5px 1.5px at 18% 22%, rgb(var(--c-fg) / 0.55), transparent),
+    radial-gradient(1px 1px at 76% 31%, rgb(var(--c-fg) / 0.45), transparent),
+    radial-gradient(1px 1px at 40% 47%, rgb(var(--c-fg) / 0.40), transparent),
+    radial-gradient(1.5px 1.5px at 84% 58%, rgb(var(--c-fg) / 0.45), transparent),
+    radial-gradient(1px 1px at 12% 69%, rgb(var(--c-fg) / 0.40), transparent),
+    radial-gradient(1px 1px at 60% 78%, rgb(var(--c-fg) / 0.40), transparent),
+    radial-gradient(1px 1px at 30% 91%, rgb(var(--c-fg) / 0.40), transparent),
+    radial-gradient(140% 30% at 0% 100%, rgb(var(--c-accent) / 0.10), transparent 70%);
+  background-repeat: no-repeat;
+  backdrop-filter: blur(2px);
+}

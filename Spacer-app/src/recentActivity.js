@@ -1,4 +1,5 @@
 import { supabase } from "./supabase"
+import { dedupeActivity } from "./projectActivity"
 
 export const RECENT_ACTIVITY_LIMIT = 10
 
@@ -36,15 +37,18 @@ export const formatActivityItem = (act) => {
 }
 
 // The signed-in user's own recent actions. Logins/sign-ups are left out so they
-// don't crowd out real work. Returns { data: formatted items, error }.
+// don't crowd out real work. One action can be logged twice (by the app and by
+// the database), so twice the rows are read and the doubles dropped.
+// Returns { data: formatted items, error }.
 export async function fetchRecentActivity(userId) {
     const { data, error } = await supabase
         .from("activity_log")
-        .select("id, action, entity_type, new_state, created_at, actor:users(name, email)")
+        .select("id, action, entity_type, entity_id, actor_id, new_state, created_at, actor:users(name, email)")
         .eq("actor_id", userId)
         .not("action", "in", "(login,signup)")
         .order("created_at", { ascending: false })
-        .limit(RECENT_ACTIVITY_LIMIT)
+        .limit(RECENT_ACTIVITY_LIMIT * 2)
     if (error) console.warn("activity_log fetch error:", error)
-    return { data: (data || []).map(formatActivityItem), error }
+    const items = dedupeActivity(data || []).slice(0, RECENT_ACTIVITY_LIMIT)
+    return { data: items.map(formatActivityItem), error }
 }

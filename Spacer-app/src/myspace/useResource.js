@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from "react"
 
 // Runs `load` (a stable async () => ({ data, error })) and tracks
-// { status: "loading" | "error" | "ready", data }. Returns [state, reload].
+// { status: "loading" | "error" | "ready", data }. Returns [state, reload, refresh]:
+// reload shows the loading state again; refresh swaps in new data quietly and
+// keeps what is shown if the request fails (for live updates).
 export function useResource(load) {
     const [state, setState] = useState({ status: "loading", data: null })
 
@@ -19,5 +21,9 @@ export function useResource(load) {
         load().then(settle)
     }, [load, settle])
 
-    return [state, reload]
+    const refresh = useCallback(() => {
+        load().then((result) => { if (!result.error) settle(result) })
+    }, [load, settle])
+
+    return [state, reload, refresh]
 }

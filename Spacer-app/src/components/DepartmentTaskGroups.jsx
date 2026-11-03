@@ -39,7 +39,8 @@ export default function DepartmentTaskGroups({ tasks, departments, onSelectTask 
     const groups = groupTasksByDepartment(tasks, departments)
 
     return (
-        <div className="space-y-8">
+        // The Orbit space backdrop spans the whole area, as the board columns have it for everyone else
+        <div className="orbit-column bg-raised/50 border border-line/30 rounded-xl p-4 space-y-8">
             {groups.map((dept) => (
                 <section key={dept.id ?? "none"} aria-labelledby={`dept-${dept.id ?? "none"}`} className="space-y-3">
                     <div className="flex items-center gap-2">

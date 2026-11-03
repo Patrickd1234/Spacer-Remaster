@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabase"
 import { fetchRecentActivity } from "../recentActivity"
@@ -6,10 +6,13 @@ import { TASK_CREATED_EVENT } from "../appEvents"
 import { StatCard, StatCardSkeleton, Panel, PanelLink, PanelMessage } from "../components/DashboardParts"
 import { TaskCard, TaskCardSkeleton, ActivityList, ActivitySkeleton, MeetingRow, MeetingSkeleton } from "./MySpaceParts"
 import { useResource } from "./useResource"
+import GreetingSky from "./GreetingSky"
 import { localDateKey, summarizeTasks, boardTasks, greetingFor } from "./taskStats"
 
 const MEETINGS_LIMIT = 4
 const COLLAPSED_ACTIVITY_COUNT = 6
+// Wait for a burst of task changes to settle before refreshing
+const LIVE_REFRESH_DELAY_MS = 500
 
 const STAT_CARDS = [
     { key: "active", label: "Active Tasks", sub: "Tasks assigned to you that are still active", empty: "No active task until you get assigned" },
@@ -111,8 +114,8 @@ export default function MySpace({ userId, displayName }) {
             return { data: data || [], error }
         }), [todayKey])
 
-    const [tasksState, reloadTasks] = useResource(loadTasks)
-    const [activityState, reloadActivity] = useResource(loadActivity)
+    const [tasksState, reloadTasks, refreshTasks] = useResource(loadTasks)
+    const [activityState, reloadActivity, refreshActivity] = useResource(loadActivity)
     const [meetingsState, reloadMeetings] = useResource(loadMeetings)
 
     // A task created from the header's Create menu shows up straight away
@@ -122,13 +125,41 @@ export default function MySpace({ userId, displayName }) {
         return () => window.removeEventListener(TASK_CREATED_EVENT, refresh)
     }, [reloadTasks, reloadActivity])
 
+    // Ids of the tasks on screen, so a change that takes one away (unassigned,
+    // deleted) is noticed even though the changed row no longer names this user
+    const shownTaskIds = useRef(new Set())
+    useEffect(() => {
+        shownTaskIds.current = new Set((tasksState.data || []).map((t) => t.id))
+    }, [tasksState.data])
+
+    // Live: a change to one of your tasks, by anyone, refreshes My Tasks and
+    // Recent Activities without the loading skeletons
+    useEffect(() => {
+        if (!userId) return
+        let refreshTimer = null
+        const onTaskChange = ({ new: row, old }) => {
+            const isMine = row?.assignee_id === userId || shownTaskIds.current.has(row?.id) || shownTaskIds.current.has(old?.id)
+            if (!isMine) return
+            clearTimeout(refreshTimer)
+            refreshTimer = setTimeout(() => { refreshTasks(); refreshActivity() }, LIVE_REFRESH_DELAY_MS)
+        }
+        const channel = supabase
+            .channel(`my-space-tasks-${userId}`)
+            .on("postgres_changes", { event: "*", schema: "public", table: "tasks" }, onTaskChange)
+            .subscribe()
+        return () => {
+            clearTimeout(refreshTimer)
+            supabase.removeChannel(channel)
+        }
+    }, [userId, refreshTasks, refreshActivity])
+
     const openTask = (task) => navigate(`/project_page/${task.project_id}?task_id=${task.id}`)
     const hasMoreActivity = activityState.status === "ready" && activityState.data.length > COLLAPSED_ACTIVITY_COUNT
 
     return (
         <>
             <section>
-                <h1 className="text-2xl font-semibold text-white">{greeting}, {displayName} 👋</h1>
+                <h1 className="text-2xl font-semibold text-white">{greeting}, {displayName} <GreetingSky greeting={greeting} /></h1>
                 <p className="text-muted text-sm mt-1">Here's what's happening with your work today.</p>
             </section>
 
@@ -137,7 +168,7 @@ export default function MySpace({ userId, displayName }) {
             </section>
 
             <div className="grid grid-cols-12 gap-4">
-                <Panel title="My Task" className="col-span-12 lg:col-span-7" action={<PanelLink onClick={() => navigate("/tasks")}>View all task</PanelLink>}>
+                <Panel title="My Orbit" className="orbit-column col-span-12 lg:col-span-7" action={<PanelLink onClick={() => navigate("/tasks")}>View all Orbits</PanelLink>}>
                     <TaskBoard tasksState={tasksState} todayKey={todayKey} onRetry={reloadTasks} onOpen={openTask} />
                 </Panel>
 
