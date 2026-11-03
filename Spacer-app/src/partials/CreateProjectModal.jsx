@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase, getSessionUser } from "../supabase";
+import Select from "../components/Select";
+import { useRole } from "../RoleContext";
+import { projectDepartmentIds } from "../projectPermissions";
 
 export default function CreateProjectModal({ onClose, onCreated }) {
+    const { isSuperAdmin, departments } = useRole();
     const [teamSpaces, setTeamSpaces] = useState([]);
-    const [teamSpaceId, setTeamSpaceId] = useState("");
+    const [pickedTeamSpaceId, setTeamSpaceId] = useState("");
     const [teamLeads, setTeamLeads] = useState([]);
     const [teamLeadId, setTeamLeadId] = useState("");
     const [name, setName] = useState("");
@@ -33,16 +37,21 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                 .order("name");
 
             if (error) {
-                console.log(error);
+                console.error("Loading departments failed:", error);
             } else {
                 setTeamSpaces(data || []);
-                if (data && data.length > 0) {
-                    setTeamSpaceId(data[0].id);
-                }
             }
         };
         fetchTeams();
     }, []);
+
+    // Only departments the database lets this user create projects in: any for
+    // super admins, otherwise those where they're team lead or admin
+    const allowedIds = new Set(projectDepartmentIds(departments));
+    const allowedTeamSpaces = isSuperAdmin ? teamSpaces : teamSpaces.filter((t) => allowedIds.has(String(t.id)));
+    const teamSpaceId = allowedTeamSpaces.some((t) => t.id === pickedTeamSpaceId)
+        ? pickedTeamSpaceId
+        : allowedTeamSpaces[0]?.id ?? "";
 
     useEffect(() => {
         const fetchMembers = async () => {
@@ -86,31 +95,33 @@ export default function CreateProjectModal({ onClose, onCreated }) {
             return;
         }
         if (!teamSpaceId) {
-            setError("You need to belong to a Team Space before creating a project.");
+            setError("You can only create projects in a department where you're a team lead or admin.");
             return;
         }
 
         setSaving(true);
-        const insertPayload = { team_space_id: teamSpaceId, name: name.trim() };
-        if (deadline) {
-            insertPayload.deadline = deadline;
-        }
+        const insertPayload = { team_space_id: teamSpaceId, name: name.trim(), team_lead: teamLeadId || null };
+        if (deadline) insertPayload.due_date = deadline;
 
         const { data, error } = await supabase
             .from("project_spaces")
-            .insert({ 
-                team_space_id: teamSpaceId, 
-                name: name.trim(),
-                team_lead: teamLeadId || null
-            })
+            .insert(insertPayload)
             .select()
             .single();
-        setSaving(false);
 
         if (error) {
+            setSaving(false);
             setError(error.message);
             return;
         }
+
+        // The team lead is a member of the project, which also sends them the
+        // "added to a project" email and notification (migration 20261031100000)
+        if (teamLeadId) {
+            const { error: memberError } = await supabase.from("project_members").insert({ project_id: data.id, user_id: teamLeadId });
+            if (memberError) console.error("Adding the team lead to the project failed:", memberError);
+        }
+        setSaving(false);
 
         try {
             const userData = { user: await getSessionUser() };
@@ -133,43 +144,43 @@ export default function CreateProjectModal({ onClose, onCreated }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-md bg-black/60 backdrop-blur-sm" onClick={onClose}>
             <div
-                className="bg-[#191c21] rounded-xl border border-[#2D3139] w-full max-w-lg shadow-2xl overflow-hidden"
+                className="bg-raised rounded-xl border border-line w-full max-w-lg shadow-2xl overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-lg border-b border-[#2D3139]/30 flex justify-between items-center bg-[#1C1F26]">
+                <div className="p-lg border-b border-line/30 flex justify-between items-center bg-surface1">
                     <div>
-                        <h2 className="font-headline-lg text-headline-lg text-[#aff82a] font-bold">Create New Project</h2>
-                        <p className="font-body-sm text-[#8c947b]">Define the parameters for your new mission.</p>
+                        <h2 className="font-headline-lg text-xl text-accent-ink font-bold">Create New Project</h2>
+                        <p className="text-xs text-muted">Define the parameters for your new mission.</p>
                     </div>
-                    <button className="text-[#8c947b] hover:text-white transition-colors cursor-pointer" onClick={onClose}>
+                    <button className="text-muted hover:text-white transition-colors cursor-pointer" onClick={onClose}>
                         <span className="material-symbols-outlined">close</span>
                     </button>
                 </div>
 
                 <div className="p-lg space-y-lg">
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
+                        <label className="font-label-md text-xs text-muted uppercase tracking-wider">
                             Team Space
                         </label>
-                        <select
-                            className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
+                        <Select
+                            className="w-full bg-canvas border border-line rounded-lg px-md py-sm text-sm text-white focus:outline-none focus:border-accent-ink/50 transition-all"
                             value={teamSpaceId}
                             onChange={(e) => setTeamSpaceId(e.target.value)}
                         >
-                            {teamSpaces.map((team) => (
+                            {allowedTeamSpaces.map((team) => (
                                 <option key={team.id} value={team.id}>
                                     {team.name}
                                 </option>
                             ))}
-                        </select>
+                        </Select>
                     </div>
 
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider">
+                        <label className="font-label-md text-xs text-muted uppercase tracking-wider">
                             Team Lead
                         </label>
-                        <select
-                            className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all"
+                        <Select
+                            className="w-full bg-canvas border border-line rounded-lg px-md py-sm text-sm text-white focus:outline-none focus:border-accent-ink/50 transition-all"
                             value={teamLeadId}
                             onChange={(e) => setTeamLeadId(e.target.value)}
                         >
@@ -177,17 +188,17 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                             {teamLeads.map((user) => (
                                 <option key={user.id} value={user.id}>{user.name}</option>
                             ))}
-                        </select>
+                        </Select>
                     </div>
 
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider" htmlFor="proj-name">
+                        <label className="font-label-md text-xs text-muted uppercase tracking-wider" htmlFor="proj-name">
                             Project Name
                         </label>
                         <div className="relative group">
                             <input
                                 id="proj-name"
-                                className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all placeholder:text-[#8c947b]/40"
+                                className="w-full bg-canvas border border-line rounded-lg px-md py-sm text-sm text-white focus:outline-none focus:border-accent-ink/50 transition-all placeholder:text-muted/40"
                                 placeholder="e.g. Operation Nightfall"
                                 type="text"
                                 value={name}
@@ -197,33 +208,30 @@ export default function CreateProjectModal({ onClose, onCreated }) {
                     </div>
 
                     <div className="space-y-xs">
-                        <label className="font-label-md text-label-md text-[#8c947b] uppercase tracking-wider" htmlFor="deadline">
-                            Deadline
+                        <label className="font-label-md text-xs text-muted uppercase tracking-wider" htmlFor="deadline">
+                            Deadline <span className="normal-case tracking-normal text-muted/60">(optional)</span>
                         </label>
                         <input
                             id="deadline"
-                            className="w-full bg-[#0F1115] border border-[#2D3139] rounded-lg px-md py-sm font-body-md text-white focus:outline-none focus:border-[#aff82a]/50 transition-all [color-scheme:dark]"
+                            className="w-full bg-canvas border border-line rounded-lg px-md py-sm text-sm text-white focus:outline-none focus:border-accent-ink/50 transition-all [color-scheme:dark]"
                             type="date"
                             value={deadline}
                             onChange={(e) => setDeadline(e.target.value)}
                         />
-                        <p className="text-[11px] text-[#8c947b]/60">
-                            Not saved yet — there's no deadline column on projects. Let me know if you want one added.
-                        </p>
                     </div>
 
-                    {error && <p className="font-body-sm text-red-400">{error}</p>}
+                    {error && <p className="text-xs text-red-400">{error}</p>}
                 </div>
 
                 <div className="p-lg pt-0 flex gap-md">
                     <button
-                        className="flex-1 py-sm border border-[#2D3139] rounded-lg font-label-md text-label-md font-bold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
+                        className="flex-1 py-sm border border-line rounded-lg font-label-md text-xs font-bold text-muted hover:text-white hover:bg-line transition-all cursor-pointer"
                         onClick={onClose}
                     >
                         Cancel
                     </button>
                     <button
-                        className="flex-1 py-sm bg-[#aff82a] text-[#1C1F26] rounded-lg font-label-md text-label-md font-bold hover:bg-[#9de022] transition-all disabled:opacity-50 cursor-pointer"
+                        className="flex-1 py-sm bg-accent text-on-accent rounded-lg font-label-md text-xs font-bold hover:bg-accent-hover transition-all disabled:opacity-50 cursor-pointer"
                         onClick={createProject}
                         disabled={saving}
                     >

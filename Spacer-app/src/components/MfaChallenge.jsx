@@ -56,11 +56,11 @@ export default function MfaChallenge({ onVerified }) {
     };
 
     return (
-        <div className="min-h-screen bg-[#181a20] flex items-center justify-center px-8">
+        <div className="min-h-screen bg-panel flex items-center justify-center px-8">
             <form onSubmit={handleSubmit} className="w-full max-w-[380px] text-center">
-                <span className="material-symbols-outlined text-[#aff82a] text-[48px] mb-4">shield_lock</span>
+                <span className="material-symbols-outlined text-accent-ink text-[48px] mb-4">shield_lock</span>
                 <h1 className="text-[28px] font-bold text-white mb-2 tracking-tight">Two-factor verification</h1>
-                <p className="text-[#8c947b] text-[15px] mb-8 leading-relaxed">
+                <p className="text-muted text-[15px] mb-8 leading-relaxed">
                     Open your authenticator app and enter the {CODE_LENGTH}-digit code for Spacer.
                 </p>
 
@@ -75,15 +75,15 @@ export default function MfaChallenge({ onVerified }) {
                     placeholder="123456"
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                    className="w-full bg-[#111318] border border-[#2D3139] focus:border-[#aff82a] rounded-xl px-4 py-3.5 text-white text-center text-[22px] tracking-[0.5em] placeholder-[#4a4f42] focus:outline-none transition-colors"
+                    className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-center text-[22px] tracking-[0.5em] placeholder-line-strong focus:outline-none transition-colors"
                 />
 
-                <label className="flex items-center justify-center gap-2 mt-4 text-[#8c947b] text-[13px] cursor-pointer select-none">
+                <label className="flex items-center justify-center gap-2 mt-4 text-muted text-[13px] cursor-pointer select-none">
                     <input
                         type="checkbox"
                         checked={rememberDevice}
                         onChange={(e) => setRememberDevice(e.target.checked)}
-                        className="rounded border-[#2D3139] bg-[#111318] text-[#aff82a] focus:ring-[#aff82a]"
+                        className="rounded border-line bg-field text-accent-ink focus:ring-accent-ink"
                     />
                     Remember this device for {TRUSTED_DEVICE_DAYS} days
                 </label>
@@ -93,7 +93,7 @@ export default function MfaChallenge({ onVerified }) {
                 <button
                     type="submit"
                     disabled={verifying}
-                    className="w-full mt-6 bg-[#aff82a] hover:bg-[#9de022] text-[#1C1F26] font-bold text-[15px] py-3.5 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
+                    className="w-full mt-6 bg-accent hover:bg-accent-hover text-on-accent font-bold text-[15px] py-3.5 rounded-xl transition-all disabled:opacity-50 cursor-pointer"
                 >
                     {verifying ? "Verifying..." : "Verify"}
                 </button>
@@ -101,11 +101,11 @@ export default function MfaChallenge({ onVerified }) {
                 <button
                     type="button"
                     onClick={handleSignOut}
-                    className="mt-4 text-[#8c947b] hover:text-white text-[13px] cursor-pointer"
+                    className="mt-4 text-muted hover:text-white text-[13px] cursor-pointer"
                 >
                     Sign in with a different account
                 </button>
-                <p className="text-[#8c947b] text-[12px] mt-6 leading-relaxed">
+                <p className="text-muted text-[12px] mt-6 leading-relaxed">
                     Lost access to your authenticator app? Contact your workspace administrator to have two-factor reset.
                 </p>
             </form>

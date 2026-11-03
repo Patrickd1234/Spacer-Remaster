@@ -155,24 +155,24 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
 
       {/* Panel */}
       <aside
-        className="fixed right-0 top-0 h-full z-[100] flex flex-col bg-surface-container shadow-2xl border-l border-outline-variant"
+        className="fixed right-0 top-0 h-full z-[100] flex flex-col bg-surface-container shadow-2xl border-l border-line"
         style={{ width: "min(480px, 100vw)", animation: "slideIn .25s ease" }}
       >
         <style>{`@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
 
         {/* Panel header */}
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-outline-variant bg-surface-container-low shrink-0">
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-line bg-panel shrink-0">
           <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-on-primary-container text-base" style={{ fontVariationSettings: "'FILL' 1" }}>folder</span>
+            <span className="material-symbols-outlined text-on-accent text-base" style={{ fontVariationSettings: "'FILL' 1" }}>folder</span>
           </div>
-          <h2 className="font-semibold text-on-surface flex-1 truncate">{project.name}</h2>
-          <button onClick={onClose} className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors">close</button>
+          <h2 className="font-semibold text-white flex-1 truncate">{project.name}</h2>
+          <button onClick={onClose} className="material-symbols-outlined text-muted hover:text-white transition-colors">close</button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {/* ── File upload zone ── */}
           <section>
-            <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-3">
+            <p className="text-xs font-semibold text-muted uppercase tracking-wider mb-3">
               Add files
             </p>
 
@@ -180,7 +180,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
               className={`rounded-xl border-2 border-dashed p-6 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors
                 ${dragOver
                   ? "border-primary-fixed bg-primary-fixed/10"
-                  : "border-outline-variant hover:border-outline hover:bg-surface-container-high/50"}`}
+                  : "border-line hover:border-outline hover:bg-surface1/50"}`}
               onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
@@ -196,13 +196,13 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
               {uploading ? (
                 <>
                   <span className="material-symbols-outlined text-primary-fixed text-4xl animate-spin">progress_activity</span>
-                  <p className="text-sm text-on-surface-variant">Uploading…</p>
+                  <p className="text-sm text-muted">Uploading…</p>
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-on-surface-variant text-4xl">upload_file</span>
-                  <p className="text-sm text-on-surface font-medium">Drop a file or click to browse</p>
-                  <p className="text-xs text-on-surface-variant text-center">
+                  <span className="material-symbols-outlined text-muted text-4xl">upload_file</span>
+                  <p className="text-sm text-white font-medium">Drop a file or click to browse</p>
+                  <p className="text-xs text-muted text-center">
                     JPG, PNG, PDF, DOCX, XLSX, ZIP and more
                   </p>
                 </>
@@ -217,23 +217,23 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
           {/* ── Files list ── */}
           <section>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">
+              <p className="text-xs font-semibold text-muted uppercase tracking-wider">
                 Project files
               </p>
-              <span className="text-xs text-on-surface-variant">{files.length} file{files.length !== 1 ? "s" : ""}</span>
+              <span className="text-xs text-muted">{files.length} file{files.length !== 1 ? "s" : ""}</span>
             </div>
 
             {files.length === 0 ? (
-              <div className="rounded-xl bg-surface-container-high/40 p-6 flex flex-col items-center gap-2 text-center">
-                <span className="material-symbols-outlined text-on-surface-variant text-3xl">folder_open</span>
-                <p className="text-sm text-on-surface-variant">No files yet. Upload the first one above.</p>
+              <div className="rounded-xl bg-surface1/40 p-6 flex flex-col items-center gap-2 text-center">
+                <span className="material-symbols-outlined text-muted text-3xl">folder_open</span>
+                <p className="text-sm text-muted">No files yet. Upload the first one above.</p>
               </div>
             ) : (
               <div className="space-y-2">
                 {files.map((f) => (
                   <div
                     key={f.id}
-                    className="group flex items-center gap-3 p-3 rounded-xl bg-surface-container-high/40 hover:bg-surface-container-high transition-colors"
+                    className="group flex items-center gap-3 p-3 rounded-xl bg-surface1/40 hover:bg-surface1 transition-colors"
                   >
                     {/* Icon / thumbnail */}
                     {f.type?.startsWith("image/") ? (
@@ -262,8 +262,8 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
                       className="flex-1 min-w-0 cursor-pointer"
                       onClick={() => onPreview(f)}
                     >
-                      <p className="text-sm font-medium text-on-surface truncate">{f.name}</p>
-                      <p className="text-xs text-on-surface-variant">
+                      <p className="text-sm font-medium text-white truncate">{f.name}</p>
+                      <p className="text-xs text-muted">
                         {formatBytes(f.size)} · {new Date(f.created_at).toLocaleDateString()}
                       </p>
                     </div>
@@ -273,7 +273,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
                       <button
                         title="Preview"
                         onClick={() => onPreview(f)}
-                        className="material-symbols-outlined text-on-surface-variant hover:text-on-surface p-1 rounded"
+                        className="material-symbols-outlined text-muted hover:text-white p-1 rounded"
                       >
                         visibility
                       </button>
@@ -283,7 +283,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
                         target="_blank"
                         rel="noreferrer"
                         title="Download"
-                        className="material-symbols-outlined text-on-surface-variant hover:text-on-surface p-1 rounded"
+                        className="material-symbols-outlined text-muted hover:text-white p-1 rounded"
                       >
                         download
                       </a>

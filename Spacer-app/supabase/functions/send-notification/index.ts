@@ -1,9 +1,27 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0"
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.0"
 import { isServiceRoleRequest, unauthorized } from "../_shared/webhookAuth.ts"
 import { DEFAULT_EMAIL_FROM, escapeHtml } from "../_shared/html.ts"
 
 const EMAIL_FROM = Deno.env.get('EMAIL_FROM') || DEFAULT_EMAIL_FROM
+const SITE_URL = (Deno.env.get('SITE_URL') || 'http://localhost:5173').replace(/\/$/, '')
+
+// Settings → Notifications, kept in the user's metadata; anything unset counts as on.
+// kind: "taskAssigned" | "projectUpdates"
+// deno-lint-ignore no-explicit-any
+async function wantsEmail(admin: SupabaseClient<any, "public", any>, userId: string, kind: string): Promise<boolean> {
+  const { data, error } = await admin.auth.admin.getUserById(userId)
+  if (error) {
+    console.error("Reading notification preferences failed:", error)
+    return true
+  }
+  const prefs = data.user?.user_metadata?.preferences?.notifications ?? {}
+  return prefs.emailAlerts !== false && prefs[kind] !== false
+}
+
+// Ids are uuids from the database row, so they're safe in a link
+const button = (href: string, label: string) =>
+  `<p style="margin-top: 24px;"><a href="${href}" style="display: inline-block; background-color: #aff82a; color: #1C1F26; font-weight: bold; padding: 10px 18px; border-radius: 8px; text-decoration: none;">${label}</a></p>`
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,7 +34,7 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
-  // Only the tasks / project_members database webhooks may trigger emails
+  // Only the tasks / project_members database webhooks may trigger emails (x-webhook-secret)
   if (!isServiceRoleRequest(req)) {
     return unauthorized()
   }
@@ -58,7 +76,7 @@ serve(async (req: Request) => {
           console.error("Error fetching user for task assignment:", userError)
         }
 
-        if (user?.email) {
+        if (user?.email && await wantsEmail(supabaseAdmin, record.assignee_id, 'taskAssigned')) {
           email = user.email
           recipientName = user.name || "Spacer Team Member"
           subject = `🚀 New Task Assigned: ${record.title || 'Untitled Task'}`
@@ -69,6 +87,8 @@ serve(async (req: Request) => {
                 You have been assigned a new task: <strong style="color: #2b6cb0;">${escapeHtml(record.title || 'Untitled Task')}</strong>.
               </p>
               ${record.description ? `<div style="background-color: #f7fafc; padding: 16px; border-left: 4px solid #3182ce; border-radius: 4px; font-style: italic; color: #4a5568; margin: 20px 0;">"${escapeHtml(record.description)}"</div>` : ''}
+              ${record.due_date ? `<p style="font-size: 14px; color: #4a5568;">Due: <strong>${escapeHtml(record.due_date)}</strong></p>` : ''}
+              ${record.project_id ? button(`${SITE_URL}/project_page/${record.project_id}?task_id=${record.id}`, 'Open the task') : ''}
               <p style="font-size: 14px; color: #718096; margin-top: 24px;">
                 Please log in to your Spacer dashboard to view details and track task progress.
               </p>
@@ -98,7 +118,7 @@ serve(async (req: Request) => {
         if (userError) console.error("Error fetching user for project member insert:", userError)
         if (projectError) console.error("Error fetching project for project member insert:", projectError)
 
-        if (user?.email && project?.name) {
+        if (user?.email && project?.name && await wantsEmail(supabaseAdmin, record.user_id, 'projectUpdates')) {
           email = user.email
           recipientName = user.name || "Spacer Team Member"
           subject = `📂 Added to Project: ${project.name}`
@@ -111,6 +131,7 @@ serve(async (req: Request) => {
               <p style="font-size: 14px; color: #718096; margin-top: 24px;">
                 You can now view files, access tasks, and coordinate with team members for this project in Spacer.
               </p>
+              ${button(`${SITE_URL}/project_page/${record.project_id}`, 'Open the project')}
             </div>
           `
         }

@@ -11,16 +11,18 @@ import CreateDepartmentModal from "./partials/CreateDepartmentModal";
 import { deleteWorkspaceItem } from "./workspaceDelete";
 import { createdToast, failedToast } from "./createDepartment";
 import { DEPARTMENT_CREATED_EVENT } from "./appEvents";
+import Select from "./components/Select";
 
 function Department() {
     const [userId, setUserId] = useState(null)
-    const [userTeamId, setUserTeamId] = useState(null)
     const [allTeams, setAllTeams] = useState([])
     const [activeTeam, setActiveTeam] = useState(null)
     const [mem_info, setMem_info] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment } = useRole()
+    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment, departments } = useRole()
+    // Admins of any department switch departments from the sidebar, not the page dropdown
+    const isAdminAnywhere = departments.some(d => d.role === "admin")
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [organizationId, setOrganizationId] = useState(null)
     const [showCreateDeptModal, setShowCreateDeptModal] = useState(false)
@@ -60,7 +62,6 @@ function Department() {
                 // The department (name + members) only needs the membership, so it
                 // loads alongside the organisation lookup instead of after it.
                 // fetchTeamMembers also sets activeTeam, which titles the page.
-                if (!isSuperAdmin) setUserTeamId(teamId)
                 const departmentWork = isSuperAdmin ? [] : [fetchTeamMembers(teamId)]
 
                 const orgWork = (async () => {
@@ -118,7 +119,7 @@ function Department() {
         return () => { cancelled = true }
     }, [isSuperAdmin, orgDepartmentId, allTeams])
 
-    const fetchAllTeams = async (orgId) => {
+    async function fetchAllTeams(orgId) {
         let teamQuery = supabase.from("team_spaces").select("id, name")
         if (orgId) teamQuery = teamQuery.eq("organization_id", orgId)
         
@@ -138,7 +139,7 @@ function Department() {
         }
     }
 
-    const fetchTeamMembers = async (teamId) => {
+    async function fetchTeamMembers(teamId) {
         if (!teamId) { setMem_info([]); return }
 
         if (!activeTeam || activeTeam.id !== teamId) {
@@ -426,17 +427,17 @@ const pageTitle = isSuperAdmin
 const isTitleLoading = roleLoading || (loading && !activeTeam)
 
 return (
-    <div className="bg-[#0F1115] min-h-screen text-white font-sans antialiased flex flex-col">
+    <div className="bg-canvas min-h-screen text-white font-sans antialiased flex flex-col">
         <Sidebar onCollapsedChange={setSidebarCollapsed} />
         <Header />
-        <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col pt-16 transition-all duration-300 ease-out`}>
+        <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
 
             {/* Top Controls Header */}
-            <div className="bg-[#111318] border-b border-[#2D3139] px-8 py-4 flex items-center justify-between sticky top-16 z-30">
+            <div className="bg-field border-b border-line px-8 py-4 flex items-center justify-between sticky top-16 z-30">
                 <div className="relative w-full max-w-md">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#8c947b] text-[20px]">search</span>
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[20px]">search</span>
                     <input
-                        className="w-full bg-[#181a20] border border-[#2D3139] rounded-xl py-2 pl-10 pr-4 text-white placeholder-[#8c947b] text-sm focus:outline-none focus:border-[#aff82a]"
+                        className="w-full bg-panel border border-line rounded-xl py-2 pl-10 pr-4 text-white placeholder-muted text-sm focus:outline-none focus:border-accent-ink"
                         placeholder="Search department members by name or email..."
                         type="text"
                         value={searchQuery}
@@ -449,20 +450,20 @@ return (
             <div className="p-8 flex-1 space-y-8">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <div className="flex items-center gap-2 text-[#8c947b] text-xs mb-1">
+                        <div className="flex items-center gap-2 text-muted text-xs mb-1">
                             <span className="material-symbols-outlined text-[16px]">groups</span>
                             <span>/</span>
                             {isTitleLoading
-                                ? <span className="inline-block h-3 w-24 rounded bg-[#2D3139] animate-pulse" aria-hidden="true" />
+                                ? <span className="inline-block h-3 w-24 rounded bg-line animate-pulse" aria-hidden="true" />
                                 : <span className="text-white font-medium">{pageTitle}</span>}
                         </div>
                         {isTitleLoading
-                            ? <h1 className="h-8 w-56 rounded-lg bg-[#2D3139] animate-pulse" aria-label="Loading department" />
+                            ? <h1 className="h-8 w-56 rounded-lg bg-line animate-pulse" aria-label="Loading department" />
                             : <h1 className="text-2xl font-bold text-white">{pageTitle}</h1>}
-                        <p className="text-[#8c947b] text-sm mt-1">
+                        <p className="text-muted text-sm mt-1">
                             {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""} {isSuperAdmin && activeTeam ? `assigned to ${activeTeam.name}` : "in your department team"}
                         </p>
-                        {!isSuperAdmin && (
+                        {!isSuperAdmin && !isAdminAnywhere && (
                             <div className="mt-3">
                                 <DepartmentSwitcher />
                             </div>
@@ -473,15 +474,16 @@ return (
                         <div className="flex items-center gap-3">
                             <button 
                                 onClick={() => { setAddMemberTab("existing"); setInviteError(""); setInviteSuccess(""); setShowAddMemberModal(true); }}
-                                className="px-4 py-2 bg-[#5b644d] hover:bg-[#6c765c] text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+                                className="px-4 py-2 bg-faint hover:bg-faint text-white text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
                             >
                                 <span className="material-symbols-outlined text-[18px]">person_add</span>
                                 Add Member
                             </button>
-                            {canManage && (
-                                <button 
+                            {/* Only super admins create departments here (hidden for admins; the database rule is unchanged) */}
+                            {isSuperAdmin && (
+                                <button
                                     onClick={() => setShowCreateDeptModal(true)}
-                                    className="px-4 py-2 bg-[#aff82a] text-[#1C1F26] hover:bg-[#9de022] text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+                                    className="px-4 py-2 bg-accent text-on-accent hover:bg-accent-hover text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">add_circle</span>
                                     Add Department
@@ -502,8 +504,8 @@ return (
                             type="button"
                             onClick={() => setActiveTab(tab.id)}
                             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm transition-colors cursor-pointer ${activeTab === tab.id
-                                ? "bg-[#aff82a] text-[#1C1F26] font-bold shadow-sm"
-                                : "text-[#8c947b] hover:text-white hover:bg-[#2D3139]/50"
+                                ? "bg-accent text-on-accent font-bold shadow-sm"
+                                : "text-muted hover:text-white hover:bg-line/50"
                                 }`}
                         >
                             <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
@@ -516,7 +518,7 @@ return (
                     <>
                         {/* Superadmin Team Switcher Tabs */}
                 {isSuperAdmin && (
-                    <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-[#2D3139]">
+                    <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-line">
                         {allTeams.length > 0 && (
                             <div className="flex items-center gap-2 flex-wrap">
                                 {allTeams.map(team => (
@@ -525,8 +527,8 @@ return (
                                         onClick={() => switchTeam(team)}
                                         className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                                             activeTeam?.id === team.id
-                                                ? "bg-[#5b644d] text-white"
-                                                : "bg-[#191c21] text-[#8c947b] border border-[#2D3139] hover:text-white"
+                                                ? "bg-faint text-white"
+                                                : "bg-raised text-muted border border-line hover:text-white"
                                         }`}
                                     >
                                         {team.name}
@@ -551,30 +553,30 @@ return (
                 {loading ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {[...Array(6)].map((_, i) => (
-                            <div key={i} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 h-44 animate-pulse">
-                                <div className="h-10 w-10 bg-[#252a33] rounded-full mb-4" />
-                                <div className="h-4 w-32 bg-[#252a33] rounded mb-2" />
-                                <div className="h-3 w-24 bg-[#252a33] rounded" />
+                            <div key={i} className="bg-raised border border-line rounded-xl p-5 h-44 animate-pulse">
+                                <div className="h-10 w-10 bg-surface2 rounded-full mb-4" />
+                                <div className="h-4 w-32 bg-surface2 rounded mb-2" />
+                                <div className="h-3 w-24 bg-surface2 rounded" />
                             </div>
                         ))}
                     </div>
                 ) : filteredMembers.length === 0 ? (
-                    <div className="bg-[#191c21] border border-[#2D3139] rounded-xl p-12 flex flex-col items-center justify-center text-center min-h-[250px] gap-3">
-                        <span className="material-symbols-outlined text-4xl text-[#8c947b]">person_search</span>
+                    <div className="bg-raised border border-line rounded-xl p-12 flex flex-col items-center justify-center text-center min-h-[250px] gap-3">
+                        <span className="material-symbols-outlined text-4xl text-muted">person_search</span>
                         <p className="text-white font-semibold text-base">No team members found</p>
-                        <p className="text-[#8c947b] text-xs max-w-sm">
+                        <p className="text-muted text-xs max-w-sm">
                             {searchQuery ? "No members matched your search query." : "No team members are assigned to this department yet."}
                         </p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredMembers.map((member) => (
-                            <div key={member.user_id || member.id} className="bg-[#191c21] border border-[#2D3139] rounded-xl p-5 flex flex-col justify-between hover:border-[#424934] transition-all group">
+                            <div key={member.user_id || member.id} className="bg-raised border border-line rounded-xl p-5 flex flex-col justify-between hover:border-line-strong transition-all group">
                                 <div className="flex items-start justify-between mb-4">
-                                    <div className="w-12 h-12 rounded-xl bg-[#252a33] border border-[#343b47] flex items-center justify-center font-bold text-white text-lg">
+                                    <div className="w-12 h-12 rounded-xl bg-surface2 border border-line-strong flex items-center justify-center font-bold text-white text-lg">
                                         {(member.name || member.email || "?").charAt(0).toUpperCase()}
                                     </div>
-                                    <span className="bg-[#5b644d]/20 text-[#aff82a] border border-[#5b644d]/30 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
+                                    <span className="bg-faint/20 text-accent-ink border border-faint/30 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
                                         {member.membershipRole || member.role || "Member"}
                                     </span>
                                 </div>
@@ -582,14 +584,14 @@ return (
                                     <h4 className="text-white font-semibold text-base">
                                         {member.name || "Team Member"}
                                     </h4>
-                                    <p className="text-[#8c947b] text-xs truncate mt-0.5">
+                                    <p className="text-muted text-xs truncate mt-0.5">
                                         {member.email || "user@spacers.com"}
                                     </p>
                                 </div>
-                                <div className="mt-6 pt-4 border-t border-[#2D3139] flex items-center justify-between">
+                                <div className="mt-6 pt-4 border-t border-line flex items-center justify-between">
                                     <button 
                                         onClick={() => handleOpenChat(member)}
-                                        className="text-[#aff82a] hover:underline text-xs font-medium flex items-center gap-1 cursor-pointer"
+                                        className="text-accent-ink hover:underline text-xs font-medium flex items-center gap-1 cursor-pointer"
                                     >
                                         <span className="material-symbols-outlined text-[14px]">chat</span> Message
                                     </button>
@@ -602,7 +604,7 @@ return (
                                                 <span className="material-symbols-outlined text-[14px]">person_remove</span> Remove
                                             </button>
                                         )}
-                                        <span className="text-[10px] text-[#8c947b]">Active now</span>
+                                        <span className="text-[10px] text-muted">Active now</span>
                                     </div>
                                 </div>
                             </div>
@@ -637,7 +639,7 @@ return (
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="remove-member-title"
-                    className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                    className="bg-surface1 border border-line rounded-2xl shadow-2xl w-full max-w-sm p-6"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
@@ -645,9 +647,9 @@ return (
                     </div>
 
                     <h2 id="remove-member-title" className="text-white font-bold text-[18px] text-center mb-2">Remove this member?</h2>
-                    <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to remove</p>
+                    <p className="text-muted text-[13px] text-center mb-1">You are about to remove</p>
                     <p className="text-white font-bold text-[15px] text-center mb-3">"{memberToRemove.name}"</p>
-                    <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                    <p className="text-muted text-[12px] text-center mb-6">
                         They will lose access to {activeTeam?.name || "this department"} and its projects, unless they were added to a project directly. You can add them back later.
                     </p>
                     {removeMemberError && (
@@ -659,7 +661,7 @@ return (
                             type="button"
                             onClick={closeRemoveMember}
                             disabled={removingMember}
-                            className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                            className="flex-1 py-2.5 rounded-xl border border-line text-muted hover:bg-line hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                         >
                             No, keep them
                         </button>
@@ -667,7 +669,7 @@ return (
                             type="button"
                             onClick={confirmRemoveMember}
                             disabled={removingMember}
-                            className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                            className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                         >
                             {removingMember ? (
                                 <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Removing…</>
@@ -691,7 +693,7 @@ return (
                     role="dialog"
                     aria-modal="true"
                     aria-labelledby="delete-dept-title"
-                    className="bg-[#1C1F26] border border-[#2D3139] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+                    className="bg-surface1 border border-line rounded-2xl shadow-2xl w-full max-w-sm p-6"
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/10 border border-red-500/20 mx-auto mb-4">
@@ -699,9 +701,9 @@ return (
                     </div>
 
                     <h2 id="delete-dept-title" className="text-white font-bold text-[18px] text-center mb-2">Delete this department?</h2>
-                    <p className="text-[#8c947b] text-[13px] text-center mb-1">You are about to permanently delete</p>
+                    <p className="text-muted text-[13px] text-center mb-1">You are about to permanently delete</p>
                     <p className="text-white font-bold text-[15px] text-center mb-3">"{deptToDelete.name}"</p>
-                    <p className="text-[#8c947b] text-[12px] text-center mb-6">
+                    <p className="text-muted text-[12px] text-center mb-6">
                         Every project in it, with all their tasks, files and chat channels, will also be removed, and everyone's membership of the department ends. This cannot be undone.
                     </p>
                     {deleteDeptError && (
@@ -713,7 +715,7 @@ return (
                             type="button"
                             onClick={closeDeleteDept}
                             disabled={deletingDept}
-                            className="flex-1 py-2.5 rounded-xl border border-[#2D3139] text-[#8c947b] hover:bg-[#2D3139] hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
+                            className="flex-1 py-2.5 rounded-xl border border-line text-muted hover:bg-line hover:text-white text-[13px] font-semibold transition-colors cursor-pointer disabled:opacity-50"
                         >
                             No, keep it
                         </button>
@@ -721,7 +723,7 @@ return (
                             type="button"
                             onClick={confirmDeleteDept}
                             disabled={deletingDept}
-                            className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                            className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                         >
                             {deletingDept ? (
                                 <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Deleting…</>
@@ -748,27 +750,27 @@ return (
         {/* Add Member Modal */}
         {showAddMemberModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md">
-                <div className="bg-[#191c21] rounded-2xl p-6 max-w-md w-full space-y-4 border border-[#2D3139] shadow-2xl animate-scaleIn">
-                    <div className="flex items-center justify-between border-b border-[#2D3139]/30 pb-3">
-                        <h3 className="text-lg font-bold text-[#aff82a]">Add Member{activeTeam ? ` to ${activeTeam.name}` : ""}</h3>
-                        <button onClick={closeAddMemberModal} className="text-[#8c947b] hover:text-white cursor-pointer">
+                <div className="bg-raised rounded-2xl p-6 max-w-md w-full space-y-4 border border-line shadow-2xl animate-scaleIn">
+                    <div className="flex items-center justify-between border-b border-line/30 pb-3">
+                        <h3 className="text-lg font-bold text-accent-ink">Add Member{activeTeam ? ` to ${activeTeam.name}` : ""}</h3>
+                        <button onClick={closeAddMemberModal} className="text-muted hover:text-white cursor-pointer">
                             <span className="material-symbols-outlined">close</span>
                         </button>
                     </div>
 
                     {/* Tab switcher: existing Spacer user vs. brand-new email invite */}
-                    <div className="flex gap-1 bg-[#0F1115] p-1 rounded-xl border border-[#2D3139]">
+                    <div className="flex gap-1 bg-canvas p-1 rounded-xl border border-line">
                         <button
                             type="button"
                             onClick={() => switchAddMemberTab("existing")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${addMemberTab === "existing" ? "bg-[#aff82a] text-[#1C1F26]" : "text-[#8c947b] hover:text-white"}`}
+                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${addMemberTab === "existing" ? "bg-accent text-on-accent" : "text-muted hover:text-white"}`}
                         >
                             Existing User
                         </button>
                         <button
                             type="button"
                             onClick={() => switchAddMemberTab("invite")}
-                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${addMemberTab === "invite" ? "bg-[#aff82a] text-[#1C1F26]" : "text-[#8c947b] hover:text-white"}`}
+                            className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${addMemberTab === "invite" ? "bg-accent text-on-accent" : "text-muted hover:text-white"}`}
                         >
                             Invite New User
                         </button>
@@ -782,9 +784,9 @@ return (
                                 </p>
                             ) : (
                                 <div>
-                                    <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Select User</label>
-                                    <select
-                                        className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
+                                    <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Select User</label>
+                                    <Select
+                                        className="w-full bg-canvas border border-line rounded-xl px-4 py-2.5 text-white text-sm focus:ring-1 focus:ring-accent-ink focus:outline-none"
                                         value={inviteEmail}
                                         onChange={(e) => setInviteEmail(e.target.value)}
                                     >
@@ -793,21 +795,21 @@ return (
                                                 {user.name || user.email} ({user.email})
                                             </option>
                                         ))}
-                                    </select>
+                                    </Select>
                                 </div>
                             )
                         ) : (
                             <div>
-                                <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Email Address</label>
+                                <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Email Address</label>
                                 <input
                                     type="email"
                                     required
                                     placeholder="name@company.com"
-                                    className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none placeholder-[#8c947b]/40"
+                                    className="w-full bg-canvas border border-line rounded-xl px-4 py-2.5 text-white text-sm focus:ring-1 focus:ring-accent-ink focus:outline-none placeholder-muted/40"
                                     value={inviteEmail}
                                     onChange={(e) => setInviteEmail(e.target.value)}
                                 />
-                                <p className="text-[11px] text-[#8c947b] mt-2 leading-relaxed">
+                                <p className="text-[11px] text-muted mt-2 leading-relaxed">
                                     They'll get an email with a link to create a password. Once they do, they're
                                     signed in automatically — already added to this department with the role below.
                                 </p>
@@ -816,15 +818,15 @@ return (
 
                         {(addMemberTab === "invite" || orgUsers.length > 0) && (
                             <div>
-                                <label className="block text-xs font-semibold text-[#8c947b] uppercase tracking-wider mb-2">Role in Department</label>
-                                <select
-                                    className="w-full bg-[#0F1115] border border-[#2D3139] rounded-xl px-4 py-2.5 text-white font-body-md focus:ring-1 focus:ring-[#aff82a] focus:outline-none"
+                                <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2">Role in Department</label>
+                                <Select
+                                    className="w-full bg-canvas border border-line rounded-xl px-4 py-2.5 text-white text-sm focus:ring-1 focus:ring-accent-ink focus:outline-none"
                                     value={inviteRole}
                                     onChange={(e) => setInviteRole(e.target.value)}
                                 >
                                     <option value="member">Member</option>
                                     <option value="admin">Admin</option>
-                                </select>
+                                </Select>
                             </div>
                         )}
 
@@ -835,7 +837,7 @@ return (
                             </p>
                         )}
                         {inviteSuccess && (
-                            <p className="text-xs text-[#aff82a] flex items-center gap-1.5">
+                            <p className="text-xs text-accent-ink flex items-center gap-1.5">
                                 <span className="material-symbols-outlined text-[14px]">check_circle</span>
                                 {inviteSuccess}
                             </p>
@@ -845,7 +847,7 @@ return (
                             <button
                                 type="button"
                                 onClick={closeAddMemberModal}
-                                className="px-4 py-2 border border-[#2D3139] rounded-xl text-xs font-semibold text-[#8c947b] hover:text-white hover:bg-[#2D3139] transition-all cursor-pointer"
+                                className="px-4 py-2 border border-line rounded-xl text-xs font-semibold text-muted hover:text-white hover:bg-line transition-all cursor-pointer"
                             >
                                 Cancel
                             </button>
@@ -853,7 +855,7 @@ return (
                                 <button
                                     type="submit"
                                     disabled={inviteSending}
-                                    className="px-4 py-2 bg-[#aff82a] text-[#1C1F26] hover:bg-[#9de022] rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                                    className="px-4 py-2 bg-accent text-on-accent hover:bg-accent-hover rounded-xl text-xs font-semibold transition-all disabled:opacity-50 cursor-pointer"
                                 >
                                     {inviteSending
                                         ? (addMemberTab === "invite" ? "Sending Invite…" : "Adding…")

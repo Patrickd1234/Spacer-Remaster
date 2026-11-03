@@ -59,18 +59,18 @@ export default function DocViewer({ file, onClose }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-5 py-3 border-b border-outline-variant bg-surface-container-low shrink-0">
-          <span className="material-symbols-outlined text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 1" }}>
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-line bg-panel shrink-0">
+          <span className="material-symbols-outlined text-muted" style={{ fontVariationSettings: "'FILL' 1" }}>
             {fileIcon(type)}
           </span>
-          <p className="text-on-surface font-semibold text-sm flex-1 truncate">{name}</p>
+          <p className="text-white font-semibold text-sm flex-1 truncate">{name}</p>
           {url && (
             <a
               href={url}
               download={name}
               target="_blank"
               rel="noreferrer"
-              className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors"
+              className="material-symbols-outlined text-muted hover:text-white transition-colors"
               title="Download"
             >
               download
@@ -78,16 +78,16 @@ export default function DocViewer({ file, onClose }) {
           )}
           <button
             onClick={onClose}
-            className="material-symbols-outlined text-on-surface-variant hover:text-on-surface transition-colors"
+            className="material-symbols-outlined text-muted hover:text-white transition-colors"
           >
             close
           </button>
         </div>
 
         {/* Preview area */}
-        <div className="flex-1 overflow-hidden flex items-center justify-center bg-surface-container-lowest">
+        <div className="flex-1 overflow-hidden flex items-center justify-center bg-panelest">
           {!url && (
-            <p className="text-on-surface-variant text-sm p-8 text-center">This file can't be opened right now. Close and reopen the project to refresh its link.</p>
+            <p className="text-muted text-sm p-8 text-center">This file can't be opened right now. Close and reopen the project to refresh its link.</p>
           )}
           {url && isImage && (
             <img
@@ -118,14 +118,14 @@ export default function DocViewer({ file, onClose }) {
               >
                 {fileIcon(type)}
               </span>
-              <p className="text-on-surface font-semibold">{name}</p>
-              <p className="text-on-surface-variant text-sm">Preview not available for this file type.</p>
+              <p className="text-white font-semibold">{name}</p>
+              <p className="text-muted text-sm">Preview not available for this file type.</p>
               <a
                 href={url}
                 download={name}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 px-5 py-2 rounded-lg bg-primary-container text-on-primary-container font-semibold text-sm hover:opacity-90 transition-opacity"
+                className="mt-2 px-5 py-2 rounded-lg bg-primary-container text-on-accent font-semibold text-sm hover:opacity-90 transition-opacity"
               >
                 Download file
               </a>

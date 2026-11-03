@@ -3,7 +3,9 @@ import { supabase, getSessionUser } from "../supabase";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import GroupChat from "../components/GroupChat";
 import { useRole } from "../RoleContext";
-import { safeDownloadDataUrl, safeImageDataUrl } from "../safeUrl";
+import { attachmentDisplay, dmAttachmentPath, formatFileSize, validateDmAttachment } from "../dmAttachmentFiles";
+import { removeDmAttachment, uploadDmAttachment, withDmAttachmentLinks } from "../dmAttachments";
+import UploadingBubble from "../components/UploadingBubble";
 
 // How close (px) to the bottom of the DM list still counts as "at the bottom"
 const NEAR_BOTTOM_PX = 120;
@@ -17,7 +19,28 @@ function groupReactions(rows) {
     return [...usersByEmoji.entries()].map(([emoji, users]) => ({ emoji, users }));
 }
 
+// When this browser last read a DM thread (drives the unread dot), kept in
+// localStorage between visits. Outside the component: Date.now() is for event
+// handlers only, never render.
+function storeDmReadNow(otherUserId) {
+    const at = Date.now();
+    localStorage.setItem(`dm_last_read_${otherUserId}`, at);
+    return at;
+}
+
+function storedDmRead(otherUserId) {
+    return Number(localStorage.getItem(`dm_last_read_${otherUserId}`)) || 0;
+}
+
 export default function SidebarRouter(props) {
+    // Read times marked in this session. Being state, marking one re-renders the
+    // unread dots; a bare localStorage write wouldn't once the component is compiled.
+    const [dmReadAt, setDmReadAt] = useState({});
+    const markDmRead = (otherUserId) => {
+        const at = storeDmReadNow(otherUserId);
+        setDmReadAt(prev => ({ ...prev, [otherUserId]: at }));
+    };
+    const dmLastRead = (otherUserId) => dmReadAt[otherUserId] ?? storedDmRead(otherUserId);
     // Role comes from RoleContext, which handles users with several memberships
     const { roleLoading } = useRole();
     const [userId, setUserId] = useState(null);
@@ -35,10 +58,15 @@ export default function SidebarRouter(props) {
     const [chatMessages, setChatMessages] = useState([]);
     const [newMessage, setNewMessage] = useState("");
     const [isChatMinimized, setIsChatMinimized] = useState(false);
+    const chatPanelRef = useRef(null);
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editingText, setEditingText] = useState("");
     const [replyingToMessage, setReplyingToMessage] = useState(null);
     const [attachedFile, setAttachedFile] = useState(null);
+    const [attachError, setAttachError] = useState("");
+    const isSendingRef = useRef(false);
+    // The attachment being uploaded, shown as a pending bubble until the message appears
+    const [dmUploading, setDmUploading] = useState(null);
     const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
 
     const imageInputRef = useRef(null);
@@ -149,6 +177,18 @@ export default function SidebarRouter(props) {
         initRouterAndChat();
     }, []);
 
+    // A click anywhere outside the open chat closes it. The conversation stays
+    // selected, so the chat button reopens it. Buttons elsewhere that open a chat
+    // ("Message") still work: this runs on pointerdown, before their click.
+    useEffect(() => {
+        if (!showChatModal || isChatMinimized) return undefined;
+        const handlePointerDown = (e) => {
+            if (chatPanelRef.current && !chatPanelRef.current.contains(e.target)) setShowChatModal(false);
+        };
+        document.addEventListener("pointerdown", handlePointerDown);
+        return () => document.removeEventListener("pointerdown", handlePointerDown);
+    }, [showChatModal, isChatMinimized]);
+
     // Listen to custom open chat event from other pages
     useEffect(() => {
         if (!userId) return;
@@ -159,7 +199,7 @@ export default function SidebarRouter(props) {
             setIsChatMinimized(false);
             await fetchChatMessages(member.user_id);
 
-            localStorage.setItem(`dm_last_read_${member.user_id}`, Date.now());
+            markDmRead(member.user_id);
         };
         window.addEventListener("open_coworker_chat", handleOpenChatEvent);
         return () => window.removeEventListener("open_coworker_chat", handleOpenChatEvent);
@@ -259,7 +299,7 @@ export default function SidebarRouter(props) {
                         
                         const isCurrentlyOpen = showChatModal && !isChatMinimized && chatRecipient?.user_id === otherId;
                         if (isCurrentlyOpen) {
-                            localStorage.setItem(`dm_last_read_${otherId}`, Date.now());
+                            markDmRead(otherId);
                         }
                     }
                 }
@@ -313,7 +353,7 @@ export default function SidebarRouter(props) {
     }, [userGroups, showChatModal, isChatMinimized, activeGroupChat, userId]);
 
     // Chat operations
-    const fetchChatMessages = async (recipientId) => {
+    async function fetchChatMessages(recipientId) {
         if (!userId || !recipientId) return;
         try {
             const { data, error } = await supabase
@@ -335,7 +375,7 @@ export default function SidebarRouter(props) {
                     pinned: m.pinned || false,
                     reactions: groupReactions(m.direct_message_reactions)
                 }));
-                setChatMessages(mappedData);
+                setChatMessages(await withDmAttachmentLinks(mappedData));
             }
         } catch (err) {
             console.error("Fetch direct messages error:", err);
@@ -346,7 +386,7 @@ export default function SidebarRouter(props) {
         setChatRecipient(recipient);
         setShowChatModal(true);
         setIsChatMinimized(false);
-        localStorage.setItem(`dm_last_read_${recipient.user_id}`, Date.now());
+        markDmRead(recipient.user_id);
         await fetchChatMessages(recipient.user_id);
     };
 
@@ -354,11 +394,37 @@ export default function SidebarRouter(props) {
         e.preventDefault();
         if (!newMessage.trim() && !attachedFile) return;
         if (!chatRecipient || !userId) return;
-        const msgContent = newMessage.trim();
-        setNewMessage("");
+        // A second Enter while a file uploads would send it twice
+        if (isSendingRef.current) return;
+        isSendingRef.current = true;
 
-        const newMsgObj = {
-            id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(),
+        const msgContent = newMessage.trim();
+        const fileToSend = attachedFile;
+        const messageId = crypto.randomUUID();
+        setAttachError("");
+
+        // Upload first: the message must never point at a file that isn't there.
+        // The row stores only where the file is, not the file itself.
+        let fileAttachment = null;
+        if (fileToSend) {
+            setDmUploading({ name: fileToSend.name, type: fileToSend.type });
+            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            const path = dmAttachmentPath(userId, messageId, fileToSend.name);
+            const uploadError = await uploadDmAttachment(path, fileToSend.file);
+            setDmUploading(null);
+            if (uploadError) {
+                console.error("DM attachment upload failed:", uploadError);
+                setAttachError(`Could not upload ${fileToSend.name}. Please try again.`);
+                isSendingRef.current = false;
+                return;
+            }
+            fileAttachment = { name: fileToSend.name, size: fileToSend.size, type: fileToSend.type, path };
+        }
+        setNewMessage("");
+        isSendingRef.current = false;
+
+        const [newMsgObj] = await withDmAttachmentLinks([{
+            id: messageId,
             sender_id: userId,
             receiver_id: chatRecipient.user_id,
             content: msgContent,
@@ -366,8 +432,8 @@ export default function SidebarRouter(props) {
             replyToId: replyingToMessage ? replyingToMessage.id : null,
             replyToContent: replyingToMessage ? replyingToMessage.content : null,
             replyToSenderName: replyingToMessage ? (replyingToMessage.sender_id === userId ? "You" : chatRecipient.name) : null,
-            fileAttachment: attachedFile || null
-        };
+            fileAttachment
+        }]);
 
         setChatMessages(prev => [...prev, newMsgObj]);
         setDmLatestMessages(prev => ({ ...prev, [chatRecipient.user_id]: newMsgObj }));
@@ -378,15 +444,17 @@ export default function SidebarRouter(props) {
             const { error } = await supabase
                 .from("direct_messages")
                 .insert({
+                    id: messageId,
                     sender_id: userId,
                     receiver_id: chatRecipient.user_id,
                     content: msgContent,
                     reply_to_id: newMsgObj.replyToId,
-                    file_attachment: newMsgObj.fileAttachment
+                    file_attachment: fileAttachment
                 });
 
             if (error) {
                 console.warn("DB message save failed:", error.message);
+                if (fileAttachment) removeDmAttachment(fileAttachment.path);
             }
         } catch (err) {
             console.warn("Error sending message to DB:", err);
@@ -418,13 +486,15 @@ export default function SidebarRouter(props) {
     const handleDeleteMessage = async (msgId) => {
         if (!chatRecipient || !userId) return;
         try {
+            const attachmentPath = chatMessages.find(m => m.id === msgId)?.fileAttachment?.path;
             const updatedMessages = chatMessages.filter(m => m.id !== msgId);
             setChatMessages(updatedMessages);
 
-            await supabase
+            const { error } = await supabase
                 .from("direct_messages")
                 .delete()
                 .eq("id", msgId);
+            if (!error && attachmentPath) await removeDmAttachment(attachmentPath);
         } catch (err) {
             console.warn("Delete message error:", err);
         }
@@ -511,19 +581,13 @@ export default function SidebarRouter(props) {
 
     const handleAttachFile = (e) => {
         const file = e.target.files?.[0];
+        e.target.value = ""; // picking the same file again should fire onChange
         if (!file) return;
 
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-            setAttachedFile({
-                name: file.name,
-                size: sizeMB > 0.1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(1)} KB`,
-                type: file.type,
-                dataUrl: reader.result
-            });
-        };
-        reader.readAsDataURL(file);
+        const invalid = validateDmAttachment(file);
+        setAttachError(invalid || "");
+        if (invalid) return;
+        setAttachedFile({ file, name: file.name, size: formatFileSize(file.size), type: file.type });
     };
 
     const getUnreadConversationsCount = () => {
@@ -533,8 +597,7 @@ export default function SidebarRouter(props) {
             if (member.user_id === userId) return;
             const latestMsg = dmLatestMessages[member.user_id];
             if (latestMsg && latestMsg.receiver_id === userId) {
-                const lastRead = localStorage.getItem(`dm_last_read_${member.user_id}`);
-                if (!lastRead || new Date(latestMsg.created_at).getTime() > Number(lastRead)) {
+                if (new Date(latestMsg.created_at).getTime() > dmLastRead(member.user_id)) {
                     count++;
                 }
             }
@@ -556,6 +619,7 @@ export default function SidebarRouter(props) {
         <WorkspaceSidebar
             {...props}
             unreadMessages={getUnreadConversationsCount()}
+            isMessagesOpen={showChatModal && !isChatMinimized}
             onOpenMessages={() => { setShowChatModal(true); setIsChatMinimized(false); }}
         />
     );
@@ -572,7 +636,7 @@ export default function SidebarRouter(props) {
                 >
                     <span className="material-symbols-outlined text-2xl">forum</span>
                     {getUnreadConversationsCount() > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white font-extrabold text-[10px] min-w-[20px] h-[20px] rounded-full flex items-center justify-center px-1 border-2 border-[#16191F] animate-bounce">
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-[#ffffff] font-extrabold text-[10px] min-w-[20px] h-[20px] rounded-full flex items-center justify-center px-1 border-2 border-panel animate-bounce">
                             {getUnreadConversationsCount()}
                         </span>
                     )}
@@ -582,7 +646,8 @@ export default function SidebarRouter(props) {
             {/* Floating Message Hub Window */}
             {showChatModal && (
                 <div 
-                    className={`fixed z-[100] transition-all duration-300 shadow-2xl border border-[#2D3139] bg-[#16191F]/95 backdrop-blur-md rounded-2xl flex flex-col overflow-hidden ${
+                    ref={chatPanelRef}
+                    className={`fixed z-[100] transition-all duration-300 shadow-2xl border border-line bg-panel/95 backdrop-blur-md rounded-2xl flex flex-col overflow-hidden ${
                         isChatMinimized 
                             ? 'bottom-6 right-6 w-[280px] h-[48px]' 
                             : 'bottom-6 right-6 w-[360px] h-[480px]'
@@ -591,7 +656,7 @@ export default function SidebarRouter(props) {
                     {/* Header */}
                     <div 
                         onClick={() => isChatMinimized && setIsChatMinimized(false)}
-                        className={`px-4 py-3 border-b border-[#2D3139] flex items-center justify-between bg-black/20 ${isChatMinimized ? 'cursor-pointer hover:bg-black/30' : ''}`}
+                        className={`px-4 py-3 border-b border-line flex items-center justify-between bg-black/20 ${isChatMinimized ? 'cursor-pointer hover:bg-black/30' : ''}`}
                     >
                         <div className="flex items-center gap-2 overflow-hidden">
                             {(chatRecipient || activeGroupChat) && !isChatMinimized ? (
@@ -601,13 +666,13 @@ export default function SidebarRouter(props) {
                                         setChatRecipient(null);
                                         setActiveGroupChat(null);
                                     }}
-                                    className="text-[#8c947b] hover:text-white cursor-pointer mr-1 flex items-center"
+                                    className="text-muted hover:text-white cursor-pointer mr-1 flex items-center"
                                 >
                                     <span className="material-symbols-outlined text-base">arrow_back</span>
                                 </button>
                             ) : null}
                             
-                            <div className="w-5 h-5 rounded-full bg-[#5b644d]/20 text-[#aff82a] flex items-center justify-center font-bold text-[10px]">
+                            <div className="w-5 h-5 rounded-full bg-faint/20 text-accent-ink flex items-center justify-center font-bold text-[10px]">
                                 {chatRecipient ? (chatRecipient.name || "?").charAt(0).toUpperCase() : (activeGroupChat ? "#" : "M")}
                             </div>
                             
@@ -616,7 +681,7 @@ export default function SidebarRouter(props) {
                                     <>
                                         Messages
                                         {getUnreadConversationsCount() > 0 && (
-                                            <span className="bg-red-500 text-white font-extrabold text-[9px] min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
+                                            <span className="bg-red-500 text-[#ffffff] font-extrabold text-[9px] min-w-[16px] h-[16px] rounded-full flex items-center justify-center px-1">
                                                 {getUnreadConversationsCount()}
                                             </span>
                                         )}
@@ -631,7 +696,7 @@ export default function SidebarRouter(props) {
                                     e.stopPropagation();
                                     setIsChatMinimized(!isChatMinimized);
                                 }}
-                                className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
+                                className="text-muted hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
                             >
                                 <span className="material-symbols-outlined text-sm">{isChatMinimized ? "open_in_full" : "minimize"}</span>
                             </button>
@@ -642,7 +707,7 @@ export default function SidebarRouter(props) {
                                     setChatRecipient(null);
                                     setActiveGroupChat(null);
                                 }}
-                                className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
+                                className="text-muted hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
                             >
                                 <span className="material-symbols-outlined text-sm">close</span>
                             </button>
@@ -654,19 +719,19 @@ export default function SidebarRouter(props) {
                             {!chatRecipient && !activeGroupChat ? (
                                 /* UNIFIED INBOX LISTING */
                                 <div className="flex-1 flex flex-col overflow-hidden bg-black/5">
-                                    <div className="p-3 border-b border-[#2D3139] bg-black/10">
+                                    <div className="p-3 border-b border-line bg-black/10">
                                         <div className="relative mb-2">
                                             <input 
                                                 type="text"
                                                 placeholder="Search people or groups..."
                                                 value={searchQuery}
                                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                                className="w-full bg-[#16191F] border border-white/10 rounded text-white text-xs px-3 py-1.5 focus:outline-none focus:border-[var(--primary-color)]"
+                                                className="w-full bg-panel border border-white/10 rounded text-white text-xs px-3 py-1.5 focus:outline-none focus:border-accent-ink"
                                             />
                                         </div>
-                                        <p className="text-[10px] text-[#8c947b] font-bold uppercase tracking-wider">Inbox</p>
+                                        <p className="text-[10px] text-muted font-bold uppercase tracking-wider">Inbox</p>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto divide-y divide-[#2D3139]/40 scrollbar-thin">
+                                    <div className="flex-1 overflow-y-auto divide-y divide-line/40 scrollbar-thin">
                                         {(() => {
                                             const lowerQuery = searchQuery.toLowerCase();
                                             
@@ -697,7 +762,7 @@ export default function SidebarRouter(props) {
                                             });
 
                                             if (combinedList.length === 0) {
-                                                return <p className="text-xs text-[#8c947b] italic text-center py-8">{lowerQuery ? "No results found" : "No active chats. Search to start one!"}</p>;
+                                                return <p className="text-xs text-muted italic text-center py-8">{lowerQuery ? "No results found" : "No active chats. Search to start one!"}</p>;
                                             }
 
                                             return combinedList.map(item => {
@@ -714,18 +779,18 @@ export default function SidebarRouter(props) {
                                                             className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
                                                         >
                                                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                                                <div className="w-8 h-8 rounded-xl bg-[var(--primary-color)]/20 flex items-center justify-center font-bold text-[var(--primary-color)] text-xs uppercase shrink-0">
+                                                                <div className="w-8 h-8 rounded-xl bg-[var(--primary-color)]/20 flex items-center justify-center font-bold text-accent-ink text-xs uppercase shrink-0">
                                                                     <span className="material-symbols-outlined text-[16px]">tag</span>
                                                                 </div>
                                                                 <div className="overflow-hidden flex-1">
                                                                     <div className="flex items-center justify-between gap-1">
                                                                         <p className="text-white font-semibold text-xs truncate">{item.name}</p>
                                                                     </div>
-                                                                    <p className="text-[10px] text-[#8c947b] truncate mt-0.5">Group Channel</p>
+                                                                    <p className="text-[10px] text-muted truncate mt-0.5">Group Channel</p>
                                                                 </div>
                                                             </div>
                                                             {isUnread && (
-                                                                <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0"></span>
+                                                                <span className="ml-2 bg-primary-accent text-on-accent font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0"></span>
                                                             )}
                                                         </div>
                                                     );
@@ -733,8 +798,7 @@ export default function SidebarRouter(props) {
                                                     const lastMsg = item.latestMsg;
                                                     let isUnread = false;
                                                     if (lastMsg && lastMsg.receiver_id === userId) {
-                                                        const lastRead = localStorage.getItem(`dm_last_read_${item.user_id}`);
-                                                        if (!lastRead || new Date(lastMsg.created_at).getTime() > Number(lastRead)) {
+                                                        if (new Date(lastMsg.created_at).getTime() > dmLastRead(item.user_id)) {
                                                             isUnread = true;
                                                         }
                                                     }
@@ -743,25 +807,25 @@ export default function SidebarRouter(props) {
                                                         <div 
                                                             key={`dm_${item.user_id}`}
                                                             onClick={() => {
-                                                                localStorage.setItem(`dm_last_read_${item.user_id}`, Date.now());
+                                                                markDmRead(item.user_id);
                                                                 handleOpenChat(item);
                                                             }}
                                                             className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
                                                         >
                                                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                                                <div className="w-8 h-8 rounded-xl bg-[#2D3139] flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
+                                                                <div className="w-8 h-8 rounded-xl bg-line flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
                                                                     {(item.name || "?").charAt(0)}
                                                                 </div>
                                                                 <div className="overflow-hidden flex-1">
                                                                     <div className="flex items-center justify-between gap-1">
                                                                         <p className="text-white font-semibold text-xs truncate">{item.name || "User"}</p>
                                                                         {lastMsg && (
-                                                                            <span className="text-[9px] text-[#8c947b] shrink-0">
+                                                                            <span className="text-[9px] text-muted shrink-0">
                                                                                 {new Date(lastMsg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                                             </span>
                                                                         )}
                                                                     </div>
-                                                                    <p className="text-[10px] text-[#8c947b] truncate mt-0.5">
+                                                                    <p className="text-[10px] text-muted truncate mt-0.5">
                                                                         {lastMsg ? (
                                                                             lastMsg.fileAttachment ? "📎 Attached file" : lastMsg.content
                                                                         ) : (
@@ -771,7 +835,7 @@ export default function SidebarRouter(props) {
                                                                 </div>
                                                             </div>
                                                             {isUnread && (
-                                                                <span className="ml-2 bg-primary-accent text-[#0F1115] font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0">
+                                                                <span className="ml-2 bg-primary-accent text-on-accent font-extrabold text-[9px] w-2 h-2 rounded-full flex items-center justify-center shrink-0">
                                                                 </span>
                                                             )}
                                                         </div>
@@ -789,9 +853,9 @@ export default function SidebarRouter(props) {
                                     <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin" onScroll={handleMessagesScroll}>
                                         {chatMessages.length === 0 ? (
                                             <div className="h-full flex flex-col items-center justify-center text-center p-4">
-                                                <span className="material-symbols-outlined text-[#8c947b] text-3xl mb-1">forum</span>
+                                                <span className="material-symbols-outlined text-muted text-3xl mb-1">forum</span>
                                                 <p className="text-white font-medium text-xs">No messages yet</p>
-                                                <p className="text-[10px] text-[#8c947b] mt-0.5">Send a message to start.</p>
+                                                <p className="text-[10px] text-muted mt-0.5">Send a message to start.</p>
                                             </div>
                                         ) : (
                                             [...chatMessages]
@@ -821,7 +885,7 @@ export default function SidebarRouter(props) {
 
                                                         {/* Quoted Message Link */}
                                                         {msg.replyToId && (
-                                                            <div className={`flex items-center gap-1 text-[9px] mb-1 opacity-75 ${isMe ? 'justify-end text-primary-accent' : 'text-[#8c947b]'}`}>
+                                                            <div className={`flex items-center gap-1 text-[9px] mb-1 opacity-75 ${isMe ? 'justify-end text-primary-accent' : 'text-muted'}`}>
                                                                 <span className="material-symbols-outlined text-[10px]">reply</span>
                                                                 <span>Quoting {msg.replyToSenderName || 'Member'}: "{msg.replyToContent}"</span>
                                                             </div>
@@ -829,19 +893,19 @@ export default function SidebarRouter(props) {
 
                                                         {/* Actions Hover Menu */}
                                                         {!isEditing && (
-                                                            <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1.5 absolute -top-5 z-20 transition-opacity bg-[#1C1F26] border border-[#2D3139] rounded-lg px-1.5 py-0.5 ${isMe ? 'right-0' : 'left-0'}`}>
+                                                            <div className={`opacity-0 group-hover:opacity-100 flex items-center gap-1.5 absolute -top-5 z-20 transition-opacity bg-surface1 border border-line rounded-lg px-1.5 py-0.5 ${isMe ? 'right-0' : 'left-0'}`}>
                                                                 {isMe && (
                                                                     <>
                                                                         <button 
                                                                             onClick={() => { setEditingMessageId(msg.id); setEditingText(msg.content); }}
-                                                                            className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center"
+                                                                            className="text-muted hover:text-white cursor-pointer p-0.5 flex items-center justify-center"
                                                                             title="Edit"
                                                                         >
                                                                             <span className="material-symbols-outlined text-[13px]">edit</span>
                                                                         </button>
                                                                         <button 
                                                                             onClick={() => handleDeleteMessage(msg.id)}
-                                                                            className="text-[#8c947b] hover:text-red-400 cursor-pointer p-0.5 flex items-center justify-center"
+                                                                            className="text-muted hover:text-red-400 cursor-pointer p-0.5 flex items-center justify-center"
                                                                             title="Delete"
                                                                         >
                                                                             <span className="material-symbols-outlined text-[13px]">delete</span>
@@ -850,14 +914,14 @@ export default function SidebarRouter(props) {
                                                                 )}
                                                                 <button 
                                                                     onClick={() => setReplyingToMessage(msg)}
-                                                                    className="text-[#8c947b] hover:text-white cursor-pointer p-0.5 flex items-center justify-center"
+                                                                    className="text-muted hover:text-white cursor-pointer p-0.5 flex items-center justify-center"
                                                                     title="Quote Reply"
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">reply</span>
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => handleTogglePinMessage(msg.id)}
-                                                                    className={`cursor-pointer p-0.5 flex items-center justify-center transition-colors ${msg.pinned ? 'text-primary-accent hover:text-white' : 'text-[#8c947b] hover:text-white'}`}
+                                                                    className={`cursor-pointer p-0.5 flex items-center justify-center transition-colors ${msg.pinned ? 'text-primary-accent hover:text-white' : 'text-muted hover:text-white'}`}
                                                                     title={msg.pinned ? "Unpin Message" : "Pin Message"}
                                                                 >
                                                                     <span className="material-symbols-outlined text-[13px]">{msg.pinned ? "keep_off" : "push_pin"}</span>
@@ -877,18 +941,20 @@ export default function SidebarRouter(props) {
                                                         {/* Message bubble */}
                                                         <div className={`rounded-2xl px-3 py-2 text-xs relative ${
                                                             isMe 
-                                                                ? 'bg-primary-accent text-[#0F1115] font-medium rounded-tr-none' 
-                                                                : 'bg-[#2D3139] text-white rounded-tl-none'
+                                                                ? 'chat-bubble-mine font-medium rounded-tr-none' 
+                                                                : 'bg-line text-white rounded-tl-none'
                                                         } ${isMe ? '' : 'order-1'} ${msg.pinned ? 'ring-1 ring-primary-accent border border-primary-accent/40' : ''}`}>
                                                             
                                                             {/* Attached File */}
-                                                            {msg.fileAttachment && (
+                                                            {msg.fileAttachment && (() => {
+                                                                // Signed storage link, or a checked legacy data URL; unsafe ones aren't rendered
+                                                                const { imageSrc, downloadHref } = attachmentDisplay(msg.fileAttachment);
+                                                                return (
                                                                 <div className="mb-2 p-1.5 rounded-lg bg-black/20 border border-white/5 max-w-[240px]">
-                                                                    {/* Stored data URLs are checked before use; unsafe ones aren't rendered as links/images */}
-                                                                    {safeImageDataUrl(msg.fileAttachment.dataUrl) ? (
-                                                                        <img 
-                                                                            src={safeImageDataUrl(msg.fileAttachment.dataUrl)}
-                                                                            alt={msg.fileAttachment.name} 
+                                                                    {imageSrc ? (
+                                                                        <img
+                                                                            src={imageSrc}
+                                                                            alt={msg.fileAttachment.name}
                                                                             className="max-h-[140px] rounded object-cover max-w-full"
                                                                         />
                                                                     ) : (
@@ -898,10 +964,12 @@ export default function SidebarRouter(props) {
                                                                                 <p className="truncate font-semibold text-[10px]">{msg.fileAttachment.name}</p>
                                                                                 <p className="text-[8px] opacity-75">{msg.fileAttachment.size}</p>
                                                                             </div>
-                                                                            {safeDownloadDataUrl(msg.fileAttachment.dataUrl) && (
+                                                                            {downloadHref && (
                                                                                 <a
-                                                                                    href={safeDownloadDataUrl(msg.fileAttachment.dataUrl)}
+                                                                                    href={downloadHref}
                                                                                     download={msg.fileAttachment.name || "attachment"}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
                                                                                     className="ml-auto text-primary-accent hover:underline flex items-center justify-center p-1"
                                                                                 >
                                                                                     <span className="material-symbols-outlined text-base">download</span>
@@ -910,14 +978,15 @@ export default function SidebarRouter(props) {
                                                                         </div>
                                                                     )}
                                                                 </div>
-                                                            )}
+                                                                );
+                                                            })()}
 
                                                             {isEditing ? (
                                                                 <div className="flex flex-col gap-1 w-48">
                                                                     <textarea
                                                                         value={editingText}
                                                                         onChange={(e) => setEditingText(e.target.value)}
-                                                                        className="w-full bg-[#0F1115] border border-[#2D3139] text-white p-1.5 rounded text-[11px] focus:outline-none"
+                                                                        className="w-full bg-canvas border border-line text-white p-1.5 rounded text-[11px] focus:outline-none"
                                                                         rows={2}
                                                                     />
                                                                     <div className="flex justify-end gap-1.5">
@@ -929,7 +998,7 @@ export default function SidebarRouter(props) {
                                                                         </button>
                                                                         <button 
                                                                             onClick={() => handleEditMessage(msg.id, editingText)}
-                                                                            className="text-[10px] bg-white text-black font-semibold px-2 py-0.5 rounded hover:bg-neutral-200 cursor-pointer"
+                                                                            className="text-[10px] bg-white text-canvas font-semibold px-2 py-0.5 rounded hover:bg-white/80 cursor-pointer"
                                                                         >
                                                                             Save
                                                                         </button>
@@ -941,11 +1010,11 @@ export default function SidebarRouter(props) {
 
                                                             {/* Reaction Badges */}
                                                             {msg.reactions && msg.reactions.length > 0 && (
-                                                                <div className="absolute -bottom-2.5 right-2 flex items-center gap-0.5 bg-[#1C1F26] border border-[#2D3139] rounded-full px-1.5 py-0.5 shadow-md scale-90 select-none">
+                                                                <div className="absolute -bottom-2.5 right-2 flex items-center gap-0.5 bg-surface1 border border-line rounded-full px-1.5 py-0.5 shadow-md scale-90 select-none">
                                                                     {msg.reactions.map((r, idx) => (
                                                                         <span key={idx} className="text-[10px] flex items-center gap-0.5" title={`${r.users.length} reaction(s)`}>
                                                                             <span>{r.emoji}</span>
-                                                                            {r.users.length > 1 && <span className="text-[8px] text-[#8c947b] font-bold">{r.users.length}</span>}
+                                                                            {r.users.length > 1 && <span className="text-[8px] text-muted font-bold">{r.users.length}</span>}
                                                                         </span>
                                                                     ))}
                                                                 </div>
@@ -953,7 +1022,7 @@ export default function SidebarRouter(props) {
                                                         </div>
 
                                                         {/* Timestamp and Edited tag */}
-                                                        <span className="text-[8px] text-[#8c947b] mt-1 opacity-75">
+                                                        <span className="text-[8px] text-muted mt-1 opacity-75">
                                                             {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                             {msg.edited && <span className="ml-1 italic font-medium text-primary-accent">(edited)</span>}
                                                         </span>
@@ -961,39 +1030,46 @@ export default function SidebarRouter(props) {
                                                 );
                                             })
                                         )}
+                                        {dmUploading && <UploadingBubble files={[dmUploading]} compact />}
                                         <div ref={messagesEndRef} />
                                     </div>
 
                                     {/* Quote Reply Banner */}
                                     {replyingToMessage && (
-                                        <div className="px-3 py-1.5 bg-black/40 border-t border-[#2D3139] flex items-center justify-between text-[10px] text-primary-accent">
+                                        <div className="px-3 py-1.5 bg-black/40 border-t border-line flex items-center justify-between text-[10px] text-primary-accent">
                                             <div className="flex items-center gap-1.5 overflow-hidden">
                                                 <span className="material-symbols-outlined text-xs">reply</span>
                                                 <span className="truncate">Replying to: "{replyingToMessage.content}"</span>
                                             </div>
                                             <button 
                                                 onClick={() => setReplyingToMessage(null)}
-                                                className="text-[#8c947b] hover:text-white cursor-pointer"
+                                                className="text-muted hover:text-white cursor-pointer"
                                             >
                                                 <span className="material-symbols-outlined text-xs">close</span>
                                             </button>
                                         </div>
                                     )}
 
+                                    {attachError && (
+                                        <div role="alert" className="px-3 py-2 bg-red-500/10 border-t border-red-500/20 text-[10px] text-red-400">
+                                            {attachError}
+                                        </div>
+                                    )}
+
                                     {/* Attachment Preview */}
                                     {attachedFile && (
-                                        <div className="px-3 py-2 bg-black/40 border-t border-[#2D3139] flex items-center justify-between text-[10px] text-primary-accent">
+                                        <div className="px-3 py-2 bg-black/40 border-t border-line flex items-center justify-between text-[10px] text-primary-accent">
                                             <div className="flex items-center gap-2 overflow-hidden">
                                                 <span className="material-symbols-outlined text-xs flex-shrink-0">
                                                     {attachedFile.type.startsWith("image/") ? "image" : "description"}
                                                 </span>
                                                 <span className="truncate font-medium">{attachedFile.name}</span>
-                                                <span className="text-[8px] text-[#8c947b]">({attachedFile.size})</span>
+                                                <span className="text-[8px] text-muted">({attachedFile.size})</span>
                                             </div>
                                             <button 
                                                 type="button"
                                                 onClick={() => setAttachedFile(null)}
-                                                className="text-[#8c947b] hover:text-white cursor-pointer"
+                                                className="text-muted hover:text-white cursor-pointer"
                                             >
                                                 <span className="material-symbols-outlined text-xs">close</span>
                                             </button>
@@ -1001,12 +1077,12 @@ export default function SidebarRouter(props) {
                                     )}
 
                                     {/* Input Footer */}
-                                    <form onSubmit={handleSendMessage} className="p-3 border-t border-[#2D3139] bg-black/20 flex gap-2 items-center relative">
+                                    <form onSubmit={handleSendMessage} className="p-3 border-t border-line bg-black/20 flex gap-2 items-center relative">
                                         {/* Hidden input tags */}
                                         <input 
                                             type="file" 
                                             ref={imageInputRef} 
-                                            accept="image/*,video/*" 
+                                            accept="image/jpeg,image/png,image/gif,image/webp"
                                             onChange={(e) => { handleAttachFile(e); setShowAttachmentMenu(false); }} 
                                             className="hidden" 
                                         />
@@ -1036,7 +1112,7 @@ export default function SidebarRouter(props) {
                                                         className="fixed inset-0 z-40" 
                                                         onClick={() => setShowAttachmentMenu(false)}
                                                     />
-                                                    <div className="absolute bottom-10 left-0 bg-[#191c21] border border-[#2D3139] rounded-2xl p-2 w-48 shadow-2xl z-50 flex flex-col gap-1">
+                                                    <div className="absolute bottom-10 left-0 bg-raised border border-line rounded-2xl p-2 w-48 shadow-2xl z-50 flex flex-col gap-1">
                                                         <button
                                                             type="button"
                                                             onClick={() => { imageInputRef.current?.click(); }}
@@ -1063,13 +1139,15 @@ export default function SidebarRouter(props) {
                                             value={newMessage}
                                             onChange={(e) => setNewMessage(e.target.value)}
                                             placeholder={attachedFile ? "Add a caption..." : `Message ${chatRecipient.name ? chatRecipient.name.split(' ')[0] : 'member'}...`}
-                                            className="flex-1 bg-[#0F1115] border border-[#2D3139] rounded-xl px-3 py-2 text-white text-xs focus:ring-1 focus:ring-primary-accent focus:outline-none"
+                                            className="flex-1 bg-canvas border border-line rounded-xl px-3 py-2 text-white text-xs focus:ring-1 focus:ring-primary-accent focus:outline-none"
                                         />
                                         <button
                                             type="submit"
-                                            className="w-8 h-8 bg-primary-accent text-[#0F1115] hover:opacity-90 rounded-xl flex items-center justify-center transition-all flex-shrink-0 cursor-pointer"
+                                            disabled={Boolean(dmUploading)}
+                                            aria-label={dmUploading ? "Uploading" : "Send"}
+                                            className="w-8 h-8 bg-primary-accent text-on-accent hover:opacity-90 rounded-xl flex items-center justify-center transition-all flex-shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                         >
-                                            <span className="material-symbols-outlined text-base">send</span>
+                                            <span className={`material-symbols-outlined text-base ${dmUploading ? "animate-spin" : ""}`}>{dmUploading ? "progress_activity" : "send"}</span>
                                         </button>
                                     </form>
                                 </div>

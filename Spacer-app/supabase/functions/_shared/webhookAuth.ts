@@ -1,21 +1,29 @@
-// Database webhooks (supabase_functions.http_request triggers) call these
-// functions with `Authorization: Bearer <service role key>`. The public anon
-// key is also a valid JWT, so JWT verification alone would let anyone with
-// the anon key trigger emails — require the exact service role key instead.
-export function isServiceRoleRequest(req: Request): boolean {
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!serviceRoleKey) return false;
+// Database webhooks (public.dispatch_edge_webhook, migration 20261031100000)
+// call these functions with `x-webhook-secret: <WEBHOOK_SECRET>`, a secret the
+// database reads from Vault. The public anon key is also a valid JWT, so JWT
+// verification alone would let anyone with it trigger emails.
+//
+// The service role key is still accepted, but only when it matches
+// SUPABASE_SERVICE_ROLE_KEY exactly: the old dashboard webhooks sent a
+// JWT-format key that stopped matching that variable, so every call was refused.
 
-  const provided = req.headers.get("Authorization") ?? "";
-  const expected = `Bearer ${serviceRoleKey}`;
-  if (provided.length !== expected.length) return false;
-
-  // Constant-time comparison so the key can't be guessed via response timing
+// Constant-time comparison so a secret can't be guessed via response timing
+function sameSecret(provided: string, expected: string): boolean {
+  if (!expected || provided.length !== expected.length) return false;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) {
     diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
   }
   return diff === 0;
+}
+
+export function isServiceRoleRequest(req: Request): boolean {
+  const webhookSecret = Deno.env.get("WEBHOOK_SECRET") ?? "";
+  if (sameSecret(req.headers.get("x-webhook-secret") ?? "", webhookSecret)) return true;
+
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!serviceRoleKey) return false;
+  return sameSecret(req.headers.get("Authorization") ?? "", `Bearer ${serviceRoleKey}`);
 }
 
 export function unauthorized(): Response {
