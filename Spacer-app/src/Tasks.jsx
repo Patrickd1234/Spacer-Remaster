@@ -313,7 +313,7 @@ export default function Tasks() {
                                         : "border-transparent text-muted hover:text-white"
                                 }`}
                             >
-                                Kanban Board
+                                Orbit Board
                             </button>
                             <button
                                 onClick={() => setActiveTab("standup")}
@@ -351,14 +351,14 @@ export default function Tasks() {
                                     </section>
                                 )}
 
-                                {/* Work Board Section Header */}
+                                {/* Orbit Board Section Header */}
                                 <section className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <h2 className="text-lg font-semibold text-white">Work Board</h2>
+                                        <h2 className="text-lg font-semibold text-white">Orbit Board</h2>
                                         <span className="text-xs text-muted font-medium">{openCount} Open Items</span>
                                     </div>
 
-                                    {/* 3 Columns Kanban Board */}
+                                    {/* 3 Columns Orbit Board */}
                                     {loading ? (
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                             {[...Array(3)].map((_, i) => (
@@ -380,7 +380,7 @@ export default function Tasks() {
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                                             {/* TO-DO Column */}
-                                            <div className="bg-raised/50 border border-line/30 rounded-xl flex flex-col min-h-[400px]">
+                                            <div className="orbit-column bg-raised/50 border border-line/30 rounded-xl flex flex-col min-h-[400px]">
                                                 <div className="flex items-center justify-between px-4 py-3 border-b border-line/20">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-muted" />
@@ -402,7 +402,7 @@ export default function Tasks() {
                                             </div>
 
                                             {/* IN PROGRESS Column */}
-                                            <div className="bg-raised/50 border border-line/30 rounded-xl flex flex-col min-h-[400px]">
+                                            <div className="orbit-column bg-raised/50 border border-line/30 rounded-xl flex flex-col min-h-[400px]">
                                                 <div className="flex items-center justify-between px-4 py-3 border-b border-line/20">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-[var(--primary-color)]" />
@@ -424,7 +424,7 @@ export default function Tasks() {
                                             </div>
 
                                             {/* DONE Column */}
-                                            <div className="bg-raised/50 border border-line/30 rounded-xl flex flex-col min-h-[400px]">
+                                            <div className="orbit-column bg-raised/50 border border-line/30 rounded-xl flex flex-col min-h-[400px]">
                                                 <div className="flex items-center justify-between px-4 py-3 border-b border-line/20">
                                                     <div className="flex items-center gap-2">
                                                         <span className="w-2 h-2 rounded-full bg-green-400" />

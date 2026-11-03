@@ -20,6 +20,7 @@ import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
+import { dedupeActivity } from "./projectActivity"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -35,6 +36,22 @@ const BOARD_NOTICE_MS = 5000
 const TASK_COLUMNS = "id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by"
 // Added by migration 20261031090000_sprints
 const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
+
+// Wait for a burst of task changes (e.g. a drag that also logs) to settle before reloading the feed
+const ACTIVITY_RELOAD_DELAY_MS = 500
+
+// The project's recent activity by anyone: entries about its work, plus its own
+// "project created" entry (logged without a project_id). Returns { data, error }.
+async function fetchProjectActivity(projectId) {
+    const { data, error } = await supabase
+        .from("activity_log")
+        .select("id, action, entity_type, entity_id, actor_id, new_state, created_at, actor:users(name, email)")
+        .or(`new_state->>project_id.eq.${projectId},and(entity_type.eq.project,entity_id.eq.${projectId},action.eq.created)`)
+        .order("created_at", { ascending: false })
+        .limit(30)
+    if (error) console.error("Error fetching activity:", error)
+    return { data: data || [], error }
+}
 
 // Board column names for each task status
 const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
@@ -178,6 +195,8 @@ function ProjectPage() {
     const [project_due_date, setProjectDueDate] = useState("")
     const [project_tasks, setProjectTasks] = useState([])
     const [activityLog, setActivityLog] = useState([])
+    const [isActivityCollapsed, setIsActivityCollapsed] = useState(false)
+    const visibleActivity = dedupeActivity(activityLog)
     const [activeTab, setActiveTab] = useState("summary")
     const [organizationId, setOrganizationId] = useState("")
     const [teamSpaceId, setTeamSpaceId] = useState("")
@@ -635,9 +654,8 @@ function ProjectPage() {
 
         const fetchActivity = async () => {
             if (!project_id) return
-            const { data, error } = await supabase.from("activity_log").select("id, action, new_state, created_at, actor:users(name, email)").eq("new_state->>project_id", project_id).order("created_at", { ascending: false }).limit(20)
-            if (error) { console.error("Error fetching activity:", error) }
-            else { setActivityLog(data || []) }
+            const { data, error } = await fetchProjectActivity(project_id)
+            if (!error) setActivityLog(data)
         }
 
         const fetchUserRole = async () => {
@@ -655,6 +673,28 @@ function ProjectPage() {
         // eslint-disable-next-line react-hooks/set-state-in-effect
         fetchFiles()
         fetchProjectMembers()
+    }, [project_id])
+
+    // Live feed: any task change in this project (by anyone, including the
+    // database's own task log) reloads Recent Activity
+    useEffect(() => {
+        if (!project_id) return
+        let reloadTimer = null
+        const reload = () => {
+            clearTimeout(reloadTimer)
+            reloadTimer = setTimeout(async () => {
+                const { data, error } = await fetchProjectActivity(project_id)
+                if (!error) setActivityLog(data)
+            }, ACTIVITY_RELOAD_DELAY_MS)
+        }
+        const channel = supabase
+            .channel(`project-activity-${project_id}`)
+            .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `project_id=eq.${project_id}` }, reload)
+            .subscribe()
+        return () => {
+            clearTimeout(reloadTimer)
+            supabase.removeChannel(channel)
+        }
     }, [project_id])
 
     // ── Delete this project
@@ -848,7 +888,7 @@ function ProjectPage() {
                     <div className="flex items-center gap-sm mt-xl mb-lg">
                         {[
                             { id: "summary", label: "Summary", icon: "dashboard" },
-                            { id: "tasks", label: "Tasks", icon: "view_kanban" },
+                            { id: "tasks", label: "Orbit", icon: "view_kanban" },
                             { id: "calendar", label: "Calendar", icon: "calendar_month" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
@@ -938,12 +978,24 @@ function ProjectPage() {
 
                                 {/* Recent Activity Feed (Full Width) */}
                                 <div className="col-span-12 bg-raised border border-line p-lg rounded-xl">
-                                    <h3 className="font-headline-md text-lg mb-lg text-white">Recent Activity</h3>
-                                    <div className="space-y-lg overflow-y-auto max-h-[600px] scroll-hide">
-                                        {activityLog.length === 0 ? (
+                                    <div className={`flex items-center gap-2 ${isActivityCollapsed ? "" : "mb-lg"}`}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsActivityCollapsed(v => !v)}
+                                            aria-expanded={!isActivityCollapsed}
+                                            aria-controls="project-recent-activity"
+                                            title={isActivityCollapsed ? "Expand recent activity" : "Collapse recent activity"}
+                                            className="w-7 h-7 rounded-lg bg-canvas border border-line hover:border-line-strong text-muted hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                                        >
+                                            <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${isActivityCollapsed ? "-rotate-90" : ""}`}>expand_more</span>
+                                        </button>
+                                        <h3 className="font-headline-md text-lg text-white">Recent Activity</h3>
+                                    </div>
+                                    <div id="project-recent-activity" hidden={isActivityCollapsed} className="space-y-lg overflow-y-auto max-h-[600px] scroll-hide">
+                                        {visibleActivity.length === 0 ? (
                                             <p className="text-muted text-sm">No recent activity found.</p>
                                         ) : (
-                                            activityLog.map(activity => (
+                                            visibleActivity.map(activity => (
                                                 <div key={activity.id} className="flex gap-sm">
                                                     <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-line flex items-center justify-center font-bold text-xs text-muted uppercase">
                                                         {activity.actor?.name?.charAt(0) || '?'}
@@ -952,8 +1004,17 @@ function ProjectPage() {
                                                         <p className="text-xs leading-snug">
                                                             <span className="text-primary font-bold">{activity.actor?.name || 'Unknown User'}</span>
                                                             {' '}
-                                                            {activity.action === "created" && (
+                                                            {activity.action === "created" && activity.entity_type === "project" && (
+                                                                <>created the project <span className="text-primary-fixed-dim font-bold">{activity.new_state?.project_name}</span></>
+                                                            )}
+                                                            {activity.action === "created" && activity.entity_type !== "project" && (
                                                                 <>created task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span></>
+                                                            )}
+                                                            {activity.action === "updated" && (
+                                                                <>updated task <span className="text-primary-fixed-dim font-bold">{activity.new_state?.title}</span></>
+                                                            )}
+                                                            {activity.action === "member_added" && (
+                                                                <>added <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name || "a member"}</span> to the project</>
                                                             )}
                                                             {activity.action === "deleted" && (
                                                                 <>deleted task <span className="text-error font-bold">{activity.new_state?.title}</span></>
@@ -1011,7 +1072,7 @@ function ProjectPage() {
                         </div>
                     )}
 
-                    {/* Tasks Tab — Kanban Board */}
+                    {/* Tasks Tab — Orbit Board */}
                     {activeTab === "tasks" && (
                         <div className="tab-pane block" id="section-tasks">
                             <div className="flex justify-end">
@@ -1063,7 +1124,7 @@ function ProjectPage() {
                                                     handleDrop(e, column)
                                                 }
                                             } : undefined}
-                                            className={`flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-raised/50 border ${isDropTarget ? 'border-accent-ink bg-[var(--primary-color)]/5' : 'border-line/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
+                                            className={`orbit-column flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-raised/50 border ${isDropTarget ? 'border-accent-ink bg-[var(--primary-color)]/5' : 'border-line/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
                                         >
                                             {/* Column Header */}
                                             <BoardColumnHeader

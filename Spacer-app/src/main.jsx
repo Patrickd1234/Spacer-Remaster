@@ -8,6 +8,10 @@ import App from './App.jsx'
 localStorage.removeItem("use_mock_supabase")
 localStorage.removeItem("mock_session")
 
+// TRIAL: the Orbit space design across the whole app (see body.orbit-app in index.css).
+// To revert, remove this line and that CSS block.
+document.body.classList.add("orbit-app")
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <App />
