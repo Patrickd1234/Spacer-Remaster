@@ -2,8 +2,7 @@
    Every color in the app comes from these roles (tailwind.config.js names them:
    bg-canvas, bg-panel, border-line, text-muted, text-accent-ink…). Values are
    RGB triplets so Tailwind's /opacity modifiers work. `white` in class names is
-   the foreground role. Only the dark palette exists for now; a light mode can be
-   added later by giving these roles light values under a class such as html.light. */
+   the foreground role. Dark is the default palette. Light Mode applies under html.light. */
 :root {
   color-scheme: dark;
   --c-canvas: 15 17 21;        /* page background */
@@ -34,7 +33,71 @@
   --primary-color: rgb(var(--c-accent));
   --primary-color-dim: rgb(var(--c-accent-hover));
   --primary-color-rgb: 175, 248, 42;
+
+  /* Semantic colour tokens — dark mode */
+  --c-success-bg: 36 61 26;   --c-success-fg: 134 198 94;
+  --c-warning-bg: 61 46 15;   --c-warning-fg: 211 160 60;
+  --c-error-bg: 61 22 22;     --c-error-fg: 220 80 80;
+  --c-info-bg: 20 42 70;      --c-info-fg: 80 160 230;
+
+  /* Team / category semantic colours — dark mode */
+  --c-green-bg: 36 80 28;   --c-green-fg: 100 210 80;
+  --c-blue-bg: 20 44 80;    --c-blue-fg: 80 150 230;
+  --c-purple-bg: 48 30 80;  --c-purple-fg: 170 110 240;
+  --c-orange-bg: 70 38 10;  --c-orange-fg: 220 130 50;
+  --c-red-bg: 70 22 22;     --c-red-fg: 220 80 80;
+  --c-teal-bg: 16 58 60;    --c-teal-fg: 60 185 185;
 }
+
+/* ── Light Mode palette ────────────────────────────────────────────
+   Applied when <html class="light"> is toggled by PreferencesContext.
+   All values are RGB triplets so Tailwind /opacity modifiers keep working. */
+html.light {
+  color-scheme: light;
+  --c-canvas: 245 247 245;      /* #F5F7F5 — app background */
+  --c-panel: 255 255 255;       /* #FFFFFF — cards, panels */
+  --c-field: 240 243 240;       /* #F0F3F0 — inputs */
+  --c-raised: 232 237 232;      /* #E8EDE8 — items inside panels */
+  --c-surface: 240 243 240;     /* #F0F3F0 — sidebar, secondary buttons */
+  --c-surface-2: 233 239 233;   /* #E9EFE9 — hover, higher surfaces */
+  --c-line: 220 227 220;        /* #DCE3DC — borders, dividers */
+  --c-line-strong: 200 210 200; /* #C8D2C8 — hovered borders */
+  --c-fg: 32 40 32;             /* #202820 — primary text */
+  --c-soft: 100 112 100;        /* #647064 — secondary text, labels */
+  --c-muted: 137 147 137;       /* #899389 — muted text */
+  --c-faint: 166 174 166;       /* #A6AEA6 — disabled, decorative */
+  --c-accent: 92 171 54;        /* #5CAB36 — brand green fills */
+  --c-accent-hover: 79 157 46;  /* #4F9D2E */
+  --c-accent-ink: 92 171 54;    /* #5CAB36 — green as text/icons/borders */
+  --c-on-accent: 255 255 255;   /* white text on green */
+
+  /* Older alias names */
+  --bg-base: rgb(var(--c-canvas));
+  --bg-surface: rgb(var(--c-raised));
+  --bg-lowest: rgb(var(--c-canvas));
+  --bg-border: rgb(var(--c-line));
+  --bg-surface-high: rgb(var(--c-surface));
+  --bg-highest: rgb(var(--c-surface-2));
+  --bg-surface-low: rgb(var(--c-panel));
+  --primary-color: rgb(var(--c-accent));
+  --primary-color-dim: rgb(var(--c-accent-hover));
+  --primary-color-rgb: 92, 171, 54;
+
+  /* Semantic colour tokens — light mode */
+  --c-success-bg: 220 243 213; --c-success-fg: 40 122 36;
+  --c-warning-bg: 252 233 211; --c-warning-fg: 168 91 18;
+  --c-error-bg: 251 225 225;   --c-error-fg: 180 59 59;
+  --c-info-bg: 220 235 255;    --c-info-fg: 30 95 168;
+
+  /* Team / category semantic colours — light mode */
+  --c-green-bg: 220 243 213;  --c-green-fg: 40 122 36;
+  --c-blue-bg: 220 235 255;   --c-blue-fg: 30 95 168;
+  --c-purple-bg: 237 226 250; --c-purple-fg: 117 65 165;
+  --c-orange-bg: 252 233 211; --c-orange-fg: 168 91 18;
+  --c-red-bg: 251 225 225;    --c-red-fg: 180 59 59;
+  --c-teal-bg: 216 240 240;   --c-teal-fg: 24 117 121;
+}
+
 
 body {
   background-color: rgb(var(--c-canvas));
@@ -464,6 +527,25 @@ body {
   }
 }
 
+/* Space design colours (Orbit backdrop, and the app-wide TRIAL below). Dark
+   mode keeps the original look; light mode swaps in darker, stronger tones so
+   the stars, nebula, moon and ring stand out on a light page as they do on a
+   dark one. Each element's own opacity is multiplied by its *-boost. */
+:root {
+  --space-star: var(--c-fg);          --space-star-boost: 1;     /* white stars */
+  --space-glow: var(--c-accent);      --space-glow-boost: 1;     /* lime nebula, ring, planet */
+  --space-rock: var(--c-soft);        --space-rock-boost: 1;     /* moon disc, asteroids */
+  --space-shade: var(--c-canvas);     --space-shade-boost: 1;    /* craters */
+  --space-light: var(--c-fg);         --space-light-boost: 1;    /* moon highlight, nebula core */
+}
+html.light {
+  --space-star: 30 38 88;             --space-star-boost: 1.3;   /* deep indigo stars */
+  --space-glow: 56 128 30;            --space-glow-boost: 2.8;   /* richer green glow */
+  --space-rock: 70 76 90;             --space-rock-boost: 2.8;   /* slate moon and rocks */
+  --space-shade: 30 33 42;            --space-shade-boost: 1.2;    /* dark craters */
+  --space-light: 255 255 255;         --space-light-boost: 4;    /* white sheen */
+}
+
 /* Orbit board columns: a quiet space backdrop behind the cards. A lime nebula
    glowing in from the top corner, stars, a large cratered moon ringed by small
    asteroids, and an orbit ring with a small planet near the bottom. Static and
@@ -471,40 +553,40 @@ body {
 .orbit-column {
   background-image:
     /* asteroids around the moon */
-    radial-gradient(circle 2.5px at calc(24% + 56px) calc(42% - 34px), rgb(var(--c-soft) / 0.30) 0 60%, transparent),
-    radial-gradient(circle 1.5px at calc(24% + 64px) calc(42% - 12px), rgb(var(--c-soft) / 0.28) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(24% + 60px) calc(42% + 16px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
-    radial-gradient(circle 3px at calc(24% + 48px) calc(42% + 42px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
-    radial-gradient(circle 1.5px at calc(24% + 22px) calc(42% + 60px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(24% - 12px) calc(42% + 62px), rgb(var(--c-soft) / 0.22) 0 60%, transparent),
-    radial-gradient(circle 1.5px at calc(24% + 30px) calc(42% - 58px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(24% - 6px) calc(42% - 60px), rgb(var(--c-soft) / 0.20) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(24% + 56px) calc(42% - 34px), rgb(var(--space-rock) / calc(0.30 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(24% + 64px) calc(42% - 12px), rgb(var(--space-rock) / calc(0.28 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(24% + 60px) calc(42% + 16px), rgb(var(--space-rock) / calc(0.26 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 3px at calc(24% + 48px) calc(42% + 42px), rgb(var(--space-rock) / calc(0.24 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(24% + 22px) calc(42% + 60px), rgb(var(--space-rock) / calc(0.26 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(24% - 12px) calc(42% + 62px), rgb(var(--space-rock) / calc(0.22 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(24% + 30px) calc(42% - 58px), rgb(var(--space-rock) / calc(0.24 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(24% - 6px) calc(42% - 60px), rgb(var(--space-rock) / calc(0.20 * var(--space-rock-boost))) 0 60%, transparent),
     /* moon: craters, a soft highlight, then the disc */
-    radial-gradient(circle 8px at calc(24% - 14px) calc(42% + 8px), rgb(var(--c-canvas) / 0.40) 0 70%, transparent),
-    radial-gradient(circle 5px at calc(24% + 12px) calc(42% - 16px), rgb(var(--c-canvas) / 0.36) 0 70%, transparent),
-    radial-gradient(circle 4px at calc(24% + 16px) calc(42% + 18px), rgb(var(--c-canvas) / 0.34) 0 70%, transparent),
-    radial-gradient(circle 3px at calc(24% - 4px) calc(42% - 24px), rgb(var(--c-canvas) / 0.32) 0 70%, transparent),
-    radial-gradient(circle 30px at calc(24% - 12px) calc(42% - 12px), rgb(var(--c-fg) / 0.08), transparent),
-    radial-gradient(circle 44px at 24% 42%, rgb(var(--c-soft) / 0.20) 0, rgb(var(--c-soft) / 0.14) 80%, rgb(var(--c-soft) / 0.08) 97%, transparent 100%),
+    radial-gradient(circle 8px at calc(24% - 14px) calc(42% + 8px), rgb(var(--space-shade) / calc(0.40 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 5px at calc(24% + 12px) calc(42% - 16px), rgb(var(--space-shade) / calc(0.36 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 4px at calc(24% + 16px) calc(42% + 18px), rgb(var(--space-shade) / calc(0.34 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 3px at calc(24% - 4px) calc(42% - 24px), rgb(var(--space-shade) / calc(0.32 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 30px at calc(24% - 12px) calc(42% - 12px), rgb(var(--space-light) / calc(0.08 * var(--space-light-boost))), transparent),
+    radial-gradient(circle 44px at 24% 42%, rgb(var(--space-rock) / calc(0.20 * var(--space-rock-boost))) 0, rgb(var(--space-rock) / calc(0.14 * var(--space-rock-boost))) 80%, rgb(var(--space-rock) / calc(0.08 * var(--space-rock-boost))) 97%, transparent 100%),
     /* planet on the orbit ring */
-    radial-gradient(circle at 78% 73%, rgb(var(--c-accent) / 0.75) 0 3.5px, transparent 4.5px),
-    radial-gradient(ellipse 150% 34% at 50% 92%, transparent 57%, rgb(var(--c-accent) / 0.20) 58%, transparent 59.5%),
+    radial-gradient(circle at 78% 73%, rgb(var(--space-glow) / calc(0.75 * var(--space-glow-boost))) 0 3.5px, transparent 4.5px),
+    radial-gradient(ellipse 150% 34% at 50% 92%, transparent 57%, rgb(var(--space-glow) / calc(0.20 * var(--space-glow-boost))) 58%, transparent 59.5%),
     /* stars */
-    radial-gradient(1.5px 1.5px at 14% 12%, rgb(var(--c-fg) / 0.75), transparent),
-    radial-gradient(1px 1px at 72% 7%, rgb(var(--c-fg) / 0.65), transparent),
-    radial-gradient(2px 2px at 38% 26%, rgb(var(--c-fg) / 0.60), transparent),
-    radial-gradient(1px 1px at 88% 34%, rgb(var(--c-fg) / 0.60), transparent),
-    radial-gradient(1.5px 1.5px at 56% 44%, rgb(var(--c-fg) / 0.50), transparent),
-    radial-gradient(1.5px 1.5px at 66% 58%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 8% 40%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 46% 92%, rgb(var(--c-fg) / 0.50), transparent),
-    radial-gradient(1.5px 1.5px at 92% 70%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 82% 18%, rgb(var(--c-fg) / 0.50), transparent),
-    radial-gradient(1px 1px at 28% 4%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 6% 88%, rgb(var(--c-fg) / 0.50), transparent),
+    radial-gradient(1.5px 1.5px at 14% 12%, rgb(var(--space-star) / calc(0.75 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 72% 7%, rgb(var(--space-star) / calc(0.65 * var(--space-star-boost))), transparent),
+    radial-gradient(2px 2px at 38% 26%, rgb(var(--space-star) / calc(0.60 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 88% 34%, rgb(var(--space-star) / calc(0.60 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 56% 44%, rgb(var(--space-star) / calc(0.50 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 66% 58%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 8% 40%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 46% 92%, rgb(var(--space-star) / calc(0.50 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 92% 70%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 82% 18%, rgb(var(--space-star) / calc(0.50 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 28% 4%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 6% 88%, rgb(var(--space-star) / calc(0.50 * var(--space-star-boost))), transparent),
     /* nebula: a lime glow with a soft white core, rising from the top corner */
-    radial-gradient(60% 30% at 92% 6%, rgb(var(--c-fg) / 0.05), transparent 70%),
-    radial-gradient(130% 65% at 100% 0%, rgb(var(--c-accent) / 0.14), rgb(var(--c-accent) / 0.05) 45%, transparent 75%);
+    radial-gradient(60% 30% at 92% 6%, rgb(var(--space-light) / calc(0.05 * var(--space-light-boost))), transparent 70%),
+    radial-gradient(130% 65% at 100% 0%, rgb(var(--space-glow) / calc(0.14 * var(--space-glow-boost))), rgb(var(--space-glow) / calc(0.05 * var(--space-glow-boost))) 45%, transparent 75%);
   background-repeat: no-repeat;
 }
 
@@ -590,40 +672,40 @@ html.light {
 body.orbit-app {
   background-color: rgb(var(--c-canvas));
   background-image:
-    radial-gradient(circle 3px at calc(82% + 74px) calc(30% - 44px), rgb(var(--c-soft) / 0.3) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(82% + 84px) calc(30% - 16px), rgb(var(--c-soft) / 0.28) 0 60%, transparent),
-    radial-gradient(circle 2.5px at calc(82% + 80px) calc(30% + 22px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
-    radial-gradient(circle 3.5px at calc(82% + 62px) calc(30% + 56px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(82% + 28px) calc(30% + 80px), rgb(var(--c-soft) / 0.26) 0 60%, transparent),
-    radial-gradient(circle 2.5px at calc(82% - 16px) calc(30% + 82px), rgb(var(--c-soft) / 0.22) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(82% + 40px) calc(30% - 76px), rgb(var(--c-soft) / 0.24) 0 60%, transparent),
-    radial-gradient(circle 2.5px at calc(82% - 8px) calc(30% - 80px), rgb(var(--c-soft) / 0.2) 0 60%, transparent),
-    radial-gradient(circle 1.5px at calc(82% + 96px) calc(30% + 40px), rgb(var(--c-soft) / 0.22) 0 60%, transparent),
-    radial-gradient(circle 2px at calc(82% - 60px) calc(30% + 64px), rgb(var(--c-soft) / 0.2) 0 60%, transparent),
-    radial-gradient(circle 11px at calc(82% - 18px) calc(30% + 10px), rgb(var(--c-canvas) / 0.4) 0 70%, transparent),
-    radial-gradient(circle 7px at calc(82% + 16px) calc(30% - 22px), rgb(var(--c-canvas) / 0.36) 0 70%, transparent),
-    radial-gradient(circle 5px at calc(82% + 22px) calc(30% + 24px), rgb(var(--c-canvas) / 0.34) 0 70%, transparent),
-    radial-gradient(circle 4px at calc(82% - 6px) calc(30% - 32px), rgb(var(--c-canvas) / 0.32) 0 70%, transparent),
-    radial-gradient(circle 3px at calc(82% - 30px) calc(30% - 10px), rgb(var(--c-canvas) / 0.3) 0 70%, transparent),
-    radial-gradient(circle 40px at calc(82% - 16px) calc(30% - 16px), rgb(var(--c-fg) / 0.08), transparent),
-    radial-gradient(circle 58px at 82% 30%, rgb(var(--c-soft) / 0.20) 0, rgb(var(--c-soft) / 0.14) 80%, rgb(var(--c-soft) / 0.08) 97%, transparent 100%),
-    radial-gradient(circle at 78% 73%, rgb(var(--c-accent) / 0.75) 0 3.5px, transparent 4.5px),
-    radial-gradient(ellipse 150% 34% at 50% 92%, transparent 57%, rgb(var(--c-accent) / 0.20) 58%, transparent 59.5%),
-    radial-gradient(1.5px 1.5px at 12% 18%, rgb(var(--c-fg) / 0.75), transparent),
-    radial-gradient(1px 1px at 64% 9%, rgb(var(--c-fg) / 0.65), transparent),
-    radial-gradient(2px 2px at 38% 44%, rgb(var(--c-fg) / 0.6), transparent),
-    radial-gradient(1px 1px at 86% 62%, rgb(var(--c-fg) / 0.6), transparent),
-    radial-gradient(1px 1px at 22% 80%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1.5px 1.5px at 70% 88%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 8% 40%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1.5px 1.5px at 52% 22%, rgb(var(--c-fg) / 0.5), transparent),
-    radial-gradient(1px 1px at 90% 30%, rgb(var(--c-fg) / 0.5), transparent),
-    radial-gradient(1px 1px at 30% 66%, rgb(var(--c-fg) / 0.5), transparent),
-    radial-gradient(1.5px 1.5px at 74% 52%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 58% 94%, rgb(var(--c-fg) / 0.45), transparent),
-    radial-gradient(40% 22% at 92% 6%, rgb(var(--c-fg) / 0.05), transparent 70%),
-    radial-gradient(70% 55% at 100% 0%, rgb(var(--c-accent) / 0.14), rgb(var(--c-accent) / 0.05) 45%, transparent 75%),
-    radial-gradient(50% 40% at 0% 100%, rgb(var(--c-accent) / 0.06), transparent 70%);
+    radial-gradient(circle 3px at calc(82% + 74px) calc(30% - 44px), rgb(var(--space-rock) / calc(0.3 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% + 84px) calc(30% - 16px), rgb(var(--space-rock) / calc(0.28 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(82% + 80px) calc(30% + 22px), rgb(var(--space-rock) / calc(0.26 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 3.5px at calc(82% + 62px) calc(30% + 56px), rgb(var(--space-rock) / calc(0.24 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% + 28px) calc(30% + 80px), rgb(var(--space-rock) / calc(0.26 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(82% - 16px) calc(30% + 82px), rgb(var(--space-rock) / calc(0.22 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% + 40px) calc(30% - 76px), rgb(var(--space-rock) / calc(0.24 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2.5px at calc(82% - 8px) calc(30% - 80px), rgb(var(--space-rock) / calc(0.2 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 1.5px at calc(82% + 96px) calc(30% + 40px), rgb(var(--space-rock) / calc(0.22 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 2px at calc(82% - 60px) calc(30% + 64px), rgb(var(--space-rock) / calc(0.2 * var(--space-rock-boost))) 0 60%, transparent),
+    radial-gradient(circle 11px at calc(82% - 18px) calc(30% + 10px), rgb(var(--space-shade) / calc(0.4 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 7px at calc(82% + 16px) calc(30% - 22px), rgb(var(--space-shade) / calc(0.36 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 5px at calc(82% + 22px) calc(30% + 24px), rgb(var(--space-shade) / calc(0.34 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 4px at calc(82% - 6px) calc(30% - 32px), rgb(var(--space-shade) / calc(0.32 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 3px at calc(82% - 30px) calc(30% - 10px), rgb(var(--space-shade) / calc(0.3 * var(--space-shade-boost))) 0 70%, transparent),
+    radial-gradient(circle 40px at calc(82% - 16px) calc(30% - 16px), rgb(var(--space-light) / calc(0.08 * var(--space-light-boost))), transparent),
+    radial-gradient(circle 58px at 82% 30%, rgb(var(--space-rock) / calc(0.20 * var(--space-rock-boost))) 0, rgb(var(--space-rock) / calc(0.14 * var(--space-rock-boost))) 80%, rgb(var(--space-rock) / calc(0.08 * var(--space-rock-boost))) 97%, transparent 100%),
+    radial-gradient(circle at 78% 73%, rgb(var(--space-glow) / calc(0.75 * var(--space-glow-boost))) 0 3.5px, transparent 4.5px),
+    radial-gradient(ellipse 150% 34% at 50% 92%, transparent 57%, rgb(var(--space-glow) / calc(0.20 * var(--space-glow-boost))) 58%, transparent 59.5%),
+    radial-gradient(1.5px 1.5px at 12% 18%, rgb(var(--space-star) / calc(0.75 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 64% 9%, rgb(var(--space-star) / calc(0.65 * var(--space-star-boost))), transparent),
+    radial-gradient(2px 2px at 38% 44%, rgb(var(--space-star) / calc(0.6 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 86% 62%, rgb(var(--space-star) / calc(0.6 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 22% 80%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 70% 88%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 8% 40%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 52% 22%, rgb(var(--space-star) / calc(0.5 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 90% 30%, rgb(var(--space-star) / calc(0.5 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 30% 66%, rgb(var(--space-star) / calc(0.5 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 74% 52%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 58% 94%, rgb(var(--space-star) / calc(0.45 * var(--space-star-boost))), transparent),
+    radial-gradient(40% 22% at 92% 6%, rgb(var(--space-light) / calc(0.05 * var(--space-light-boost))), transparent 70%),
+    radial-gradient(70% 55% at 100% 0%, rgb(var(--space-glow) / calc(0.14 * var(--space-glow-boost))), rgb(var(--space-glow) / calc(0.05 * var(--space-glow-boost))) 45%, transparent 75%),
+    radial-gradient(50% 40% at 0% 100%, rgb(var(--space-glow) / calc(0.06 * var(--space-glow-boost))), transparent 70%);
   background-size: auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, auto, 310px 310px, 310px 310px, 310px 310px, 310px 310px, 310px 310px, 310px 310px, 470px 470px, 470px 470px, 470px 470px, 470px 470px, 470px 470px, 470px 470px, auto, auto, auto;
   background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
   background-attachment: fixed;
@@ -639,14 +721,14 @@ body.orbit-app .min-h-screen {
 body.orbit-app aside.fixed.left-0 {
   background-color: rgb(var(--c-surface) / 0.72);
   background-image:
-    radial-gradient(1.5px 1.5px at 18% 22%, rgb(var(--c-fg) / 0.55), transparent),
-    radial-gradient(1px 1px at 76% 31%, rgb(var(--c-fg) / 0.45), transparent),
-    radial-gradient(1px 1px at 40% 47%, rgb(var(--c-fg) / 0.40), transparent),
-    radial-gradient(1.5px 1.5px at 84% 58%, rgb(var(--c-fg) / 0.45), transparent),
-    radial-gradient(1px 1px at 12% 69%, rgb(var(--c-fg) / 0.40), transparent),
-    radial-gradient(1px 1px at 60% 78%, rgb(var(--c-fg) / 0.40), transparent),
-    radial-gradient(1px 1px at 30% 91%, rgb(var(--c-fg) / 0.40), transparent),
-    radial-gradient(140% 30% at 0% 100%, rgb(var(--c-accent) / 0.10), transparent 70%);
+    radial-gradient(1.5px 1.5px at 18% 22%, rgb(var(--space-star) / calc(0.55 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 76% 31%, rgb(var(--space-star) / calc(0.45 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 40% 47%, rgb(var(--space-star) / calc(0.40 * var(--space-star-boost))), transparent),
+    radial-gradient(1.5px 1.5px at 84% 58%, rgb(var(--space-star) / calc(0.45 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 12% 69%, rgb(var(--space-star) / calc(0.40 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 60% 78%, rgb(var(--space-star) / calc(0.40 * var(--space-star-boost))), transparent),
+    radial-gradient(1px 1px at 30% 91%, rgb(var(--space-star) / calc(0.40 * var(--space-star-boost))), transparent),
+    radial-gradient(140% 30% at 0% 100%, rgb(var(--space-glow) / calc(0.10 * var(--space-glow-boost))), transparent 70%);
   background-repeat: no-repeat;
   backdrop-filter: blur(2px);
 }
