@@ -559,7 +559,31 @@ export default function Settings() {
                                         </p>
                                     </div>
 
-                                    {/* No theme or accent pickers: the app uses one palette everywhere (PreferencesContext) */}
+                                    {/* Theme Mode Picker */}
+                                    <div className="space-y-2">
+                                        <label className="block text-xs font-medium text-soft">Colour Theme</label>
+                                        <p className="text-xs text-muted">Switch between Dark and Light interface themes.</p>
+                                        <div className="flex gap-sm">
+                                            {[
+                                                { id: "dark",  label: "Dark",  icon: "dark_mode" },
+                                                { id: "light", label: "Light", icon: "light_mode" }
+                                            ].map((t) => (
+                                                <button
+                                                    key={t.id}
+                                                    onClick={() => handleSaveAppearance({ ...appearance, theme: t.id })}
+                                                    className={`flex-1 flex items-center justify-center gap-2 py-2 px-md border rounded-xl text-xs transition-all ${
+                                                        (appearance.theme || "dark") === t.id
+                                                            ? "border-primary-fixed bg-field text-primary-fixed"
+                                                            : "border-line bg-panel text-muted hover:border-outline"
+                                                    }`}
+                                                >
+                                                    <span className="material-symbols-outlined text-sm">{t.icon}</span>
+                                                    <span>{t.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
                                     {/* Layout Options Grid */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
 

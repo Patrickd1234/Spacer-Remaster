@@ -74,7 +74,13 @@ export function PreferencesProvider({ children }) {
   useEffect(() => {
     const root = document.documentElement;
     
-    // Colors come from the palette roles in index.css (dark only for now)
+    // Theme: toggle html.light to switch between dark and light palettes
+    const theme = preferences.appearance.theme || 'dark';
+    if (theme === 'light') {
+      root.classList.add('light');
+    } else {
+      root.classList.remove('light');
+    }
 
     // Apply layout custom styles to document root
     const sidebarPos = preferences.appearance.sidebarPosition || "left";
