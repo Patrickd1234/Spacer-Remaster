@@ -5,16 +5,23 @@ import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import OrgOverview from "./OrgOverview"
 import MySpace from "./myspace/MySpace"
+import GreetingSky from "./myspace/GreetingSky"
+import { greetingFor } from "./myspace/taskStats"
 import { StatCardSkeleton } from "./components/DashboardParts"
+import { readSavedOrgName, saveOrgName } from "./orgNameCache"
 
 // Super admins land on the organization overview, everyone else on My Space
 function Home() {
     const [userEmail] = useState(() => localStorage.getItem("userEmail") || "")
     const [userData, setUserData] = useState(null)
     const [orgId, setOrgId] = useState(null)
-    const [orgName, setOrgName] = useState("")
+    // The last organization name loaded shows straight away (orgNameCache.js)
+    const [orgName, setOrgName] = useState(readSavedOrgName)
+    const [isOrgNameLoaded, setIsOrgNameLoaded] = useState(false)
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const { isSuperAdmin, roleLoading, membershipData } = useRole()
+    // Super admins get the same greeting as My Space, above the organization name
+    const [greeting] = useState(() => greetingFor(new Date().getHours()))
 
     useEffect(() => {
         if (roleLoading) return
@@ -36,10 +43,15 @@ function Home() {
                 }
                 if (!active) return
                 setOrgId(resolvedOrgId || null)
+                if (!resolvedOrgId) setIsOrgNameLoaded(true)
                 if (resolvedOrgId) {
                     const { data: org, error } = await supabase.from("organizations").select("name").eq("id", resolvedOrgId).maybeSingle()
                     if (error) console.warn("organizations fetch error:", error)
-                    if (active) setOrgName(org?.name || "")
+                    if (active) {
+                        setOrgName(org?.name || "")
+                        saveOrgName(org?.name || "")
+                        setIsOrgNameLoaded(true)
+                    }
                 }
             } catch (err) {
                 console.error("Home init error:", err)
@@ -71,7 +83,10 @@ function Home() {
                         {isReady && isSuperAdmin && (
                             <>
                                 <section>
-                                    <h1 className="text-2xl font-semibold text-white">{orgName || "Your Organization"}</h1>
+                                    <p className="text-2xl font-semibold text-white">{greeting}, {displayName} <GreetingSky greeting={greeting} /></p>
+                                    <h1 className="text-2xl font-semibold text-white mt-3">
+                                        {orgName || (isOrgNameLoaded ? "Your Organization" : <span className="inline-block h-6 w-48 rounded bg-line animate-pulse align-middle" aria-label="Loading organization" />)}
+                                    </h1>
                                     <p className="text-muted text-sm mt-1">Organization's overview and activity.</p>
                                 </section>
                                 <OrgOverview userId={userData.id} orgId={orgId} />
