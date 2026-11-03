@@ -205,12 +205,15 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
 
     // Activity scoped to this user: members see what concerns them, admins also
     // see their departments, super admins see everything (see notifications.js).
-    // Loads once the role is known, and refreshes whenever the panel opens.
-    const hasLoadedNotificationsRef = useRef(false);
+    // Loads on every page once the role is known (so the badge count is there
+    // straight away), again if the role or reminder setting changes, and
+    // refreshes whenever the panel opens. Only a finished load counts: a load
+    // cut short by a role update must not stop the next one.
+    const loadedNotificationsKeyRef = useRef(null);
     useEffect(() => {
         if (!inAppEnabled || roleLoading) return;
-        if (hasLoadedNotificationsRef.current && !showNotifications) return;
-        hasLoadedNotificationsRef.current = true;
+        const loadKey = `${isSuperAdmin}|${isAdmin}|${remindersEnabled}`;
+        if (loadedNotificationsKeyRef.current === loadKey && !showNotifications) return;
 
         let cancelled = false;
         const loadNotifications = async () => {
@@ -247,6 +250,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                 }
                 // Relative times ("5m ago") are computed at load, not during render
                 setActivities(data.map((activity) => ({ ...activity, timeLabel: formatTime(activity.created_at) })));
+                loadedNotificationsKeyRef.current = loadKey;
             } finally {
                 if (!cancelled) setNotificationsLoading(false);
             }
@@ -429,7 +433,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                             <span className="material-symbols-outlined">notifications</span>
                             {unreadCount > 0 && (
                                 <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[10px] font-bold text-[#ffffff] flex items-center justify-center border border-canvas">
-                                    {unreadCount > 9 ? "9+" : unreadCount}
+                                    {unreadCount}
                                 </span>
                             )}
                         </button>
