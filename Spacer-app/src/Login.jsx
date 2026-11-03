@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useNavigate, Link, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
 import AuthBrandPanel from "./partials/AuthBrandPanel"
+import RocketLogo from "./components/RocketLogo"
 
 function Login() {
     const [email, setEmail] = useState("")
@@ -157,6 +158,7 @@ function Login() {
             {/* Left Side: Visual/Brand (Hidden on mobile) */}
             <AuthBrandPanel
                 showThirdGlow
+                logo={<RocketLogo size={28} />}
                 quote="Spacer helped us organize all our department workspaces into a single unified dashboard."
                 tagline={
                     <p className="text-white text-[20px] leading-relaxed max-w-md">
@@ -196,7 +198,7 @@ function Login() {
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[var(--bg-surface)] relative z-10">
                 <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
+                        <RocketLogo size={40} />
                     </div>
 
                     <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Welcome Back</h2>
