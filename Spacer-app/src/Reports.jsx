@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
+import { projectStatus, isInDoingColumn, matchesStatusFilter } from "./projectStatus"
 
 const STATUS_COLORS = {
   todo: "#818cf8",
@@ -431,14 +432,12 @@ export default function Reports() {
       const done = projTasks.filter((t) => t.effectiveStatus === "done").length
       const inProgress = projTasks.filter((t) => t.effectiveStatus === "in_progress").length
       const overdue = projTasks.filter((t) => t.isOverdue).length
+      // Tasks under Doing on the project's Orbit board (for the In Progress filter)
+      const doing = projTasks.filter((t) => isInDoingColumn(t)).length
       const progressPct = total > 0 ? Math.round((done / total) * 100) : 0
 
-      let calculatedStatus = "in_progress"
-      if (total > 0 && done === total) {
-        calculatedStatus = "done"
-      } else if (overdue > 0) {
-        calculatedStatus = "attention"
-      }
+      // Done, Needs Attention (overdue) or In Progress; see projectStatus.js
+      const calculatedStatus = projectStatus({ total, done, overdue })
 
       return {
         ...proj,
@@ -446,6 +445,7 @@ export default function Reports() {
         doneTasks: done,
         inProgressTasks: inProgress,
         overdueTasks: overdue,
+        doingTasks: doing,
         progressPct,
         calculatedStatus,
       }
@@ -466,15 +466,7 @@ export default function Reports() {
 
   const filteredProjectGrid = useMemo(() => {
     return assignedProjectStats.filter((proj) => {
-      if (projectStatusFilter === "in_progress" && proj.calculatedStatus !== "in_progress") {
-        return false
-      }
-      if (projectStatusFilter === "done" && proj.calculatedStatus !== "done") {
-        return false
-      }
-      if (projectStatusFilter === "attention" && proj.calculatedStatus !== "attention") {
-        return false
-      }
+      if (!matchesStatusFilter(proj, projectStatusFilter)) return false
       if (projectSearchQuery.trim()) {
         const query = projectSearchQuery.toLowerCase()
         const matchesName = proj.name.toLowerCase().includes(query)
