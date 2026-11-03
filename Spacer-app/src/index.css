@@ -2,8 +2,7 @@
    Every color in the app comes from these roles (tailwind.config.js names them:
    bg-canvas, bg-panel, border-line, text-muted, text-accent-ink…). Values are
    RGB triplets so Tailwind's /opacity modifiers work. `white` in class names is
-   the foreground role. Only the dark palette exists for now; a light mode can be
-   added later by giving these roles light values under a class such as html.light. */
+   the foreground role. Dark is the default palette. Light Mode applies under html.light. */
 :root {
   color-scheme: dark;
   --c-canvas: 15 17 21;        /* page background */
@@ -34,7 +33,71 @@
   --primary-color: rgb(var(--c-accent));
   --primary-color-dim: rgb(var(--c-accent-hover));
   --primary-color-rgb: 175, 248, 42;
+
+  /* Semantic colour tokens — dark mode */
+  --c-success-bg: 36 61 26;   --c-success-fg: 134 198 94;
+  --c-warning-bg: 61 46 15;   --c-warning-fg: 211 160 60;
+  --c-error-bg: 61 22 22;     --c-error-fg: 220 80 80;
+  --c-info-bg: 20 42 70;      --c-info-fg: 80 160 230;
+
+  /* Team / category semantic colours — dark mode */
+  --c-green-bg: 36 80 28;   --c-green-fg: 100 210 80;
+  --c-blue-bg: 20 44 80;    --c-blue-fg: 80 150 230;
+  --c-purple-bg: 48 30 80;  --c-purple-fg: 170 110 240;
+  --c-orange-bg: 70 38 10;  --c-orange-fg: 220 130 50;
+  --c-red-bg: 70 22 22;     --c-red-fg: 220 80 80;
+  --c-teal-bg: 16 58 60;    --c-teal-fg: 60 185 185;
 }
+
+/* ── Light Mode palette ────────────────────────────────────────────
+   Applied when <html class="light"> is toggled by PreferencesContext.
+   All values are RGB triplets so Tailwind /opacity modifiers keep working. */
+html.light {
+  color-scheme: light;
+  --c-canvas: 245 247 245;      /* #F5F7F5 — app background */
+  --c-panel: 255 255 255;       /* #FFFFFF — cards, panels */
+  --c-field: 240 243 240;       /* #F0F3F0 — inputs */
+  --c-raised: 232 237 232;      /* #E8EDE8 — items inside panels */
+  --c-surface: 240 243 240;     /* #F0F3F0 — sidebar, secondary buttons */
+  --c-surface-2: 233 239 233;   /* #E9EFE9 — hover, higher surfaces */
+  --c-line: 220 227 220;        /* #DCE3DC — borders, dividers */
+  --c-line-strong: 200 210 200; /* #C8D2C8 — hovered borders */
+  --c-fg: 32 40 32;             /* #202820 — primary text */
+  --c-soft: 100 112 100;        /* #647064 — secondary text, labels */
+  --c-muted: 137 147 137;       /* #899389 — muted text */
+  --c-faint: 166 174 166;       /* #A6AEA6 — disabled, decorative */
+  --c-accent: 92 171 54;        /* #5CAB36 — brand green fills */
+  --c-accent-hover: 79 157 46;  /* #4F9D2E */
+  --c-accent-ink: 92 171 54;    /* #5CAB36 — green as text/icons/borders */
+  --c-on-accent: 255 255 255;   /* white text on green */
+
+  /* Older alias names */
+  --bg-base: rgb(var(--c-canvas));
+  --bg-surface: rgb(var(--c-raised));
+  --bg-lowest: rgb(var(--c-canvas));
+  --bg-border: rgb(var(--c-line));
+  --bg-surface-high: rgb(var(--c-surface));
+  --bg-highest: rgb(var(--c-surface-2));
+  --bg-surface-low: rgb(var(--c-panel));
+  --primary-color: rgb(var(--c-accent));
+  --primary-color-dim: rgb(var(--c-accent-hover));
+  --primary-color-rgb: 92, 171, 54;
+
+  /* Semantic colour tokens — light mode */
+  --c-success-bg: 220 243 213; --c-success-fg: 40 122 36;
+  --c-warning-bg: 252 233 211; --c-warning-fg: 168 91 18;
+  --c-error-bg: 251 225 225;   --c-error-fg: 180 59 59;
+  --c-info-bg: 220 235 255;    --c-info-fg: 30 95 168;
+
+  /* Team / category semantic colours — light mode */
+  --c-green-bg: 220 243 213;  --c-green-fg: 40 122 36;
+  --c-blue-bg: 220 235 255;   --c-blue-fg: 30 95 168;
+  --c-purple-bg: 237 226 250; --c-purple-fg: 117 65 165;
+  --c-orange-bg: 252 233 211; --c-orange-fg: 168 91 18;
+  --c-red-bg: 251 225 225;    --c-red-fg: 180 59 59;
+  --c-teal-bg: 216 240 240;   --c-teal-fg: 24 117 121;
+}
+
 
 body {
   background-color: rgb(var(--c-canvas));
