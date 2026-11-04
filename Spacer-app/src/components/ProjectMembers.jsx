@@ -6,12 +6,15 @@ import { ErrorNote } from "../general/GeneralParts"
 // members, and people who are only here because a task is assigned to them.
 // Removing someone is for project managers (project_members_delete allows
 // can_manage_project), and anyone can leave a project they were added to.
+// Project managers can also add someone who is only here through an assigned
+// task as a full member in one click (project_members_insert).
 
 const openChat = (person) =>
     window.dispatchEvent(new CustomEvent("open_coworker_chat", { detail: { user_id: person.id, name: person.name } }))
 
-function MemberCard({ member, isExplicit, isMe, canManage, onRemove }) {
+function MemberCard({ member, isExplicit, isMe, canManage, isAdding, onRemove, onAdd }) {
     const canRemove = isExplicit && (canManage || isMe)
+    const canAdd = !isExplicit && canManage
     return (
         <div className="bg-raised border border-line rounded-xl p-4 flex flex-col gap-3 h-full transition-colors hover:border-line-strong">
             <div className="flex items-start justify-between gap-2">
@@ -45,6 +48,18 @@ function MemberCard({ member, isExplicit, isMe, canManage, onRemove }) {
                     <span className="material-symbols-outlined text-[16px]">person</span>
                     {isMe && "Your profile"}
                 </Link>
+                {canAdd && (
+                    <button
+                        type="button"
+                        title="Add to project"
+                        aria-label={`Add ${member.name || "them"} to the project`}
+                        disabled={isAdding}
+                        onClick={() => onAdd(member)}
+                        className="w-8 h-8 bg-accent/10 text-accent-ink rounded-lg flex items-center justify-center hover:bg-accent/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+                    >
+                        <span className={`material-symbols-outlined text-[16px] ${isAdding ? "animate-spin" : ""}`}>{isAdding ? "progress_activity" : "person_add"}</span>
+                    </button>
+                )}
                 {canRemove && (
                     <button
                         type="button"
@@ -62,9 +77,10 @@ function MemberCard({ member, isExplicit, isMe, canManage, onRemove }) {
 }
 
 // projectMembers: project_members rows with `user`; assignedUsers: org users with tasks here.
-// onRemove(userId) resolves to an error or null.
-export default function ProjectMembers({ projectMembers, assignedUsers, currentUserId, canManage, onRemove }) {
+// onRemove(userId) and onAdd(user) resolve to an error or null.
+export default function ProjectMembers({ projectMembers, assignedUsers, currentUserId, canManage, onRemove, onAdd }) {
     const [errorMsg, setErrorMsg] = useState("")
+    const [addingId, setAddingId] = useState(null)
     const explicitIds = new Set(projectMembers.map((pm) => pm.user_id))
     const members = [
         ...projectMembers.map((pm) => pm.user).filter(Boolean),
@@ -77,6 +93,14 @@ export default function ProjectMembers({ projectMembers, assignedUsers, currentU
         setErrorMsg("")
         const error = await onRemove(member.id)
         if (error) setErrorMsg(isMe ? "Couldn't leave the project." : "Couldn't remove them. Only project managers can remove members.")
+    }
+
+    const handleAdd = async (member) => {
+        setErrorMsg("")
+        setAddingId(member.id)
+        const error = await onAdd(member)
+        setAddingId(null)
+        if (error) setErrorMsg(`Couldn't add ${member.name || "them"} to the project. Only project managers can add members.`)
     }
 
     if (members.length === 0) {
@@ -100,7 +124,9 @@ export default function ProjectMembers({ projectMembers, assignedUsers, currentU
                         isExplicit={explicitIds.has(member.id)}
                         isMe={member.id === currentUserId}
                         canManage={canManage}
+                        isAdding={addingId === member.id}
                         onRemove={handleRemove}
+                        onAdd={handleAdd}
                     />
                 ))}
             </div>

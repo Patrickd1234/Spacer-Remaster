@@ -7,6 +7,7 @@ import CreateProjectModal from "./CreateProjectModal"
 import SidebarProfile from "./SidebarProfile"
 import { NavLink, NavButton, NavSection, SubLink, EmptyNote, TeamSpaceGroup } from "./SidebarNav"
 import { mergeProjects } from "./projectMemberships"
+import { readSavedOrgName, saveOrgName } from "../orgNameCache"
 
 // Sidebar for every role. Super admins see all of the organization's departments
 // under Team Spaces; everyone else sees the departments they belong to.
@@ -21,7 +22,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
     const [projects, setProjects] = useState([])
     const [orgTeams, setOrgTeams] = useState([])
     const [dbUser, setDbUser] = useState(null)
-    const [orgName, setOrgName] = useState("")
+    const [orgName, setOrgName] = useState(readSavedOrgName)
     const [showCreateModal, setShowCreateModal] = useState(false)
     const isExpanded = !collapsed || hovered
 
@@ -58,7 +59,9 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
             if (!data.organization_id) return
             const { data: org, error } = await supabase.from("organizations").select("name").eq("id", data.organization_id).maybeSingle()
             if (error) console.warn("organizations fetch error:", error)
-            if (active) setOrgName(org?.name || "")
+            if (!active) return
+            setOrgName(org?.name || "")
+            saveOrgName(org?.name || "")
         }
         load()
         return () => { active = false }
@@ -110,9 +113,11 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                     {isExpanded && (
                         <div className="flex items-center gap-2.5 min-w-0">
                             <div className="w-7 h-7 rounded-md bg-primary-accent-dim text-primary-accent flex items-center justify-center font-bold text-[13px] shrink-0">
-                                {(orgName || "S").charAt(0).toUpperCase()}
+                                {orgName.charAt(0).toUpperCase()}
                             </div>
-                            <span className="font-semibold text-[14px] text-white truncate">{orgName || "Spacers"}</span>
+                            {orgName
+                                ? <span className="font-semibold text-[14px] text-white truncate">{orgName}</span>
+                                : <span className="h-3.5 w-24 rounded bg-line animate-pulse" aria-label="Loading organization" />}
                         </div>
                     )}
                     <button
