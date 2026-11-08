@@ -1,7 +1,10 @@
+import { useState } from "react"
 import { groupTasksByDepartment } from "./groupTasksByDepartment"
 
 // Super admin view of All Tasks: departments → projects → tasks.
-// Deliberately shows no assignees, only the work itself.
+// Deliberately shows no assignees, only the work itself. Departments start
+// collapsed and open from their heading, so a big organization doesn't crowd
+// the page.
 
 const STATUS_LABEL = { todo: "To do", in_progress: "In progress", done: "Done" }
 const STATUS_STYLE = {
@@ -37,21 +40,44 @@ function TaskRow({ task, onClick }) {
 
 export default function DepartmentTaskGroups({ tasks, departments, onSelectTask }) {
     const groups = groupTasksByDepartment(tasks, departments)
+    // Tracks the open ones, so departments that load later also start collapsed
+    const [expandedIds, setExpandedIds] = useState(() => new Set())
+    const toggleDepartment = (key) => setExpandedIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(key)) next.delete(key)
+        else next.add(key)
+        return next
+    })
 
     return (
         // The Orbit space backdrop spans the whole area, as the board columns have it for everyone else
         <div className="orbit-column bg-raised/50 border border-line/30 rounded-xl p-4 space-y-8">
-            {groups.map((dept) => (
-                <section key={dept.id ?? "none"} aria-labelledby={`dept-${dept.id ?? "none"}`} className="space-y-3">
-                    <div className="flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px] text-accent-ink">groups</span>
-                        <h3 id={`dept-${dept.id ?? "none"}`} className="text-base font-semibold text-white">{dept.name}</h3>
-                        <span className="text-xs text-muted">
-                            {dept.taskCount} {dept.taskCount === 1 ? "task" : "tasks"} · {dept.projects.length} {dept.projects.length === 1 ? "project" : "projects"}
-                        </span>
-                    </div>
+            {groups.map((dept) => {
+                const key = dept.id ?? "none"
+                const isCollapsed = !expandedIds.has(key)
+                return (
+                <section key={key} aria-labelledby={`dept-${key}`} className="space-y-3">
+                    <h3 id={`dept-${key}`} className="text-base font-semibold text-white">
+                        <button
+                            type="button"
+                            onClick={() => toggleDepartment(key)}
+                            aria-expanded={!isCollapsed}
+                            aria-controls={`dept-projects-${key}`}
+                            title={isCollapsed ? `Expand ${dept.name}` : `Collapse ${dept.name}`}
+                            className="group flex items-center gap-2 text-left cursor-pointer"
+                        >
+                            <span className={`material-symbols-outlined text-[18px] text-muted group-hover:text-white transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`}>expand_more</span>
+                            <span className="material-symbols-outlined text-[18px] text-accent-ink">groups</span>
+                            <span className="group-hover:text-accent-ink transition-colors">{dept.name}</span>
+                            <span className="text-xs font-normal text-muted">
+                                {dept.taskCount} {dept.taskCount === 1 ? "task" : "tasks"} · {dept.projects.length} {dept.projects.length === 1 ? "project" : "projects"}
+                            </span>
+                        </button>
+                    </h3>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                    {/* Left out while folded: the grid class would override the hidden attribute */}
+                    {!isCollapsed && (
+                    <div id={`dept-projects-${key}`} className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                         {dept.projects.map((project) => (
                             <div key={project.id ?? "none"} className="bg-raised border border-line rounded-xl">
                                 <div className="flex items-center justify-between px-4 py-3 border-b border-line/40">
@@ -69,8 +95,10 @@ export default function DepartmentTaskGroups({ tasks, departments, onSelectTask 
                             </div>
                         ))}
                     </div>
+                    )}
                 </section>
-            ))}
+                )
+            })}
         </div>
     )
 }
