@@ -135,3 +135,12 @@ This log tracks development work and code changes made for this project.
 - Home (`a464753`): super admins get the My Space greeting (`GreetingSky`) above the organization name. Every page mounts its own sidebar and home heading, so the organization name loaded each time and the placeholders "Spacers" (sidebar) and "Your Organization" (home) flashed before "Spacer". The last name loaded is kept in localStorage (`src/orgNameCache.js`) and shown at once; with nothing saved, a loading bar shows instead. A different organization signing in on the same browser can see the previous name for a moment.
 - Sign-in page (`90c413c`): a grey rocket with bold asteroids (`components/RocketLogo.jsx`, palette roles so it follows light mode) replaces the token icon in the brand panel and above the form. `AuthBrandPanel` takes an optional `logo`; sign-up, welcome and the other pages keep the old icon.
 - Checked: `npm test` 104/104, ESLint 0 errors on the changed files, `vite build` succeeds. None of this was checked in a browser.
+
+## 2026-11-04
+
+- Merged `Test-phase` into `main` on GitHub (`4cd9b82`): the 4 commits from 3 November (`4f507a8`, `a464753`, `90c413c`, `b6c5348`). No conflicts; `main` had only earlier merge commits. Made in a temporary worktree and pushed directly (no GitHub CLI, so no pull request). Afterwards `main` and `Test-phase` are identical.
+
+## 2026-11-09
+
+- Super admin Orbit Board (`1a088a0`): every department's projects and tasks on one page crowded it in a big organization. Each department heading in `components/DepartmentTaskGroups.jsx` is now a toggle (chevron, `aria-expanded`), and every department starts collapsed, as asked (it was briefly open by default). The open departments are tracked, so ones that load later also start collapsed. Folded departments leave their projects out of the page, because the `grid` class would override the `hidden` attribute. Not remembered between visits.
+- Checked: `npm test` 104/104, ESLint 0 errors on the file, `vite build` succeeds. Not checked in a browser.
