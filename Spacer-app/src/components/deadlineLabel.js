@@ -8,6 +8,15 @@ const shortDate = (y, m, d) =>
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+// A task's deadline (tasks.due_date, a plain date) as "Nov 10, 2026", or null.
+// Built from the date parts so it never slips a day in zones west of UTC.
+export function formatTaskDeadline(dueDate) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dueDate || "");
+    if (!match) return null;
+    const [y, m, d] = match.slice(1).map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 // Returns { label, tone } with tone "normal" | "warn" | "danger", or null when
 // there is no usable deadline. Days are counted on calendar dates (UTC math on
 // the date parts), so a deadline doesn't shift with the time of day or DST.

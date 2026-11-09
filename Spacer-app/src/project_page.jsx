@@ -19,6 +19,7 @@ import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./component
 import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
+import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 import { dedupeActivity } from "./projectActivity"
 
@@ -226,6 +227,9 @@ function ProjectPage() {
     // null while checking; then can_edit_project, the rule for adding tasks here
     const [canAddTasks, setCanAddTasks] = useState(null)
     const [projectDepartmentName, setProjectDepartmentName] = useState(null)
+    // Task deadlines: super admins, admins and project managers (can_manage_project,
+    // the same rule the database's tasks_guard_due_date trigger checks)
+    const canEditTaskDeadline = canDeleteProject === true
 
     // Same rule the delete-workspace-item function enforces: team lead or higher in
     // the project's own department, or an org admin. Being a direct member is not enough.
@@ -553,6 +557,24 @@ function ProjectPage() {
             return "Couldn't save the deadline."
         }
         setProjectDueDate(nextDate || "")
+        return null
+    }
+
+    // Resolves to an error message for TaskDeadline, or null once saved.
+    // .select() confirms a row changed (permissions can silently update 0 rows).
+    const handleTaskDeadlineSave = async (taskId, nextDate) => {
+        const { data: updated, error } = await supabase
+            .from("tasks")
+            .update({ due_date: nextDate })
+            .eq("id", taskId)
+            .select("id")
+        if (error || !updated?.length) {
+            console.error("Error saving task deadline:", error)
+            return "Couldn't save the deadline. Only project managers and admins can change it."
+        }
+        const withDeadline = t => (String(t.id) === String(taskId) ? { ...t, due_date: nextDate } : t)
+        setSelectedTask(prev => (prev ? withDeadline(prev) : prev))
+        setProjectTasks(prev => prev.map(withDeadline))
         return null
     }
 
@@ -1937,13 +1959,12 @@ function ProjectPage() {
                                     <h3 className="font-label-sm text-muted uppercase tracking-wider flex items-center gap-xs">
                                         <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
                                     </h3>
-                                    <p className="text-sm text-white font-semibold mt-1">
-                                        {selectedTask.due_date ? (
-                                            selectedTask.due_date.includes('T') || selectedTask.due_date.includes(' ')
-                                                ? new Date(selectedTask.due_date).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })
-                                                : new Date(selectedTask.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                                        ) : <span className="italic opacity-70">No deadline</span>}
-                                    </p>
+                                    <TaskDeadline
+                                        key={selectedTask.id}
+                                        dueDate={selectedTask.due_date}
+                                        canEdit={canEditTaskDeadline}
+                                        onSave={(nextDate) => handleTaskDeadlineSave(selectedTask.id, nextDate)}
+                                    />
                                 </div>
                             </div>
 
