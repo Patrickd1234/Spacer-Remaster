@@ -455,14 +455,16 @@ export default function Reports() {
   // Projects filtered for the Grid Section
   // Project Workspaces lists the projects the signed-in user is assigned to
   // (project member or assignee of a task in it). Admins also see every
-  // project in the departments they administer.
-  const assignedProjectStats = useMemo(
-    () => projectStats.filter((proj) =>
+  // project in the departments they administer. Super admins see every project
+  // in the organization under Entire Workspace, and only their own under
+  // Assigned to Me.
+  const assignedProjectStats = useMemo(() => {
+    if (isSuperAdmin && scope === "workspace") return projectStats
+    return projectStats.filter((proj) =>
       userAssignedProjectIds.has(String(proj.id)) ||
       (isAdmin && adminTeamSpaceIds.has(String(proj.team_space_id)))
-    ),
-    [projectStats, userAssignedProjectIds, isAdmin, adminTeamSpaceIds]
-  )
+    )
+  }, [projectStats, userAssignedProjectIds, isAdmin, isSuperAdmin, scope, adminTeamSpaceIds])
 
   const filteredProjectGrid = useMemo(() => {
     return assignedProjectStats.filter((proj) => {
@@ -891,7 +893,9 @@ export default function Reports() {
                     folder_off
                   </span>
                   <p className="text-sm text-white font-medium">
-                    {assignedProjectStats.length === 0 ? "No projects assigned to you yet" : "No matching projects found"}
+                    {assignedProjectStats.length === 0
+                      ? (isSuperAdmin && scope === "workspace" ? "No projects in the organization yet" : "No projects assigned to you yet")
+                      : "No matching projects found"}
                   </p>
                   <p className="text-xs text-muted mt-1 max-w-sm mx-auto">
                     {assignedProjectStats.length === 0
