@@ -184,10 +184,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                     <NavLink to="/reports" icon="bar_chart" label="Reports" isActive={pathname === "/reports"} isExpanded={isExpanded} />
                 </nav>
 
-                <div className="px-3 pt-2 pb-3">
-                    <NavLink to="/settings" icon="settings" label="Settings" isActive={pathname === "/settings"} isExpanded={isExpanded} />
-                </div>
-
+                {/* Settings opens from the profile menu below */}
                 <SidebarProfile name={displayName} email={displayEmail} isExpanded={isExpanded} />
             </aside>
 
