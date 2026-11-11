@@ -64,7 +64,9 @@ export default function Reports() {
   const [allProjects, setAllProjects] = useState([])
 
   // Top Filter Controls
-  const [scope, setScope] = useState("workspace") // "workspace" | "personal"
+  const [chosenScope, setScope] = useState("workspace") // "workspace" | "personal"
+  // Members only ever see what is assigned to them; the switch is for admins and up
+  const scope = isAdminLevel ? chosenScope : "personal"
 
   // Project Grid Filter & Search
   const [projectSearchQuery, setProjectSearchQuery] = useState("")
@@ -519,12 +521,6 @@ export default function Reports() {
                       />
                       {isRefreshing ? "Syncing..." : "Live Data"}
                     </span>
-                    {!isAdminLevel && (
-                      <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white/5 border border-line text-muted text-xs">
-                        <span className="material-symbols-outlined text-[14px] text-amber-400">shield_person</span>
-                        Member Mode
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs md:text-sm text-muted mt-1.5">
                     Real-time performance metrics, team workload distribution, and milestone tracking.
@@ -534,7 +530,8 @@ export default function Reports() {
                 {/* Filter Controls Toolbar */}
                 <div className="flex flex-wrap lg:flex-nowrap items-center gap-3 shrink-0">
                   
-                  {/* Scope Switcher Segmented Control */}
+                  {/* Scope Switcher Segmented Control (admins and up) */}
+                  {isAdminLevel && (
                   <div className="bg-canvas p-1 rounded-xl border border-line flex items-center shadow-inner">
                     <button
                       type="button"
@@ -559,6 +556,7 @@ export default function Reports() {
                       Assigned to Me
                     </button>
                   </div>
+                  )}
 
                   {/* Manual Refresh Button */}
                   <button
