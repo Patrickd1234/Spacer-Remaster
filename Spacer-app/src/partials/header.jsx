@@ -15,6 +15,7 @@ import { buildTaskReminders } from "../taskReminders";
 import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
 import CreateMenu from "./CreateMenu";
+import PlanetLoader from "../components/PlanetLoader";
 
 // `breadcrumb` ({ icon, label }) is optional; pages that show their own keep it off.
 // The header sits under the fixed sidebar, so `insetLeft` (px) moves the breadcrumb clear of it.
@@ -348,7 +349,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                             <div className="font-body-md absolute top-full left-0 right-0 mt-2 bg-surface1 border border-line rounded-xl shadow-xl overflow-hidden z-50">
                                 {isSearching ? (
                                     <div className="p-4 text-center text-sm text-muted flex items-center justify-center gap-2">
-                                        <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+                                        <PlanetLoader className="text-[16px]" />
                                         Searching...
                                     </div>
                                 ) : !hasResults ? (
@@ -458,7 +459,7 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                 </div>
                                 {notificationsLoading ? (
                                     <div className="flex items-center justify-center py-6 text-sm text-muted">
-                                        <span className="material-symbols-outlined animate-spin text-[16px] mr-2">progress_activity</span>
+                                        <PlanetLoader className="text-[16px] mr-2" />
                                         Loading notifications...
                                     </div>
                                 ) : notifications.length === 0 ? (

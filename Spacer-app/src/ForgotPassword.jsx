@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
+import PlanetLoader from "./components/PlanetLoader"
 
 function ForgotPassword() {
     const location = useLocation()
@@ -136,7 +137,7 @@ function ForgotPassword() {
                                 >
                                     {submitting ? (
                                         <>
-                                            <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                                            <PlanetLoader className="text-[18px]" />
                                             Sending instructions…
                                         </>
                                     ) : (

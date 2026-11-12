@@ -1,3 +1,5 @@
+import PlanetLoader from "./PlanetLoader"
+
 // Shown on the sender's side while their attachments upload (group chat and DMs).
 // Supabase storage uploads don't report progress, so the bar is indeterminate.
 // files: [{ name, type }]
@@ -18,7 +20,7 @@ export default function UploadingBubble({ files, compact = false }) {
                     <div className="h-full w-1/3 rounded-full bg-[var(--primary-color)] animate-[upload-slide_1.2s_ease-in-out_infinite]" />
                 </div>
                 <p className={`flex items-center gap-1.5 opacity-80 ${compact ? "text-[10px]" : "text-xs"}`}>
-                    <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                    <PlanetLoader className="text-[14px]" />
                     Uploading {files.length === 1 ? "file" : `${files.length} files`}…
                 </p>
             </div>

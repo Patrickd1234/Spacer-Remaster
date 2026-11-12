@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 import AuthBrandPanel from "./partials/AuthBrandPanel"
+import PlanetLoader from "./components/PlanetLoader"
 
 function Signup() {
     const [status, setStatus] = useState("idle")
@@ -260,7 +261,7 @@ function Signup() {
                         >
                             {status === "submitting" ? (
                                 <>
-                                    <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                                    <PlanetLoader className="text-[18px]" />
                                     Creating Account...
                                 </>
                             ) : (

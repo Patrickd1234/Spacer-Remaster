@@ -3,6 +3,7 @@ import { supabase } from '../supabase';
 import ChatMessage from './ChatMessage';
 import UploadingBubble from './UploadingBubble';
 import { createSignedLinks } from '../storageLinks';
+import PlanetLoader from "./PlanetLoader";
 
 const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 
@@ -580,7 +581,9 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     aria-label={uploading.length > 0 ? "Uploading" : "Send"}
                                     className="p-3 rounded-xl bg-[var(--primary-color)] text-on-accent disabled:opacity-50 disabled:cursor-not-allowed hover:brightness-110 transition-all flex items-center justify-center"
                                 >
-                                    <span className={`material-symbols-outlined text-[20px] ${uploading.length > 0 ? "animate-spin" : "ml-1"}`}>{uploading.length > 0 ? "progress_activity" : "send"}</span>
+                                    {uploading.length > 0
+                                        ? <PlanetLoader className="text-[20px]" />
+                                        : <span className="material-symbols-outlined text-[20px] ml-1">send</span>}
                                 </button>
                             </form>
                         </div>

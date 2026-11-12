@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react"
 import { Avatar, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote } from "./GeneralParts"
 import { validateImage } from "./generalData"
 import Select from "../components/Select"
+import { RemoveFromOrganizationButton } from "../components/OrgExitControls"
 
 const ROLE_NAMES = { admin: "Admin", team_lead: "Team lead", member: "Member", viewer: "Viewer", super_admin: "Super admin" }
 const MAX_TAGS = 2
@@ -159,7 +160,7 @@ function InfoLine({ icon, children }) {
 }
 
 // Right-side profile drawer. Shows only what the viewer's access returns.
-export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, onMessage, onEdit, onSetManager }) {
+export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, onMessage, onEdit, onSetManager, onRemoved }) {
     const manager = people.find((p) => p.id === person.reports_to)
     const time = localTime(person.timezone)
 
@@ -227,6 +228,13 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                     <dt className="text-muted">Department</dt><dd className="text-soft truncate">{person.teams[0]?.name || "—"}</dd>
                 </dl>
             </DrawerSection>
+
+            {/* Admins only; the database refuses if the person is an organization admin */}
+            {canSetManager && !isMe && (
+                <div className="pt-3 border-t border-line space-y-2">
+                    <RemoveFromOrganizationButton key={person.id} person={person} onRemoved={onRemoved} />
+                </div>
+            )}
         </aside>
     )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
+import PlanetLoader from "./components/PlanetLoader"
 
 function Onboarding() {
     const [teamInput, setTeamInput] = useState("")
@@ -265,7 +266,7 @@ function Onboarding() {
                             >
                                 {status === "submitting" ? (
                                     <>
-                                        <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                                        <PlanetLoader className="text-sm" />
                                         <span>Setting up workspaces...</span>
                                     </>
                                 ) : status === "success" ? (

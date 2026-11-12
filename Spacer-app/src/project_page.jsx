@@ -22,6 +22,7 @@ import ProjectDeadline from "./components/ProjectDeadline"
 import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 import { dedupeActivity } from "./projectActivity"
+import PlanetLoader from "./components/PlanetLoader"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -904,7 +905,7 @@ function ProjectPage() {
                         <button type="button" onClick={cancelPending} className="px-md py-sm rounded-lg border border-line text-muted hover:bg-line text-sm font-semibold transition-colors cursor-pointer">Cancel</button>
                         <button type="button" onClick={confirmUpload} disabled={uploading} className="px-md py-sm rounded-lg bg-[var(--primary-color)] text-on-accent font-bold hover:opacity-90 active:scale-95 cursor-pointer flex items-center gap-xs disabled:opacity-60">
                             {uploading
-                                ? <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span> Uploading…</>
+                                ? <><PlanetLoader className="text-[16px]" /> Uploading…</>
                                 : <><span className="material-symbols-outlined text-[16px]">cloud_upload</span> Confirm Upload</>}
                         </button>
                     </div>
@@ -1851,7 +1852,7 @@ function ProjectPage() {
                                             >
                                                 {taskUploading ? (
                                                     <>
-                                                        <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                                                        <PlanetLoader className="text-[14px]" />
                                                         Uploading…
                                                     </>
                                                 ) : (
@@ -2039,7 +2040,7 @@ function ProjectPage() {
                                 className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                             >
                                 {deletingProject ? (
-                                    <><span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>Deleting…</>
+                                    <><PlanetLoader className="text-[16px]" />Deleting…</>
                                 ) : (
                                     <><span className="material-symbols-outlined text-[16px]">delete</span>Yes, delete</>
                                 )}

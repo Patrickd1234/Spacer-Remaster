@@ -7,6 +7,7 @@ import { useRole } from "./RoleContext"
 import CreateTaskModal from "./partials/CreateTaskModal"
 import DepartmentTaskGroups from "./components/DepartmentTaskGroups"
 import Select from "./components/Select"
+import PlanetLoader from "./components/PlanetLoader"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -552,7 +553,7 @@ export default function Tasks() {
                                                             className="px-3 py-1.5 btn-primary-accent rounded-lg font-bold text-[10px] uppercase transition-all disabled:opacity-50 cursor-pointer w-full flex items-center justify-center gap-1"
                                                         >
                                                             {standupSaving ? (
-                                                                <span className="material-symbols-outlined text-[12px] animate-spin">progress_activity</span>
+                                                                <PlanetLoader className="text-[12px]" />
                                                             ) : (
                                                                 <>
                                                                     <span className="material-symbols-outlined text-[12px] font-bold">check</span>
@@ -568,7 +569,7 @@ export default function Tasks() {
                                                     <tr>
                                                         <td colSpan="7" className="px-4 py-8 text-center text-muted bg-raised/20">
                                                             <div className="flex items-center justify-center gap-2">
-                                                                <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+                                                                <PlanetLoader className="text-[16px]" />
                                                                 Loading logs...
                                                             </div>
                                                         </td>

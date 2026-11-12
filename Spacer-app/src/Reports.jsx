@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import { projectStatus, isInDoingColumn, matchesStatusFilter } from "./projectStatus"
+import PlanetLoader from "./components/PlanetLoader"
 
 const STATUS_COLORS = {
   todo: "#818cf8",
@@ -710,9 +711,7 @@ export default function Reports() {
 
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <span className="material-symbols-outlined animate-spin text-3xl text-accent-ink">
-                    progress_activity
-                  </span>
+                  <PlanetLoader className="text-3xl text-accent-ink" />
                   <p className="text-xs text-muted">Calculating workspace metrics...</p>
                 </div>
               ) : (

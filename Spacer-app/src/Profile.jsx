@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import { describeActivity, timeAgo } from "./activityLabels"
+import PlanetLoader from "./components/PlanetLoader"
 
 function initials(name, email) {
     const source = (name || email || "").trim()
@@ -208,9 +209,7 @@ function Profile() {
 
                 {loading ? (
                     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-                        <span className="material-symbols-outlined animate-spin text-5xl text-primary-fixed">
-                            progress_activity
-                        </span>
+                        <PlanetLoader className="text-5xl text-primary-fixed" />
                         <p className="text-sm text-neutral-400">Loading your profile...</p>
                     </div>
                 ) : (
@@ -385,7 +384,7 @@ function Profile() {
                                                 disabled={saving}
                                                 className="flex items-center gap-2 px-4 py-2 rounded-xl btn-primary-accent transition-all disabled:opacity-50"
                                             >
-                                                {saving && <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>}
+                                                {saving && <PlanetLoader className="text-base" />}
                                                 Save Changes
                                             </button>
                                             <button

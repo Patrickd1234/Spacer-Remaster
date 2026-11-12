@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 import NewPasswordForm from "./components/NewPasswordForm"
+import PlanetLoader from "./components/PlanetLoader"
 
 // Lands here when someone clicks the "invite" link Supabase emails them
 // (see supabase/functions/invite-department-member). Their auth account,
@@ -51,7 +52,7 @@ function AcceptInvite() {
 
                 {status === "checking" && (
                     <div className="text-center py-10">
-                        <span className="material-symbols-outlined animate-spin text-4xl text-accent-ink">progress_activity</span>
+                        <PlanetLoader className="text-4xl text-accent-ink" />
                         <p className="text-muted text-sm mt-4">Verifying your invite…</p>
                     </div>
                 )}
