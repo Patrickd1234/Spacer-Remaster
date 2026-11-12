@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { supabase } from "../supabase"
 import { validateNewPassword } from "../passwordRules"
+import PlanetLoader from "./PlanetLoader"
 
 // Password + confirmation fields that set the signed-in user's password.
 // Only for accounts that have no password yet (invites, Google sign-ups):
@@ -77,7 +78,7 @@ function NewPasswordForm({ submitLabel, onSuccess }) {
             >
                 {submitting ? (
                     <>
-                        <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                        <PlanetLoader className="text-[18px]" />
                         Setting password…
                     </>
                 ) : (

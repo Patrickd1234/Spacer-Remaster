@@ -12,6 +12,7 @@ import { deleteWorkspaceItem } from "./workspaceDelete";
 import { createdToast, failedToast } from "./createDepartment";
 import { DEPARTMENT_CREATED_EVENT } from "./appEvents";
 import Select from "./components/Select";
+import PlanetLoader from "./components/PlanetLoader";
 
 function Department() {
     const [userId, setUserId] = useState(null)
@@ -48,6 +49,9 @@ function Department() {
     const location = useLocation()
     const requestedTeamId = location.state?.teamSpaceId ?? null
     const requestedTeamIdRef = useRef(requestedTeamId)
+    // The department whose members were asked for last. Switching quickly starts
+    // several loads; only the newest one may fill the page or end the loading state.
+    const teamRequestRef = useRef(null)
 
     useEffect(() => {
         const init = async () => {
@@ -58,6 +62,8 @@ function Department() {
                 setUserId(uid)
 
                 const teamId = membershipData?.team_space_id
+                // Members switching department: show the loading state, not the last department's people
+                if (!isSuperAdmin) setLoading(true)
 
                 // The department (name + members) only needs the membership, so it
                 // loads alongside the organisation lookup instead of after it.
@@ -91,7 +97,9 @@ function Department() {
             } catch (err) {
                 console.error("Department init error:", err)
             } finally {
-                setLoading(false)
+                // A newer switch is still loading: leave the loading state to it
+                const teamId = membershipData?.team_space_id ?? null
+                if (isSuperAdmin || teamRequestRef.current === teamId) setLoading(false)
             }
         }
 
@@ -113,7 +121,7 @@ function Department() {
             setActiveTeam(team)
             setLoading(true)
             await fetchTeamMembers(team.id)
-            if (!cancelled) setLoading(false)
+            if (!cancelled && teamRequestRef.current === team.id) setLoading(false)
         }
         followSidebar()
         return () => { cancelled = true }
@@ -140,6 +148,9 @@ function Department() {
     }
 
     async function fetchTeamMembers(teamId) {
+        const requested = teamId ?? null
+        teamRequestRef.current = requested
+        const isSuperseded = () => teamRequestRef.current !== requested
         if (!teamId) { setMem_info([]); return }
 
         if (!activeTeam || activeTeam.id !== teamId) {
@@ -148,6 +159,7 @@ function Department() {
                 .select("id, name")
                 .eq("id", teamId)
                 .maybeSingle();
+            if (isSuperseded()) return
             if (teamSpace) {
                 setActiveTeam(teamSpace);
             } else {
@@ -160,25 +172,28 @@ function Department() {
             .select("*")
             .eq("team_space_id", teamId)
 
+        if (isSuperseded()) return
         if (mErr) { console.warn("memberships error:", mErr); setMem_info([]); return }
         if (!memberships || memberships.length === 0) { setMem_info([]); return }
 
-        const enriched = []
-        for (const row of memberships) {
-            const { data: profile } = await supabase
-                .from("users")
-                .select("*")
-                .eq("id", row.user_id)
-                .maybeSingle()
+        // Everyone's profile in one request (it was one request per person)
+        const { data: profiles, error: pErr } = await supabase
+            .from("users")
+            .select("*")
+            .in("id", memberships.map((row) => row.user_id))
+        if (isSuperseded()) return
+        if (pErr) console.warn("member profiles error:", pErr)
 
-            enriched.push({
+        const profileById = new Map((profiles || []).map((profile) => [profile.id, profile]))
+        setMem_info(memberships.map((row) => {
+            const profile = profileById.get(row.user_id)
+            return {
                 ...row,
                 ...(profile || {}),
                 membershipRole: row.role,
                 profileRole: profile?.role ?? row.role,
-            })
-        }
-        setMem_info(enriched)
+            }
+        }))
     }
 
     const switchTeam = async (team) => {
@@ -186,7 +201,7 @@ function Department() {
         setOrgDepartment(team.id) // keeps the super admin sidebar in step
         setLoading(true)
         await fetchTeamMembers(team.id)
-        setLoading(false)
+        if (teamRequestRef.current === team.id) setLoading(false)
     }
 
     // The modal has already created the department and added its people
@@ -422,7 +437,7 @@ const filteredMembers = mem_info.filter(m =>
 
 const pageTitle = isSuperAdmin
     ? (activeTeam ? activeTeam.name : "All Teams")
-    : (activeTeam?.name || "Department Directory")
+    : (activeDepartment?.name || activeTeam?.name || "Department Directory")
 // Until the department is known, show a placeholder rather than a fallback title
 const isTitleLoading = roleLoading || (loading && !activeTeam)
 
@@ -460,9 +475,16 @@ return (
                         {isTitleLoading
                             ? <h1 className="h-8 w-56 rounded-lg bg-line animate-pulse" aria-label="Loading department" />
                             : <h1 className="text-2xl font-bold text-white">{pageTitle}</h1>}
-                        <p className="text-muted text-sm mt-1">
-                            {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""} {isSuperAdmin && activeTeam ? `assigned to ${activeTeam.name}` : "in your department team"}
-                        </p>
+                        {loading ? (
+                            <p role="status" className="text-muted text-sm mt-1 flex items-center gap-2">
+                                <PlanetLoader className="text-[18px] text-accent-ink" />
+                                Loading {isTitleLoading ? "department" : pageTitle}…
+                            </p>
+                        ) : (
+                            <p className="text-muted text-sm mt-1">
+                                {filteredMembers.length} member{filteredMembers.length !== 1 ? "s" : ""} {isSuperAdmin && activeTeam ? `assigned to ${activeTeam.name}` : "in your department team"}
+                            </p>
+                        )}
                         {!isSuperAdmin && !isAdminAnywhere && (
                             <div className="mt-3">
                                 <DepartmentSwitcher />
@@ -615,7 +637,14 @@ return (
                 )}
 
                 {/* Messages Tab */}
-                {activeTab === "messages" && activeTeam && (
+                {/* While switching, the last department's chat must not show under the new name */}
+                {activeTab === "messages" && loading && (
+                    <div role="status" className="flex flex-col items-center justify-center gap-3 py-20 text-muted text-sm">
+                        <PlanetLoader className="text-[44px] text-accent-ink" />
+                        Loading messages…
+                    </div>
+                )}
+                {activeTab === "messages" && !loading && activeTeam && (
                     <div className="h-full">
                         <GroupChat 
                             departmentId={activeTeam.id} 
@@ -672,7 +701,7 @@ return (
                             className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                         >
                             {removingMember ? (
-                                <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Removing…</>
+                                <><PlanetLoader className="text-[16px]" />Removing…</>
                             ) : (
                                 <><span className="material-symbols-outlined text-[16px]" aria-hidden="true">person_remove</span>Yes, remove</>
                             )}
@@ -726,7 +755,7 @@ return (
                             className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                         >
                             {deletingDept ? (
-                                <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Deleting…</>
+                                <><PlanetLoader className="text-[16px]" />Deleting…</>
                             ) : (
                                 <><span className="material-symbols-outlined text-[16px]" aria-hidden="true">delete</span>Yes, delete</>
                             )}

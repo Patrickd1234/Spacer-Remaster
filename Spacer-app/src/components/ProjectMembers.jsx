@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { Link } from "react-router-dom"
 import { ErrorNote } from "../general/GeneralParts"
+import PlanetLoader from "./PlanetLoader"
 
 // A project's Members tab. Two kinds of people show up: explicit project
 // members, and people who are only here because a task is assigned to them.
@@ -57,7 +58,9 @@ function MemberCard({ member, isExplicit, isMe, canManage, isAdding, onRemove, o
                         onClick={() => onAdd(member)}
                         className="w-8 h-8 bg-accent/10 text-accent-ink rounded-lg flex items-center justify-center hover:bg-accent/20 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
                     >
-                        <span className={`material-symbols-outlined text-[16px] ${isAdding ? "animate-spin" : ""}`}>{isAdding ? "progress_activity" : "person_add"}</span>
+                        {isAdding
+                            ? <PlanetLoader className="text-[16px]" />
+                            : <span className="material-symbols-outlined text-[16px]">person_add</span>}
                     </button>
                 )}
                 {canRemove && (
