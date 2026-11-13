@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { BASE_STATUSES, COLUMN_NAME_MAX } from "../projectColumns"
+import PlanetLoader from "./PlanetLoader"
 
 const STATUS_LABEL = Object.fromEntries(BASE_STATUSES.map((s) => [s.value, s.label]))
 
@@ -291,7 +292,7 @@ export function AddColumnTile({ columns, onAdd, saving }) {
                     className="flex-1 py-2 rounded-lg bg-[var(--primary-color)] text-on-accent text-[12px] font-bold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5"
                 >
                     {saving
-                        ? <><span className="material-symbols-outlined text-[15px] animate-spin" aria-hidden="true">progress_activity</span>Adding…</>
+                        ? <><PlanetLoader className="text-[15px]" />Adding…</>
                         : "Add column"}
                 </button>
             </div>
@@ -346,7 +347,7 @@ export function DeleteColumnModal({ column, target, taskCount, deleting, error, 
                         className="flex-1 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-[#ffffff] text-[13px] font-bold transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
                     >
                         {deleting
-                            ? <><span className="material-symbols-outlined text-[16px] animate-spin" aria-hidden="true">progress_activity</span>Deleting…</>
+                            ? <><PlanetLoader className="text-[16px]" />Deleting…</>
                             : <><span className="material-symbols-outlined text-[16px]" aria-hidden="true">delete</span>Yes, delete</>}
                     </button>
                 </div>

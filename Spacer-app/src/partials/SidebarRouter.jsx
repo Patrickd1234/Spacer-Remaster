@@ -6,6 +6,7 @@ import { useRole } from "../RoleContext";
 import { attachmentDisplay, dmAttachmentPath, formatFileSize, validateDmAttachment } from "../dmAttachmentFiles";
 import { removeDmAttachment, uploadDmAttachment, withDmAttachmentLinks } from "../dmAttachments";
 import UploadingBubble from "../components/UploadingBubble";
+import PlanetLoader from "../components/PlanetLoader";
 
 // How close (px) to the bottom of the DM list still counts as "at the bottom"
 const NEAR_BOTTOM_PX = 120;
@@ -1147,7 +1148,9 @@ export default function SidebarRouter(props) {
                                             aria-label={dmUploading ? "Uploading" : "Send"}
                                             className="w-8 h-8 bg-primary-accent text-on-accent hover:opacity-90 rounded-xl flex items-center justify-center transition-all flex-shrink-0 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                                         >
-                                            <span className={`material-symbols-outlined text-base ${dmUploading ? "animate-spin" : ""}`}>{dmUploading ? "progress_activity" : "send"}</span>
+                                            {dmUploading
+                                                ? <PlanetLoader className="text-base" />
+                                                : <span className="material-symbols-outlined text-base">send</span>}
                                         </button>
                                     </form>
                                 </div>

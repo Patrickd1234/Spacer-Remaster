@@ -6,6 +6,7 @@ import { RoleProvider } from './RoleContext'
 import MfaChallenge from './components/MfaChallenge'
 import ErrorBoundary from './components/ErrorBoundary'
 import { hasTrustedDeviceFor, clearTrustedDevice } from './trustedDevice'
+import PlanetLoader from "./components/PlanetLoader"
 
 // Pages load on first visit instead of all up front
 const Home = lazy(() => import('./home'))
@@ -43,10 +44,10 @@ function PasswordGate({ needsPassword, email, onPasswordSet, children }) {
   return children
 }
 
-// A CSS ring, not an icon: the icon font may not have loaded yet at startup
+// Drawn with CSS, not an icon: the icon font may not have loaded yet at startup
 const PageLoader = () => (
   <div className="bg-canvas min-h-screen flex items-center justify-center">
-    <span role="status" aria-label="Loading" className="w-9 h-9 rounded-full border-[3px] border-line border-t-accent animate-spin" />
+    <PlanetLoader label="Loading" className="text-[44px] text-accent" />
   </div>
 )
 

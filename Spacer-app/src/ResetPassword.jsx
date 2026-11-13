@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
+import PlanetLoader from "./components/PlanetLoader"
 
 // The error Supabase puts in the link's #hash when it's expired or invalid; null if none
 function linkError() {
@@ -130,7 +131,7 @@ function ResetPassword() {
 
                 {status === "checking" && (
                     <div className="text-center py-10 space-y-3">
-                        <span className="material-symbols-outlined animate-spin text-4xl text-accent-ink">progress_activity</span>
+                        <PlanetLoader className="text-4xl text-accent-ink" />
                         <p className="text-muted text-sm">Verifying password reset request…</p>
                     </div>
                 )}
@@ -221,7 +222,7 @@ function ResetPassword() {
                             >
                                 {submitting ? (
                                     <>
-                                        <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                                        <PlanetLoader className="text-[18px]" />
                                         Updating password…
                                     </>
                                 ) : (

@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
 import { withSignedUrls } from "../projectFiles";
+import PlanetLoader from "./PlanetLoader";
 
 const ACCEPTED = [
   "image/*",
@@ -195,7 +196,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
               />
               {uploading ? (
                 <>
-                  <span className="material-symbols-outlined text-primary-fixed text-4xl animate-spin">progress_activity</span>
+                  <PlanetLoader className="text-primary-fixed text-4xl" />
                   <p className="text-sm text-muted">Uploading…</p>
                 </>
               ) : (

@@ -113,7 +113,12 @@ export default function Directory() {
         await load()
     }
 
-    const openChat = (person) => window.dispatchEvent(new CustomEvent("open_coworker_chat", { detail: { user_id: person.id, name: person.name } }))
+    const handleRemoved = async () => {
+        close()
+        await load()
+    }
+
+    const openChat =(person) => window.dispatchEvent(new CustomEvent("open_coworker_chat", { detail: { user_id: person.id, name: person.name } }))
 
     return (
         <GeneralShell page="Directory">
@@ -198,6 +203,7 @@ export default function Directory() {
                             onMessage={() => openChat(selected)}
                             onEdit={() => setIsEditing(true)}
                             onSetManager={handleSetManager}
+                            onRemoved={handleRemoved}
                         />
                     </div>
                 )}

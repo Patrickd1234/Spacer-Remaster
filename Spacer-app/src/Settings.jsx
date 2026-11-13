@@ -9,6 +9,7 @@ import TwoFactorSettings from "./components/TwoFactorSettings"
 import ComingSoonCard from "./components/ComingSoonCard"
 import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
 import Select from "./components/Select"
+import { LeaveOrganizationButton } from "./components/OrgExitControls"
 
 export default function Settings() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -486,6 +487,18 @@ export default function Settings() {
                                                 <span className="w-2.5 h-2.5 rounded-full bg-primary-fixed"></span>
                                                 <span className="text-sm font-medium text-white">Active & Verified</span>
                                             </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-md rounded-xl border border-red-500/30 flex flex-wrap items-center justify-between gap-md">
+                                        <div className="space-y-1">
+                                            <h3 className="text-sm font-semibold text-white">Leave organization</h3>
+                                            <p className="text-xs text-muted">
+                                                Give up your access to this organization for good. Your sign-in stays yours.
+                                            </p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <LeaveOrganizationButton />
                                         </div>
                                     </div>
                                 </div>
