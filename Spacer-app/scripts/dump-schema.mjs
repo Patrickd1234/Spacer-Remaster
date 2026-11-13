@@ -1,7 +1,7 @@
 // Writes a read-only snapshot of the live database schema to supabase/schema/schema.sql.
 //
 // `supabase db dump` needs Docker, so this rebuilds the DDL from Postgres' own
-// catalog through `supabase db query --linked` (Management API, read-only).
+// catalog through `supabase db query --remote --read-only` (Management API).
 // The snapshot is for reading and diffing in git; it is NOT a migration.
 //
 // Usage: npm run db:schema
@@ -111,10 +111,15 @@ const SECTIONS = [
     order by schemaname, tablename, policyname`],
 
   ["Table privileges for API roles", `
-    select format('grant %s on public.%I to %I;', string_agg(lower(privilege_type), ', ' order by privilege_type), table_name, grantee) as ddl
-    from information_schema.role_table_grants
-    where table_schema = 'public' and grantee in ('anon', 'authenticated')
-    group by table_name, grantee order by table_name, grantee`],
+    -- Read from the catalog: information_schema.role_table_grants only lists
+    -- grants involving the role asking, and --read-only runs as a separate role
+    select format('grant %s on public.%I to %I;', string_agg(lower(a.privilege_type), ', ' order by a.privilege_type), c.relname, r.rolname) as ddl
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(c.relacl) a
+    join pg_roles r on r.oid = a.grantee
+    where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm') and r.rolname in ('anon', 'authenticated')
+    group by c.relname, r.rolname order by c.relname, r.rolname`],
 
   ["Realtime publication", `
     select format('alter publication supabase_realtime add table %I.%I;', schemaname, tablename) as ddl
@@ -137,7 +142,7 @@ function sleepSync(ms) {
 
 function runQueryOnce(file) {
   // One command string: npx needs a shell on Windows, and the temp path is quoted
-  const result = spawnSync(`npx supabase db query --linked -f "${file}"`, {
+  const result = spawnSync(`npx supabase db query --remote --read-only -f "${file}"`, {
     cwd: APP_DIR,
     encoding: "utf8",
     shell: true,

@@ -6,6 +6,8 @@
 -- Extensions
 -- ======================================================================
 
+-- extension pg_cron (schema pg_catalog, version 1.6.4)
+
 -- extension pg_net (schema extensions, version 0.20.4)
 
 -- extension pg_stat_statements (schema extensions, version 1.11)
@@ -51,7 +53,12 @@ create table public.announcements (
   body text not null,
   pinned boolean default false not null,
   created_at timestamp with time zone default now() not null,
-  updated_at timestamp with time zone default now() not null
+  updated_at timestamp with time zone default now() not null,
+  category text default 'company_update'::text not null,
+  cover_path text,
+  event_starts_at timestamp with time zone,
+  event_ends_at timestamp with time zone,
+  meeting_url text
 );
 
 create table public.attachments (
@@ -73,7 +80,10 @@ create table public.calendar_events (
   external_url text,
   created_by uuid,
   created_at timestamp with time zone default now() not null,
-  project_id uuid default gen_random_uuid()
+  project_id uuid default gen_random_uuid(),
+  starts_at timestamp with time zone,
+  ends_at timestamp with time zone,
+  category text default 'meeting'::text not null
 );
 
 create table public.chat_channel_members (
@@ -296,7 +306,36 @@ create table public.project_spaces (
   status text default 'active'::text not null,
   created_at timestamp with time zone default now() not null,
   search_vector tsvector generated always as (to_tsvector('english'::regconfig, COALESCE(name, ''::text))) stored,
-  team_lead uuid default gen_random_uuid()
+  team_lead uuid default gen_random_uuid(),
+  due_date date
+);
+
+create table public.sprints (
+  id uuid default gen_random_uuid() not null,
+  project_id uuid not null,
+  name text not null,
+  goal text,
+  starts_on date not null,
+  ends_on date not null,
+  status text default 'planned'::text not null,
+  committed_points integer,
+  committed_tasks integer,
+  completed_points integer,
+  completed_tasks integer,
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  retro_went_well text,
+  retro_to_improve text,
+  retro_actions text,
+  created_by uuid default auth.uid(),
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null
+);
+
+create table public.task_due_reminders (
+  task_id uuid not null,
+  due_date date not null,
+  sent_at timestamp with time zone default now() not null
 );
 
 create table public.tasks (
@@ -316,7 +355,10 @@ create table public.tasks (
   parent_task_id uuid,
   search_vector tsvector generated always as ((setweight(to_tsvector('english'::regconfig, COALESCE(title, ''::text)), 'A'::"char") || setweight(to_tsvector('english'::regconfig, COALESCE(description, ''::text)), 'B'::"char"))) stored,
   sub_tasks text,
-  column_id uuid
+  column_id uuid,
+  sprint_id uuid,
+  story_points smallint,
+  completed_at timestamp with time zone
 );
 
 create table public.team_space_stats (
@@ -345,7 +387,12 @@ create table public.users (
   auth_provider text default 'email'::text not null,
   created_at timestamp with time zone default now() not null,
   search_vector tsvector generated always as (to_tsvector('english'::regconfig, ((COALESCE(name, ''::text) || ' '::text) || COALESCE(email, ''::text)))) stored,
-  description text
+  description text,
+  job_title text,
+  location text,
+  timezone text,
+  avatar_path text,
+  reports_to uuid
 );
 
 -- ======================================================================
@@ -406,6 +453,10 @@ alter table only public.project_members add constraint project_members_pkey PRIM
 
 alter table only public.project_spaces add constraint project_spaces_pkey PRIMARY KEY (id);
 
+alter table only public.sprints add constraint sprints_pkey PRIMARY KEY (id);
+
+alter table only public.task_due_reminders add constraint task_due_reminders_pkey PRIMARY KEY (task_id, due_date);
+
 alter table only public.tasks add constraint tasks_pkey PRIMARY KEY (id);
 
 alter table only public.team_space_stats add constraint team_space_stats_pkey PRIMARY KEY (team_space_id);
@@ -426,13 +477,29 @@ alter table only public.project_members add constraint project_members_project_i
 
 alter table only public.users add constraint users_email_key UNIQUE (email);
 
+alter table only public.announcements add constraint announcements_category_check CHECK ((category = ANY (ARRAY['company_update'::text, 'policy'::text, 'event'::text, 'people_culture'::text])));
+
+alter table only public.announcements add constraint announcements_event_order_check CHECK (((event_ends_at IS NULL) OR (event_starts_at IS NULL) OR (event_ends_at >= event_starts_at)));
+
+alter table only public.announcements add constraint announcements_meeting_url_check CHECK ((meeting_url ~ '^https://'::text));
+
 alter table only public.announcements add constraint announcements_title_check CHECK ((char_length(title) > 0));
+
+alter table only public.announcements add constraint announcements_title_length_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)));
 
 alter table only public.attachments add constraint attachments_label_check CHECK ((label = ANY (ARRAY['document'::text, 'meeting'::text, 'other'::text])));
 
 alter table only public.attachments add constraint attachments_type_check CHECK ((type = ANY (ARRAY['file'::text, 'link'::text])));
 
+alter table only public.calendar_events add constraint calendar_events_category_check CHECK ((category = ANY (ARRAY['meeting'::text, 'holiday'::text, 'training'::text, 'social'::text, 'review'::text, 'other'::text])));
+
+alter table only public.calendar_events add constraint calendar_events_external_url_check CHECK ((external_url ~ '^https://'::text));
+
+alter table only public.calendar_events add constraint calendar_events_time_order_check CHECK (((ends_at IS NULL) OR (starts_at IS NULL) OR (ends_at >= starts_at)));
+
 alter table only public.calendar_events add constraint calendar_events_title_check CHECK ((char_length(title) > 0));
+
+alter table only public.calendar_events add constraint calendar_events_title_length_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)));
 
 alter table only public.comments add constraint comments_body_check CHECK ((char_length(body) > 0));
 
@@ -448,9 +515,9 @@ alter table only public.memberships add constraint memberships_org_role_admin_on
 
 alter table only public.milestones add constraint milestones_name_check CHECK ((char_length(name) > 0));
 
-alter table only public.notifications add constraint notifications_reference_type_check CHECK ((reference_type = ANY (ARRAY['task'::text, 'comment'::text, 'announcement'::text])));
+alter table only public.notifications add constraint notifications_reference_type_check CHECK ((reference_type = ANY (ARRAY['task'::text, 'comment'::text, 'announcement'::text, 'project'::text])));
 
-alter table only public.notifications add constraint notifications_type_check CHECK ((type = ANY (ARRAY['assignment'::text, 'mention'::text, 'status_change'::text])));
+alter table only public.notifications add constraint notifications_type_check CHECK ((type = ANY (ARRAY['assignment'::text, 'mention'::text, 'status_change'::text, 'project_added'::text])));
 
 alter table only public.organizations add constraint organizations_name_check CHECK ((char_length(name) > 0));
 
@@ -462,15 +529,39 @@ alter table only public.project_spaces add constraint project_spaces_name_check 
 
 alter table only public.project_spaces add constraint project_spaces_status_check CHECK ((status = ANY (ARRAY['active'::text, 'archived'::text])));
 
+alter table only public.sprints add constraint sprints_dates_check CHECK ((ends_on >= starts_on));
+
+alter table only public.sprints add constraint sprints_goal_check CHECK (((goal IS NULL) OR (char_length(goal) <= 500)));
+
+alter table only public.sprints add constraint sprints_name_check CHECK (((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 80)));
+
+alter table only public.sprints add constraint sprints_retro_actions_check CHECK (((retro_actions IS NULL) OR (char_length(retro_actions) <= 2000)));
+
+alter table only public.sprints add constraint sprints_retro_to_improve_check CHECK (((retro_to_improve IS NULL) OR (char_length(retro_to_improve) <= 2000)));
+
+alter table only public.sprints add constraint sprints_retro_went_well_check CHECK (((retro_went_well IS NULL) OR (char_length(retro_went_well) <= 2000)));
+
+alter table only public.sprints add constraint sprints_status_check CHECK ((status = ANY (ARRAY['planned'::text, 'active'::text, 'completed'::text])));
+
 alter table only public.tasks add constraint tasks_priority_check CHECK ((priority = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'urgent'::text])));
 
 alter table only public.tasks add constraint tasks_status_check CHECK ((status = ANY (ARRAY['todo'::text, 'in_progress'::text, 'done'::text])));
+
+alter table only public.tasks add constraint tasks_story_points_check CHECK (((story_points IS NULL) OR (story_points = ANY (ARRAY[0, 1, 2, 3, 5, 8, 13, 21]))));
 
 alter table only public.tasks add constraint tasks_title_check CHECK ((char_length(title) > 0));
 
 alter table only public.team_spaces add constraint team_spaces_description_check CHECK (((description IS NULL) OR (char_length(description) <= 1500)));
 
 alter table only public.team_spaces add constraint team_spaces_name_check CHECK ((char_length(name) > 0));
+
+alter table only public.users add constraint users_job_title_length_check CHECK ((char_length(job_title) <= 100));
+
+alter table only public.users add constraint users_location_length_check CHECK ((char_length(location) <= 100));
+
+alter table only public.users add constraint users_reports_to_not_self_check CHECK ((reports_to IS DISTINCT FROM id));
+
+alter table only public.users add constraint users_timezone_length_check CHECK ((char_length(timezone) <= 64));
 
 alter table only public.activity_log add constraint activity_log_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL;
 
@@ -568,6 +659,12 @@ alter table only public.project_members add constraint project_members_user_id_f
 
 alter table only public.project_spaces add constraint project_spaces_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE CASCADE;
 
+alter table only public.sprints add constraint sprints_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+alter table only public.sprints add constraint sprints_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
+
+alter table only public.task_due_reminders add constraint task_due_reminders_task_id_fkey FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE;
+
 alter table only public.tasks add constraint tasks_assignee_id_fkey FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL;
 
 alter table only public.tasks add constraint tasks_column_id_fkey FOREIGN KEY (column_id) REFERENCES project_columns(id) ON DELETE SET NULL;
@@ -582,6 +679,8 @@ alter table only public.tasks add constraint tasks_parent_task_id_fkey FOREIGN K
 
 alter table only public.tasks add constraint tasks_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
 
+alter table only public.tasks add constraint tasks_sprint_id_fkey FOREIGN KEY (sprint_id) REFERENCES sprints(id) ON DELETE SET NULL;
+
 alter table only public.team_space_stats add constraint team_space_stats_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE CASCADE;
 
 alter table only public.team_spaces add constraint team_spaces_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
@@ -590,15 +689,21 @@ alter table only public.users add constraint users_id_fkey FOREIGN KEY (id) REFE
 
 alter table only public.users add constraint users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
 
+alter table only public.users add constraint users_reports_to_fkey FOREIGN KEY (reports_to) REFERENCES users(id) ON DELETE SET NULL;
+
 -- ======================================================================
 -- Indexes
 -- ======================================================================
 
 CREATE INDEX activity_log_entity_idx ON public.activity_log USING btree (entity_type, entity_id, created_at DESC);
 
+CREATE INDEX announcements_org_created_idx ON public.announcements USING btree (organization_id, created_at DESC);
+
 CREATE INDEX announcements_org_idx ON public.announcements USING btree (organization_id, pinned, created_at DESC);
 
 CREATE INDEX attachments_task_idx ON public.attachments USING btree (task_id);
+
+CREATE INDEX calendar_events_org_date_idx ON public.calendar_events USING btree (organization_id, event_date);
 
 CREATE INDEX calendar_events_org_idx ON public.calendar_events USING btree (organization_id, event_date);
 
@@ -607,6 +712,8 @@ CREATE INDEX comments_task_idx ON public.comments USING btree (task_id);
 CREATE INDEX daily_standups_team_space_date_idx ON public.daily_standups USING btree (team_space_id, standup_date DESC);
 
 CREATE INDEX direct_message_reactions_message_id_idx ON public.direct_message_reactions USING btree (message_id);
+
+CREATE INDEX direct_messages_attachment_path_idx ON public.direct_messages USING btree (((file_attachment ->> 'path'::text))) WHERE (file_attachment ? 'path'::text);
 
 CREATE INDEX invitations_email_idx ON public.invitations USING btree (email);
 
@@ -644,6 +751,10 @@ CREATE INDEX project_spaces_search_idx ON public.project_spaces USING gin (searc
 
 CREATE INDEX project_spaces_team_space_idx ON public.project_spaces USING btree (team_space_id);
 
+CREATE UNIQUE INDEX sprints_one_active_per_project ON public.sprints USING btree (project_id) WHERE (status = 'active'::text);
+
+CREATE INDEX sprints_project_id_idx ON public.sprints USING btree (project_id);
+
 CREATE INDEX tasks_assignee_idx ON public.tasks USING btree (assignee_id, status);
 
 CREATE INDEX tasks_column_id_idx ON public.tasks USING btree (column_id);
@@ -655,6 +766,8 @@ CREATE INDEX tasks_parent_idx ON public.tasks USING btree (parent_task_id);
 CREATE INDEX tasks_project_idx ON public.tasks USING btree (project_id, status);
 
 CREATE INDEX tasks_search_idx ON public.tasks USING gin (search_vector);
+
+CREATE INDEX tasks_sprint_id_idx ON public.tasks USING btree (sprint_id) WHERE (sprint_id IS NOT NULL);
 
 CREATE INDEX users_search_idx ON public.users USING gin (search_vector);
 
@@ -817,6 +930,7 @@ CREATE OR REPLACE FUNCTION public.claim_pending_invites()
 AS $function$
 declare
   v_email text;
+  v_org uuid;
   v_invite record;
 begin
   select email into v_email from users where id = auth.uid();
@@ -825,8 +939,14 @@ begin
   end if;
 
   for v_invite in
-    select * from invites where lower(email) = lower(v_email) and accepted_at is null
+    select * from invites
+    where lower(email) = lower(v_email) and accepted_at is null
+    order by created_at
   loop
+    -- Re-read each time: the first claimed invite may have just set it
+    select organization_id into v_org from users where id = auth.uid();
+    continue when v_org is not null and v_org <> v_invite.organization_id;
+
     update users set organization_id = v_invite.organization_id
       where id = auth.uid() and organization_id is null;
 
@@ -870,6 +990,71 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.complete_sprint(p_sprint_id uuid, p_carry_over_to uuid DEFAULT NULL::uuid, p_went_well text DEFAULT NULL::text, p_to_improve text DEFAULT NULL::text, p_actions text DEFAULT NULL::text)
+ RETURNS sprints
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_sprint sprints;
+  v_done_points integer;
+  v_done_tasks integer;
+  v_open_tasks integer;
+begin
+  -- Permission first: locking the row needs update rights, which members lack
+  select * into v_sprint from sprints where id = p_sprint_id;
+  if not found then
+    raise exception 'Sprint not found' using errcode = 'P0002';
+  end if;
+  if not can_manage_project(v_sprint.project_id) then
+    raise exception 'Only project managers can complete a sprint' using errcode = '42501';
+  end if;
+  select * into v_sprint from sprints where id = p_sprint_id for update;
+  if v_sprint.status <> 'active' then
+    raise exception 'Only the active sprint can be completed' using errcode = '22023';
+  end if;
+  if p_carry_over_to is not null and not exists (
+    select 1 from sprints
+    where id = p_carry_over_to and project_id = v_sprint.project_id and status = 'planned'
+  ) then
+    raise exception 'Unfinished work can only move to a planned sprint of this project' using errcode = '22023';
+  end if;
+
+  select coalesce(sum(story_points) filter (where status = 'done'), 0),
+         count(*) filter (where status = 'done'),
+         count(*) filter (where status <> 'done')
+    into v_done_points, v_done_tasks, v_open_tasks
+    from tasks where sprint_id = p_sprint_id;
+
+  update tasks set sprint_id = p_carry_over_to
+  where sprint_id = p_sprint_id and status <> 'done';
+
+  update sprints set
+    status = 'completed',
+    completed_at = now(),
+    completed_points = v_done_points,
+    completed_tasks = v_done_tasks,
+    retro_went_well = nullif(btrim(p_went_well), ''),
+    retro_to_improve = nullif(btrim(p_to_improve), ''),
+    retro_actions = nullif(btrim(p_actions), '')
+  where id = p_sprint_id
+  returning * into v_sprint;
+
+  -- completionPercent / completedCount / totalTasks: the feed's existing wording
+  insert into activity_log (entity_type, entity_id, actor_id, action, new_state)
+  values ('sprint', v_sprint.id, auth.uid(), 'sprint_completed', jsonb_build_object(
+    'project_id', v_sprint.project_id, 'name', v_sprint.name,
+    'completedCount', v_done_tasks, 'totalTasks', v_done_tasks + v_open_tasks,
+    'completionPercent', case when v_done_tasks + v_open_tasks = 0 then 0
+                              else round(100.0 * v_done_tasks / (v_done_tasks + v_open_tasks)) end,
+    'completedPoints', v_done_points, 'committedPoints', v_sprint.committed_points,
+    'carriedOver', v_open_tasks));
+
+  return v_sprint;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.current_org_id()
  RETURNS uuid
  LANGUAGE sql
@@ -877,6 +1062,40 @@ CREATE OR REPLACE FUNCTION public.current_org_id()
  SET search_path TO 'public'
 AS $function$
   select organization_id from users where id = auth.uid();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.dispatch_edge_webhook()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_url text;
+  v_secret text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'edge_webhook_secret';
+  if v_url is null or v_secret is null then
+    raise warning 'Webhook to % skipped: add the project_url and edge_webhook_secret Vault secrets', tg_argv[0];
+    return null;
+  end if;
+
+  perform net.http_post(
+    url := rtrim(v_url, '/') || '/functions/v1/' || tg_argv[0],
+    body := jsonb_build_object(
+      'type', tg_op,
+      'table', tg_table_name,
+      'schema', tg_table_schema,
+      'record', to_jsonb(new),
+      'old_record', case when tg_op = 'UPDATE' then to_jsonb(old) end
+    ),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-webhook-secret', v_secret),
+    timeout_milliseconds := 5000
+  );
+  return null;
+end;
 $function$
 ;
 
@@ -930,6 +1149,17 @@ begin
   )
   on conflict do nothing;
 
+  -- Logging must never block account creation
+  begin
+    insert into public.activity_log (entity_type, entity_id, actor_id, action, new_state)
+    values (
+      'user', new.id, new.id, 'signup',
+      jsonb_build_object('email', new.email, 'full_name', new.raw_user_meta_data ->> 'full_name')
+    );
+  exception when others then
+    raise warning 'handle_new_user: could not log signup for %: %', new.id, sqlerrm;
+  end;
+
   return new;
 end;
 $function$
@@ -946,6 +1176,18 @@ AS $function$
             has_team_access(p_department_id)
             or is_admin_of_org(team_space_org(p_department_id))
          ));
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.has_password()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(u.encrypted_password, '') <> ''
+  from auth.users u
+  where u.id = auth.uid();
 $function$
 ;
 
@@ -1100,6 +1342,86 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.launch_organization(p_user_id uuid, p_organization_name text, p_team_spaces jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_current_org uuid;
+  v_founder_email text;
+  v_org organizations;
+  v_team team_spaces;
+  v_team_input jsonb;
+  v_teams jsonb := '[]'::jsonb;
+  v_invites jsonb := '[]'::jsonb;
+  v_invite record;
+begin
+  if coalesce(btrim(p_organization_name), '') = '' then
+    raise exception 'organization_name is required' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_team_spaces) is distinct from 'array'
+     or jsonb_array_length(p_team_spaces) not between 1 and 5 then
+    raise exception 'team_spaces must contain 1 to 5 entries' using errcode = '22023';
+  end if;
+
+  -- Row lock: a second launch from the same user (double click, two tabs) waits
+  -- here, then sees the organization the first one set and stops
+  select organization_id, lower(email) into v_current_org, v_founder_email
+  from users where id = p_user_id
+  for update;
+  if not found then
+    raise exception 'Profile not found' using errcode = 'P0002';
+  end if;
+  if v_current_org is not null then
+    raise exception 'You already belong to an organization.' using errcode = '23505';
+  end if;
+
+  insert into organizations (name) values (btrim(p_organization_name)) returning * into v_org;
+  update users set organization_id = v_org.id where id = p_user_id;
+  insert into memberships (user_id, team_space_id, role) values (p_user_id, null, 'admin');
+
+  for v_team_input in select value from jsonb_array_elements(p_team_spaces) loop
+    continue when coalesce(btrim(v_team_input ->> 'name'), '') = '';
+
+    insert into team_spaces (organization_id, name)
+    values (v_org.id, btrim(v_team_input ->> 'name'))
+    returning * into v_team;
+    v_teams := v_teams || to_jsonb(v_team);
+
+    -- One invite per address per team; if the lead is also listed as a member,
+    -- the lead role wins. The founder never invites themselves.
+    for v_invite in
+      select distinct on (e.email) e.email, e.role
+      from (
+        select lower(btrim(v_team_input ->> 'team_lead_email')) as email, 'team_lead'::membership_role as role, 0 as rank
+        union all
+        select lower(btrim(m)), 'member'::membership_role, 1
+        from jsonb_array_elements_text(coalesce(v_team_input -> 'member_emails', '[]'::jsonb)) as m
+      ) e
+      where coalesce(e.email, '') <> '' and e.email <> v_founder_email
+      order by e.email, e.rank
+    loop
+      insert into invites (organization_id, team_space_id, email, role, invited_by)
+      values (v_org.id, v_team.id, v_invite.email, v_invite.role, p_user_id);
+      v_invites := v_invites || jsonb_build_object(
+        'email', v_invite.email,
+        'role', v_invite.role,
+        'team_space_id', v_team.id,
+        'team_name', v_team.name
+      );
+    end loop;
+  end loop;
+
+  if jsonb_array_length(v_teams) = 0 then
+    raise exception 'At least one team space needs a name' using errcode = '22023';
+  end if;
+
+  return jsonb_build_object('organization', to_jsonb(v_org), 'team_spaces', v_teams, 'invites', v_invites);
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.membership_org(p_team_space_id uuid, p_user_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -1166,6 +1488,22 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.org_team_memberships()
+ RETURNS TABLE(user_id uuid, team_space_id uuid, team_name text, role text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select m.user_id, t.id, t.name::text, m.role::text
+  from memberships m
+  join team_spaces t on t.id = m.team_space_id
+  join users u on u.id = m.user_id
+  where t.organization_id = current_org_id()
+    and u.organization_id = t.organization_id
+    and mfa_satisfied();
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.project_id_from_storage_path(p_name text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -1175,6 +1513,73 @@ begin
   return split_part(p_name, '/', 1)::uuid;
 exception when invalid_text_representation then
   return null;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.project_members_notify()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_actor_name text;
+  v_project_name text;
+begin
+  -- Joining a project yourself isn't news
+  if new.user_id is null or new.user_id = auth.uid() then
+    return new;
+  end if;
+  select name into v_actor_name from users where id = auth.uid();
+  select name into v_project_name from project_spaces where id = new.project_id;
+  perform notify_user(new.user_id, 'project_added', 'project', new.project_id,
+    coalesce(v_actor_name, 'Someone') || ' added you to "' || coalesce(v_project_name, 'a project') || '"');
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.queue_due_soon_reminders()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_count integer;
+begin
+  with due as (
+    select t.id, t.title, t.due_date, t.project_id, t.organization_id, u.email, p.name as project_name
+    from tasks t
+    join users u on u.id = t.assignee_id
+    join auth.users au on au.id = t.assignee_id
+    left join project_spaces p on p.id = t.project_id
+    where t.status <> 'done'
+      and t.due_date between current_date and current_date + 1
+      and u.email is not null
+      and coalesce(au.raw_user_meta_data #>> '{preferences,notifications,emailAlerts}', 'true') <> 'false'
+      and coalesce(au.raw_user_meta_data #>> '{preferences,notifications,taskAssigned}', 'true') <> 'false'
+      and not exists (select 1 from task_due_reminders r where r.task_id = t.id and r.due_date = t.due_date)
+  ),
+  remembered as (
+    insert into task_due_reminders (task_id, due_date)
+    select id, due_date from due
+    returning task_id
+  )
+  insert into notification_queue (organization_id, recipient_email, notification, payload)
+  select d.organization_id, d.email, 'deadline_incoming', jsonb_build_object(
+    'task_name', d.title,
+    'project_name', d.project_name,
+    'task_id', d.id,
+    'project_id', d.project_id,
+    'due_label', case when d.due_date = current_date then 'today' else 'tomorrow' end,
+    'due_date', to_char(d.due_date, 'FMDay, FMMonth FMDD'))
+  from due d
+  join remembered r on r.task_id = d.id;
+
+  get diagnostics v_count = row_count;
+  return v_count;
 end;
 $function$
 ;
@@ -1207,6 +1612,161 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.remove_from_organization(p_user_id uuid DEFAULT NULL::uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_caller uuid := auth.uid();
+  v_target uuid := coalesce(p_user_id, auth.uid());
+  v_is_leaving boolean;
+  v_org uuid;
+  v_name text;
+  v_email text;
+  v_target_is_org_admin boolean;
+begin
+  if v_caller is null then
+    raise exception 'Sign in first.' using errcode = '42501', hint = 'org_exit';
+  end if;
+  if not mfa_satisfied() then
+    raise exception 'Enter your authenticator code first.' using errcode = '42501', hint = 'org_exit';
+  end if;
+
+  v_is_leaving := v_target = v_caller;
+
+  select organization_id into v_org from users where id = v_target;
+  if v_org is null then
+    raise exception 'That person is not in an organization.' using errcode = 'P0001', hint = 'org_exit';
+  end if;
+
+  -- One exit per organization at a time. Without this, two admins leaving at
+  -- the same moment would each still see the other as an admin and both get
+  -- through, leaving nobody in charge. Every check below runs after the lock.
+  perform 1 from organizations where id = v_org for update;
+
+  select name, email into v_name, v_email
+  from users where id = v_target and organization_id = v_org for update;
+  if not found then
+    raise exception 'That person is not in an organization.' using errcode = 'P0001', hint = 'org_exit';
+  end if;
+
+  select exists (
+    select 1 from memberships m
+    where m.user_id = v_target
+      and ((m.team_space_id is null and m.role = 'admin') or m.role = 'super_admin')
+  ) into v_target_is_org_admin;
+
+  if v_is_leaving then
+    if v_target_is_org_admin
+       and exists (select 1 from users u where u.organization_id = v_org and u.id <> v_target)
+       and not exists (
+         select 1 from memberships m
+         join users u on u.id = m.user_id
+         where u.organization_id = v_org
+           and u.id <> v_target
+           and ((m.team_space_id is null and m.role = 'admin') or m.role = 'super_admin')
+       ) then
+      raise exception 'You are the only organization admin. Make someone else an admin before you leave.'
+        using errcode = 'P0001', hint = 'org_exit';
+    end if;
+  else
+    -- is_admin_of_org: the caller is in that same organization and is_org_admin()
+    if not is_admin_of_org(v_org) then
+      raise exception 'Only an organization admin can remove people.' using errcode = '42501', hint = 'org_exit';
+    end if;
+    if v_target_is_org_admin then
+      raise exception 'Organization admins can''t be removed. They have to leave themselves.'
+        using errcode = 'P0001', hint = 'org_exit';
+    end if;
+  end if;
+
+  -- Unfinished work goes back to "unassigned" so someone picks it up;
+  -- finished tasks keep their name
+  update tasks set assignee_id = null
+  where assignee_id = v_target and organization_id = v_org and status <> 'done';
+
+  delete from project_members pm
+  using project_spaces ps, team_spaces ts
+  where pm.user_id = v_target
+    and ps.id = pm.project_id
+    and ts.id = ps.team_space_id
+    and ts.organization_id = v_org;
+
+  -- A person is in one organization at a time, so every channel and
+  -- membership they hold belongs to this one
+  delete from chat_channel_members where user_id = v_target;
+  delete from memberships where user_id = v_target;
+
+  -- A channel's creator can always read and manage it (can_see_channel,
+  -- can_manage_channel), member or not. The channels stay; whoever manages
+  -- the project or department still manages them.
+  update chat_channels set created_by = null where created_by = v_target;
+
+  -- A pending invite would pull them straight back in at the next sign-in
+  -- (claim_pending_invites)
+  delete from invites
+  where organization_id = v_org and accepted_at is null and lower(email) = lower(v_email);
+  delete from invitations
+  where organization_id = v_org and status = 'pending'
+    and (invited_user_id = v_target or lower(email) = lower(v_email));
+
+  -- Their bell only held this organization's tasks and projects
+  delete from notifications where user_id = v_target;
+
+  update users set reports_to = null
+  where reports_to = v_target and organization_id = v_org;
+
+  update users set organization_id = null, reports_to = null, job_title = null
+  where id = v_target;
+
+  insert into activity_log (entity_type, entity_id, actor_id, action, prior_state, new_state)
+  values (
+    'organization', v_org, v_caller,
+    case when v_is_leaving then 'member_left' else 'member_removed' end,
+    jsonb_build_object('user_id', v_target, 'name', v_name, 'email', v_email),
+    null
+  );
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.set_reports_to(p_user_id uuid, p_manager_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_org uuid := current_org_id();
+begin
+  if v_org is null or not is_org_admin() then
+    raise exception 'Only an organization admin can change who someone reports to' using errcode = '42501';
+  end if;
+  if p_user_id = p_manager_id then
+    raise exception 'Someone cannot report to themselves' using errcode = '22023';
+  end if;
+  if not exists (select 1 from users where id = p_user_id and organization_id = v_org)
+     or (p_manager_id is not null and not exists (select 1 from users where id = p_manager_id and organization_id = v_org)) then
+    raise exception 'Both people must be in your organization' using errcode = '22023';
+  end if;
+  -- No loops: the new manager can't already report (directly or not) to this person
+  if p_manager_id is not null and exists (
+    with recursive chain(id) as (
+      select reports_to from users where id = p_manager_id
+      union
+      select u.reports_to from users u join chain c on u.id = c.id where u.reports_to is not null
+    )
+    select 1 from chain where id = p_user_id
+  ) then
+    raise exception 'That would make a reporting loop' using errcode = '22023';
+  end if;
+  update users set reports_to = p_manager_id where id = p_user_id;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1214,6 +1774,49 @@ AS $function$
 begin
   new.updated_at = now();
   return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.start_sprint(p_sprint_id uuid)
+ RETURNS sprints
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_sprint sprints;
+begin
+  -- Permission first: locking the row needs update rights, which members lack
+  select * into v_sprint from sprints where id = p_sprint_id;
+  if not found then
+    raise exception 'Sprint not found' using errcode = 'P0002';
+  end if;
+  if not can_manage_project(v_sprint.project_id) then
+    raise exception 'Only project managers can start a sprint' using errcode = '42501';
+  end if;
+  select * into v_sprint from sprints where id = p_sprint_id for update;
+  if v_sprint.status <> 'planned' then
+    raise exception 'Only a planned sprint can be started' using errcode = '22023';
+  end if;
+  if exists (select 1 from sprints where project_id = v_sprint.project_id and status = 'active') then
+    raise exception 'Complete the active sprint first' using errcode = '22023';
+  end if;
+
+  update sprints set
+    status = 'active',
+    started_at = now(),
+    committed_points = (select coalesce(sum(story_points), 0) from tasks where sprint_id = p_sprint_id),
+    committed_tasks = (select count(*) from tasks where sprint_id = p_sprint_id)
+  where id = p_sprint_id
+  returning * into v_sprint;
+
+  insert into activity_log (entity_type, entity_id, actor_id, action, new_state)
+  values ('sprint', v_sprint.id, auth.uid(), 'sprint_started', jsonb_build_object(
+    'project_id', v_sprint.project_id, 'name', v_sprint.name, 'goal', v_sprint.goal,
+    'ends_on', v_sprint.ends_on,
+    'committedPoints', v_sprint.committed_points, 'totalTasks', v_sprint.committed_tasks));
+
+  return v_sprint;
 end;
 $function$
 ;
@@ -1249,17 +1852,41 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tasks_guard_due_date()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if auth.uid() is not null
+     and new.due_date is distinct from old.due_date
+     and not (
+       case
+         when old.project_id is not null then can_manage_project(old.project_id)
+         else is_admin_of_org(old.organization_id)
+       end
+     ) then
+    raise exception 'Only project managers and admins can change a task''s deadline'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tasks_log_activity()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
+declare
+  v_quiet text[] := array['sprint_id', 'story_points', 'completed_at', 'updated_at', 'search_vector'];
 begin
   if tg_op = 'INSERT' then
     insert into activity_log (entity_type, entity_id, actor_id, action, prior_state, new_state)
     values ('task', new.id, auth.uid(), 'created', null, to_jsonb(new));
-  elsif tg_op = 'UPDATE' then
+  elsif tg_op = 'UPDATE' and (to_jsonb(new) - v_quiet) is distinct from (to_jsonb(old) - v_quiet) then
     insert into activity_log (entity_type, entity_id, actor_id, action, prior_state, new_state)
     values ('task', new.id, auth.uid(), 'updated', to_jsonb(old), to_jsonb(new));
   end if;
@@ -1314,6 +1941,42 @@ begin
     perform refresh_team_space_stats(v_team_space_id);
   end if;
   return coalesce(new, old);
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tasks_sprint_rules()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.status = 'done' and (tg_op = 'INSERT' or old.status is distinct from 'done') then
+    new.completed_at := now();
+  elsif new.status <> 'done' then
+    new.completed_at := null;
+  end if;
+
+  if tg_op = 'UPDATE' and new.sprint_id is not distinct from old.sprint_id
+     and new.project_id is not distinct from old.project_id then
+    return new;
+  end if;
+
+  if new.sprint_id is not null and not exists (
+    select 1 from sprints s
+    where s.id = new.sprint_id and s.project_id = new.project_id and s.status <> 'completed'
+  ) then
+    raise exception 'A task can only join an unfinished sprint of its own project' using errcode = '22023';
+  end if;
+
+  if auth.uid() is not null
+     and (tg_op = 'INSERT' and new.sprint_id is not null
+          or tg_op = 'UPDATE' and new.sprint_id is distinct from old.sprint_id)
+     and not can_manage_project(new.project_id) then
+    raise exception 'Only project managers can plan sprints' using errcode = '42501';
+  end if;
+
+  return new;
 end;
 $function$
 ;
@@ -1419,6 +2082,11 @@ begin
   ) then
     raise exception 'Not allowed to change id, organization, email or auth provider';
   end if;
+  if current_user in ('authenticated', 'anon')
+     and new.reports_to is distinct from old.reports_to
+     and not public.is_org_admin() then
+    raise exception 'Only an organization admin can change who someone reports to';
+  end if;
   return new;
 end;
 $function$
@@ -1448,7 +2116,11 @@ $function$
 
 -- comments_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- complete_sprint(p_sprint_id uuid, p_carry_over_to uuid, p_went_well text, p_to_improve text, p_actions text): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- current_org_id(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- dispatch_edge_webhook(): {postgres=X/postgres,service_role=X/postgres}
 
 -- forget_trusted_devices(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1457,6 +2129,8 @@ $function$
 -- handle_new_user(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- has_channel_scope_access(p_project_id uuid, p_department_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- has_password(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- has_project_access(p_project_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1478,6 +2152,8 @@ $function$
 
 -- is_trusted_device(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- launch_organization(p_user_id uuid, p_organization_name text, p_team_spaces jsonb): {postgres=X/postgres,service_role=X/postgres}
+
 -- membership_org(p_team_space_id uuid, p_user_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- memberships_log_activity(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
@@ -1486,21 +2162,37 @@ $function$
 
 -- notify_user(p_user_id uuid, p_type text, p_reference_type text, p_reference_id uuid, p_body text): {postgres=X/postgres,service_role=X/postgres}
 
+-- org_team_memberships(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- project_id_from_storage_path(p_name text): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- project_members_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- queue_due_soon_reminders(): {postgres=X/postgres,service_role=X/postgres}
 
 -- refresh_team_space_stats(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- remove_from_organization(p_user_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- set_reports_to(p_user_id uuid, p_manager_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- set_updated_at(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- start_sprint(p_sprint_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- storage_path_uuid(p_name text, p_position integer): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_column_matches_project(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- tasks_guard_due_date(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_log_activity(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_refresh_stats(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- tasks_sprint_rules(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- team_role(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1526,7 +2218,21 @@ CREATE TRIGGER comments_notify_trigger AFTER INSERT ON public.comments FOR EACH 
 
 CREATE TRIGGER memberships_log_activity_trigger AFTER INSERT OR DELETE OR UPDATE ON public.memberships FOR EACH ROW EXECUTE FUNCTION memberships_log_activity();
 
+CREATE TRIGGER notification_queue_send_email AFTER INSERT ON public.notification_queue FOR EACH ROW EXECUTE FUNCTION dispatch_edge_webhook('send_email');
+
+CREATE TRIGGER project_members_email_on_insert AFTER INSERT ON public.project_members FOR EACH ROW EXECUTE FUNCTION dispatch_edge_webhook('send-notification');
+
+CREATE TRIGGER project_members_notify_trigger AFTER INSERT ON public.project_members FOR EACH ROW EXECUTE FUNCTION project_members_notify();
+
+CREATE TRIGGER sprints_set_updated_at BEFORE UPDATE ON public.sprints FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
 CREATE TRIGGER tasks_column_matches_project BEFORE INSERT OR UPDATE OF column_id, project_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_column_matches_project();
+
+CREATE TRIGGER tasks_email_assignee_on_insert AFTER INSERT ON public.tasks FOR EACH ROW WHEN ((new.assignee_id IS NOT NULL)) EXECUTE FUNCTION dispatch_edge_webhook('send-notification');
+
+CREATE TRIGGER tasks_email_assignee_on_update AFTER UPDATE OF assignee_id ON public.tasks FOR EACH ROW WHEN (((new.assignee_id IS NOT NULL) AND (new.assignee_id IS DISTINCT FROM old.assignee_id))) EXECUTE FUNCTION dispatch_edge_webhook('send-notification');
+
+CREATE TRIGGER tasks_guard_due_date BEFORE UPDATE OF due_date ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_guard_due_date();
 
 CREATE TRIGGER tasks_log_activity_trigger AFTER INSERT OR UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_log_activity();
 
@@ -1535,6 +2241,8 @@ CREATE TRIGGER tasks_notify_trigger AFTER INSERT OR UPDATE ON public.tasks FOR E
 CREATE TRIGGER tasks_refresh_stats_trigger AFTER INSERT OR DELETE OR UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_refresh_stats();
 
 CREATE TRIGGER tasks_set_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER tasks_sprint_rules BEFORE INSERT OR UPDATE OF status, sprint_id, project_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_sprint_rules();
 
 CREATE TRIGGER users_guard_protected_columns BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION users_guard_protected_columns();
 
@@ -1596,6 +2304,10 @@ alter table public.project_members enable row level security;
 
 alter table public.project_spaces enable row level security;
 
+alter table public.sprints enable row level security;
+
+alter table public.task_due_reminders enable row level security;
+
 alter table public.tasks enable row level security;
 
 alter table public.team_space_stats enable row level security;
@@ -1647,11 +2359,18 @@ create policy mfa_required on public.attachments as restrictive for all to authe
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
+create policy calendar_events_delete on public.calendar_events as permissive for delete to authenticated
+  using (((organization_id = current_org_id()) AND (is_org_admin() OR (created_by = auth.uid()))));
+
 create policy calendar_events_insert on public.calendar_events as permissive for insert to public
   with check (((organization_id = current_org_id()) AND is_org_admin()));
 
 create policy calendar_events_select on public.calendar_events as permissive for select to public
   using ((organization_id = current_org_id()));
+
+create policy calendar_events_update on public.calendar_events as permissive for update to authenticated
+  using (((organization_id = current_org_id()) AND (is_org_admin() OR (created_by = auth.uid()))))
+  with check (((organization_id = current_org_id()) AND (is_org_admin() OR (created_by = auth.uid()))));
 
 create policy mfa_required on public.calendar_events as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1950,6 +2669,23 @@ create policy project_spaces_update on public.project_spaces as permissive for u
   using ((team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id))))
   with check ((team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id))));
 
+create policy mfa_required on public.sprints as restrictive for all to authenticated
+  using (mfa_satisfied())
+  with check (mfa_satisfied());
+
+create policy sprints_delete on public.sprints as permissive for delete to authenticated
+  using ((can_manage_project(project_id) AND (status = 'planned'::text)));
+
+create policy sprints_insert on public.sprints as permissive for insert to authenticated
+  with check ((can_manage_project(project_id) AND (status = 'planned'::text)));
+
+create policy sprints_select on public.sprints as permissive for select to authenticated
+  using (has_project_access(project_id));
+
+create policy sprints_update on public.sprints as permissive for update to authenticated
+  using (can_manage_project(project_id))
+  with check (can_manage_project(project_id));
+
 create policy mfa_required on public.tasks as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
@@ -2018,6 +2754,28 @@ create policy chat_attachments_objects_insert on storage.objects as permissive f
 create policy chat_attachments_objects_select on storage.objects as permissive for select to authenticated
   using (((bucket_id = 'chat-attachments'::text) AND can_see_channel(storage_path_uuid(name, 1))));
 
+create policy dm_attachments_objects_delete on storage.objects as permissive for delete to authenticated
+  using (((bucket_id = 'dm-attachments'::text) AND (storage_path_uuid(name, 1) = auth.uid())));
+
+create policy dm_attachments_objects_insert on storage.objects as permissive for insert to authenticated
+  with check (((bucket_id = 'dm-attachments'::text) AND (storage_path_uuid(name, 1) = auth.uid()) AND (storage_path_uuid(name, 2) IS NOT NULL)));
+
+create policy dm_attachments_objects_select on storage.objects as permissive for select to authenticated
+  using (((bucket_id = 'dm-attachments'::text) AND ((storage_path_uuid(name, 1) = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM direct_messages dm
+  WHERE (((dm.file_attachment ->> 'path'::text) = objects.name) AND (dm.sender_id = storage_path_uuid(objects.name, 1)) AND ((auth.uid() = dm.sender_id) OR (auth.uid() = dm.receiver_id))))))));
+
+create policy general_media_delete on storage.objects as permissive for delete to authenticated
+  using (((bucket_id = 'general-media'::text) AND (((split_part(name, '/'::text, 1) = 'avatars'::text) AND (storage_path_uuid(name, 2) = auth.uid())) OR ((split_part(name, '/'::text, 1) = 'announcements'::text) AND (storage_path_uuid(name, 2) = current_org_id()) AND is_org_admin()))));
+
+create policy general_media_insert on storage.objects as permissive for insert to authenticated
+  with check (((bucket_id = 'general-media'::text) AND (((split_part(name, '/'::text, 1) = 'avatars'::text) AND (storage_path_uuid(name, 2) = auth.uid())) OR ((split_part(name, '/'::text, 1) = 'announcements'::text) AND (storage_path_uuid(name, 2) = current_org_id()) AND is_org_admin()))));
+
+create policy general_media_select on storage.objects as permissive for select to authenticated
+  using (((bucket_id = 'general-media'::text) AND (((split_part(name, '/'::text, 1) = 'avatars'::text) AND (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = storage_path_uuid(objects.name, 2)) AND ((u.id = auth.uid()) OR (u.organization_id = current_org_id())))))) OR ((split_part(name, '/'::text, 1) = 'announcements'::text) AND (storage_path_uuid(name, 2) = current_org_id())))));
+
 create policy mfa_required on storage.objects as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
@@ -2035,129 +2793,131 @@ create policy project_files_objects_select on storage.objects as permissive for 
 -- Table privileges for API roles
 -- ======================================================================
 
-grant delete, insert, references, select, trigger, truncate, update on public.activity_log to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.activity_log to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.activity_log to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.activity_log to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.announcements to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.announcements to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.announcements to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.announcements to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.attachments to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.attachments to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.attachments to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.attachments to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.calendar_events to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.calendar_events to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.calendar_events to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.calendar_events to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channel_members to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channel_members to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channel_members to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channel_members to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channels to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channels to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channels to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channels to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.comments to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.comments to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.comments to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.comments to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.daily_standups to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.daily_standups to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.daily_standups to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.daily_standups to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.direct_message_reactions to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_message_reactions to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.direct_message_reactions to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_message_reactions to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.direct_messages to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_messages to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.direct_messages to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_messages to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.email_tickets to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.email_tickets to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.email_tickets to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.email_tickets to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.invitations to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invitations to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.invitations to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invitations to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.invites to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invites to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.invites to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invites to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.memberships to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.memberships to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.memberships to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.memberships to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.message_attachments to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_attachments to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.message_attachments to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_attachments to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.message_reactions to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_reactions to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.message_reactions to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_reactions to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.messages to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.messages to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.messages to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.messages to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.mfa_trusted_devices to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.mfa_trusted_devices to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.mfa_trusted_devices to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.mfa_trusted_devices to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.milestones to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.milestones to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.milestones to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.milestones to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.notification_queue to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notification_queue to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.notification_queue to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notification_queue to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.notifications to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notifications to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.notifications to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notifications to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.org_feed_items to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.org_feed_items to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.org_feed_items to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.org_feed_items to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.organizations to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.organizations to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.organizations to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.organizations to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_columns to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_columns to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_columns to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_columns to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_files to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_files to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_files to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_files to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_members to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_members to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_members to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_members to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_spaces to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_spaces to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.project_spaces to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_spaces to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.tasks to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.sprints to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.tasks to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.tasks to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.team_space_stats to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.tasks to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.team_space_stats to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_space_stats to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.team_spaces to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_space_stats to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.team_spaces to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_spaces to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.users to anon;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_spaces to authenticated;
 
-grant delete, insert, references, select, trigger, truncate, update on public.users to authenticated;
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.users to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.users to authenticated;
 
 -- ======================================================================
 -- Realtime publication
@@ -2190,5 +2950,9 @@ alter publication supabase_realtime add table public.team_space_stats;
 -- ======================================================================
 
 -- bucket chat-attachments: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/gif,application/pdf,text/plain}
+
+-- bucket dm-attachments: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation}
+
+-- bucket general-media: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/webp,image/gif}
 
 -- bucket project-files: public=f, file_size_limit=none, allowed_mime_types=any
