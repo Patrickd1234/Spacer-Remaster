@@ -144,6 +144,16 @@ This log tracks development work and code changes made for this project.
 
 - Super admin Orbit Board (`1a088a0`): every department's projects and tasks on one page crowded it in a big organization. Each department heading in `components/DepartmentTaskGroups.jsx` is now a toggle (chevron, `aria-expanded`), and every department starts collapsed, as asked (it was briefly open by default). The open departments are tracked, so ones that load later also start collapsed. Folded departments leave their projects out of the page, because the `grid` class would override the `hidden` attribute. Not remembered between visits.
 - Checked: `npm test` 104/104, ESLint 0 errors on the file, `vite build` succeeds. Not checked in a browser.
+- Merged `Test-phase` into `main` (`7053cbd`): `1a088a0` and `93f817d`. No conflicts; pushed directly from a temporary worktree.
+- Sidebar (`a5b6aa7`): the separate Settings link above the profile is removed for every role; Settings opens from the profile menu (`SidebarProfile`), and `/settings` is unchanged. Merged into `main` as `5f8241f`.
+- Reports, Project Workspaces (`008e6a1`): super admins now see every project in the organization under Entire Workspace (the organization's team-space projects already loaded), and only the projects they're on under Assigned to Me. Members and department admins are unchanged (their projects, plus administered departments for admins). The empty state reads "No projects in the organization yet" for a super admin on Entire Workspace. Merged into `main` as `21b6b2b`.
+- Checked: `npm test` 104/104, ESLint 0 errors, `vite build` succeeds for both changes. Not checked in a browser.
+- Merged the `22's` branch into `Test-phase` (`b54800a`, no conflicts): `1baf44d` lets project managers, admins and super admins edit a task's deadline from the project page (`components/TaskDeadline.jsx`, `project_page.jsx`, `deadlineLabel.js`). Migration `supabase/migrations/20261109090000_task_deadline_managers.sql` adds the `tasks_guard_due_date` trigger, which rejects deadline changes by anyone else (rollback in `supabase/rollback/`). The migration was run on the live database by the user; not verified from here. Checked: `node --test src/components/deadlineLabel.test.js` passes 10/10; the full `npm test` was stopped after two minutes without finishing.
+
+## 2026-11-11
+
+- Reports (`2175f64`): members no longer see the "Member Mode" badge or the Entire Workspace / Assigned to Me switch. Their page always uses Assigned to Me, so the task totals, status chart and Project Workspaces show only their own tasks and the projects they're on. Admins and super admins keep the switch; team leads and project managers count as members here. UI only: the tasks query is unchanged.
+- Checked: ESLint 0 errors on `Reports.jsx`, `vite build` succeeds. Not checked in a browser.
 
 ## 2026-11-12
 
