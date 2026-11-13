@@ -2,10 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase, getSessionUser } from "../supabase";
 import Select from "../components/Select";
 import { useRole } from "../RoleContext";
-import { projectDepartmentIds } from "../projectPermissions";
 
 export default function CreateProjectModal({ onClose, onCreated }) {
-    const { isSuperAdmin, departments } = useRole();
+    const { can } = useRole();
     const [teamSpaces, setTeamSpaces] = useState([]);
     const [pickedTeamSpaceId, setTeamSpaceId] = useState("");
     const [teamLeads, setTeamLeads] = useState([]);
@@ -45,10 +44,8 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         fetchTeams();
     }, []);
 
-    // Only departments the database lets this user create projects in: any for
-    // super admins, otherwise those where they're team lead or admin
-    const allowedIds = new Set(projectDepartmentIds(departments));
-    const allowedTeamSpaces = isSuperAdmin ? teamSpaces : teamSpaces.filter((t) => allowedIds.has(String(t.id)));
+    // Only departments the database lets this user create projects in
+    const allowedTeamSpaces = teamSpaces.filter((t) => can("project.create", t.id));
     const teamSpaceId = allowedTeamSpaces.some((t) => t.id === pickedTeamSpaceId)
         ? pickedTeamSpaceId
         : allowedTeamSpaces[0]?.id ?? "";

@@ -160,7 +160,7 @@ function InfoLine({ icon, children }) {
 }
 
 // Right-side profile drawer. Shows only what the viewer's access returns.
-export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, onMessage, onEdit, onSetManager, onRemoved }) {
+export function ProfileDrawer({ person, people, isMe, canSetManager, canRemove, onClose, onMessage, onEdit, onSetManager, onRemoved }) {
     const manager = people.find((p) => p.id === person.reports_to)
     const time = localTime(person.timezone)
 
@@ -229,8 +229,8 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                 </dl>
             </DrawerSection>
 
-            {/* Admins only; the database refuses if the person is an organization admin */}
-            {canSetManager && !isMe && (
+            {/* The database also refuses if the person holds an organization role */}
+            {canRemove && !isMe && (
                 <div className="pt-3 border-t border-line space-y-2">
                     <RemoveFromOrganizationButton key={person.id} person={person} onRemoved={onRemoved} />
                 </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { dayKey, startOfDay, addDays, weekDays, eventsByDay, upcomingEvents, eventStart, visibleRange, shiftCursor, agendaItems } from "./generalFormat"
 import { fetchEvents, createEvent, updateEvent, deleteEvent } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
+import { useRole } from "../RoleContext"
 import { GeneralShell, PageHeading, PrimaryButton, SecondaryButton, ErrorNote } from "./GeneralParts"
 import { Panel } from "../components/DashboardParts"
 import { MonthView, WeekView, AgendaView, MiniMonth, EventListItem, EventDetail, EventForm, CalendarToolbar } from "./CalendarParts"
@@ -12,7 +13,8 @@ const UPCOMING_LIMIT = 5
 // Screen 3: organization events. Org admins add events; admins and the
 // person who added an event can edit or delete it.
 export default function CompanyCalendar() {
-    const { profile, canManage } = useMyProfile()
+    const { profile } = useMyProfile()
+    const canManage = useRole().can("event.manage")
     const [view, setView] = useState("month")
     const [cursor, setCursor] = useState(() => startOfDay(new Date()))
     const [miniCursor, setMiniCursor] = useState(() => startOfDay(new Date()))

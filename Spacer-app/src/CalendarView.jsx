@@ -36,7 +36,8 @@ async function fetchCalendarProfile() {
 
 // Personal calendar: the tasks assigned to you, plus your organization's events
 export default function CalendarView() {
-    const { isSuperAdmin: canManage } = useRole()
+    const { can } = useRole()
+    const canManage = can("event.manage")
     const [profile, setProfile] = useState(null)
     const [view, setView] = useState("month")
     const [cursor, setCursor] = useState(() => startOfDay(new Date()))

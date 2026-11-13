@@ -22,9 +22,9 @@ function readLayout() {
 // Screen 4: the people the viewer may see (see scopeDirectory). ?person=<id> opens a profile drawer;
 // search, filters and layout stay as they were when it closes.
 export default function Directory() {
-    const { profile, error: profileError, canManage, reload: reloadProfile } = useMyProfile()
+    const { profile, error: profileError, reload: reloadProfile } = useMyProfile()
     const [searchParams, setSearchParams] = useSearchParams()
-    const { isSuperAdmin, roleLoading } = useRole()
+    const { isSuperAdmin, roleLoading, can } = useRole()
     // Everyone in the organization; the drawer still names managers outside the scope
     const [everyone, setEveryone] = useState([])
     const [orgTeams, setOrgTeams] = useState([])
@@ -198,7 +198,8 @@ export default function Directory() {
                             person={selected}
                             people={everyone}
                             isMe={myId !== null && selectedId === myId}
-                            canSetManager={canManage}
+                            canSetManager={can("directory.manage")}
+                            canRemove={can("member.remove_from_organization")}
                             onClose={close}
                             onMessage={() => openChat(selected)}
                             onEdit={() => setIsEditing(true)}

@@ -7,7 +7,6 @@ import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
 import SprintTab from "./sprints/SprintTab"
-import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
 import { statusFromSubtasks } from "./taskStatus"
 import { deleteWorkspaceItem } from "./workspaceDelete"
@@ -215,9 +214,6 @@ function ProjectPage() {
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [currentUserId, setCurrentUserId] = useState(null)
 
-    // ── Role comes from the global RoleContext — no local fetch needed
-    const { isSuperAdmin, isAdmin } = useRole()
-    const canEditTaskDetails = isSuperAdmin || isAdmin || (selectedTask && selectedTask.assignee_id === currentUserId)
 
     // ── Delete project
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -225,6 +221,8 @@ function ProjectPage() {
     const [deleteProjectError, setDeleteProjectError] = useState("")
     // null while checking; then whether the server's can_manage_project allows a delete
     const [canDeleteProject, setCanDeleteProject] = useState(null)
+    // Task details: the project's managers (can_manage_project) and the task's assignee
+    const canEditTaskDetails = canDeleteProject === true || Boolean(selectedTask && selectedTask.assignee_id === currentUserId)
     // null while checking; then can_edit_project, the rule for adding tasks here
     const [canAddTasks, setCanAddTasks] = useState(null)
     const [projectDepartmentName, setProjectDepartmentName] = useState(null)

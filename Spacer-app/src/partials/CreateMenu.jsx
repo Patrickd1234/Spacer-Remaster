@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase"
 import { useRole } from "../RoleContext"
-import { canCreateProjects } from "../projectPermissions"
 import { createdToast, failedToast } from "../createDepartment"
 import { DEPARTMENT_CREATED_EVENT, TASK_CREATED_EVENT } from "../appEvents"
 import CreateDepartmentModal from "./CreateDepartmentModal"
@@ -28,7 +27,7 @@ const PROJECT_ITEM = SUPER_ADMIN_ITEMS.find((item) => item.action === "project")
 // Everyone else: a task or a meeting (scheduled on the calendar page), plus a
 // project for team leads and admins, who may create them in their departments.
 export default function CreateMenu({ isSuperAdmin }) {
-    const { departments } = useRole()
+    const { canAnywhere } = useRole()
     const navigate = useNavigate()
     const menuRef = useRef(null)
     const [isOpen, setIsOpen] = useState(false)
@@ -76,7 +75,7 @@ export default function CreateMenu({ isSuperAdmin }) {
 
     const items = isSuperAdmin
         ? SUPER_ADMIN_ITEMS
-        : canCreateProjects({ isSuperAdmin, departments }) ? [MEMBER_ITEMS[0], PROJECT_ITEM, ...MEMBER_ITEMS.slice(1)] : MEMBER_ITEMS
+        : canAnywhere("project.create") ? [MEMBER_ITEMS[0], PROJECT_ITEM, ...MEMBER_ITEMS.slice(1)] : MEMBER_ITEMS
 
     return (
         <>

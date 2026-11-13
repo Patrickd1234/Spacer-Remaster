@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom"
 import { ANNOUNCEMENT_CATEGORIES, filterAnnouncements, sortAnnouncements } from "./generalFormat"
 import { fetchAnnouncements, createAnnouncement, setAnnouncementPinned, deleteAnnouncement } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
+import { useRole } from "../RoleContext"
 import { GeneralShell, PageHeading, PrimaryButton, Chip, ErrorNote, COMPACT_SELECT_CLASS } from "./GeneralParts"
 import { PanelMessage } from "../components/DashboardParts"
 import { AnnouncementCard, AnnouncementRow, AnnouncementDetail, AnnouncementForm } from "./AnnouncementParts"
@@ -13,7 +14,8 @@ const FILTERS = [{ value: "all", label: "All" }, { value: "pinned", label: "Pinn
 // Screen 2: organization-wide news. ?id=<announcement> opens one directly
 // (the Overview links here that way).
 export default function Announcements() {
-    const { profile, canManage } = useMyProfile()
+    const { profile } = useMyProfile()
+    const canManage = useRole().can("announcement.manage")
     const [searchParams, setSearchParams] = useSearchParams()
     const [announcements, setAnnouncements] = useState([])
     const [status, setStatus] = useState("loading") // loading | ready | error

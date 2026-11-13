@@ -17,7 +17,7 @@ export default function Settings() {
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState(null)
     const { preferences, updatePreferences } = usePreferences()
-    const { isSuperAdmin, isAdmin, membershipData } = useRole()
+    const { roleName } = useRole()
 
     const notifications = preferences?.notifications || {}
     const appearance = preferences?.appearance || {}
@@ -76,7 +76,7 @@ export default function Settings() {
                         id: authUser.id,
                         name: userProfile?.name || authUser.user_metadata?.full_name || "Workspace User",
                         email: authUser.email || userProfile?.email || "",
-                        role: isSuperAdmin ? "Superadmin" : isAdmin ? "Admin" : membershipData?.role || "Member"
+                        role: roleName
                     })
 
                     const userEmail = authUser.email || userProfile?.email || ""
@@ -140,7 +140,7 @@ export default function Settings() {
             }
         }
         fetchUserData()
-    }, [isSuperAdmin, isAdmin, membershipData])
+    }, [roleName])
 
     // Handlers
     const handleSaveWorkspace = async () => {

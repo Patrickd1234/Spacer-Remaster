@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase"
 import { useRole } from "../RoleContext"
-import { canCreateProjects } from "../projectPermissions"
 import CreateProjectModal from "./CreateProjectModal"
 import SidebarProfile from "./SidebarProfile"
 import { NavLink, NavButton, NavSection, SubLink, EmptyNote, TeamSpaceGroup } from "./SidebarNav"
@@ -16,7 +15,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
     const navigate = useNavigate()
     const location = useLocation()
     const { pathname } = location
-    const { departments, setActiveDepartment, isSuperAdmin, activeDepartment, orgDepartmentId } = useRole()
+    const { departments, setActiveDepartment, isSuperAdmin, activeDepartment, orgDepartmentId, canAnywhere } = useRole()
     const [collapsed, setCollapsed] = useState(false)
     const [hovered, setHovered] = useState(false)
     const [projects, setProjects] = useState([])
@@ -161,7 +160,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                         label="Projects"
                         isExpanded={isExpanded}
                         defaultOpen={pathname.startsWith("/project_page")}
-                        action={canCreateProjects({ isSuperAdmin, departments }) && (
+                        action={canAnywhere("project.create") && (
                             <span
                                 role="button"
                                 tabIndex={0}
