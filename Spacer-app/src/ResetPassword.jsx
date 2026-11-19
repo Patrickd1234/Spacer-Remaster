@@ -114,6 +114,14 @@ function ResetPassword() {
             }, 1800)
         } catch (err) {
             console.error("Update password error:", err)
+            // The link's sign-in is gone (signed out in another tab, opened in another
+            // browser, or used already): show the "request a new link" screen
+            const isSessionMissing = err?.name === "AuthSessionMissingError" || /session missing/i.test(err?.message || "")
+            if (isSessionMissing) {
+                setErrorMsg("This reset link has expired or was already used. Request a new one to set your password.")
+                setStatus("invalid")
+                return
+            }
             setErrorMsg(err.message || "Failed to update password. Please try again.")
         } finally {
             setSubmitting(false)

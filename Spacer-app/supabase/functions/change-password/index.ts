@@ -19,9 +19,12 @@ async function sha256Hex(value: string): Promise<string> {
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72; // bcrypt only uses the first 72 bytes
-// Same rules as src/passwordRules.js: a number and a special character
-const HAS_NUMBER = /\d/;
-const HAS_SPECIAL = /[^\p{L}\p{N}\s]/u;
+// Same rules as src/passwordRules.js (and Supabase's "lowercase, uppercase
+// letters, digits and symbols" setting)
+const HAS_LOWERCASE = /[a-z]/;
+const HAS_UPPERCASE = /[A-Z]/;
+const HAS_NUMBER = /[0-9]/;
+const HAS_SPECIAL = /[!@#$%^&*()_+\-=[\]{};'\\:"|<>?,./`~]/;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -55,6 +58,8 @@ Deno.serve(async (req) => {
   if (!currentPassword) return badRequest("Enter your current password.");
   if (newPassword.length < MIN_PASSWORD_LENGTH) return badRequest(`New password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
   if (new TextEncoder().encode(newPassword).length > MAX_PASSWORD_LENGTH) return badRequest(`New password must be at most ${MAX_PASSWORD_LENGTH} characters.`);
+  if (!HAS_LOWERCASE.test(newPassword)) return badRequest("New password must include at least one lowercase letter.");
+  if (!HAS_UPPERCASE.test(newPassword)) return badRequest("New password must include at least one uppercase letter.");
   if (!HAS_NUMBER.test(newPassword)) return badRequest("New password must include at least one number.");
   if (!HAS_SPECIAL.test(newPassword)) return badRequest("New password must include at least one special character, such as ! @ # or $.");
   if (newPassword === currentPassword) return badRequest("New password must be different from the current one.");
