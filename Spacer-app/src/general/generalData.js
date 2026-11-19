@@ -151,14 +151,20 @@ export async function deleteAnnouncement(announcement) {
 // Calendar events
 // ---------------------------------------------------------------------------
 
-// Events whose day falls between two dates (inclusive)
+// Before migration 20261119090000 there is no audience column (and no meetings)
+const isMissingColumn = (error) => error?.code === "42703" || error?.code === "PGRST204"
+
+// Company-wide events whose day falls between two dates (inclusive). Meetings
+// people schedule for chosen attendees stay on their personal calendars.
 export async function fetchEvents(from, to) {
-    const { data, error } = await supabase
+    const query = () => supabase
         .from("calendar_events")
         .select(EVENT_FIELDS)
         .gte("event_date", dayKey(from))
         .lte("event_date", dayKey(to))
         .order("event_date", { ascending: true })
+    let { data, error } = await query().eq("audience", "company")
+    if (isMissingColumn(error)) ({ data, error } = await query())
     if (error) console.error("Loading events failed:", error)
     return { data: data || [], error }
 }

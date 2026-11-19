@@ -73,7 +73,8 @@ export const fetchNotificationActivities = async ({ userId, email, isSuperAdmin,
 }
 
 // Notifications the database wrote for this user: assigned a task, added to a
-// project, a status change on a task they created (tasks_notify, project_members_notify)
+// project, a status change on a task they created, invited to a meeting
+// (tasks_notify, project_members_notify, calendar_event_attendees_notify)
 export const fetchPersonalNotifications = async (userId, limit = NOTIFICATION_LIMIT) => {
     if (!userId) return { data: [], error: null }
     const { data, error } = await supabase
@@ -88,6 +89,7 @@ export const fetchPersonalNotifications = async (userId, limit = NOTIFICATION_LI
 // Where a personal notification leads; tasks need their project, looked up on click
 export const personalNotificationPath = async (notification) => {
     if (notification.reference_type === "project") return `/project_page/${notification.reference_id}`
+    if (notification.reference_type === "event") return "/calendar"
     if (notification.reference_type !== "task") return null
     const { data, error } = await supabase.from("tasks").select("project_id").eq("id", notification.reference_id).maybeSingle()
     if (error) console.warn("Unable to find the task's project", error)

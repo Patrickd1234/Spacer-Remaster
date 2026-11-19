@@ -132,7 +132,8 @@ What asks `can(...)` as of step 4:
 
 | Where | Permission |
 |---|---|
-| Company calendar and personal calendar: add events | `event.manage` |
+| Company calendar: add, edit, delete company-wide events | `event.manage` |
+| Schedule a meeting (Create menu, personal calendar) | none: anyone in the organization, as organizer. Only the organizer and attendees see it; only the organizer edits or deletes it, and `event.manage` doesn't override that (migration `20261119090000_meetings`) |
 | Announcements: create, edit others' | `announcement.manage` |
 | Directory: set who someone reports to | `directory.manage` |
 | Directory: remove from organization | `member.remove_from_organization` |

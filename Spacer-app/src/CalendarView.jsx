@@ -1,16 +1,20 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { supabase, getSessionUser } from "./supabase"
 import { statusFromSubtasks } from "./taskStatus"
-import { useRole } from "./RoleContext"
-import { createEvent } from "./general/generalData"
 import {
-    dayKey, startOfDay, weekDays, eventsByDay, upcomingEvents, shiftCursor, agendaItems, taskItem,
+    dayKey, startOfDay, addDays, weekDays, eventsByDay, upcomingEvents, shiftCursor, agendaItems, taskItem, visibleRange,
 } from "./general/generalFormat"
 import { GeneralShell, PageHeading, PrimaryButton } from "./general/GeneralParts"
-import { MonthView, WeekView, AgendaView, MiniMonth, EventChip, EventListItem, EventDetail, EventForm, CalendarToolbar } from "./general/CalendarParts"
+import { MonthView, WeekView, AgendaView, MiniMonth, EventChip, EventListItem, EventDetail, CalendarToolbar } from "./general/CalendarParts"
 import { Panel } from "./components/DashboardParts"
 import { DayScheduleDrawer, TaskDetailsDrawer } from "./components/CalendarTaskDrawers"
 import { TaskChip, TaskRow } from "./components/CalendarTaskItems"
+import Toast from "./components/Toast"
+import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
+import MeetingDetail from "./meetings/MeetingDetail"
+import { deleteMeeting } from "./meetings/meetingData"
+import { expandRecurring, baseEventId } from "./meetings/meetingFormat"
+import { MEETING_SAVED_EVENT } from "./appEvents"
 
 const UPCOMING_DAYS = 30
 const UPCOMING_LIMIT = 6
@@ -19,7 +23,7 @@ function Legend() {
     return (
         <Panel title="Legend">
             <p className="flex items-center gap-2 text-xs text-soft"><span className="w-3 h-3 rounded-sm bg-accent/30 border border-accent-ink/50" />Your tasks (by due date)</p>
-            <p className="flex items-center gap-2 text-xs text-soft"><span className="w-3 h-3 rounded-sm bg-blue-500/30 border border-blue-500/50" />Company events (coloured by category)</p>
+            <p className="flex items-center gap-2 text-xs text-soft"><span className="w-3 h-3 rounded-sm bg-blue-500/30 border border-blue-500/50" />Your meetings and company events (coloured by category)</p>
         </Panel>
     )
 }
@@ -34,10 +38,12 @@ async function fetchCalendarProfile() {
     return data
 }
 
-// Personal calendar: the tasks assigned to you, plus your organization's events
+// The stored event replaced by (or added as) `saved`
+const upsertEvent = (events, saved) => [...events.filter((e) => e.id !== saved.id), saved]
+
+// Personal calendar: the tasks assigned to you, your organization's events,
+// and the meetings you organize or are invited to (row-level security decides)
 export default function CalendarView() {
-    const { can } = useRole()
-    const canManage = can("event.manage")
     const [profile, setProfile] = useState(null)
     const [view, setView] = useState("month")
     const [cursor, setCursor] = useState(() => startOfDay(new Date()))
@@ -47,7 +53,10 @@ export default function CalendarView() {
     const [selectedDate, setSelectedDate] = useState(null)
     const [selectedTask, setSelectedTask] = useState(null)
     const [openEvent, setOpenEvent] = useState(null)
-    const [newEventDate, setNewEventDate] = useState(null)
+    // { date } schedules a new meeting; { event } edits one
+    const [meetingModal, setMeetingModal] = useState(null)
+    const [toast, setToast] = useState(null)
+    const closeToast = useCallback(() => setToast(null), [])
     const todayKey = dayKey(new Date())
 
     const updateTaskSubtasks = async (taskId, newSubtasks) => {
@@ -174,7 +183,18 @@ export default function CalendarView() {
         return () => { active = false }
     }, [profile?.id, profile?.organization_id])
 
-    const items = useMemo(() => [...events, ...tasks.map(taskItem)], [events, tasks])
+    // Repeating meetings are placed across the visible period and the "Coming Up" window
+    const [rangeFrom, rangeTo] = visibleRange(view, cursor)
+    const today = startOfDay(new Date())
+    const expandFrom = rangeFrom < today ? rangeFrom : today
+    const upcomingTo = addDays(today, UPCOMING_DAYS)
+    const expandTo = rangeTo > upcomingTo ? rangeTo : upcomingTo
+    const expandFromKey = dayKey(expandFrom)
+    const expandToKey = dayKey(expandTo)
+    const items = useMemo(
+        () => [...expandRecurring(events, new Date(`${expandFromKey}T00:00`), new Date(`${expandToKey}T00:00`)), ...tasks.map(taskItem)],
+        [events, tasks, expandFromKey, expandToKey],
+    )
     const byDay = useMemo(() => eventsByDay(items), [items])
     const upcoming = useMemo(
         () => upcomingEvents(items.filter((i) => i.kind !== "task" || i.task.status !== "done"), new Date(), UPCOMING_DAYS, UPCOMING_LIMIT),
@@ -193,13 +213,43 @@ export default function CalendarView() {
         ? <TaskRow key={item.id} item={item} onOpen={setSelectedTask} />
         : <EventListItem key={item.id} event={item} onOpen={setOpenEvent} />
 
-    const handleCreateEvent = async (form) => {
-        const { data, error } = await createEvent(profile, form)
-        if (error) return error
-        setEvents((prev) => [...prev, data])
-        setNewEventDate(null)
+    // Meetings scheduled from the header's Create menu show up straight away
+    useEffect(() => {
+        const onSaved = (e) => { if (e.detail?.id) setEvents((prev) => upsertEvent(prev, e.detail)) }
+        window.addEventListener(MEETING_SAVED_EVENT, onSaved)
+        return () => window.removeEventListener(MEETING_SAVED_EVENT, onSaved)
+    }, [])
+
+    const handleMeetingSaved = (saved, { isNew, hasGuestListError }) => {
+        setMeetingModal(null)
+        setOpenEvent(null)
+        setEvents((prev) => upsertEvent(prev, saved))
+        setToast(hasGuestListError
+            ? { type: "error", title: isNew ? "Meeting scheduled" : "Meeting saved", message: "Some guest list changes didn't go through. Open the meeting to check." }
+            : { type: "success", title: isNew ? "Meeting scheduled" : "Meeting saved", message: saved.title })
+    }
+
+    const handleEditMeeting = (eventId) => {
+        const stored = events.find((e) => e.id === eventId)
+        if (!stored) return
+        setOpenEvent(null)
+        setMeetingModal({ event: stored })
+    }
+
+    // Returns the error, if any, so the dialog can stay open
+    const handleDeleteMeeting = async (eventId) => {
+        const { error } = await deleteMeeting(eventId)
+        if (error) {
+            setToast({ type: "error", title: "Couldn't delete the meeting", message: "Please try again." })
+            return error
+        }
+        setEvents((prev) => prev.filter((e) => e.id !== eventId))
+        setOpenEvent(null)
+        setToast({ type: "success", title: "Meeting deleted" })
         return null
     }
+
+    const meetingOpen = openEvent?.audience === "invited"
 
     return (
         <GeneralShell page="Calendar" section={null} icon="calendar_today">
@@ -240,8 +290,8 @@ export default function CalendarView() {
                     date={selectedDate}
                     items={byDay.get(dayKey(selectedDate)) || []}
                     organizationId={profile?.organization_id}
-                    canAddEvent={canManage && Boolean(profile)}
-                    onAddEvent={() => setNewEventDate(selectedDate)}
+                    canAddEvent={Boolean(profile?.organization_id)}
+                    onAddEvent={() => setMeetingModal({ date: selectedDate })}
                     onTaskCreated={(task) => setTasks((prev) => [task, ...prev])}
                     onOpenTask={setSelectedTask}
                     onOpenEvent={setOpenEvent}
@@ -257,8 +307,27 @@ export default function CalendarView() {
                     onPriorityChange={updateTaskPriority}
                 />
             )}
-            {openEvent && <EventDetail event={openEvent} canEdit={false} onClose={() => setOpenEvent(null)} />}
-            {newEventDate && <EventForm event={null} defaultDate={newEventDate} onSubmit={handleCreateEvent} onClose={() => setNewEventDate(null)} />}
+            {openEvent && !meetingOpen && <EventDetail event={openEvent} canEdit={false} onClose={() => setOpenEvent(null)} />}
+            {meetingOpen && (
+                <MeetingDetail
+                    key={baseEventId(openEvent)}
+                    event={openEvent}
+                    selfId={profile?.id}
+                    onEdit={handleEditMeeting}
+                    onDelete={handleDeleteMeeting}
+                    onClose={() => setOpenEvent(null)}
+                />
+            )}
+            {meetingModal && (
+                <ScheduleMeetingModal
+                    organizer={profile}
+                    event={meetingModal.event ?? null}
+                    defaultDate={meetingModal.date}
+                    onClose={() => setMeetingModal(null)}
+                    onSaved={handleMeetingSaved}
+                />
+            )}
+            <Toast toast={toast} onClose={closeToast} />
         </GeneralShell>
     )
 }

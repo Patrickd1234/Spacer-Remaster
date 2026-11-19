@@ -25,8 +25,9 @@ const PERSONAL_MESSAGES = {
     project_added: "You can now see this project's tasks and files.",
     status_change: "A task you created changed status.",
     mention: "You were mentioned.",
+    meeting_invite: "Open your calendar for the details.",
 }
-const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email" }
+const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event" }
 
 function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();
@@ -500,4 +501,4 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     )
 }
 
-export default Header
+export default Header

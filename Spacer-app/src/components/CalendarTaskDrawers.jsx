@@ -94,7 +94,7 @@ export function DayScheduleDrawer({ date, items, organizationId, canAddEvent, on
                                             className="w-full text-left px-4 py-2.5 hover:bg-line transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
                                             onClick={() => { setIsMenuOpen(false); onAddEvent() }}
                                         >
-                                            <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Add Event
+                                            <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Schedule Meeting
                                         </button>
                                     )}
                                 </div>
@@ -125,7 +125,7 @@ export function DayScheduleDrawer({ date, items, organizationId, canAddEvent, on
                         <div className="flex flex-col items-center justify-center py-12 text-center text-muted space-y-2">
                             <span className="material-symbols-outlined text-4xl">calendar_today</span>
                             <p className="text-sm font-medium text-white">Nothing scheduled for this day</p>
-                            <p className="text-xs">Click the "+" button above to add a task{canAddEvent ? " or event" : ""}.</p>
+                            <p className="text-xs">Click the "+" button above to add a task{canAddEvent ? " or schedule a meeting" : ""}.</p>
                         </div>
                     ) : (
                         items.map((item) => <ScheduleItem key={item.id} item={item} onOpenTask={onOpenTask} onOpenEvent={onOpenEvent} />)
