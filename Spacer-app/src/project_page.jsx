@@ -22,6 +22,7 @@ import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
+import TaskKeyBar from "./tasks/TaskKeyBar"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -37,6 +38,8 @@ const BOARD_NOTICE_MS = 5000
 const TASK_COLUMNS = "id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by"
 // Added by migration 20261031090000_sprints
 const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
+// Added by migration 20261119100000_task_keys
+const TASK_KEY_COLUMNS = "task_key_scope, task_number"
 
 // Wait for a burst of task changes (e.g. a drag that also logs) to settle before reloading the feed
 const ACTIVITY_RELOAD_DELAY_MS = 500
@@ -671,8 +674,9 @@ function ProjectPage() {
                 .select(columns)
                 .eq("project_id", project_id)
                 .order("created_at", { ascending: false })
-            let { data, error } = await queryTasks(`${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`)
-            // 42703: the sprints migration isn't applied yet; load tasks without its columns
+            let { data, error } = await queryTasks(`${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`)
+            // 42703: a newer migration isn't applied yet; load tasks without its columns
+            if (error?.code === "42703") ({ data, error } = await queryTasks(`${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`))
             if (error?.code === "42703") ({ data, error } = await queryTasks(TASK_COLUMNS))
             if (error) { console.error("Error fetching tasks:", error) }
             else {
@@ -1647,7 +1651,8 @@ function ProjectPage() {
                         {/* Content */}
                         <div className="p-lg space-y-xl flex-1">
                             <div>
-                                <h1 className="font-headline-lg text-white font-bold mb-md leading-tight">{selectedTask.title}</h1>
+                                <h1 className="font-headline-lg text-white font-bold mb-sm leading-tight">{selectedTask.title}</h1>
+                                <TaskKeyBar task={selectedTask} className="mb-md" />
                                 <div className="flex flex-wrap gap-sm">
                                     {(() => {
                                         const isOverdue = isTaskOverdue(selectedTask);

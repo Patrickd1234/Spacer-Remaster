@@ -8,6 +8,7 @@ import CreateTaskModal from "./partials/CreateTaskModal"
 import DepartmentTaskGroups from "./components/DepartmentTaskGroups"
 import Select from "./components/Select"
 import PlanetLoader from "./components/PlanetLoader"
+import TaskKeyBar from "./tasks/TaskKeyBar"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -646,7 +647,8 @@ export default function Tasks() {
                         </div>
                         <div className="p-6 space-y-6 flex-1">
                             <div>
-                                <h1 className="text-lg text-white font-bold leading-tight mb-3">{selectedTask.title || selectedTask.name || "Untitled"}</h1>
+                                <h1 className="text-lg text-white font-bold leading-tight mb-2">{selectedTask.title || selectedTask.name || "Untitled"}</h1>
+                                <TaskKeyBar task={selectedTask} className="mb-3" />
                                 <div className="flex flex-wrap gap-2">
                                     {selectedTask.priority && (
                                         <span className={`px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${PRIORITY_STYLE[selectedTask.priority] || PRIORITY_STYLE.low}`}>

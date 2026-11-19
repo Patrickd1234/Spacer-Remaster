@@ -3,6 +3,7 @@ import CreateTaskModal from "../partials/CreateTaskModal"
 import { parseSubtasks } from "../taskStatus"
 import { dayKey } from "../general/generalFormat"
 import Select from "./Select"
+import TaskKeyBar from "../tasks/TaskKeyBar"
 
 // Side drawers for the personal Calendar page: one day's schedule, and a task's details
 
@@ -160,6 +161,7 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                         </button>
                     </div>
                     <h2 className="text-xl font-bold text-white mb-2">{task.title}</h2>
+                    <TaskKeyBar task={task} className="mb-3" />
                     <p className="text-sm text-muted mb-4">{task.description || "No description provided."}</p>
 
                     <div className="mb-6 space-y-3">
