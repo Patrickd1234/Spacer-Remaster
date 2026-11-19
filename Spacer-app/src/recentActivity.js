@@ -25,7 +25,11 @@ const describe = (act, actorName) => {
     if (act.action === "updated") {
         return [`${actorName} updated ${act.entity_type || "item"}`, act.new_state?.title || (act.new_state?.status ? `Status: ${act.new_state.status}` : "Modified recently")]
     }
-    return [`${actorName} performed ${act.action || "action"}`, act.new_state?.title || act.entity_type || "Activity recorded"]
+    if (act.action === "member_left") return [`${act.new_state?.name || actorName} left the organization`, "Organization"]
+    if (act.action === "member_removed") return [`${actorName} removed ${act.new_state?.name || "someone"} from the organization`, "Organization"]
+    if (act.entity_type === "membership" && act.action === "removed") return [`${actorName} removed a department membership`, "Department"]
+    // Anything without wording of its own: plain words, never the stored code name
+    return [`${actorName} ${(act.action || "did something").replace(/_/g, " ")}`, act.new_state?.title || act.entity_type || "Activity recorded"]
 }
 
 export const formatActivityItem = (act) => {
