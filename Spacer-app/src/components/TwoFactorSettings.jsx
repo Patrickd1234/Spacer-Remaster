@@ -9,7 +9,7 @@ const CODE_LENGTH = 6;
 //   Disable: enter a current code (re-verifies), then unenroll
 // Once enabled, sign-in asks for a code (App.jsx) and the database refuses
 // data to sessions that skipped it (mfa_required policies).
-export default function TwoFactorSettings({ onNotify }) {
+export default function TwoFactorSettings({ onNotify, onEnabled }) {
     const [factor, setFactor] = useState(null);       // verified TOTP factor, if any
     const [loading, setLoading] = useState(true);
     const [mode, setMode] = useState("idle");         // idle | enrolling | disabling
@@ -36,6 +36,20 @@ export default function TwoFactorSettings({ onNotify }) {
         });
         return () => { active = false; };
     }, [applyFactors]);
+
+    // Required for every account, so it can't be turned off: the database would
+    // lock them out of their data (20261119090000_require_mfa.sql)
+    const [isRequired, setIsRequired] = useState(false);
+    useEffect(() => {
+        let active = true;
+        supabase.rpc("mfa_required_for_caller").then(({ data, error: requiredError }) => {
+            if (!active) return;
+            // Before that migration the function doesn't exist: nothing is required
+            if (requiredError) console.warn("Checking whether two-factor is required failed:", requiredError);
+            setIsRequired(!requiredError && data === true);
+        });
+        return () => { active = false; };
+    }, []);
 
     const reset = () => {
         setMode("idle");
@@ -100,6 +114,7 @@ export default function TwoFactorSettings({ onNotify }) {
         reset();
         await loadFactor();
         onNotify?.("Two-factor authentication is on. You'll be asked for a code when you sign in.", "success");
+        onEnabled?.();
     };
 
     const confirmDisable = async (e) => {
@@ -167,7 +182,10 @@ export default function TwoFactorSettings({ onNotify }) {
                         Ask for a code from an authenticator app (Google Authenticator, 1Password, Authy…) when you sign in.
                     </p>
                 </div>
-                {mode === "idle" && !loading && (
+                {mode === "idle" && !loading && factor && isRequired && (
+                    <p className="text-xs text-muted shrink-0">Required for every account</p>
+                )}
+                {mode === "idle" && !loading && !(factor && isRequired) && (
                     <button
                         type="button"
                         onClick={factor ? () => { setMode("disabling"); setError(""); } : startEnrollment}

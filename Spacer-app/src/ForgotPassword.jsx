@@ -3,6 +3,9 @@ import { Link, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
 import PlanetLoader from "./components/PlanetLoader"
 import RocketLogo from "./components/RocketLogo"
+import Captcha from "./components/Captcha"
+import { useCaptcha } from "./useCaptcha"
+import { withCaptcha } from "./captcha"
 
 function ForgotPassword() {
     const location = useLocation()
@@ -10,6 +13,7 @@ function ForgotPassword() {
     const [submitted, setSubmitted] = useState(false)
     const [submitting, setSubmitting] = useState(false)
     const [errorMsg, setErrorMsg] = useState("")
+    const captcha = useCaptcha()
 
     const handleResetPassword = async (e) => {
         e.preventDefault()
@@ -19,15 +23,20 @@ function ForgotPassword() {
             setErrorMsg("Please enter your email address.")
             return
         }
+        if (!captcha.isSolved) {
+            setErrorMsg("Please complete the security check.")
+            return
+        }
 
         setSubmitting(true)
         try {
             const { error } = await supabase.auth.resetPasswordForEmail(
                 email.trim(),
-                {
+                withCaptcha({
                     redirectTo: `${window.location.origin}/reset-password`,
-                }
+                }, captcha.token)
             )
+            captcha.reset()
 
             if (error) {
                 console.error("Password reset request error:", error)
@@ -131,9 +140,11 @@ function ForgotPassword() {
                                     />
                                 </div>
 
+                                <Captcha siteKey={captcha.siteKey} onToken={captcha.setToken} resetKey={captcha.resetKey} />
+
                                 <button
                                     type="submit"
-                                    disabled={submitting || !email.trim()}
+                                    disabled={submitting || !email.trim() || !captcha.isSolved}
                                     className="w-full bg-accent hover:bg-accent-hover text-on-accent font-bold text-[15px] py-3.5 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {submitting ? (

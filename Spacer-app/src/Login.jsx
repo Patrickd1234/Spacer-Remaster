@@ -3,6 +3,9 @@ import { useNavigate, Link, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
 import AuthBrandPanel from "./partials/AuthBrandPanel"
 import RocketLogo from "./components/RocketLogo"
+import Captcha from "./components/Captcha"
+import { useCaptcha } from "./useCaptcha"
+import { withCaptcha } from "./captcha"
 
 function Login() {
     const [email, setEmail] = useState("")
@@ -13,22 +16,30 @@ function Login() {
     const [isUnconfirmed, setIsUnconfirmed] = useState(false)
     const [resendState, setResendState] = useState("idle")
     const navigate = useNavigate()
+    const captcha = useCaptcha()
     const location = useLocation()
     const [successMsg, setSuccessMsg] = useState(
         location.state?.resetSuccess ? "Your password has been reset successfully. Please sign in with your new password." : ""
     )
 
-    const isFormFilled = email.trim() !== "" && password.trim() !== ""
+    const isFormFilled = email.trim() !== "" && password.trim() !== "" && captcha.isSolved
     const googleAuthReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setErrorMsg("")
+        if (!captcha.isSolved) {
+            setErrorMsg("Please complete the security check.")
+            return
+        }
 
         const { data, error } = await supabase.auth.signInWithPassword({
             email: email,
             password: password,
+            options: withCaptcha({}, captcha.token),
         })
+        // Each token works once: get a fresh one for the next try
+        captcha.reset()
 
         if (error) {
             console.error(error)
@@ -62,13 +73,18 @@ function Login() {
     }
 
     const handleResendConfirmation = async () => {
+        if (!captcha.isSolved) {
+            setErrorMsg("Please complete the security check below, then resend.")
+            return
+        }
         setResendState("sending")
 
         const { error } = await supabase.auth.resend({
             type: "signup",
             email: email,
-            options: { emailRedirectTo: `${window.location.origin}/login` }
+            options: withCaptcha({ emailRedirectTo: `${window.location.origin}/login` }, captcha.token)
         })
+        captcha.reset()
 
         if (error) {
             console.error("Resend confirmation error:", error)
@@ -263,6 +279,8 @@ function Login() {
                                 Forgot Password?
                             </Link>
                         </div>
+
+                        <Captcha siteKey={captcha.siteKey} onToken={captcha.setToken} resetKey={captcha.resetKey} />
 
                         {/* Sign In Button */}
                         <button

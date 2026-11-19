@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 import PlanetLoader from "./components/PlanetLoader"
 import RocketLogo from "./components/RocketLogo"
+import { validateNewPassword, PASSWORD_HINT } from "./passwordRules"
 
 // The error Supabase puts in the link's #hash when it's expired or invalid; null if none
 function linkError() {
@@ -77,13 +78,9 @@ function ResetPassword() {
         e.preventDefault()
         setErrorMsg("")
 
-        if (password.length < 8) {
-            setErrorMsg("Password must be at least 8 characters long.")
-            return
-        }
-
-        if (password !== confirmPassword) {
-            setErrorMsg("Passwords do not match.")
+        const invalid = validateNewPassword(password, confirmPassword)
+        if (invalid) {
+            setErrorMsg(invalid)
             return
         }
 
@@ -178,7 +175,7 @@ function ResetPassword() {
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     id="new-password"
-                                    placeholder="New password (min. 8 characters)"
+                                    placeholder="New password"
                                     className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -208,6 +205,7 @@ function ResetPassword() {
                                     required
                                 />
                             </div>
+                            <p className="text-muted text-xs">{PASSWORD_HINT}</p>
 
                             {errorMsg && (
                                 <p className="text-red-400 text-xs flex items-center gap-1.5 pt-1">

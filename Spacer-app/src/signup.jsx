@@ -4,6 +4,10 @@ import { supabase } from "./supabase"
 import AuthBrandPanel from "./partials/AuthBrandPanel"
 import PlanetLoader from "./components/PlanetLoader"
 import RocketLogo from "./components/RocketLogo"
+import Captcha from "./components/Captcha"
+import { useCaptcha } from "./useCaptcha"
+import { withCaptcha } from "./captcha"
+import { passwordStrengthError, PASSWORD_HINT } from "./passwordRules"
 
 function Signup() {
     const [status, setStatus] = useState("idle")
@@ -15,6 +19,8 @@ function Signup() {
     const [isGoogleLoading, setIsGoogleLoading] = useState(false)
     const [resendState, setResendState] = useState("idle")
     const navigate = useNavigate()
+    // One token per request: the sign-up form and the "resend" button each use one
+    const captcha = useCaptcha()
 
     const googleAuthReady = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
@@ -45,19 +51,29 @@ function Signup() {
     const handleSubmit = async (e) => {
         e.preventDefault()
         setErrorMsg("")
+        const weakPassword = passwordStrengthError(password)
+        if (weakPassword) {
+            setErrorMsg(weakPassword)
+            return
+        }
+        if (!captcha.isSolved) {
+            setErrorMsg("Please complete the security check.")
+            return
+        }
         setStatus("submitting")
 
         try {
             const { data, error } = await supabase.auth.signUp({
                 email: email,
                 password: password,
-                options: {
+                options: withCaptcha({
                     data: {
                         full_name: fullName,
                     },
                     emailRedirectTo: `${window.location.origin}/login`
-                }
+                }, captcha.token)
             })
+            captcha.reset()
 
             if (error) {
                 throw error
@@ -99,13 +115,18 @@ function Signup() {
 
     const handleResend = async () => {
         setErrorMsg("")
+        if (!captcha.isSolved) {
+            setErrorMsg("Please complete the security check first.")
+            return
+        }
         setResendState("sending")
 
         const { error } = await supabase.auth.resend({
             type: "signup",
             email: email,
-            options: { emailRedirectTo: `${window.location.origin}/login` }
+            options: withCaptcha({ emailRedirectTo: `${window.location.origin}/login` }, captcha.token)
         })
+        captcha.reset()
 
         if (error) {
             console.error("Resend confirmation error:", error)
@@ -133,6 +154,9 @@ function Signup() {
                         We sent a confirmation link to <span className="text-white font-semibold">{email}</span>.
                         Click it to activate your account, then sign in.
                     </p>
+                    <div className="mb-4">
+                        <Captcha siteKey={captcha.siteKey} onToken={captcha.setToken} resetKey={captcha.resetKey} />
+                    </div>
                     <button
                         type="button"
                         onClick={handleResend}
@@ -244,6 +268,7 @@ function Signup() {
                                     {showPassword ? "visibility_off" : "visibility"}
                                 </span>
                             </button>
+                            <p className="text-muted text-[12px] mt-2">{PASSWORD_HINT}</p>
                         </div>
 
                         {/* Terms Checkbox */}
@@ -253,6 +278,8 @@ function Signup() {
                                 I agree to the Terms &amp; Conditions and Privacy Policy
                             </label>
                         </div>
+
+                        <Captcha siteKey={captcha.siteKey} onToken={captcha.setToken} resetKey={captcha.resetKey} />
 
                         {/* Sign Up Button */}
                         <button 

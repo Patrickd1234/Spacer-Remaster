@@ -7,7 +7,8 @@ import { usePreferences } from "./PreferencesContext"
 import { useRole } from "./RoleContext"
 import TwoFactorSettings from "./components/TwoFactorSettings"
 import ComingSoonCard from "./components/ComingSoonCard"
-import { changePassword, MIN_PASSWORD_LENGTH } from "./passwordChange"
+import { changePassword } from "./passwordChange"
+import { passwordStrengthError, PASSWORD_HINT } from "./passwordRules"
 import Select from "./components/Select"
 import { LeaveOrganizationButton } from "./components/OrgExitControls"
 
@@ -211,8 +212,9 @@ export default function Settings() {
             setPasswordMsg({ type: "error", text: "New passwords do not match." })
             return
         }
-        if (passwordForm.next.length < MIN_PASSWORD_LENGTH) {
-            setPasswordMsg({ type: "error", text: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` })
+        const strengthError = passwordStrengthError(passwordForm.next)
+        if (strengthError) {
+            setPasswordMsg({ type: "error", text: strengthError })
             return
         }
 
@@ -745,6 +747,7 @@ export default function Settings() {
                                                     value={passwordForm.next}
                                                     onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}
                                                 />
+                                                <p className="text-[11px] text-muted mt-1">{PASSWORD_HINT}</p>
                                             </div>
                                             <div>
                                                 <label className="block text-xs text-muted mb-1">Confirm New Password</label>

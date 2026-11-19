@@ -4,8 +4,10 @@ import { supabase } from './supabase'
 import { PreferencesProvider } from './PreferencesContext'
 import { RoleProvider } from './RoleContext'
 import MfaChallenge from './components/MfaChallenge'
+import MfaSetupRequired from './components/MfaSetupRequired'
 import ErrorBoundary from './components/ErrorBoundary'
 import { hasTrustedDeviceFor, clearTrustedDevice } from './trustedDevice'
+import { mfaSetupState, hasVerifiedFactor } from './mfaSetupGate'
 import PlanetLoader from "./components/PlanetLoader"
 import { clearSavedProjectLists } from "./projectListCache"
 
@@ -69,8 +71,7 @@ function PageErrorBoundary({ children }) {
 // password step. Read from the session itself (no API call), because calling
 // Supabase inside onAuthStateChange can deadlock.
 function needsSecondFactor(session) {
-  const hasVerifiedFactor = session?.user?.factors?.some(f => f.status === 'verified')
-  if (!hasVerifiedFactor) return false
+  if (!hasVerifiedFactor(session?.user)) return false
   try {
     const payload = session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
     return JSON.parse(atob(payload)).aal !== 'aal2'
@@ -101,8 +102,32 @@ function App() {
     return () => { active = false }
   }, [hasLocalTrust, userId])
 
-  // Signed in far enough to load data: second factor passed or device remembered
-  const sessionReady = Boolean(session) &&
+  // Admins, super admins and team leads must set up two-factor first; the
+  // database gives them no data until they do. { userId, required }
+  const [mfaSetupCheck, setMfaSetupCheck] = useState(null)
+  const accountHasFactor = hasVerifiedFactor(session?.user)
+  const setupState = mfaSetupState({ userId, hasVerifiedFactor: accountHasFactor, check: mfaSetupCheck })
+
+  // Asks the server; on failure lets them in (the database still enforces the rule)
+  const checkMfaSetup = useCallback(async (forUserId) => {
+    const { data, error } = await supabase.rpc('mfa_setup_required')
+    if (error) console.error('Checking whether two-factor is required failed:', error)
+    const required = !error && data === true
+    setMfaSetupCheck({ userId: forUserId, required })
+    return required
+  }, [])
+
+  useEffect(() => {
+    if (setupState !== 'checking') return
+    let active = true
+    // Deferred so it never runs inside the auth state callback's call stack
+    const timer = setTimeout(() => { if (active) checkMfaSetup(userId) }, 0)
+    return () => { active = false; clearTimeout(timer) }
+  }, [setupState, userId, checkMfaSetup])
+
+  // Signed in far enough to load data: second factor passed or device remembered,
+  // and no two-factor setup outstanding
+  const sessionReady = Boolean(session) && setupState === 'none' &&
     (!mfaPending || (hasLocalTrust && deviceTrust?.userId === userId && deviceTrust?.trusted))
 
   // Which organization the user belongs to (null = none yet -> /welcome)
@@ -135,6 +160,10 @@ function App() {
     if (!currentUserId) return false
     const { error: claimError } = await supabase.rpc('claim_pending_invites')
     if (claimError) console.error('Claiming pending invites failed:', claimError)
+    // An invite or a newly launched organization may have just made them an
+    // admin or team lead: then two-factor comes first (their organization is
+    // read once it's set up, as the database hides it until then)
+    if (!hasVerifiedFactor(current.user) && await checkMfaSetup(currentUserId)) return true
     const { data, error } = await supabase
       .from('users')
       .select('organization_id')
@@ -144,7 +173,7 @@ function App() {
     const orgId = data?.organization_id ?? null
     setOrgStatus({ userId: currentUserId, orgId })
     return Boolean(orgId)
-  }, [])
+  }, [checkMfaSetup])
 
   useEffect(() => {
     if (!sessionReady || orgStatus?.userId === userId) return
@@ -196,6 +225,18 @@ function App() {
     if (!(hasLocalTrust && deviceTrust?.trusted)) {
       return <MfaChallenge onVerified={() => supabase.auth.getSession().then(({ data }) => setSession(data.session))} />
     }
+  }
+
+  // A manager without two-factor: set it up before anything else. Enrolling
+  // upgrades the session to aal2, so the data unlocks right after.
+  if (session && setupState === 'checking') return <PageLoader />
+  if (session && setupState === 'required') {
+    // Organization re-read: it was hidden while two-factor was missing
+    const handleEnabled = () => {
+      setMfaSetupCheck({ userId, required: false })
+      setOrgStatus(null)
+    }
+    return <MfaSetupRequired onEnabled={handleEnabled} />
   }
 
   // Signed in, organization or password status not known yet
