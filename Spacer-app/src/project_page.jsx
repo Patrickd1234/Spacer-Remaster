@@ -7,6 +7,13 @@ import CreateTaskModal from "./partials/CreateTaskModal"
 import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
 import SprintTab from "./sprints/SprintTab"
+import DepartmentsTab from "./components/DepartmentsTab"
+import TaskBlockPanel from "./components/TaskBlockPanel"
+import { DepartmentFilterBar, TaskDependencyNote } from "./components/DepartmentTaskBadges"
+import { matchesDepartmentFilter } from "./crossDepartment"
+import { addableProjectMembers } from "./projectDepartments"
+import { TASK_CREATED_EVENT } from "./appEvents"
+import { fetchProjectDepartments, updateTaskDepartment, setTaskBlock } from "./crossDepartmentData"
 import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
 import { statusFromSubtasks } from "./taskStatus"
@@ -19,6 +26,7 @@ import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./component
 import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
+import { findSavedProject } from "./projectListCache"
 import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 import { dedupeActivity } from "./projectActivity"
@@ -38,6 +46,8 @@ const BOARD_NOTICE_MS = 5000
 const TASK_COLUMNS = "id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by"
 // Added by migration 20261031090000_sprints
 const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
+// Added by migration 20261117090000_cross_department_projects
+const DEPARTMENT_TASK_COLUMNS = "team_space_id, blocked_by_task_id, blocked_at"
 
 // Wait for a burst of task changes (e.g. a drag that also logs) to settle before reloading the feed
 const ACTIVITY_RELOAD_DELAY_MS = 500
@@ -193,8 +203,11 @@ function formatBytes(bytes) {
 
 function ProjectPage() {
     const { project_id } = useParams()
-    const [project_name, setProjectName] = useState("Loading...")
-    const [project_due_date, setProjectDueDate] = useState("")
+    // The sidebar's saved list gives the name and deadline at once; the fetch below confirms them
+    const [savedProject] = useState(() => findSavedProject(project_id))
+    const [project_name, setProjectName] = useState(savedProject?.name || "")
+    const [project_due_date, setProjectDueDate] = useState(savedProject?.due_date || "")
+    const [isProjectLoaded, setIsProjectLoaded] = useState(false)
     const [project_tasks, setProjectTasks] = useState([])
     const [activityLog, setActivityLog] = useState([])
     const [isActivityCollapsed, setIsActivityCollapsed] = useState(false)
@@ -216,7 +229,7 @@ function ProjectPage() {
     const [currentUserId, setCurrentUserId] = useState(null)
 
     // ── Role comes from the global RoleContext — no local fetch needed
-    const { isSuperAdmin, isAdmin } = useRole()
+    const { isSuperAdmin, isAdmin, departments: myDepartments } = useRole()
     const canEditTaskDetails = isSuperAdmin || isAdmin || (selectedTask && selectedTask.assignee_id === currentUserId)
 
     // ── Delete project
@@ -256,6 +269,9 @@ function ProjectPage() {
     // ── Members
     const [projectMembers, setProjectMembers] = useState([])
     const [showAddMemberModal, setShowAddMemberModal] = useState(false)
+    // Until both lists arrive, an empty list means "still loading", not "nobody"
+    const [isMembersLoaded, setIsMembersLoaded] = useState(false)
+    const [isOrgUsersLoaded, setIsOrgUsersLoaded] = useState(false)
 
     // ── File upload state
     const [projectFiles, setProjectFiles] = useState([])
@@ -438,6 +454,100 @@ function ProjectPage() {
     // What the board shows, overdue split out; the Summary overview counts the same groups
     const tasksByColumn = groupTasksByColumn(project_tasks, boardColumns)
 
+    // ── Cross-department projects (migration 20261117090000): the project's
+    // departments, lead first. Empty until that migration is applied.
+    const [projectDepartments, setProjectDepartments] = useState([])
+    const [departmentsVersion, setDepartmentsVersion] = useState(0)
+    const [departmentFilter, setDepartmentFilter] = useState({ departmentId: null, isBlockedOnly: false })
+    const [hasLoadedDepartments, setHasLoadedDepartments] = useState(false)
+    useEffect(() => {
+        if (!project_id) return undefined
+        let cancelled = false
+        const loadDepartments = async () => {
+            const { data } = await fetchProjectDepartments(project_id)
+            if (cancelled) return
+            setProjectDepartments(data)
+            setHasLoadedDepartments(true)
+        }
+        loadDepartments()
+        return () => { cancelled = true }
+    }, [project_id, departmentsVersion])
+    // Add Members offers the members of the project's department, or of all its
+    // departments on a cross-department project. Waits until those are known.
+    const memberDepartments = projectDepartments.length > 0
+        ? projectDepartments
+        : (teamSpaceId ? [{ team_space_id: teamSpaceId, name: projectDepartmentName || "" }] : [])
+    const memberDepartmentKey = hasLoadedDepartments ? memberDepartments.map((d) => d.team_space_id).join(",") : ""
+    const [departmentMemberRows, setDepartmentMemberRows] = useState([])
+    const [loadedMemberKey, setLoadedMemberKey] = useState(null)
+    useEffect(() => {
+        if (!memberDepartmentKey) return undefined
+        let cancelled = false
+        const loadDepartmentMembers = async () => {
+            const { data, error } = await supabase
+                .from("memberships")
+                .select("team_space_id, user:users(id, name, email, job_title)")
+                .in("team_space_id", memberDepartmentKey.split(","))
+            if (cancelled) return
+            if (error) console.error("Error fetching department members:", error)
+            setDepartmentMemberRows(error ? [] : (data || []))
+            setLoadedMemberKey(memberDepartmentKey)
+        }
+        loadDepartmentMembers()
+        return () => { cancelled = true }
+    }, [memberDepartmentKey])
+
+    // A task made from the header's Create menu on this page joins the board at once
+    useEffect(() => {
+        const addCreatedTask = (event) => {
+            const task = event.detail
+            if (!task || String(task.project_id) !== String(project_id)) return
+            setProjectTasks((prev) => (prev.some((t) => String(t.id) === String(task.id)) ? prev : [task, ...prev]))
+        }
+        window.addEventListener(TASK_CREATED_EVENT, addCreatedTask)
+        return () => window.removeEventListener(TASK_CREATED_EVENT, addCreatedTask)
+    }, [project_id])
+    const leadDepartmentId = projectDepartments[0]?.team_space_id ?? teamSpaceId
+    const isCrossDepartment = projectDepartments.length > 1
+    // The board can show one department, or only blocked tasks; the Summary still counts everything
+    const tasksById = new Map(project_tasks.map((t) => [String(t.id), t]))
+    const boardTasks = isCrossDepartment
+        ? project_tasks.filter((t) => matchesDepartmentFilter(t, departmentFilter, leadDepartmentId, tasksById))
+        : project_tasks
+    const boardTasksByColumn = groupTasksByColumn(boardTasks, boardColumns)
+    // New tasks go to the department being viewed, else yours, else the lead department
+    const myProjectDepartmentId = projectDepartments.find((d) => myDepartments.some((m) => String(m.team_space_id) === String(d.team_space_id)))?.team_space_id
+    const newTaskDepartmentId = departmentFilter.departmentId || myProjectDepartmentId || leadDepartmentId
+    const taskModalDepartments = isCrossDepartment ? projectDepartments : []
+
+    // Same rule as the database's tasks_guard_department: the task's assignee or
+    // creator, a lead of its department, or a project manager
+    const canBlockTask = (task) => {
+        if (!task || !currentUserId) return false
+        const department = String(task.team_space_id ?? leadDepartmentId)
+        const myRole = myDepartments.find((m) => String(m.team_space_id) === department)?.role
+        return canDeleteProject === true
+            || task.assignee_id === currentUserId
+            || task.created_by === currentUserId
+            || projectDepartments.some((d) => String(d.team_space_id) === department && d.lead_id === currentUserId)
+            || ["team_lead", "admin", "super_admin"].includes(myRole)
+    }
+    const patchTask = (taskId, changes) => {
+        setProjectTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...changes } : t)))
+        setSelectedTask((prev) => (prev && String(prev.id) === String(taskId) ? { ...prev, ...changes } : prev))
+    }
+    // Both resolve to an error message for TaskBlockPanel, or null once saved
+    const handleTaskDepartmentChange = async (taskId, departmentId) => {
+        const { error } = await updateTaskDepartment(taskId, departmentId)
+        if (!error) patchTask(taskId, { team_space_id: departmentId })
+        return error
+    }
+    const handleTaskBlockSave = async (taskId, blockerId) => {
+        const { data, error } = await setTaskBlock(taskId, blockerId)
+        if (!error) patchTask(taskId, { blocked_by_task_id: data.blocked_by_task_id, blocked_at: data.blocked_at })
+        return error
+    }
+
     const confirmDeleteColumn = async () => {
         const column = columnToDelete
         if (!column) return
@@ -596,7 +706,9 @@ function ProjectPage() {
             .from("project_members")
             .select("*, user:users(*)")
             .eq("project_id", project_id)
-        if (!error) setProjectMembers(data || [])
+        if (error) console.error("Error fetching project members:", error)
+        else setProjectMembers(data || [])
+        setIsMembersLoaded(true)
     }
 
     // ─── Data fetching (UNCHANGED) ────────────────────────────────────────────
@@ -634,23 +746,39 @@ function ProjectPage() {
     useEffect(() => {
         const fetchProject = async () => {
             if (!project_id) return
-            const { data, error } = await supabase
-                .from("project_spaces")
-                .select("*, team_spaces(organization_id)")
-                .eq("id", project_id)
-            if (error) {
-                console.error("Error fetching project:", error)
-            } else if (data && data.length > 0) {
-                if (data[0].name) setProjectName(data[0].name)
-                if (data[0].due_date) setProjectDueDate(data[0].due_date)
-                if (data[0].team_spaces?.organization_id) {
-                    setOrganizationId(data[0].team_spaces.organization_id)
-                    fetchOrgUsers(data[0].team_spaces.organization_id)
-                }
-                if (data[0].team_space_id) {
-                    setTeamSpaceId(data[0].team_space_id)
-                }
+            // Your organization is looked up alongside the project, not after it,
+            // so the people lists (members, assignees) arrive sooner
+            const [{ data, error }, myOrgId] = await Promise.all([
+                supabase.from("project_spaces").select("*, team_spaces(organization_id)").eq("id", project_id),
+                fetchMyOrganizationId(),
+            ])
+            setIsProjectLoaded(true)
+            if (error) console.error("Error fetching project:", error)
+            const project = !error && data?.length > 0 ? data[0] : null
+            if (project) {
+                setProjectName(project.name || "")
+                setProjectDueDate(project.due_date || "")
+                if (project.team_space_id) setTeamSpaceId(project.team_space_id)
             }
+            // Always found, even when the project or its lead department can't be read
+            // (people who reach it through another of its departments can't see the
+            // lead one): the project is then in the user's own organization
+            const orgId = project?.team_spaces?.organization_id || myOrgId
+            if (orgId) {
+                setOrganizationId(orgId)
+                fetchOrgUsers(orgId)
+            } else {
+                console.error("Couldn't find the organization for project", project_id)
+                setIsOrgUsersLoaded(true)
+            }
+        }
+
+        const fetchMyOrganizationId = async () => {
+            const user = await getSessionUser()
+            if (!user) return null
+            const { data, error } = await supabase.from("users").select("organization_id").eq("id", user.id).maybeSingle()
+            if (error) console.error("Error fetching your organization:", error)
+            return data?.organization_id ?? null
         }
 
         const fetchOrgUsers = async (orgId) => {
@@ -664,6 +792,7 @@ function ProjectPage() {
             } else {
                 setOrgUsers(data || [])
             }
+            setIsOrgUsersLoaded(true)
         }
 
         const fetchTasks = async () => {
@@ -673,9 +802,17 @@ function ProjectPage() {
                 .select(columns)
                 .eq("project_id", project_id)
                 .order("created_at", { ascending: false })
-            let { data, error } = await queryTasks(`${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`)
-            // 42703: the sprints migration isn't applied yet; load tasks without its columns
-            if (error?.code === "42703") ({ data, error } = await queryTasks(TASK_COLUMNS))
+            // Newest columns first; 42703 means a migration isn't applied yet, so drop its columns
+            let data = null
+            let error = null
+            for (const columns of [
+                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}`,
+                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`,
+                TASK_COLUMNS,
+            ]) {
+                ({ data, error } = await queryTasks(columns))
+                if (error?.code !== "42703") break
+            }
             if (error) { console.error("Error fetching tasks:", error) }
             else {
                 // Show statuses as stored; they're only derived when subtasks are edited
@@ -914,6 +1051,22 @@ function ProjectPage() {
         )
     }
 
+    // The project's own department, for the "Delete locked" note: from the project,
+    // else your departments, else its department list (that one may say just "Department")
+    const lockedDepartmentName = projectDepartmentName
+        || myDepartments.find((d) => String(d.team_space_id) === String(teamSpaceId))?.name
+        || projectDepartments.find((d) => String(d.team_space_id) === String(teamSpaceId) && d.name !== "Department")?.name
+        || null
+
+    // Name and deadline: shown at once when saved, otherwise placeholder bars until the fetch returns
+    const projectHeading = project_name || isProjectLoaded
+        ? <h2 className="font-headline-xl text-2xl text-primary leading-tight shrink-0">{project_name || "Project not found"}</h2>
+        : <div className="h-8 w-56 rounded-md bg-line animate-pulse" aria-label="Loading project" />
+    const isDeadlinePending = !project_due_date && (!isProjectLoaded || canDeleteProject === null)
+    const projectDeadline = isDeadlinePending
+        ? <div className="h-7 w-32 rounded-full bg-line animate-pulse" aria-label="Loading deadline" />
+        : <ProjectDeadline dueDate={project_due_date} canEdit={canDeleteProject === true} onSave={handleDeadlineSave} />
+
     return (
         <div className="bg-canvas min-h-screen text-white font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
@@ -922,14 +1075,16 @@ function ProjectPage() {
                 {/* Project Header */}
                 <div className="mb-lg">
                     <div className="flex items-center gap-md flex-wrap">
-                        <h2 className="font-headline-xl text-2xl text-primary leading-tight shrink-0">{project_name || "Website Redesign"}</h2>
-                        <ProjectDeadline dueDate={project_due_date} canEdit={canDeleteProject === true} onSave={handleDeadlineSave} />
+                        {projectHeading}
+                        {projectDeadline}
                     </div>
                     {/* Sub-Tabs Navigation */}
                     <div className="flex items-center gap-sm mt-xl mb-lg">
                         {[
                             { id: "summary", label: "Summary", icon: "dashboard" },
                             { id: "tasks", label: "Orbit", icon: "view_kanban" },
+                            // Only projects shared by more than one department
+                            ...(isCrossDepartment ? [{ id: "departments", label: "Departments", icon: "lan" }] : []),
                             { id: "calendar", label: "Calendar", icon: "calendar_month" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
@@ -976,9 +1131,10 @@ function ProjectPage() {
                                     role="tooltip"
                                     className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 whitespace-normal rounded-lg border border-line bg-surface1 px-3 py-2 text-left text-[12px] font-normal leading-relaxed text-soft shadow-xl opacity-0 translate-y-1 transition-all duration-150 group-hover:opacity-100 group-hover:translate-y-0 group-focus-visible:opacity-100 group-focus-visible:translate-y-0"
                                 >
-                                    {projectDepartmentName
-                                        ? <>Only team leads and admins of <span className="text-white font-semibold">{projectDepartmentName}</span> can delete this project.</>
-                                        : "This project has no department, so it can't be deleted here. A super admin can assign it one in Supabase."}
+                                    {/* Every project has a department; its name may just not be readable here */}
+                                    Only an admin or team lead of {lockedDepartmentName
+                                        ? <span className="text-white font-semibold">{lockedDepartmentName}</span>
+                                        : "this project's department"} can delete this project.
                                 </span>
                             </span>
                         )}
@@ -1075,6 +1231,9 @@ function ProjectPage() {
                                                             {activity.action === "sprint_started" && (
                                                                 <>started <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span> with {activity.new_state?.totalTasks} task{activity.new_state?.totalTasks === 1 ? "" : "s"}{activity.new_state?.committedPoints > 0 && ` (${activity.new_state.committedPoints} pts)`}</>
                                                             )}
+                                                            {activity.action === "department_nudged" && (
+                                                                <>nudged <span className="text-primary-fixed-dim font-bold">{activity.new_state?.department || "a department"}</span> about this project</>
+                                                            )}
                                                             {activity.action === "sprint_completed" && (
                                                                 <>completed {activity.new_state?.name ? <span className="text-primary-fixed-dim font-bold">{activity.new_state.name}</span> : "a sprint"} with <span className="text-accent-ink font-bold">{activity.new_state?.completionPercent}%</span> done ({activity.new_state?.completedCount}/{activity.new_state?.totalTasks} tasks)</>
                                                             )}
@@ -1091,6 +1250,20 @@ function ProjectPage() {
                     )}
 
                     {/* Sprint Tab */}
+                    {activeTab === "departments" && isCrossDepartment && (
+                        <DepartmentsTab
+                            projectId={project_id}
+                            projectDueDate={project_due_date}
+                            departments={projectDepartments}
+                            tasks={project_tasks}
+                            orgUsers={orgUsers}
+                            currentUserId={currentUserId}
+                            canManage={canDeleteProject === true}
+                            onResolve={(departmentId) => { setDepartmentFilter({ departmentId, isBlockedOnly: false }); setActiveTab("tasks") }}
+                            onOpenTask={setSelectedTask}
+                            onDepartmentsChanged={() => setDepartmentsVersion((v) => v + 1)}
+                        />
+                    )}
                     {activeTab === "sprint" && (
                         <SprintTab
                             projectId={project_id}
@@ -1116,11 +1289,12 @@ function ProjectPage() {
                     {/* Tasks Tab — Orbit Board */}
                     {activeTab === "tasks" && (
                         <div className="tab-pane block" id="section-tasks">
-                            <div className="flex justify-end">
+                            <div className="flex items-center gap-md flex-wrap">
+                                {isCrossDepartment && <DepartmentFilterBar departments={projectDepartments} filter={departmentFilter} onChange={setDepartmentFilter} />}
                                 <button
                                     type="button"
                                     onClick={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) }}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 btn-primary-accent rounded-lg text-sm font-semibold cursor-pointer"
+                                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 btn-primary-accent rounded-lg text-sm font-semibold cursor-pointer"
                                 >
                                     <span className="material-symbols-outlined text-[18px]">add</span>
                                     Add Task
@@ -1138,7 +1312,7 @@ function ProjectPage() {
                             )}
                             <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[...boardColumns, OVERDUE_COLUMN].map((column, columnIndex) => {
-                                    const columnTasks = tasksByColumn[column.key] ?? [];
+                                    const columnTasks = boardTasksByColumn[column.key] ?? [];
                                     // "Overdue" is derived from the due date, not a column you can drop into
                                     const acceptsDrop = !column.isOverdue;
                                     const isDropTarget = acceptsDrop && (draggingColumnKey ? columnDropKey === column.key : dragOverColumn === column.key);
@@ -1226,6 +1400,9 @@ function ProjectPage() {
 
                                                         {/* Task Title */}
                                                         <h4 className="text-sm text-white font-bold leading-snug mb-xs">{task.title}</h4>
+
+                                                        {/* Waiting on another department / holding others up */}
+                                                        {isCrossDepartment && <TaskDependencyNote task={task} tasks={project_tasks} departments={projectDepartments} />}
 
                                                         {/* Description */}
                                                         {task.description && (
@@ -1387,6 +1564,8 @@ function ProjectPage() {
                                                 projectId={project_id}
                                                 organizationId={organizationId}
                                                 teamSpaceId={teamSpaceId}
+                                                departments={taskModalDepartments}
+                                                defaultDepartmentId={newTaskDepartmentId}
                                                 initialStatus="todo"
                                                 initialDate={selectedDateEvents ? `${selectedDateEvents.getFullYear()}-${String(selectedDateEvents.getMonth() + 1).padStart(2, '0')}-${String(selectedDateEvents.getDate()).padStart(2, '0')}T09:00` : ""}
                                                 isInline={true}
@@ -1582,6 +1761,7 @@ function ProjectPage() {
                             assignedUsers={assignedMembers}
                             currentUserId={currentUserId}
                             canManage={canDeleteProject === true}
+                            isLoading={!isMembersLoaded || !isOrgUsersLoaded}
                             onRemove={removeProjectMember}
                             onAdd={addProjectMember}
                         />
@@ -1617,6 +1797,7 @@ function ProjectPage() {
             })()}
             {isCreateTaskModalOpen && (
                 <CreateTaskModal projectId={project_id} organizationId={organizationId} teamSpaceId={teamSpaceId}
+                    departments={taskModalDepartments} defaultDepartmentId={newTaskDepartmentId}
                     initialStatus={createTaskInitialStatus} onClose={() => setIsCreateTaskModalOpen(false)}
                     onCreated={(newTask) => { setProjectTasks(prev => [newTask, ...prev]) }} />
             )}
@@ -1937,6 +2118,19 @@ function ProjectPage() {
                                 })()}
                             </div>
 
+                            {isCrossDepartment && (
+                                <TaskBlockPanel
+                                    key={`${selectedTask.id}-${selectedTask.blocked_by_task_id ?? ""}`}
+                                    task={selectedTask}
+                                    tasks={project_tasks}
+                                    departments={projectDepartments}
+                                    canChangeDepartment={canEditTaskDetails || canDeleteProject === true}
+                                    canBlock={canBlockTask(selectedTask)}
+                                    onDepartmentChange={(id) => handleTaskDepartmentChange(selectedTask.id, id)}
+                                    onBlockSave={(blockerId) => handleTaskBlockSave(selectedTask.id, blockerId)}
+                                />
+                            )}
+
                             <div className="grid grid-cols-2 gap-md">
                                 <div className="bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs">
                                     <h3 className="font-label-sm text-muted uppercase tracking-wider flex items-center gap-xs">
@@ -2056,7 +2250,10 @@ function ProjectPage() {
                     ...projectMembers.map(pm => pm.user_id),
                     ...assignedMembers.map(u => u.id),
                 ])
-                const available = orgUsers.filter(u => !alreadyIn.has(u.id))
+                const available = addableProjectMembers(departmentMemberRows, memberDepartments, alreadyIn)
+                // Who can be added is only known once every list is in
+                const isReady = isMembersLoaded && isOrgUsersLoaded && memberDepartmentKey !== "" && loadedMemberKey === memberDepartmentKey
+                const fromWhere = isCrossDepartment ? "this project's departments" : (projectDepartmentName || "this project's department")
 
                 const addMember = (user) => addProjectMember(user)
 
@@ -2074,7 +2271,7 @@ function ProjectPage() {
                             <div className="flex items-center justify-between px-6 py-4 border-b border-line">
                                 <div>
                                     <h2 className="text-white font-bold text-[16px]">Add Members</h2>
-                                    <p className="text-muted text-[12px]">Pick team members to add to this project</p>
+                                    <p className="text-muted text-[12px]">Pick people from {fromWhere} to add to this project</p>
                                 </div>
                                 <button onClick={() => setShowAddMemberModal(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-white hover:bg-line transition-colors cursor-pointer">
                                     <span className="material-symbols-outlined text-[20px]">close</span>
@@ -2083,10 +2280,22 @@ function ProjectPage() {
 
                             {/* List */}
                             <div className="max-h-80 overflow-y-auto p-4 space-y-2">
-                                {available.length === 0 ? (
+                                {!isReady ? (
+                                    <div className="space-y-2" aria-busy="true" aria-label="Loading people">
+                                        {[0, 1, 2].map((row) => (
+                                            <div key={row} className="flex items-center gap-3 p-3 rounded-xl bg-raised border border-line/50">
+                                                <div className="w-9 h-9 rounded-full bg-line animate-pulse shrink-0" />
+                                                <div className="flex-1 space-y-1.5">
+                                                    <div className="h-3 w-32 rounded bg-line animate-pulse" />
+                                                    <div className="h-2.5 w-44 rounded bg-line animate-pulse" />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : available.length === 0 ? (
                                     <div className="text-center py-8">
                                         <span className="material-symbols-outlined text-muted text-4xl mb-2 block">group</span>
-                                        <p className="text-muted text-[13px]">All team space members are already in this project.</p>
+                                        <p className="text-muted text-[13px]">Everyone in {fromWhere} is already on this project.</p>
                                     </div>
                                 ) : (
                                     available.map(user => (
@@ -2097,7 +2306,11 @@ function ProjectPage() {
                                                 </div>
                                                 <div>
                                                     <p className="text-white text-[13px] font-semibold">{user.name}</p>
-                                                    <p className="text-muted text-[11px]">{user.email}</p>
+                                                    <p className="text-muted text-[11px]">
+                                                        {user.email}
+                                                        {/* Which department, when the project has several */}
+                                                        {isCrossDepartment && user.departments.length > 0 && ` · ${user.departments.join(", ")}`}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <button

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { saveOrgName } from "./orgNameCache";
+import { clearSavedProjectLists } from "./projectListCache";
 import { exitErrorMessage } from "./orgExitRules";
 
 // Both go through the remove_from_organization() database function, which
@@ -27,8 +28,9 @@ export async function leaveOrganization() {
         console.error("Leaving the organization failed:", error);
         return { error: exitErrorMessage(error, "Couldn't leave the organization. Please try again.") };
     }
-    // The remembered name would otherwise flash in the next organization's sidebar
+    // The remembered name and projects would otherwise flash in the next organization's sidebar
     saveOrgName("");
+    clearSavedProjectLists();
     return { error: null };
 }
 

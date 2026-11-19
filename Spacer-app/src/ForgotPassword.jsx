@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { supabase } from "./supabase"
 import PlanetLoader from "./components/PlanetLoader"
+import RocketLogo from "./components/RocketLogo"
 
 function ForgotPassword() {
     const location = useLocation()
@@ -71,7 +72,7 @@ function ForgotPassword() {
                 {/* Branding */}
                 <div className="relative z-10 mb-12">
                     <div className="flex items-center gap-2 mb-8">
-                        <span className="material-symbols-outlined text-accent-ink font-bold text-[24px]">token</span>
+                        <RocketLogo size={28} />
                         <h1 className="text-[16px] font-bold tracking-widest text-white">Spacer</h1>
                     </div>
                     <p className="text-white text-[20px] leading-relaxed max-w-md">
@@ -106,7 +107,7 @@ function ForgotPassword() {
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-panel relative z-10">
                 <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
+                        <RocketLogo size={40} />
                     </div>
 
                     {!submitted ? (

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "./supabase"
 import AuthBrandPanel from "./partials/AuthBrandPanel"
 import PlanetLoader from "./components/PlanetLoader"
+import RocketLogo from "./components/RocketLogo"
 
 function Signup() {
     const [status, setStatus] = useState("idle")
@@ -188,7 +189,7 @@ function Signup() {
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[var(--bg-surface)] relative z-10 overflow-y-auto py-12">
                 <div className="w-full max-w-[420px] mx-auto">
                     <div className="w-10 h-10 mb-6 flex items-center justify-center">
-                        <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
+                        <RocketLogo size={40} />
                     </div>
 
                     <h2 className="text-[36px] font-bold text-white mb-2 tracking-tight">Create Account</h2>

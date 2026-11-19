@@ -79,9 +79,24 @@ function MemberCard({ member, isExplicit, isMe, canManage, isAdding, onRemove, o
     )
 }
 
+// Placeholder cards shaped like member cards, while the lists load
+function MemberCardSkeleton() {
+    return (
+        <div className="bg-raised border border-line rounded-xl p-4 flex flex-col gap-3" aria-hidden="true">
+            <div className="w-12 h-12 rounded-xl bg-line animate-pulse" />
+            <div className="space-y-1.5">
+                <div className="h-3.5 w-32 rounded bg-line animate-pulse" />
+                <div className="h-3 w-24 rounded bg-line animate-pulse" />
+            </div>
+            <div className="h-8 rounded-lg bg-line animate-pulse" />
+        </div>
+    )
+}
+
 // projectMembers: project_members rows with `user`; assignedUsers: org users with tasks here.
+// isLoading: those lists are still on their way, so an empty list isn't final.
 // onRemove(userId) and onAdd(user) resolve to an error or null.
-export default function ProjectMembers({ projectMembers, assignedUsers, currentUserId, canManage, onRemove, onAdd }) {
+export default function ProjectMembers({ projectMembers, assignedUsers, currentUserId, canManage, isLoading = false, onRemove, onAdd }) {
     const [errorMsg, setErrorMsg] = useState("")
     const [addingId, setAddingId] = useState(null)
     const explicitIds = new Set(projectMembers.map((pm) => pm.user_id))
@@ -104,6 +119,16 @@ export default function ProjectMembers({ projectMembers, assignedUsers, currentU
         const error = await onAdd(member)
         setAddingId(null)
         if (error) setErrorMsg(`Couldn't add ${member.name || "them"} to the project. Only project managers can add members.`)
+    }
+
+    // Show the whole list at once: added members arrive before people who are
+    // only here through an assigned task, so a partial list would grow in place
+    if (isLoading) {
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="section-members" aria-busy="true" aria-label="Loading members">
+                {[0, 1, 2].map((card) => <MemberCardSkeleton key={card} />)}
+            </div>
+        )
     }
 
     if (members.length === 0) {

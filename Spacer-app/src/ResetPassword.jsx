@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 import PlanetLoader from "./components/PlanetLoader"
+import RocketLogo from "./components/RocketLogo"
 
 // The error Supabase puts in the link's #hash when it's expired or invalid; null if none
 function linkError() {
@@ -126,7 +127,7 @@ function ResetPassword() {
         <div className="min-h-screen bg-panel flex items-center justify-center px-6">
             <div className="w-full max-w-[420px]">
                 <div className="w-10 h-10 mb-6 flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
+                    <RocketLogo size={40} />
                 </div>
 
                 {status === "checking" && (

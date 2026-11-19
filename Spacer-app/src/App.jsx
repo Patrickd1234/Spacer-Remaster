@@ -7,6 +7,7 @@ import MfaChallenge from './components/MfaChallenge'
 import ErrorBoundary from './components/ErrorBoundary'
 import { hasTrustedDeviceFor, clearTrustedDevice } from './trustedDevice'
 import PlanetLoader from "./components/PlanetLoader"
+import { clearSavedProjectLists } from "./projectListCache"
 
 // Pages load on first visit instead of all up front
 const Home = lazy(() => import('./home'))
@@ -164,6 +165,7 @@ function App() {
       } else {
         localStorage.removeItem('userId')
         localStorage.removeItem('userEmail')
+        clearSavedProjectLists()
       }
     }
 

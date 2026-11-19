@@ -1,6 +1,7 @@
+import RocketLogo from "../components/RocketLogo"
 // Left-side brand panel shared by the Login and Signup pages (hidden on mobile).
 // `tagline` renders under the logo, `children` below the branding block, `quote` pinned to the bottom.
-// `logo` replaces the default icon beside the name (the sign-in page passes its rocket).
+// `logo` replaces the default rocket beside the name.
 export default function AuthBrandPanel({ tagline, quote, showThirdGlow = false, logo = null, children }) {
     return (
         <div className="hidden lg:flex w-[55%] relative flex-col px-16 py-12 border-r border-[color:color-mix(in_srgb,var(--bg-border)_30%,transparent)]">
@@ -14,7 +15,7 @@ export default function AuthBrandPanel({ tagline, quote, showThirdGlow = false, 
             {/* Branding */}
             <div className="relative z-10 mb-12">
                 <div className="flex items-center gap-2 mb-8">
-                    {logo || <span className="material-symbols-outlined text-accent-ink font-bold text-[24px]">token</span>}
+                    {logo || <RocketLogo size={28} />}
                     <h1 className="text-[16px] font-bold tracking-widest text-white">Spacer</h1>
                 </div>
                 {tagline}

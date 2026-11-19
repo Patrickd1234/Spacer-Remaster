@@ -75,7 +75,12 @@ const CustomDropdown = ({ options, value, onChange, placeholder, icon = null, is
     );
 };
 
-export default function CreateTaskModal({ projectId, organizationId, teamSpaceId, initialStatus = "todo", initialDate = "", onClose, onCreated, isInline = false }) {
+// `departments` ({ team_space_id, name }[]): a cross-department project's departments.
+// With more than one, the task gets a Department field; its members are the assignees.
+// `initialTeamSpaceId` / `initialProjectId` preselect the department and project
+// pickers (shown when there's no fixed `projectId`); `departments` then applies
+// only while that project stays picked.
+export default function CreateTaskModal({ projectId, organizationId: organizationIdProp, teamSpaceId, initialTeamSpaceId = "", initialProjectId = "", departments = [], defaultDepartmentId = "", initialStatus = "todo", initialDate = "", onClose, onCreated, isInline = false }) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [dueDate, setDueDate] = useState(String(initialDate || "").slice(0, 10));
@@ -83,12 +88,33 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
     const [priority, setPriority] = useState("medium");
     const [assigneeId, setAssigneeId] = useState("");
     const [teamSpaces, setTeamSpaces] = useState([]);
-    const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState(teamSpaceId || "");
-    const [selectedProjectId, setSelectedProjectId] = useState(projectId || "");
+    const [selectedTeamSpaceId, setSelectedTeamSpaceId] = useState(teamSpaceId || initialTeamSpaceId || "");
+    const [pickedDepartmentId, setTaskDepartmentId] = useState(defaultDepartmentId || "");
+    const [selectedProjectId, setSelectedProjectId] = useState(projectId || initialProjectId || "");
+    const hasDepartments = departments.length > 1
+        && (Boolean(projectId) || String(selectedProjectId) === String(initialProjectId));
+    const taskDepartmentId = departments.some((d) => String(d.team_space_id) === String(pickedDepartmentId))
+        ? pickedDepartmentId
+        : departments[0]?.team_space_id ?? "";
     const [projects, setProjects] = useState([]);
     const [users, setUsers] = useState([]);
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
+    // The user's own organization, looked up when the page didn't pass one
+    const [ownOrganizationId, setOwnOrganizationId] = useState(null);
+    const organizationId = organizationIdProp || ownOrganizationId;
+
+    useEffect(() => {
+        if (organizationIdProp) return;
+        let active = true;
+        getSessionUser().then(async (user) => {
+            if (!user) return;
+            const { data, error: orgError } = await supabase.from("users").select("organization_id").eq("id", user.id).maybeSingle();
+            if (orgError) console.error("Looking up your organization for the task failed:", orgError);
+            if (active) setOwnOrganizationId(data?.organization_id ?? null);
+        });
+        return () => { active = false; };
+    }, [organizationIdProp]);
 
     // Departments to choose from (row-level security keeps this to what the user can see)
     useEffect(() => {
@@ -128,7 +154,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
         // A slower, older request must not replace the list for the current choice
         let active = true;
         const fetchTeamMembers = async () => {
-            let activeTeamSpaceId = teamSpaceId || selectedTeamSpaceId;
+            let activeTeamSpaceId = (hasDepartments && taskDepartmentId) || teamSpaceId || selectedTeamSpaceId;
 
             if (!activeTeamSpaceId && selectedProjectId) {
                 const { data: projData } = await supabase
@@ -181,7 +207,7 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
         };
         fetchTeamMembers();
         return () => { active = false; };
-    }, [teamSpaceId, selectedTeamSpaceId, selectedProjectId, organizationId]);
+    }, [teamSpaceId, selectedTeamSpaceId, selectedProjectId, organizationId, hasDepartments, taskDepartmentId]);
 
     const chooseTeamSpace = (id) => {
         setSelectedTeamSpaceId(id);
@@ -200,8 +226,12 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
 
         const finalProjectId = projectId || selectedProjectId;
 
-        if (!finalProjectId || !organizationId) {
+        if (!finalProjectId) {
             setError("Please select a project.");
+            return;
+        }
+        if (!organizationId) {
+            setError("Couldn't find your organization. Reload the page and try again.");
             return;
         }
 
@@ -220,6 +250,8 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                 assignee_id: assigneeId || null,
                 created_by: userData?.user?.id || null,
                 status,
+                // Only cross-department projects send it (the column comes with that migration)
+                ...(hasDepartments ? { team_space_id: taskDepartmentId } : {}),
             })
             .select()
             .single();
@@ -290,6 +322,19 @@ export default function CreateTaskModal({ projectId, organizationId, teamSpaceId
                                 isDisabled={!selectedTeamSpaceId}
                             />
                         </div>
+                    </div>
+                )}
+
+                {hasDepartments && (
+                    <div>
+                        <Label isRequired>Department</Label>
+                        <CustomDropdown
+                            options={departments.map((d) => ({ value: d.team_space_id, label: d.name }))}
+                            value={taskDepartmentId}
+                            onChange={(id) => { setTaskDepartmentId(id); setAssigneeId(""); }}
+                            placeholder="Department"
+                            icon="groups"
+                        />
                     </div>
                 )}
 
