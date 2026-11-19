@@ -3,7 +3,7 @@ import { dayKey, startOfDay, addDays, weekDays, eventsByDay, upcomingEvents, eve
 import { fetchEvents, createEvent, updateEvent, deleteEvent } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
 import { useRole } from "../RoleContext"
-import { GeneralShell, PageHeading, PrimaryButton, SecondaryButton, ErrorNote } from "./GeneralParts"
+import { GeneralShell, PageHeading, PrimaryButton, ErrorNote } from "./GeneralParts"
 import { Panel } from "../components/DashboardParts"
 import { MonthView, WeekView, AgendaView, MiniMonth, EventListItem, EventDetail, EventForm, CalendarToolbar } from "./CalendarParts"
 
@@ -122,10 +122,6 @@ export default function CompanyCalendar() {
                         {upcoming.length === 0
                             ? <p className="text-xs text-muted">Nothing in the next {UPCOMING_DAYS} days.</p>
                             : upcoming.map((e) => <EventListItem key={e.id} event={e} onOpen={setOpenEvent} />)}
-                    </Panel>
-                    <Panel title="Calendar Integrations">
-                        <p className="text-xs text-muted">Sync with your external calendar to keep all your events in one place.</p>
-                        <SecondaryButton icon="link" disabled title="Coming soon">Connect Calendar (coming soon)</SecondaryButton>
                     </Panel>
                 </aside>
             </div>

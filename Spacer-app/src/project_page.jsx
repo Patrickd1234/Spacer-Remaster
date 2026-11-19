@@ -23,6 +23,8 @@ import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGroupi
 import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
 import TaskKeyBar from "./tasks/TaskKeyBar"
+import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
+import { MEETING_SAVED_EVENT } from "./appEvents"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -1404,9 +1406,15 @@ function ProjectPage() {
                                             <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-muted flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
-                                            <div className="flex-1 flex items-center justify-center bg-raised rounded-xl border border-line/20 border-dashed p-6 text-center">
-                                                <p className="text-muted italic">Meeting creation functionality coming soon...</p>
-                                            </div>
+                                            <ScheduleMeetingModal
+                                                organizer={currentUserId && organizationId ? { id: currentUserId, organization_id: organizationId } : null}
+                                                defaultDate={selectedDateEvents || new Date()}
+                                                onClose={() => setCreatingInSidebar(null)}
+                                                onSaved={(meeting) => {
+                                                    setCreatingInSidebar(null)
+                                                    window.dispatchEvent(new CustomEvent(MEETING_SAVED_EVENT, { detail: meeting }))
+                                                }}
+                                            />
                                         </div>
                                     ) : (() => {
                                         const formatYMD = (date) => {
