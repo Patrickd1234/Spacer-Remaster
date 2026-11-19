@@ -23,6 +23,7 @@ import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGroupi
 import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
 import TaskKeyBar from "./tasks/TaskKeyBar"
+import TaskComments from "./tasks/TaskComments"
 import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
 import { MEETING_SAVED_EVENT } from "./appEvents"
 
@@ -1980,8 +1981,9 @@ function ProjectPage() {
                                 </div>
                             </div>
 
-                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-muted border-t border-line/20">
-                                <span>ID: <span className="font-mono text-white opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
+                            <TaskComments key={selectedTask.id} taskId={selectedTask.id} />
+
+                            <div className="pt-md mt-auto flex justify-end items-center text-[11px] text-muted border-t border-line/20">
                                 <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>

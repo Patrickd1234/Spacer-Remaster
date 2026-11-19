@@ -9,6 +9,7 @@ import DepartmentTaskGroups from "./components/DepartmentTaskGroups"
 import Select from "./components/Select"
 import PlanetLoader from "./components/PlanetLoader"
 import TaskKeyBar from "./tasks/TaskKeyBar"
+import TaskComments from "./tasks/TaskComments"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -653,6 +654,7 @@ export default function Tasks() {
                                     Open in Project
                                 </button>
                             )}
+                            <TaskComments key={selectedTask.id} taskId={selectedTask.id} />
                         </div>
                     </div>
                 </div>

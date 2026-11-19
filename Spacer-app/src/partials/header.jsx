@@ -26,8 +26,9 @@ const PERSONAL_MESSAGES = {
     status_change: "A task you created changed status.",
     mention: "You were mentioned.",
     meeting_invite: "Open your calendar for the details.",
+    comment: "Open the task to read and reply.",
 }
-const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event" }
+const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble" }
 
 function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();

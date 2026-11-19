@@ -4,6 +4,7 @@ import { parseSubtasks } from "../taskStatus"
 import { dayKey } from "../general/generalFormat"
 import Select from "./Select"
 import TaskKeyBar from "../tasks/TaskKeyBar"
+import TaskComments from "../tasks/TaskComments"
 
 // Side drawers for the personal Calendar page: one day's schedule, and a task's details
 
@@ -152,7 +153,7 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full max-w-md bg-raised border-l border-line p-6 flex flex-col justify-between h-full text-white" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-raised border-l border-line p-6 flex flex-col justify-between h-full overflow-y-auto text-white" onClick={(e) => e.stopPropagation()}>
                 <div>
                     <div className="flex items-center justify-between pb-4 border-b border-line mb-6">
                         <h3 className="font-bold text-lg text-white">Task Details</h3>
@@ -247,6 +248,9 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                             <span className="text-muted">Due Date</span>
                             <span className="font-semibold text-white">{task.due_date ? new Date(task.due_date).toLocaleDateString() : "—"}</span>
                         </div>
+                    </div>
+                    <div className="mt-6">
+                        <TaskComments key={task.id} taskId={task.id} />
                     </div>
                 </div>
             </div>

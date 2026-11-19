@@ -86,14 +86,23 @@ export const fetchPersonalNotifications = async (userId, limit = NOTIFICATION_LI
     return { data: data || [], error }
 }
 
-// Where a personal notification leads; tasks need their project, looked up on click
+// Where a personal notification leads; tasks need their project, and comments
+// their task, looked up on click
 export const personalNotificationPath = async (notification) => {
     if (notification.reference_type === "project") return `/project_page/${notification.reference_id}`
     if (notification.reference_type === "event") return "/calendar"
-    if (notification.reference_type !== "task") return null
-    const { data, error } = await supabase.from("tasks").select("project_id").eq("id", notification.reference_id).maybeSingle()
+    let taskId = notification.reference_type === "task" ? notification.reference_id : null
+    if (notification.reference_type === "comment") {
+        const { data, error } = await supabase.from("comments").select("task_id").eq("id", notification.reference_id).maybeSingle()
+        if (error) console.warn("Unable to find the comment's task", error)
+        // A deleted comment: fall back to the task list
+        taskId = data?.task_id ?? null
+        if (!taskId) return "/tasks"
+    }
+    if (!taskId) return null
+    const { data, error } = await supabase.from("tasks").select("project_id").eq("id", taskId).maybeSingle()
     if (error) console.warn("Unable to find the task's project", error)
-    return data?.project_id ? `/project_page/${data.project_id}?task_id=${notification.reference_id}` : "/tasks"
+    return data?.project_id ? `/project_page/${data.project_id}?task_id=${taskId}` : "/tasks"
 }
 
 // Open tasks assigned to the user, for the daily and deadline reminders (taskReminders.js)
