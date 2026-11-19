@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { filterPeople, sortPeople, scopeDirectory } from "./generalFormat"
-import { fetchPeople, updateMyProfile, updateMyAvatar, setReportsTo } from "./generalData"
+import { fetchPeople, fetchDepartments, updateMyProfile, updateMyAvatar, setReportsTo } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
 import { useRole } from "../RoleContext"
 import { GeneralShell, PageHeading, ErrorNote, INPUT_CLASS, COMPACT_SELECT_CLASS } from "./GeneralParts"
@@ -54,6 +54,16 @@ export default function Directory() {
         })
         return () => { active = false }
     }, [])
+
+    // Every department, for the role editor (only people who may assign roles see it)
+    const canAssignRoles = can("member.assign_role")
+    const [departments, setDepartments] = useState([])
+    useEffect(() => {
+        if (!canAssignRoles) return undefined
+        let active = true
+        fetchDepartments().then((result) => { if (active) setDepartments(result.data) })
+        return () => { active = false }
+    }, [canAssignRoles])
 
     const changeLayout = (next) => {
         setLayout(next)
@@ -200,6 +210,9 @@ export default function Directory() {
                             isMe={myId !== null && selectedId === myId}
                             canSetManager={can("directory.manage")}
                             canRemove={can("member.remove_from_organization")}
+                            canAssignRoles={canAssignRoles}
+                            departments={departments}
+                            onRolesChanged={load}
                             onClose={close}
                             onMessage={() => openChat(selected)}
                             onEdit={() => setIsEditing(true)}

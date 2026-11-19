@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { ANNOUNCEMENT_CATEGORIES, filterAnnouncements, sortAnnouncements } from "./generalFormat"
-import { fetchAnnouncements, createAnnouncement, setAnnouncementPinned, deleteAnnouncement } from "./generalData"
+import { fetchAnnouncements, createAnnouncement, updateAnnouncement, setAnnouncementPinned, deleteAnnouncement } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
 import { useRole } from "../RoleContext"
 import { GeneralShell, PageHeading, PrimaryButton, Chip, ErrorNote, COMPACT_SELECT_CLASS } from "./GeneralParts"
@@ -46,7 +46,10 @@ export default function Announcements() {
     const selectedId = searchParams.get("id")
     const selected = announcements.find((a) => a.id === selectedId) || visible[0] || null
     const select = (id) => setSearchParams({ id }, { replace: true })
-    const canEdit = (a) => canManage || a.author_id === profile?.id
+    // Editing needs the same permission as posting (the database rule since
+    // migration 20261114090000); being the author is not enough
+    const canEdit = () => canManage
+    const [editing, setEditing] = useState(null)
 
     const handleCreate = async (form) => {
         const { data, error } = await createAnnouncement(profile, form)
@@ -54,6 +57,14 @@ export default function Announcements() {
         setIsCreating(false)
         await load()
         select(data.id)
+        return null
+    }
+
+    const handleUpdate = async (form) => {
+        const { error } = await updateAnnouncement(editing, form)
+        if (error) return error
+        setEditing(null)
+        await load()
         return null
     }
 
@@ -124,6 +135,7 @@ export default function Announcements() {
                             canEdit={canEdit(selected)}
                             isBusy={busyId === selected.id}
                             onTogglePin={() => runAction(selected, () => setAnnouncementPinned(selected.id, !selected.pinned))}
+                            onEdit={() => setEditing(selected)}
                             onDelete={() => handleDelete(selected)}
                         />
                     )}
@@ -131,6 +143,7 @@ export default function Announcements() {
             </div>
 
             {isCreating && <AnnouncementForm onSubmit={handleCreate} onClose={() => setIsCreating(false)} />}
+            {editing && <AnnouncementForm key={editing.id} initial={editing} onSubmit={handleUpdate} onClose={() => setEditing(null)} />}
         </GeneralShell>
     )
 }

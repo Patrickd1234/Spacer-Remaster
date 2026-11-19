@@ -87,7 +87,7 @@ function EventDetails({ announcement }) {
 }
 
 // Right-hand panel for the selected announcement
-export function AnnouncementDetail({ announcement, canEdit, onTogglePin, onDelete, isBusy }) {
+export function AnnouncementDetail({ announcement, canEdit, onTogglePin, onEdit, onDelete, isBusy }) {
     return (
         <article className="bg-panel border border-line rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between gap-2">
@@ -113,6 +113,9 @@ export function AnnouncementDetail({ announcement, canEdit, onTogglePin, onDelet
                     <button type="button" disabled={isBusy} onClick={onTogglePin} className="text-xs text-soft hover:text-white flex items-center gap-1 cursor-pointer disabled:opacity-50">
                         <span className="material-symbols-outlined text-[16px]">push_pin</span>{announcement.pinned ? "Unpin" : "Pin"}
                     </button>
+                    <button type="button" disabled={isBusy} onClick={onEdit} className="text-xs text-soft hover:text-white flex items-center gap-1 cursor-pointer disabled:opacity-50">
+                        <span className="material-symbols-outlined text-[16px]">edit</span>Edit
+                    </button>
                     <button type="button" disabled={isBusy} onClick={onDelete} className="text-xs text-red-400 hover:text-red-300 flex items-center gap-1 cursor-pointer disabled:opacity-50 ml-auto">
                         <span className="material-symbols-outlined text-[16px]">delete</span>Delete
                     </button>
@@ -124,8 +127,28 @@ export function AnnouncementDetail({ announcement, canEdit, onTogglePin, onDelet
 
 const EMPTY_FORM = { title: "", body: "", category: "company_update", pinned: false, meetingUrl: "", startsAt: "", endsAt: "", coverFile: null }
 
-export function AnnouncementForm({ onSubmit, onClose }) {
-    const [form, setForm] = useState(EMPTY_FORM)
+// An ISO time as the value a datetime-local input takes, in the viewer's time zone
+function toLocalInput(iso) {
+    if (!iso) return ""
+    const d = new Date(iso)
+    const pad = (n) => String(n).padStart(2, "0")
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const formFrom = (announcement) => ({
+    title: announcement.title || "",
+    body: announcement.body || "",
+    category: announcement.category || "company_update",
+    pinned: Boolean(announcement.pinned),
+    meetingUrl: announcement.meeting_url || "",
+    startsAt: toLocalInput(announcement.event_starts_at),
+    endsAt: toLocalInput(announcement.event_ends_at),
+    coverFile: null,
+})
+
+// Create (no `initial`) or edit an announcement. onSubmit returns an error or null.
+export function AnnouncementForm({ initial = null, onSubmit, onClose }) {
+    const [form, setForm] = useState(() => (initial ? formFrom(initial) : EMPTY_FORM))
     const [errorMsg, setErrorMsg] = useState("")
     const [isSaving, setIsSaving] = useState(false)
     const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === "checkbox" ? e.target.checked : e.target.value }))
@@ -146,11 +169,11 @@ export function AnnouncementForm({ onSubmit, onClose }) {
         setIsSaving(true)
         const error = await onSubmit(form)
         setIsSaving(false)
-        if (error) setErrorMsg("Couldn't publish the announcement. Please try again.")
+        if (error) setErrorMsg(initial ? "Couldn't save the changes. Please try again." : "Couldn't publish the announcement. Please try again.")
     }
 
     return (
-        <Modal title="Create announcement" onClose={onClose} wide>
+        <Modal title={initial ? "Edit announcement" : "Create announcement"} onClose={onClose} wide>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <Field label="Title"><input className={INPUT_CLASS} value={form.title} onChange={set("title")} maxLength={200} required /></Field>
                 <Field label="Message"><textarea className={`${INPUT_CLASS} min-h-[120px]`} value={form.body} onChange={set("body")} required /></Field>
@@ -160,7 +183,7 @@ export function AnnouncementForm({ onSubmit, onClose }) {
                             {ANNOUNCEMENT_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
                         </Select>
                     </Field>
-                    <Field label="Cover image" hint="Optional. JPG, PNG, WebP or GIF, up to 5 MB.">
+                    <Field label="Cover image" hint={initial?.cover_path ? "Choose a file to replace the current image; leave empty to keep it." : "Optional. JPG, PNG, WebP or GIF, up to 5 MB."}>
                         <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleCover} className="text-xs text-soft" />
                     </Field>
                 </div>
@@ -180,7 +203,9 @@ export function AnnouncementForm({ onSubmit, onClose }) {
                 </label>
                 {errorMsg && <ErrorNote>{errorMsg}</ErrorNote>}
                 <div className="flex justify-end">
-                    <PrimaryButton type="submit" icon="campaign" disabled={isSaving}>{isSaving ? "Publishing…" : "Publish"}</PrimaryButton>
+                    <PrimaryButton type="submit" icon={initial ? "save" : "campaign"} disabled={isSaving}>
+                        {initial ? (isSaving ? "Saving…" : "Save changes") : (isSaving ? "Publishing…" : "Publish")}
+                    </PrimaryButton>
                 </div>
             </form>
         </Modal>

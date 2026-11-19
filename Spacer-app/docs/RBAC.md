@@ -14,8 +14,8 @@ How access is decided in Spacer, how to change it, and where the move to role-ba
 | 1 | Permission tables and `has_permission()` | Applied to live 12 Nov 2026 (`20261112100000_rbac_foundation`) |
 | 2 | Parity check against the old rules | Passed on live: 11,304 answers, no unexpected differences |
 | 3 | Every database rule asks `has_permission()` | Applied to live 13 Nov 2026 (`20261112110000_rbac_rules`) |
-| 4 | The app asks `can(...)`; edge functions ask the database | App and edge functions converted 13 Nov 2026; **edge functions not deployed yet**; Reports and notifications scoping still to do |
-| 5 | Screen for admins to change roles; decide who is Owner | Not started |
+| 4 | The app asks `can(...)`; edge functions ask the database | App and edge functions converted 13 Nov 2026; edge functions deployed the same day; Reports and notifications scoping still to do |
+| 5 | Admins change roles from the Directory; decide who is Owner | Role editor applied to live 17 Nov 2026 (`20261114090000_assign_roles`) and working in the Directory. Ownership transfer not started |
 
 The database enforces access. The app only shows or hides controls, and since step 4 it does so by asking the same permissions (section 4).
 
@@ -31,6 +31,17 @@ A **permission** is one thing that can be allowed, such as `project.create`. A *
 | `memberships` | Who holds which role, and in which department (existing table) |
 
 The roles are fixed for now: they change only through a migration. The tables are shaped so per-organization custom roles can be added later.
+
+### Giving people roles
+
+Since step 5, people with `member.assign_role` (Organization Admins and the Owner) change roles from the Directory: open a person, and the drawer shows an Organization Admin switch and a role per department. It calls `assign_role(person, department, role)` and `revoke_role(person, department)`, which check:
+
+- the caller holds `member.assign_role` and the person is in the caller's organization;
+- the role is one of `org_admin` (no department), `department_admin`, `team_lead`, `member`, `viewer`;
+- the person is not the Owner. Owner changes only by migration until ownership transfer is built;
+- an organization keeps at least one Owner or Organization Admin while anyone else is in it.
+
+The last two rules are also a trigger on `memberships` (`memberships_guard_org_roles`), so a direct write from the app can't get around them. Refusals carry hint `rbac` and the app shows them as written.
 
 ### Roles
 
@@ -125,6 +136,8 @@ What asks `can(...)` as of step 4:
 | Announcements: create, edit others' | `announcement.manage` |
 | Directory: set who someone reports to | `directory.manage` |
 | Directory: remove from organization | `member.remove_from_organization` |
+| Directory: change someone's roles | `member.assign_role` (and the database checks again) |
+| Announcements: edit, pin, delete | `announcement.manage`; being the author is no longer enough (step 5 migration) |
 | Department page: Add Member | `member.add` in that department |
 | Department page: Remove (from the department) | `member.remove` in that department |
 | Department page: Add Department / Delete Department | `department.create` / `department.delete` |
@@ -183,14 +196,16 @@ npx supabase db query --remote --yes -f supabase/checks/rbac_parity.sql
 |---|---|---|
 | `20261112100000_rbac_foundation` | `supabase/rollback/20261112100000_rbac_foundation_rollback.sql` | Tables, seed data, `has_permission`, `has_org_permission`, `my_permissions`, `membership_role_key` |
 | `20261112110000_rbac_rules` | `supabase/rollback/20261112110000_rbac_rules_rollback.sql` | 5 helpers, 4 functions and 28 policies moved onto `has_permission()` |
+| `20261114090000_assign_roles` | `supabase/rollback/20261114090000_assign_roles_rollback.sql` | `assign_role`, `revoke_role`, `org_member_roles`, the `memberships_guard_org_roles` trigger, announcement edit and delete need `announcement.manage` |
 
 The step 3 rollback was generated from the live definitions before the change and tested: applying the migration and then the rollback leaves every answer as it was. Roll back in reverse order.
 
 ## 9. Open items
 
 - Delete the three cross-organization memberships (they no longer give any access).
-- Deploy the three edge functions changed in step 4: `invite-department-member`, `invite-team-post-launch`, `delete-workspace-item`.
 - Step 4, remaining: Reports, the notifications bell and the Directory scope still read role names (section 4). Once they and the deployed edge functions no longer need them, drop `is_org_admin`, `is_admin_of_org`, `has_team_access`, `team_role` and `team_role_at_least`.
 - Nothing in step 4 was checked in a browser.
-- Step 5: role management screen; decide who is Owner in each organization (only one person holds the old `super_admin` role today).
+- Step 5, remaining: ownership transfer, and deciding who is Owner in each organization. Today one person holds the old `super_admin` role (in Spacer); every other organization's founder is an Organization Admin, who can do everything an Owner can except be protected from other admins.
+- Record `20261114090000_assign_roles` in the migration history: `npx supabase migration repair --status applied 20261114090000 --remote`. Its contents are already live; without the row, `db push` re-runs it and fails.
+- Step 5 role changes were checked in a browser by the user on 17 Nov 2026; announcement editing was not.
 - Insert, update and delete policies are covered by the parity check, not exercised row by row.
