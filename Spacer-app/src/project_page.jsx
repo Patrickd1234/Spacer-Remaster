@@ -50,7 +50,7 @@ const BOARD_NOTICE_MS = 5000
 const TASK_COLUMNS = "id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by"
 // Added by migration 20261031090000_sprints
 const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
-// Added by migration 20261117090000_cross_department_projects
+// Added by migration 20261120100000_cross_department_projects
 const DEPARTMENT_TASK_COLUMNS = "team_space_id, blocked_by_task_id, blocked_at"
 // Added by migration 20261119100000_task_keys
 const TASK_KEY_COLUMNS = "task_key_scope, task_number"
@@ -461,7 +461,7 @@ function ProjectPage() {
     // What the board shows, overdue split out; the Summary overview counts the same groups
     const tasksByColumn = groupTasksByColumn(project_tasks, boardColumns)
 
-    // ── Cross-department projects (migration 20261117090000): the project's
+    // ── Cross-department projects (migration 20261120100000): the project's
     // departments, lead first. Empty until that migration is applied.
     const [projectDepartments, setProjectDepartments] = useState([])
     const [departmentsVersion, setDepartmentsVersion] = useState(0)

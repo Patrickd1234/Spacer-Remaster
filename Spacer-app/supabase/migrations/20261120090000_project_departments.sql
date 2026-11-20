@@ -1,7 +1,7 @@
 -- A project can belong to more than one department. project_spaces.team_space_id
 -- stays the main department; this table lists the extra ones, picked with the
 -- "+" next to Team Space in the Create Project form.
--- Rollback: supabase/rollback/20261112100000_project_departments_rollback.sql
+-- Rollback: supabase/rollback/20261120090000_project_departments_rollback.sql
 --
 -- Access: people in an extra department can see the project and work on its
 -- tasks, the same as the main department (has_project_access, can_edit_project,

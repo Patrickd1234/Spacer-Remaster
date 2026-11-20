@@ -1,7 +1,7 @@
--- Undo 20261117090000_cross_department_projects.sql, back to the state after
--- 20261112100000_project_departments (projects keep their extra departments as
+-- Undo 20261120100000_cross_department_projects.sql, back to the state after
+-- 20261120090000_project_departments (projects keep their extra departments as
 -- plain links; leads, due dates, sign-offs, task departments and blocks are lost).
--- To go back further, run 20261112100000_project_departments_rollback.sql after this.
+-- To go back further, run 20261120090000_project_departments_rollback.sql after this.
 -- Deploy a front end that no longer uses these columns first.
 
 drop trigger if exists tasks_block_notify on public.tasks;

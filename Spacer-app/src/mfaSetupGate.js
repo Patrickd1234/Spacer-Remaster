@@ -1,6 +1,6 @@
 // Must a signed-in user set up two-factor before using Spacers?
 // Every account must (the database refuses data without it, see
-// 20261119090000_require_mfa.sql).
+// 20261120110000_require_mfa.sql).
 // Kept free of imports so `npm test` can load it without Supabase.
 
 /**

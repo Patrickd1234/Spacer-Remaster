@@ -1,13 +1,13 @@
 import { supabase } from "./supabase"
 
-// Reads and writes for cross-department projects (migration 20261117090000).
+// Reads and writes for cross-department projects (migration 20261120100000).
 // Each call resolves to { error: string | null } (plus data where it reads),
 // with a message fit to show on screen; the details go to the console.
 
 // Postgres codes for "column/table/function doesn't exist": the migration isn't applied yet
 const MISSING_CODES = new Set(["42703", "42P01", "PGRST202", "PGRST204", "PGRST200"])
 export const isMissingSchema = (error) => Boolean(error && MISSING_CODES.has(error.code))
-export const MIGRATION_NOTE = "Cross-department projects need a database update: run the 20261117090000_cross_department_projects migration in Supabase."
+export const MIGRATION_NOTE = "Cross-department projects need a database update: run the 20261120100000_cross_department_projects migration in Supabase."
 
 // The raise exception messages in the migration are written for people; show those as they are
 const readable = (error, fallback) => (error?.code === "42501" || error?.code === "23514" || error?.code === "P0001" || error?.code === "P0002")

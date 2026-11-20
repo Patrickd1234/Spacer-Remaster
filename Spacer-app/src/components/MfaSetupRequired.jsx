@@ -4,7 +4,7 @@ import TwoFactorSettings from "./TwoFactorSettings";
 
 // Full-screen step after sign-in for anyone who hasn't set up two-factor yet.
 // Shown by App.jsx; the database gives an account no data until it's done
-// (20261119090000_require_mfa.sql).
+// (20261120110000_require_mfa.sql).
 export default function MfaSetupRequired({ onEnabled }) {
     const handleSignOut = async () => {
         const { error } = await supabase.auth.signOut();

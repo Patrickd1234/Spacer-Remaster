@@ -1,5 +1,5 @@
 // A project's departments: the main one (project_spaces.team_space_id) plus
-// extra ones in project_departments (migration 20261112100000).
+// extra ones in project_departments (migration 20261120090000).
 
 // Departments an extra-department picker can offer: not the main one and not
 // one another picker already chose. `ownChoice` is that picker's current pick.

@@ -1,4 +1,4 @@
--- Undo 20261112100000_project_departments.sql
+-- Undo 20261120090000_project_departments.sql
 -- Projects go back to a single department; the extra departments are lost.
 -- Deploy a front end that no longer reads or writes project_departments first.
 
