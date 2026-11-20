@@ -27,8 +27,11 @@ const PERSONAL_MESSAGES = {
     mention: "You were mentioned.",
     meeting_invite: "Open your calendar for the details.",
     comment: "Open the task to read and reply.",
+    task_blocked: "Another department is waiting on your department's task.",
+    task_unblocked: "The task you were waiting on is done.",
+    department_nudge: "Your department is holding up a project.",
 }
-const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble" }
+const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble", task_blocked: "hourglass_top", task_unblocked: "lock_open", department_nudge: "campaign" }
 
 function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();

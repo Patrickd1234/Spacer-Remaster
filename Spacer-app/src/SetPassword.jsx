@@ -1,5 +1,6 @@
 import { supabase } from "./supabase"
 import NewPasswordForm from "./components/NewPasswordForm"
+import RocketLogo from "./components/RocketLogo"
 
 // Shown by App instead of any page while the signed-in account has no password
 // (signed up with Google, or never finished an invite). Once it's set they can
@@ -9,7 +10,7 @@ function SetPassword({ email, onPasswordSet }) {
         <div className="min-h-screen bg-panel flex items-center justify-center px-6">
             <div className="w-full max-w-[420px]">
                 <div className="w-10 h-10 mb-6 flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
+                    <RocketLogo size={40} />
                 </div>
 
                 <h2 className="text-[28px] font-bold text-white mb-2 tracking-tight text-center">Set a password</h2>
