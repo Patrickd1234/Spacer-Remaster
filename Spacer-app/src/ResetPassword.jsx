@@ -2,6 +2,8 @@ import { useState, useEffect } from "react"
 import { useNavigate, Link } from "react-router-dom"
 import { supabase } from "./supabase"
 import PlanetLoader from "./components/PlanetLoader"
+import RocketLogo from "./components/RocketLogo"
+import { validateNewPassword, PASSWORD_HINT } from "./passwordRules"
 
 // The error Supabase puts in the link's #hash when it's expired or invalid; null if none
 function linkError() {
@@ -76,13 +78,9 @@ function ResetPassword() {
         e.preventDefault()
         setErrorMsg("")
 
-        if (password.length < 8) {
-            setErrorMsg("Password must be at least 8 characters long.")
-            return
-        }
-
-        if (password !== confirmPassword) {
-            setErrorMsg("Passwords do not match.")
+        const invalid = validateNewPassword(password, confirmPassword)
+        if (invalid) {
+            setErrorMsg(invalid)
             return
         }
 
@@ -116,6 +114,14 @@ function ResetPassword() {
             }, 1800)
         } catch (err) {
             console.error("Update password error:", err)
+            // The link's sign-in is gone (signed out in another tab, opened in another
+            // browser, or used already): show the "request a new link" screen
+            const isSessionMissing = err?.name === "AuthSessionMissingError" || /session missing/i.test(err?.message || "")
+            if (isSessionMissing) {
+                setErrorMsg("This reset link has expired or was already used. Request a new one to set your password.")
+                setStatus("invalid")
+                return
+            }
             setErrorMsg(err.message || "Failed to update password. Please try again.")
         } finally {
             setSubmitting(false)
@@ -126,7 +132,7 @@ function ResetPassword() {
         <div className="min-h-screen bg-panel flex items-center justify-center px-6">
             <div className="w-full max-w-[420px]">
                 <div className="w-10 h-10 mb-6 flex items-center justify-center mx-auto">
-                    <span className="material-symbols-outlined text-accent-ink text-[36px]">token</span>
+                    <RocketLogo size={40} />
                 </div>
 
                 {status === "checking" && (
@@ -177,7 +183,7 @@ function ResetPassword() {
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     id="new-password"
-                                    placeholder="New password (min. 8 characters)"
+                                    placeholder="New password"
                                     className="w-full bg-field border border-line focus:border-accent-ink rounded-xl px-4 py-3.5 text-white text-[14px] placeholder-muted focus:outline-none transition-colors"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
@@ -207,6 +213,7 @@ function ResetPassword() {
                                     required
                                 />
                             </div>
+                            <p className="text-muted text-xs">{PASSWORD_HINT}</p>
 
                             {errorMsg && (
                                 <p className="text-red-400 text-xs flex items-center gap-1.5 pt-1">

@@ -74,8 +74,22 @@ export function EmptyNote({ children }) {
     return <p className="px-3 py-1.5 text-[12px] text-muted italic">{children}</p>
 }
 
+// Placeholder rows shaped like the list while it loads for the first time
+const SKELETON_WIDTHS = ["w-28", "w-20", "w-24"]
+export function SkeletonRows() {
+    return (
+        <div aria-label="Loading" aria-busy="true" className="space-y-0.5">
+            {SKELETON_WIDTHS.map((width) => (
+                <div key={width} className="px-3 py-2">
+                    <div className={`h-3 ${width} rounded bg-line animate-pulse`} />
+                </div>
+            ))}
+        </div>
+    )
+}
+
 // A department row that opens its projects; the name itself opens the department
-export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, isActive = false }) {
+export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, isActive = false, isLoading = false }) {
     const [isOpen, setIsOpen] = useState(false)
     return (
         <div>
@@ -89,9 +103,9 @@ export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, i
             </div>
             {isOpen && (
                 <div className="ml-3 pl-3 border-l border-line space-y-0.5">
-                    {projects.length === 0
-                        ? <EmptyNote>No projects yet</EmptyNote>
-                        : projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={activePath === `/project_page/${p.id}`} />)}
+                    {projects.length === 0 && isLoading && <SkeletonRows />}
+                    {projects.length === 0 && !isLoading && <EmptyNote>No projects yet</EmptyNote>}
+                    {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={activePath === `/project_page/${p.id}`} />)}
                 </div>
             )}
         </div>

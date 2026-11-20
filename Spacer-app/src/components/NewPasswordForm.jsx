@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { supabase } from "../supabase"
-import { validateNewPassword } from "../passwordRules"
+import { validateNewPassword, PASSWORD_HINT } from "../passwordRules"
 import PlanetLoader from "./PlanetLoader"
 
 // Password + confirmation fields that set the signed-in user's password.
@@ -63,6 +63,7 @@ function NewPasswordForm({ submitLabel, onSuccess }) {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
             />
+            <p className="text-muted text-xs">{PASSWORD_HINT}</p>
 
             {errorMsg && (
                 <p role="alert" className="text-red-400 text-xs flex items-center gap-1.5">

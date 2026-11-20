@@ -68,7 +68,7 @@ export default {
         "secondary-container": "#464951",
         "on-primary": "rgb(var(--c-on-accent) / <alpha-value>)",
         "outline": "rgb(var(--c-muted) / <alpha-value>)",
-        "error": "#ffb4ab",
+        "error": "rgb(var(--c-error-ink) / <alpha-value>)",
         "background": "rgb(var(--c-canvas) / <alpha-value>)",
         "surface-container-highest": "rgb(var(--c-surface-2) / <alpha-value>)",
         "primary-fixed": "rgb(var(--c-accent-ink) / <alpha-value>)",

@@ -216,7 +216,12 @@ function Profile() {
                     <div className="w-full max-w-6xl mx-auto p-4 sm:p-8 space-y-6">
 
                         {/* HERO BANNER & HEADER */}
-                        <div className="relative rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-r from-neutral-900 via-neutral-900/90 to-emerald-950/40 p-6 sm:p-8 shadow-2xl">
+                        {/* Theme colours, partly see-through so the page's space shows softly behind
+                            it; blends with the page in light and dark mode */}
+                        <div
+                            className="relative rounded-3xl overflow-hidden bg-panel/50 backdrop-blur-sm p-6 sm:p-8"
+                            style={{ backgroundImage: "linear-gradient(to right, transparent 50%, rgba(var(--primary-color-rgb), 0.06))" }}
+                        >
                             {/* Decorative glow ambient background */}
                             <div className="absolute top-0 right-0 w-96 h-96 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" style={{ backgroundColor: "rgba(var(--primary-color-rgb), 0.05)" }} />
                             <div className="absolute bottom-0 left-1/3 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -226,11 +231,11 @@ function Profile() {
                                     {/* Avatar with Status Ring */}
                                     <div className="relative group">
                                         <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-[var(--primary-color)] to-emerald-600 p-[2px] shadow-xl">
-                                            <div className="w-full h-full rounded-[14px] bg-neutral-900 flex items-center justify-center text-3xl font-extrabold text-primary-accent tracking-wider">
+                                            <div className="w-full h-full rounded-[14px] bg-raised flex items-center justify-center text-3xl font-extrabold text-primary-accent tracking-wider">
                                                 {initials(profile.name, profile.email)}
                                             </div>
                                         </div>
-                                        <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-neutral-900 shadow-md" title="Online & Active" />
+                                        <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-panel shadow-md" title="Online & Active" />
                                     </div>
 
                                     {/* Identity Details */}
@@ -244,9 +249,9 @@ function Profile() {
                                             </span>
                                         </div>
 
-                                        <div className="flex items-center gap-4 text-xs text-neutral-400 pt-1 flex-wrap">
-                                            <span className="flex items-center gap-1">
-                                                <span className="material-symbols-outlined text-sm">mail</span>
+                                        <div className="flex items-center gap-4 text-sm font-medium text-soft pt-1 flex-wrap">
+                                            <span className="flex items-center gap-1.5">
+                                                <span className="material-symbols-outlined text-base text-accent-ink">mail</span>
                                                 {profile.email}
                                             </span>
                                         </div>

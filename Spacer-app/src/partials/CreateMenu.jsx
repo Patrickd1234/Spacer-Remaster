@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useMatch, useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase"
 import { useRole } from "../RoleContext"
 import { canCreateProjects } from "../projectPermissions"
@@ -9,6 +9,21 @@ import CreateDepartmentModal from "./CreateDepartmentModal"
 import CreateProjectModal from "./CreateProjectModal"
 import CreateTaskModal from "./CreateTaskModal"
 import Toast from "../components/Toast"
+import { fetchProjectDepartments } from "../crossDepartmentData"
+
+// The open project, preselected in the task form's pickers: its department and,
+// on a cross-department project, its departments. Null if it can't be loaded.
+async function loadProjectContext(projectId) {
+    const [{ data: project, error }, { data: departments }] = await Promise.all([
+        supabase.from("project_spaces").select("id, team_space_id").eq("id", projectId).maybeSingle(),
+        fetchProjectDepartments(projectId),
+    ])
+    if (error || !project) {
+        if (error) console.error("Loading the open project for a new task failed:", error)
+        return null
+    }
+    return { projectId: project.id, teamSpaceId: project.team_space_id, departments: departments.length > 1 ? departments : [] }
+}
 
 const SUPER_ADMIN_ITEMS = [
     { action: "task", icon: "add_task", label: "Create a Task" },
@@ -30,6 +45,9 @@ const PROJECT_ITEM = SUPER_ADMIN_ITEMS.find((item) => item.action === "project")
 export default function CreateMenu({ isSuperAdmin }) {
     const { departments } = useRole()
     const navigate = useNavigate()
+    // On a project page, "Create a Task" starts with that project picked
+    const openProjectId = useMatch("/project_page/:project_id")?.params.project_id ?? null
+    const [projectContext, setProjectContext] = useState(null)
     const menuRef = useRef(null)
     const [isOpen, setIsOpen] = useState(false)
     const [openModal, setOpenModal] = useState(null) // "department" | "project" | "task" | null
@@ -56,12 +74,20 @@ export default function CreateMenu({ isSuperAdmin }) {
         return () => document.removeEventListener("mousedown", handleClickOutside)
     }, [])
 
-    const choose = (action) => {
+    const choose = async (action) => {
         setIsOpen(false)
         if (action === "invite") navigate("/department")
         else if (action === "meeting") navigate("/calendar")
-        else setOpenModal(action)
+        else {
+            // Elsewhere (or if the project can't be loaded) the form asks for department and project
+            setProjectContext(action === "task" && openProjectId ? await loadProjectContext(openProjectId) : null)
+            setOpenModal(action)
+        }
     }
+    // New tasks on a cross-department project go to your department there, else the lead one
+    const projectDepartments = projectContext?.departments ?? []
+    const defaultDepartmentId = projectDepartments.find((d) => departments.some((m) => String(m.team_space_id) === String(d.team_space_id)))?.team_space_id
+        ?? projectDepartments[0]?.team_space_id ?? ""
 
     const handleCreated = ({ department, failedEmails }) => {
         setOpenModal(null)
@@ -120,7 +146,15 @@ export default function CreateMenu({ isSuperAdmin }) {
                 />
             )}
             {openModal === "task" && (
-                <CreateTaskModal organizationId={organizationId} onClose={() => setOpenModal(null)} onCreated={handleTaskCreated} />
+                <CreateTaskModal
+                    organizationId={organizationId}
+                    initialProjectId={projectContext?.projectId}
+                    initialTeamSpaceId={projectContext?.teamSpaceId}
+                    departments={projectDepartments}
+                    defaultDepartmentId={defaultDepartmentId}
+                    onClose={() => setOpenModal(null)}
+                    onCreated={handleTaskCreated}
+                />
             )}
             {openModal === "project" && (
                 <CreateProjectModal onClose={() => setOpenModal(null)} onCreated={() => setOpenModal(null)} />
