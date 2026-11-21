@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { supabase, getSessionUser } from "../supabase";
 import Select from "../components/Select";
 import { useRole } from "../RoleContext";
-import { projectDepartmentIds } from "../projectPermissions";
 import { addableDepartments, teamLeadOptions, departmentLeadOptions } from "../projectDepartments";
 import { validateDepartmentDates } from "../crossDepartment";
 import { isMissingSchema } from "../crossDepartmentData";
@@ -34,7 +33,7 @@ function normalizeDepartments(picked, allowedTeamSpaces) {
 // first department leads; each has its own lead and due date, none due after the
 // overall deadline. Starts from what was typed there; `onBack` returns to it.
 export default function CollabProjectModal({ initialName = "", initialDeadline = "", initialLeadDepartmentId = "", onBack, onClose, onCreated }) {
-    const { isSuperAdmin, departments: myDepartments } = useRole();
+    const { can } = useRole();
     const [teamSpaces, setTeamSpaces] = useState([]);
     const [memberRows, setMemberRows] = useState([]);
     const [sessionUserId, setSessionUserId] = useState(null);
@@ -62,10 +61,8 @@ export default function CollabProjectModal({ initialName = "", initialDeadline =
         fetchTeams();
     }, []);
 
-    // Only departments the database lets this user add: any for super admins,
-    // otherwise those where they're team lead or admin
-    const allowedIds = new Set(projectDepartmentIds(myDepartments));
-    const allowedTeamSpaces = isSuperAdmin ? teamSpaces : teamSpaces.filter((t) => allowedIds.has(String(t.id)));
+    // Only departments the database lets this user create projects in
+    const allowedTeamSpaces = teamSpaces.filter((t) => can("project.create", t.id));
     const departments = normalizeDepartments(picked, allowedTeamSpaces);
     const pickedIds = departments.map((d) => d.teamSpaceId);
     const pickedKey = pickedIds.join(",");

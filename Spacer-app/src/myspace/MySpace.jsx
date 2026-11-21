@@ -2,14 +2,17 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { supabase } from "../supabase"
 import { fetchRecentActivity } from "../recentActivity"
-import { TASK_CREATED_EVENT } from "../appEvents"
+import { TASK_CREATED_EVENT, MEETING_SAVED_EVENT } from "../appEvents"
 import { StatCard, StatCardSkeleton, Panel, PanelLink, PanelMessage } from "../components/DashboardParts"
 import { TaskCard, TaskCardSkeleton, ActivityList, ActivitySkeleton, MeetingRow, MeetingSkeleton } from "./MySpaceParts"
 import { useResource } from "./useResource"
 import GreetingSky from "./GreetingSky"
+import { fetchUpcomingMeetings } from "../meetings/meetingData"
 import { localDateKey, summarizeTasks, boardTasks, greetingFor } from "./taskStats"
 
 const MEETINGS_LIMIT = 4
+// How far ahead repeating meetings are looked for
+const MEETINGS_DAYS_AHEAD = 60
 const COLLAPSED_ACTIVITY_COUNT = 6
 // Wait for a burst of task changes to settle before refreshing
 const LIVE_REFRESH_DELAY_MS = 500
@@ -102,21 +105,23 @@ export default function MySpace({ userId, displayName }) {
 
     const loadActivity = useCallback(() => fetchRecentActivity(userId), [userId])
 
-    // Row-level security limits events to the user's organization
-    const loadMeetings = useCallback(() => supabase
-        .from("calendar_events")
-        .select("id, title, event_date, external_url")
-        .gte("event_date", todayKey)
-        .order("event_date", { ascending: true })
-        .limit(MEETINGS_LIMIT)
-        .then(({ data, error }) => {
-            if (error) console.error("Loading upcoming meetings failed:", error)
-            return { data: data || [], error }
-        }), [todayKey])
+    // Company events plus meetings you organize or are invited to (row-level
+    // security decides), repeats included
+    const loadMeetings = useCallback(() => {
+        const from = new Date(`${todayKey}T00:00`)
+        const until = new Date(from.getFullYear(), from.getMonth(), from.getDate() + MEETINGS_DAYS_AHEAD)
+        return fetchUpcomingMeetings(from, until, MEETINGS_LIMIT)
+    }, [todayKey])
 
     const [tasksState, reloadTasks, refreshTasks] = useResource(loadTasks)
     const [activityState, reloadActivity, refreshActivity] = useResource(loadActivity)
     const [meetingsState, reloadMeetings] = useResource(loadMeetings)
+
+    // A meeting scheduled from the header's Create menu shows up straight away
+    useEffect(() => {
+        window.addEventListener(MEETING_SAVED_EVENT, reloadMeetings)
+        return () => window.removeEventListener(MEETING_SAVED_EVENT, reloadMeetings)
+    }, [reloadMeetings])
 
     // A task created from the header's Create menu shows up straight away
     useEffect(() => {

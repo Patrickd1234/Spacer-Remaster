@@ -3,8 +3,9 @@ import { Avatar, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, Erro
 import { validateImage } from "./generalData"
 import Select from "../components/Select"
 import { RemoveFromOrganizationButton } from "../components/OrgExitControls"
-
-const ROLE_NAMES = { admin: "Admin", team_lead: "Team lead", member: "Member", viewer: "Viewer", super_admin: "Super admin" }
+import { roleKey, roleName } from "../permissions"
+import { canEditRoles } from "./roleAssignment"
+import RoleEditor from "./RoleEditor"
 const MAX_TAGS = 2
 const TIME_ZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []
 
@@ -160,9 +161,10 @@ function InfoLine({ icon, children }) {
 }
 
 // Right-side profile drawer. Shows only what the viewer's access returns.
-export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, onMessage, onEdit, onSetManager, onRemoved }) {
+export function ProfileDrawer({ person, people, isMe, canSetManager, canRemove, canAssignRoles = false, departments = [], onClose, onMessage, onEdit, onSetManager, onRemoved, onRolesChanged }) {
     const manager = people.find((p) => p.id === person.reports_to)
     const time = localTime(person.timezone)
+    const showRoleEditor = canEditRoles({ person, viewerId: isMe ? person.id : null, canAssign: canAssignRoles })
 
     useEffect(() => {
         // An open dialog (Edit profile) handles Escape itself
@@ -197,12 +199,16 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                 {time && <InfoLine icon="schedule">Local time {time}</InfoLine>}
             </DrawerSection>
 
-            {person.teams.length > 0 && (
+            {showRoleEditor ? (
+                <DrawerSection title="Roles">
+                    <RoleEditor key={person.id} person={person} departments={departments} onChanged={onRolesChanged} />
+                </DrawerSection>
+            ) : person.teams.length > 0 && (
                 <DrawerSection title={`Team Spaces (${person.teams.length})`}>
                     {person.teams.map((t) => (
                         <p key={t.id} className="flex items-center justify-between text-sm text-soft">
                             <span className="truncate">{t.name}</span>
-                            <span className="text-[11px] text-muted">{ROLE_NAMES[t.role] || t.role}</span>
+                            <span className="text-[11px] text-muted">{roleName(roleKey(t.id, t.role))}</span>
                         </p>
                     ))}
                 </DrawerSection>
@@ -211,6 +217,7 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
             <DrawerSection title="Role & Reporting">
                 <dl className="grid grid-cols-[100px_1fr] gap-y-1.5 text-sm">
                     <dt className="text-muted">Role</dt><dd className="text-soft truncate">{person.job_title || "—"}</dd>
+                    <dt className="text-muted">Access</dt><dd className="text-soft truncate">{person.orgRole ? roleName(person.orgRole) : "—"}</dd>
                     <dt className="text-muted">Reports to</dt>
                     <dd className="text-soft truncate">
                         {canSetManager ? (
@@ -229,8 +236,8 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, onClose, on
                 </dl>
             </DrawerSection>
 
-            {/* Admins only; the database refuses if the person is an organization admin */}
-            {canSetManager && !isMe && (
+            {/* The database also refuses if the person holds an organization role */}
+            {canRemove && !isMe && (
                 <div className="pt-3 border-t border-line space-y-2">
                     <RemoveFromOrganizationButton key={person.id} person={person} onRemoved={onRemoved} />
                 </div>

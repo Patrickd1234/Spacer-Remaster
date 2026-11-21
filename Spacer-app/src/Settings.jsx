@@ -9,7 +9,6 @@ import TwoFactorSettings from "./components/TwoFactorSettings"
 import ComingSoonCard from "./components/ComingSoonCard"
 import { changePassword } from "./passwordChange"
 import { passwordStrengthError, PASSWORD_HINT } from "./passwordRules"
-import Select from "./components/Select"
 import { LeaveOrganizationButton } from "./components/OrgExitControls"
 
 export default function Settings() {
@@ -18,7 +17,7 @@ export default function Settings() {
     const [saving, setSaving] = useState(false)
     const [toast, setToast] = useState(null)
     const { preferences, updatePreferences } = usePreferences()
-    const { isSuperAdmin, isAdmin, membershipData } = useRole()
+    const { roleName, can } = useRole()
 
     const notifications = preferences?.notifications || {}
     const appearance = preferences?.appearance || {}
@@ -35,164 +34,82 @@ export default function Settings() {
         role: "Member"
     })
 
-    // Workspace Settings State
-    const [workspace, setWorkspace] = useState({
-        name: "",
-        slug: "",
-        description: "",
-        defaultPage: "/",
-        defaultVisibility: "team",
-        dataRetention: "90_days",
-        autoJoinDomain: true,
-        allowedDomain: ""
-    })
-
-    // Integrations State (now from context)
+    // The organization's name (the only workspace setting stored so far) and its size
+    const [organizationId, setOrganizationId] = useState(null)
+    const [workspaceName, setWorkspaceName] = useState("")
+    const [memberCount, setMemberCount] = useState(null)
+    const canRenameWorkspace = can("organization.update")
 
     const showToast = (message, type = "success") => {
         setToast({ message, type })
         setTimeout(() => setToast(null), 3500)
     }
 
-    // Load initial settings from localStorage / Supabase
     useEffect(() => {
+        let active = true
         const fetchUserData = async () => {
-            try {
-                const authData = { user: await getSessionUser() }
-                const authUser = authData?.user
+            const authUser = await getSessionUser()
+            if (!authUser || !active) return
+            const { data: userProfile, error: profileError } = await supabase
+                .from("users")
+                .select("id, name, email, organization_id")
+                .eq("id", authUser.id)
+                .maybeSingle()
+            if (profileError) console.error("Loading your profile failed:", profileError)
+            if (!active) return
+            setUser({
+                id: authUser.id,
+                name: userProfile?.name || authUser.user_metadata?.full_name || "Workspace User",
+                email: authUser.email || userProfile?.email || "",
+                role: roleName
+            })
 
-                let fetchedOrgName = ""
-                let derivedSlug = ""
-                let derivedDomain = ""
-                let derivedDescription = ""
-
-                if (authUser) {
-                    const { data: userProfile } = await supabase
-                        .from("users")
-                        .select("id, name, email, organization_id")
-                        .eq("id", authUser.id)
-                        .maybeSingle()
-
-                    setUser({
-                        id: authUser.id,
-                        name: userProfile?.name || authUser.user_metadata?.full_name || "Workspace User",
-                        email: authUser.email || userProfile?.email || "",
-                        role: isSuperAdmin ? "Superadmin" : isAdmin ? "Admin" : membershipData?.role || "Member"
-                    })
-
-                    const userEmail = authUser.email || userProfile?.email || ""
-                    const emailDomain = userEmail.includes("@") ? userEmail.split("@")[1].toLowerCase() : ""
-
-                    const orgId = userProfile?.organization_id
-                    if (orgId) {
-                        const { data: orgData } = await supabase
-                            .from("organizations")
-                            .select("id, name")
-                            .eq("id", orgId)
-                            .maybeSingle()
-
-                        if (orgData?.name) {
-                            fetchedOrgName = orgData.name.toLowerCase().includes("redtech") ? "Spacer" : orgData.name
-                            derivedSlug = fetchedOrgName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "workspace"
-                            derivedDomain = emailDomain && !["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com"].includes(emailDomain)
-                                ? emailDomain
-                                : `${derivedSlug}.com`
-                            derivedDescription = `${fetchedOrgName} workspace for cross-functional project tracking and engineering collaboration.`
-                        }
-                    } else if (emailDomain) {
-                        derivedSlug = emailDomain.split(".")[0] || "workspace"
-                        derivedDomain = emailDomain
-                        derivedDescription = "Primary workspace for cross-functional project tracking and engineering collaboration."
-                    }
-                }
-
-                // Restore local workspace settings if available, while ensuring real organization data takes precedence
-                const savedWorkspace = localStorage.getItem("spacers_settings_workspace")
-                let parsed = null
-                if (savedWorkspace) {
-                    try {
-                        parsed = JSON.parse(savedWorkspace)
-                    } catch (e) {
-                        console.warn("Could not parse saved workspace settings:", e)
-                    }
-                }
-
-                // Filter out any stale mock "Acme" values from localStorage
-                const cleanCachedName = parsed?.name && !parsed.name.toLowerCase().includes("acme") ? parsed.name : ""
-                const cleanCachedSlug = parsed?.slug && !parsed.slug.toLowerCase().includes("acme") ? parsed.slug : ""
-                const cleanCachedDomain = parsed?.allowedDomain && !parsed.allowedDomain.toLowerCase().includes("acme") ? parsed.allowedDomain : ""
-                const cleanCachedDesc = parsed?.description && !parsed.description.toLowerCase().includes("acme") ? parsed.description : ""
-
-                const resolvedName = fetchedOrgName || cleanCachedName || "Workspace"
-                const resolvedSlug = cleanCachedSlug || derivedSlug || (resolvedName ? resolvedName.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : "workspace")
-                const resolvedDomain = cleanCachedDomain || derivedDomain || `${resolvedSlug}.com`
-                const resolvedDesc = cleanCachedDesc || derivedDescription || `${resolvedName} workspace for cross-functional project tracking and engineering collaboration.`
-
-                setWorkspace(prev => ({
-                    ...prev,
-                    ...(parsed || {}),
-                    name: resolvedName,
-                    slug: resolvedSlug,
-                    allowedDomain: resolvedDomain,
-                    description: resolvedDesc
-                }))
-            } catch (err) {
-                console.error("Error initializing settings:", err)
-            }
+            const orgId = userProfile?.organization_id
+            if (!orgId) return
+            setOrganizationId(orgId)
+            const [{ data: orgData, error: orgError }, { count, error: countError }] = await Promise.all([
+                supabase.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+                supabase.from("users").select("id", { count: "exact", head: true }).eq("organization_id", orgId),
+            ])
+            if (orgError) console.error("Loading the workspace failed:", orgError)
+            if (countError) console.error("Counting members failed:", countError)
+            if (!active) return
+            setWorkspaceName(orgData?.name || "")
+            setMemberCount(countError ? null : count)
         }
         fetchUserData()
-    }, [isSuperAdmin, isAdmin, membershipData])
+        return () => { active = false }
+    }, [roleName])
 
     // Handlers
     const handleSaveWorkspace = async () => {
-        setSaving(true)
-        try {
-            const authData = { user: await getSessionUser() }
-            const authUser = authData?.user
-            if (authUser) {
-                const { data: userProfile } = await supabase
-                    .from("users")
-                    .select("organization_id")
-                    .eq("id", authUser.id)
-                    .maybeSingle()
-
-                const orgId = userProfile?.organization_id
-                if (orgId) {
-                    // .select() returns the updated row; the database silently skips
-                    // the update (no error) when the user isn't allowed to rename
-                    const { data: updatedRows, error } = await supabase
-                        .from("organizations")
-                        .update({ name: workspace.name })
-                        .eq("id", orgId)
-                        .select("id")
-
-                    if (error) {
-                        alert("Error saving organization settings: " + error.message)
-                        setSaving(false)
-                        return
-                    }
-                    if (!updatedRows?.length) {
-                        alert(
-                            "The workspace name wasn't saved. Only organization admins can rename the workspace, " +
-                            "and they need to have signed in with two-factor authentication."
-                        )
-                        setSaving(false)
-                        return
-                    }
-                }
-            }
-            localStorage.setItem("spacers_settings_workspace", JSON.stringify(workspace))
-            showToast("Workspace settings saved successfully!")
-
-            // Reload page to reflect name changes globally
-            setTimeout(() => {
-                window.location.reload()
-            }, 1000)
-        } catch (err) {
-            console.error("Save workspace error:", err)
-        } finally {
-            setSaving(false)
+        const name = workspaceName.trim()
+        if (!organizationId) return
+        if (!name) {
+            showToast("Give the workspace a name.", "error")
+            return
         }
+        setSaving(true)
+        // .select() returns the updated row; the database silently skips the
+        // update (no error) when the user isn't allowed to rename
+        const { data: updatedRows, error } = await supabase
+            .from("organizations")
+            .update({ name })
+            .eq("id", organizationId)
+            .select("id")
+        setSaving(false)
+        if (error) {
+            console.error("Renaming the workspace failed:", error)
+            showToast("Couldn't save the workspace name. Please try again.", "error")
+            return
+        }
+        if (!updatedRows?.length) {
+            showToast("Only organization admins signed in with two-factor authentication can rename the workspace.", "error")
+            return
+        }
+        showToast("Workspace name saved.")
+        // Reload so the new name shows everywhere
+        setTimeout(() => window.location.reload(), 1000)
     }
 
     const handleSaveNotifications = async (updated) => {
@@ -238,7 +155,7 @@ export default function Settings() {
         { id: "notifications", label: "Notifications & Alerts", icon: "notifications" },
         { id: "appearance", label: "Appearance & Interface", icon: "palette" },
         { id: "security", label: "Security & Access", icon: "security" },
-        { id: "team", label: "Team & Permissions", icon: "group_add" },
+        { id: "team", label: "Members", icon: "group" },
         { id: "integrations", label: "Connected Apps", icon: "extension" }
     ]
 
@@ -273,9 +190,6 @@ export default function Settings() {
                             </div>
                             <h1 className="text-2xl font-semibold text-white flex items-center gap-3">
                                 Workspace Settings
-                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-primary-container/20 text-primary-fixed font-semibold border border-primary-fixed/30">
-                                    Spacers v2.4
-                                </span>
                             </h1>
                             <p className="text-muted text-sm mt-1">
                                 Manage workspace configurations, preferences, security, and member access controls.
@@ -317,115 +231,27 @@ export default function Settings() {
                                     <div className="border-b border-line pb-md">
                                         <h2 className="text-lg font-semibold text-white">General Workspace Settings</h2>
                                         <p className="text-muted text-xs mt-1">
-                                            Configure core workspace properties, defaults, and data policies.
+                                            Your organization's name as everyone in it sees it.
                                         </p>
                                     </div>
 
                                     <div className="space-y-md">
                                         {/* Workspace Name */}
                                         <div>
-                                            <label className="block text-xs font-medium text-soft mb-2">Workspace Name</label>
+                                            <label htmlFor="workspace-name" className="block text-xs font-medium text-soft mb-2">Workspace Name</label>
                                             <input
+                                                id="workspace-name"
                                                 type="text"
-                                                className="w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors"
+                                                maxLength={100}
+                                                disabled={!canRenameWorkspace}
+                                                className="w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                                                 placeholder="e.g. My Organization"
-                                                value={workspace.name}
-                                                onChange={(e) => setWorkspace({ ...workspace, name: e.target.value })}
+                                                value={workspaceName}
+                                                onChange={(e) => setWorkspaceName(e.target.value)}
                                             />
-                                        </div>
-
-                                        {/* Workspace URL / Slug */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-soft mb-2">Workspace URL</label>
-                                            <div className="flex items-center rounded-xl bg-field border border-line overflow-hidden">
-                                                <span className="px-md py-2.5 text-muted text-xs bg-surface1 border-r border-line select-none">
-                                                    https://spacers.app/
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    className="w-full bg-transparent px-md py-2.5 text-white text-sm focus:outline-none"
-                                                    placeholder="workspace-slug"
-                                                    value={workspace.slug}
-                                                    onChange={(e) => setWorkspace({ ...workspace, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Allowed Email Domain */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-soft mb-2">Allowed Email Domain</label>
-                                            <div className="flex items-center rounded-xl bg-field border border-line overflow-hidden">
-                                                <span className="px-md py-2.5 text-muted text-xs bg-surface1 border-r border-line select-none">
-                                                    @
-                                                </span>
-                                                <input
-                                                    type="text"
-                                                    className="w-full bg-transparent px-md py-2.5 text-white text-sm focus:outline-none"
-                                                    placeholder="company.com"
-                                                    value={workspace.allowedDomain}
-                                                    onChange={(e) => setWorkspace({ ...workspace, allowedDomain: e.target.value.toLowerCase().replace(/[@\s]/g, "") })}
-                                                />
-                                            </div>
-                                            <p className="text-muted text-xs mt-1">
-                                                Team members with this email domain can automatically join your workspace.
-                                            </p>
-                                        </div>
-
-                                        {/* Description */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-soft mb-2">Workspace Description</label>
-                                            <textarea
-                                                rows="3"
-                                                className="w-full bg-field border border-line rounded-xl p-md text-white text-sm focus:border-accent-ink focus:outline-none"
-                                                placeholder="Brief workspace description..."
-                                                value={workspace.description}
-                                                onChange={(e) => setWorkspace({ ...workspace, description: e.target.value })}
-                                            />
-                                        </div>
-
-                                        {/* Default Landing Page & Visibility */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-md pt-md border-t border-line">
-                                            <div>
-                                                <label className="block text-xs font-medium text-soft mb-2">Default Landing View</label>
-                                                <Select
-                                                    className="w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors"
-                                                    value={workspace.defaultPage}
-                                                    onChange={(e) => setWorkspace({ ...workspace, defaultPage: e.target.value })}
-                                                >
-                                                    <option value="/">Home Dashboard</option>
-                                                    <option value="/calendar">Calendar View</option>
-                                                    <option value="/department">Department Overview</option>
-                                                    <option value="/reports">Reports & Analytics</option>
-                                                </Select>
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-xs font-medium text-soft mb-2">Default Project Privacy</label>
-                                                <Select
-                                                    className="w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors"
-                                                    value={workspace.defaultVisibility}
-                                                    onChange={(e) => setWorkspace({ ...workspace, defaultVisibility: e.target.value })}
-                                                >
-                                                    <option value="team">Team Members Only</option>
-                                                    <option value="private">Private (Invite Only)</option>
-                                                    <option value="public">Public to Workspace</option>
-                                                </Select>
-                                            </div>
-                                        </div>
-
-                                        {/* Data Retention */}
-                                        <div>
-                                            <label className="block text-xs font-medium text-soft mb-2">Data & Activity Log Retention</label>
-                                            <Select
-                                                className="w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors"
-                                                value={workspace.dataRetention}
-                                                onChange={(e) => setWorkspace({ ...workspace, dataRetention: e.target.value })}
-                                            >
-                                                <option value="30_days">30 Days</option>
-                                                <option value="90_days">90 Days (Recommended)</option>
-                                                <option value="1_year">1 Year</option>
-                                                <option value="indefinite">Indefinite (Enterprise)</option>
-                                            </Select>
+                                            {!canRenameWorkspace && (
+                                                <p className="text-muted text-xs mt-1">Only organization admins can rename the workspace.</p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -434,11 +260,11 @@ export default function Settings() {
                                         <button
                                             type="button"
                                             onClick={handleSaveWorkspace}
-                                            disabled={saving}
+                                            disabled={saving || !canRenameWorkspace}
                                             className="px-lg py-2.5 bg-primary-container text-on-accent font-semibold rounded-xl flex items-center gap-sm hover:scale-[0.98] transition-all disabled:opacity-50"
                                         >
                                             <span className="material-symbols-outlined text-lg">save</span>
-                                            {saving ? "Saving..." : "Save Workspace Changes"}
+                                            {saving ? "Saving..." : "Save Name"}
                                         </button>
                                     </div>
                                 </div>
@@ -512,18 +338,15 @@ export default function Settings() {
                                     <div className="border-b border-line pb-md">
                                         <h2 className="text-lg font-semibold text-white">Notifications & Alerts</h2>
                                         <p className="text-muted text-xs mt-1">
-                                            Control when and how you receive updates and automated digests.
+                                            Choose which emails Spacer sends you. In-app notifications always appear in the bell.
                                         </p>
                                     </div>
 
                                     <div className="space-y-md">
                                         {[
-                                            { key: "emailAlerts", label: "Email Notifications", desc: "Receive immediate emails for critical project updates and direct mentions." },
-                                            { key: "taskAssigned", label: "Task Assignments & Due Dates", desc: "Get notified as soon as a task is assigned or its status changes." },
-                                            { key: "projectUpdates", label: "Project Milestone Changes", desc: "Alerts when projects achieve milestone completions." },
-                                            { key: "weeklyDigest", label: "Weekly Productivity Digest", desc: "Receive a weekly summary email of pending tasks and team reports." },
-                                            { key: "desktopPush", label: "Browser Desktop Push Notifications", desc: "Enable real-time push alerts on your desktop browser." },
-                                            { key: "soundEffects", label: "In-App Audio Effects", desc: "Play subtle sound effects on task completion and notifications." }
+                                            { key: "emailAlerts", label: "Email Notifications", desc: "Turn off to stop every email from Spacer." },
+                                            { key: "taskAssigned", label: "Task Assignments & Due Dates", desc: "Email when a task is assigned to you, and when one of your tasks is due today or tomorrow. Also controls the daily task reminders in the bell." },
+                                            { key: "projectUpdates", label: "Added to a Project", desc: "Email when someone adds you to a project." }
                                         ].map((item) => (
                                             <div key={item.key} className="flex items-center justify-between p-md rounded-xl bg-panel border border-line hover:border-outline transition-colors">
                                                 <div>
@@ -546,21 +369,6 @@ export default function Settings() {
                                         ))}
                                     </div>
 
-                                    <div className="pt-md border-t border-line">
-                                        <label className="block text-xs font-medium text-soft mb-2">Notification Delivery Frequency</label>
-                                        <Select
-                                            className="w-full bg-field border border-line focus:border-accent-ink rounded-lg px-3 py-2 text-white text-sm placeholder-muted focus:outline-none transition-colors"
-                                            value={notifications.frequency}
-                                            onChange={(e) => {
-                                                const next = { ...notifications, frequency: e.target.value }
-                                                handleSaveNotifications(next)
-                                            }}
-                                        >
-                                            <option value="realtime">Real-time (Immediate)</option>
-                                            <option value="hourly">Hourly Summary Batch</option>
-                                            <option value="daily">Daily Morning Digest</option>
-                                        </Select>
-                                    </div>
                                 </div>
                             )}
 
@@ -780,42 +588,26 @@ export default function Settings() {
                             {activeTab === "team" && (
                                 <div className="glass-card rounded-2xl p-lg space-y-lg">
                                     <div className="border-b border-line pb-md">
-                                        <h2 className="text-lg font-semibold text-white">Team Roles & Permissions</h2>
+                                        <h2 className="text-lg font-semibold text-white">Members</h2>
                                         <p className="text-muted text-xs mt-1">
-                                            Manage member invitation policies and seat utilization.
+                                            Who is in your organization. Roles and departments are managed in the Directory.
                                         </p>
                                     </div>
 
-                                    {/* Seat Utilization Bar */}
-                                    <div className="p-md rounded-xl bg-panel border border-line space-y-2">
-                                        <div className="flex items-center justify-between text-xs font-semibold">
-                                            <span className="text-white">Organization License Seats</span>
-                                            <span className="text-primary-fixed">14 of 25 seats used</span>
+                                    <div className="p-md rounded-xl bg-panel border border-line flex flex-wrap items-center justify-between gap-md">
+                                        <div>
+                                            <p className="text-sm font-semibold text-white">
+                                                {memberCount == null ? "Counting members…" : `${memberCount} ${memberCount === 1 ? "member" : "members"}`}
+                                            </p>
+                                            <p className="text-xs text-muted">Everyone who has joined this organization.</p>
                                         </div>
-                                        <div className="h-2.5 rounded-full bg-field overflow-hidden">
-                                            <div className="h-full rounded-full bg-primary-fixed w-[56%] transition-all duration-500" />
-                                        </div>
-                                    </div>
-
-                                    {/* Permissions Switches */}
-                                    <div className="space-y-md">
-                                        <div className="flex items-center justify-between p-md rounded-xl bg-panel border border-line">
-                                            <div>
-                                                <p className="text-sm font-semibold text-white">Automated Domain Joining</p>
-                                                <p className="text-xs text-muted">
-                                                    Allow anyone with an @{workspace.allowedDomain || (workspace.slug ? `${workspace.slug}.com` : "domain.com")} email address to automatically join workspace.
-                                                </p>
-                                            </div>
-                                            <button
-                                                role="switch"
-                                                aria-checked={workspace.autoJoinDomain}
-                                                onClick={() => setWorkspace({ ...workspace, autoJoinDomain: !workspace.autoJoinDomain })}
-                                                className={`w-12 h-6 rounded-full p-1 flex items-center transition-all ${workspace.autoJoinDomain ? "bg-primary-container justify-end" : "bg-field justify-start"
-                                                    }`}
-                                            >
-                                                <span className={`w-4 h-4 rounded-full ${workspace.autoJoinDomain ? "bg-surface1" : "bg-muted"}`} />
-                                            </button>
-                                        </div>
+                                        <Link
+                                            to="/general/directory"
+                                            className="flex items-center gap-2 px-md py-2 rounded-xl border border-line text-sm text-white hover:border-line-strong transition-colors"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">badge</span>
+                                            Open Directory
+                                        </Link>
                                     </div>
                                 </div>
                             )}
@@ -826,7 +618,7 @@ export default function Settings() {
                                     <div className="border-b border-line pb-md">
                                         <h2 className="text-lg font-semibold text-white">Connected Services & Integrations</h2>
                                         <p className="text-muted text-xs mt-1">
-                                            Extend Spacers functionality with external developer tools and services.
+                                            Connect Spacer to the tools your team already uses.
                                         </p>
                                     </div>
 

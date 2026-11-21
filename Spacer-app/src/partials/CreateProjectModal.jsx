@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { supabase, getSessionUser } from "../supabase";
 import Select from "../components/Select";
 import { useRole } from "../RoleContext";
-import { projectDepartmentIds } from "../projectPermissions";
 import { departmentLeadOptions } from "../projectDepartments";
 import { isMissingSchema } from "../crossDepartmentData";
 import CollabProjectModal from "./CollabProjectModal";
@@ -16,7 +15,7 @@ const Label = ({ htmlFor, children }) => (
 // Create a project in one department. "Collab" switches to CollabProjectModal for
 // a project shared by several departments, keeping what was typed here.
 export default function CreateProjectModal({ onClose, onCreated }) {
-    const { isSuperAdmin, departments } = useRole();
+    const { can } = useRole();
     const [isCollab, setIsCollab] = useState(false);
     const [teamSpaces, setTeamSpaces] = useState([]);
     const [pickedTeamSpaceId, setTeamSpaceId] = useState("");
@@ -44,10 +43,8 @@ export default function CreateProjectModal({ onClose, onCreated }) {
         fetchTeams();
     }, []);
 
-    // Only departments the database lets this user create projects in: any for
-    // super admins, otherwise those where they're team lead or admin
-    const allowedIds = new Set(projectDepartmentIds(departments));
-    const allowedTeamSpaces = isSuperAdmin ? teamSpaces : teamSpaces.filter((t) => allowedIds.has(String(t.id)));
+    // Only departments the database lets this user create projects in
+    const allowedTeamSpaces = teamSpaces.filter((t) => can("project.create", t.id));
     const teamSpaceId = allowedTeamSpaces.some((t) => t.id === pickedTeamSpaceId)
         ? pickedTeamSpaceId
         : allowedTeamSpaces[0]?.id ?? "";

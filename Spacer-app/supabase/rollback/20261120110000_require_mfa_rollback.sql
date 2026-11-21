@@ -1,4 +1,4 @@
--- Undo 20261119090000_require_mfa.sql: two-factor optional again.
+-- Undo 20261120110000_require_mfa.sql: two-factor optional again.
 -- Restores mfa_satisfied() as defined in 20261019090000_mfa_trusted_devices.sql.
 
 create or replace function public.mfa_satisfied()

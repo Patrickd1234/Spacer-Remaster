@@ -450,7 +450,10 @@ create table public.users (
   location text,
   timezone text,
   avatar_path text,
-  reports_to uuid
+  reports_to uuid,
+  away_from date,
+  away_back_on date,
+  away_note text
 );
 
 -- ======================================================================
@@ -603,7 +606,7 @@ alter table only public.milestones add constraint milestones_name_check CHECK ((
 
 alter table only public.notifications add constraint notifications_reference_type_check CHECK ((reference_type = ANY (ARRAY['task'::text, 'comment'::text, 'announcement'::text, 'project'::text, 'event'::text])));
 
-alter table only public.notifications add constraint notifications_type_check CHECK ((type = ANY (ARRAY['assignment'::text, 'mention'::text, 'status_change'::text, 'project_added'::text, 'task_blocked'::text, 'task_unblocked'::text, 'department_nudge'::text])));
+alter table only public.notifications add constraint notifications_type_check CHECK ((type = ANY (ARRAY['assignment'::text, 'mention'::text, 'status_change'::text, 'project_added'::text, 'task_blocked'::text, 'task_unblocked'::text, 'department_nudge'::text, 'meeting_invite'::text, 'comment'::text])));
 
 alter table only public.organizations add constraint organizations_name_check CHECK ((char_length(name) > 0));
 
@@ -654,6 +657,10 @@ alter table only public.team_spaces add constraint team_spaces_description_check
 alter table only public.team_spaces add constraint team_spaces_name_check CHECK ((char_length(name) > 0));
 
 alter table only public.team_spaces add constraint team_spaces_task_key_prefix_check CHECK ((task_key_prefix ~ '^[A-Z][A-Z0-9]{1,9}$'::text));
+
+alter table only public.users add constraint users_away_note_length_check CHECK ((char_length(away_note) <= 80));
+
+alter table only public.users add constraint users_away_period_check CHECK ((((away_from IS NULL) AND (away_back_on IS NULL) AND (away_note IS NULL)) OR ((away_from IS NOT NULL) AND (away_back_on IS NOT NULL) AND (away_back_on > away_from))));
 
 alter table only public.users add constraint users_job_title_length_check CHECK ((char_length(job_title) <= 100));
 
@@ -1057,12 +1064,9 @@ AS $function$
   select exists (
     select 1 from project_spaces ps
     where ps.id = p_project_id
-      and (
-        team_role_at_least(ps.team_space_id, 'member')
-        or is_project_member(ps.id)
-        or is_admin_of_org(team_space_org(ps.team_space_id))
-        or extra_department_role_at_least(ps.id, 'member')
-      )
+      and (has_permission('project.edit', ps.team_space_id)
+           or is_project_member(ps.id)
+           or extra_department_has_permission(ps.id, 'project.edit'))
   );
 $function$
 ;
@@ -1482,6 +1486,19 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.extra_department_has_permission(p_project_id uuid, p_permission text)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1 from project_departments pd
+    where pd.project_id = p_project_id and has_permission(p_permission, pd.team_space_id)
+  );
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.extra_department_role_at_least(p_project_id uuid, p_min membership_role)
  RETURNS boolean
  LANGUAGE sql
@@ -1490,8 +1507,7 @@ CREATE OR REPLACE FUNCTION public.extra_department_role_at_least(p_project_id uu
 AS $function$
   select exists (
     select 1 from project_departments pd
-    where pd.project_id = p_project_id
-      and team_role_at_least(pd.team_space_id, p_min)
+    where pd.project_id = p_project_id and team_role_at_least(pd.team_space_id, p_min)
   );
 $function$
 ;
@@ -1577,13 +1593,9 @@ CREATE OR REPLACE FUNCTION public.has_extra_department_access(p_project_id uuid)
  RETURNS boolean
  LANGUAGE sql
  STABLE SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
-  select exists (
-    select 1 from project_departments pd
-    where pd.project_id = p_project_id
-      and has_team_access(pd.team_space_id)
-  );
+  select extra_department_has_permission(p_project_id, 'project.view');
 $function$
 ;
 
@@ -1642,12 +1654,9 @@ AS $function$
   select exists (
     select 1 from project_spaces ps
     where ps.id = p_project_id
-      and (
-        has_team_access(ps.team_space_id)
-        or is_project_member(ps.id)
-        or is_admin_of_org(team_space_org(ps.team_space_id))
-        or has_extra_department_access(ps.id)
-      )
+      and (has_permission('project.view', ps.team_space_id)
+           or is_project_member(ps.id)
+           or extra_department_has_permission(ps.id, 'project.view'))
   );
 $function$
 ;
@@ -1928,7 +1937,7 @@ CREATE OR REPLACE FUNCTION public.leads_project_department(p_project_id uuid, p_
  STABLE SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-  select team_role_at_least(p_team_space_id, 'team_lead')
+  select has_permission('project.manage', p_team_space_id)
       or exists (
         select 1 from project_departments
         where project_id = p_project_id and team_space_id = p_team_space_id and lead_id = auth.uid()
@@ -2568,6 +2577,22 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.shares_project_with_department(p_team_space_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from project_departments theirs
+    join project_departments mine on mine.project_id = theirs.project_id
+    where theirs.team_space_id = p_team_space_id
+      and has_permission('department.view', mine.team_space_id)
+  );
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.start_sprint(p_sprint_id uuid)
  RETURNS sprints
  LANGUAGE plpgsql
@@ -3137,6 +3162,8 @@ $function$
 
 -- dispatch_edge_webhook(): {postgres=X/postgres,service_role=X/postgres}
 
+-- extra_department_has_permission(p_project_id uuid, p_permission text): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- extra_department_role_at_least(p_project_id uuid, p_min membership_role): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- forget_trusted_devices(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
@@ -3234,6 +3261,8 @@ $function$
 -- set_reports_to(p_user_id uuid, p_manager_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- set_updated_at(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- shares_project_with_department(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- start_sprint(p_sprint_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -3626,7 +3655,7 @@ create policy memberships_insert on public.memberships as permissive for insert 
   with check (has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)));
 
 create policy memberships_select on public.memberships as permissive for select to public
-  using (((user_id = auth.uid()) OR has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)) OR ((team_space_id IS NOT NULL) AND has_permission('department.view'::text, team_space_id))));
+  using (((user_id = auth.uid()) OR has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)) OR ((team_space_id IS NOT NULL) AND has_permission('department.view'::text, team_space_id)) OR ((team_space_id IS NOT NULL) AND shares_project_with_department(team_space_id))));
 
 create policy memberships_update on public.memberships as permissive for update to public
   using (has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)))
@@ -3757,14 +3786,12 @@ create policy project_columns_update on public.project_columns as permissive for
   with check (can_manage_project(project_id));
 
 create policy project_departments_delete on public.project_departments as permissive for delete to authenticated
-  using (can_manage_project(project_id));
+  using ((can_manage_project(project_id) AND (NOT is_lead_department)));
 
 create policy project_departments_insert on public.project_departments as permissive for insert to authenticated
   with check ((can_manage_project(project_id) AND (team_space_org(team_space_id) = ( SELECT team_space_org(ps.team_space_id) AS team_space_org
    FROM project_spaces ps
-  WHERE (ps.id = project_departments.project_id))) AND (team_space_id <> ( SELECT ps.team_space_id
-   FROM project_spaces ps
-  WHERE (ps.id = project_departments.project_id))) AND (team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id)))));
+  WHERE (ps.id = project_departments.project_id))) AND has_permission('project.create'::text, team_space_id)));
 
 create policy project_departments_select on public.project_departments as permissive for select to authenticated
   using (has_project_access(project_id));
@@ -3812,7 +3839,7 @@ create policy project_spaces_insert on public.project_spaces as permissive for i
   with check (has_permission('project.create'::text, team_space_id));
 
 create policy project_spaces_select on public.project_spaces as permissive for select to public
-  using ((has_team_access(team_space_id) OR is_project_member(id) OR is_admin_of_org(team_space_org(team_space_id)) OR has_extra_department_access(id)));
+  using ((has_permission('project.view'::text, team_space_id) OR is_project_member(id) OR extra_department_has_permission(id, 'project.view'::text)));
 
 create policy project_spaces_update on public.project_spaces as permissive for update to public
   using (has_permission('project.manage'::text, team_space_id))
@@ -3879,7 +3906,7 @@ create policy team_spaces_insert_admin on public.team_spaces as permissive for i
   with check (((organization_id = current_org_id()) AND has_permission('department.create'::text)));
 
 create policy team_spaces_select on public.team_spaces as permissive for select to public
-  using (((organization_id = current_org_id()) AND (has_permission('department.view'::text, id) OR is_member_of_project_in_team(id))));
+  using (((organization_id = current_org_id()) AND (has_permission('department.view'::text, id) OR is_member_of_project_in_team(id) OR shares_project_with_department(id))));
 
 create policy team_spaces_update_admin on public.team_spaces as permissive for update to public
   using (((organization_id = current_org_id()) AND has_permission('department.update'::text)))
@@ -3951,7 +3978,143 @@ create policy project_files_objects_select on storage.objects as permissive for 
 -- Table privileges for API roles
 -- ======================================================================
 
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.activity_log to anon;
 
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.activity_log to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.announcements to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.announcements to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.attachments to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.attachments to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.calendar_event_attendees to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.calendar_events to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.calendar_events to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channel_members to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channel_members to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channels to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.chat_channels to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.comments to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.comments to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.daily_standups to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.daily_standups to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_message_reactions to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_message_reactions to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_messages to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.direct_messages to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.email_tickets to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.email_tickets to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invitations to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invitations to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invites to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.invites to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.memberships to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.memberships to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_attachments to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_attachments to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_reactions to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.message_reactions to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.messages to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.messages to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.mfa_trusted_devices to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.mfa_trusted_devices to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.milestones to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.milestones to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notification_queue to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notification_queue to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notifications to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.notifications to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.org_feed_items to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.org_feed_items to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.organizations to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.organizations to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_columns to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_columns to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_departments to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_departments to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_files to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_files to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_members to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_members to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_spaces to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.project_spaces to authenticated;
+
+grant select on public.rbac_permissions to authenticated;
+
+grant select on public.rbac_role_permissions to authenticated;
+
+grant select on public.rbac_roles to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.sprints to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.tasks to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.tasks to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_space_stats to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_space_stats to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_spaces to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.team_spaces to authenticated;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.users to anon;
+
+grant delete, insert, maintain, references, select, trigger, truncate, update on public.users to authenticated;
 
 -- ======================================================================
 -- Realtime publication

@@ -9,8 +9,8 @@
 //
 // Permission is checked as the CALLER (their JWT) using the same database
 // functions the RLS policies use; only then does the service role act.
-//   project:    can_manage_project(id)          (department team lead+ / org admin)
-//   department: is_admin_of_org(department org) (org admin)
+//   project:    has_permission(project.delete) in its department
+//   department: has_org_permission(department.delete) (docs/RBAC.md)
 //
 // Body: { type: "project" | "department", id: "<uuid>" }
 
@@ -80,14 +80,24 @@ Deno.serve(async (req) => {
   // ── Permission (as the caller) and the set of projects affected
   let projectIds: string[];
   if (type === "project") {
-    const { data: allowed, error } = await caller.rpc("can_manage_project", { p_project_id: id });
+    // project.delete in the project's department, the same rule as the
+    // project_spaces delete policy (docs/RBAC.md)
+    const { data: project } = await admin.from("project_spaces").select("team_space_id").eq("id", id).maybeSingle();
+    if (!project) return notFound();
+    const { data: allowed, error } = await caller.rpc("has_permission", {
+      p_permission: "project.delete",
+      p_team_space_id: project.team_space_id,
+    });
     if (error) return jsonResponse({ error: "Permission check failed" }, 500);
     if (!allowed) return notFound(); // 404, not 403 — per Tech Spec 7.2
     projectIds = [id];
   } else {
     const { data: dept } = await admin.from("team_spaces").select("organization_id").eq("id", id).maybeSingle();
     if (!dept) return notFound();
-    const { data: allowed, error } = await caller.rpc("is_admin_of_org", { p_org_id: dept.organization_id });
+    const { data: allowed, error } = await caller.rpc("has_org_permission", {
+      p_permission: "department.delete",
+      p_org_id: dept.organization_id,
+    });
     if (error) return jsonResponse({ error: "Permission check failed" }, 500);
     if (!allowed) return notFound();
     const { data: projects, error: projErr } = await admin.from("project_spaces").select("id").eq("team_space_id", id);

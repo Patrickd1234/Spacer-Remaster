@@ -40,19 +40,23 @@ Deno.serve(async (req) => {
   const mfaBlocked = await requireMfa(caller);
   if (mfaBlocked) return mfaBlocked;
 
-  const { data: isAdmin } = await caller.rpc("is_org_admin");
-  if (!isAdmin) return notFound(); // 404, not 403 — per Tech Spec 7.2
-
   const body: InviteRequest = await req.json();
   if (!body.organization_id) return badRequest("organization_id is required");
+
+  // member.invite in the organization named in the request (docs/RBAC.md).
+  // has_org_permission() is only ever true for the caller's own organization.
+  const { data: mayInvite } = await caller.rpc("has_org_permission", {
+    p_permission: "member.invite",
+    p_org_id: body.organization_id,
+  });
+  if (!mayInvite) return notFound(); // 404, not 403 — per Tech Spec 7.2
   if (!body.team_space_id && !body.new_team_space_name?.trim()) {
     return badRequest("Provide team_space_id or new_team_space_name");
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey);
 
-  // is_org_admin() only says the caller administers *some* organization —
-  // make sure it's the one named in the request before acting on it.
+  // Belt and braces: the caller's profile must name the same organization.
   const { data: callerProfile } = await admin
     .from("users")
     .select("organization_id")

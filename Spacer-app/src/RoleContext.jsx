@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase, getSessionUser } from './supabase';
+import { buildPermissionIndex, can as indexCan, canAnywhere as indexCanAnywhere, highestRoleName, EMPTY_PERMISSIONS } from './permissions';
 
 const RoleContext = createContext();
 
@@ -57,6 +58,10 @@ export function RoleProvider({ children }) {
     const [orgDepartmentId, setOrgDepartmentId] = useState(null);
     const [roleUserId, setRoleUserId] = useState(null);
     const [simulatedRole, setSimulatedRole] = useState(null);
+    // What the database says this person may do (docs/RBAC.md). Controls are
+    // shown from this, never from role names.
+    const [permissions, setPermissions] = useState(EMPTY_PERMISSIONS);
+    const [roleName, setRoleName] = useState("Member");
 
     useEffect(() => {
         const fetchRole = async () => {
@@ -72,10 +77,18 @@ export function RoleProvider({ children }) {
                 }
 
                 // Check for highest role among memberships
-                const { data: memberships, error } = await supabase
-                    .from("memberships")
-                    .select("role, team_space_id, team_space:team_spaces(name)")
-                    .eq("user_id", userId);
+                const [{ data: memberships, error }, { data: permissionRows, error: permissionError }] = await Promise.all([
+                    supabase
+                        .from("memberships")
+                        .select("role, team_space_id, team_space:team_spaces(name)")
+                        .eq("user_id", userId),
+                    supabase.rpc("my_permissions"),
+                ]);
+
+                // Without the list nothing is offered; the database still decides every action
+                if (permissionError) console.error("Loading permissions failed:", permissionError);
+                setPermissions(buildPermissionIndex(permissionError ? [] : permissionRows));
+                setRoleName(highestRoleName(error ? [] : memberships));
 
                 setRoleUserId(userId);
                 setOrgDepartmentId(readStoredDepartment(orgDepartmentKey(userId)));
@@ -127,6 +140,8 @@ export function RoleProvider({ children }) {
             } else if (event === 'SIGNED_OUT') {
                 setUserRole(null);
                 setSuperAdminMembership(null);
+                setPermissions(EMPTY_PERMISSIONS);
+                setRoleName("Member");
                 setDepartments([]);
                 setActiveDepartmentId(null);
                 setRoleUserId(null);
@@ -166,8 +181,13 @@ export function RoleProvider({ children }) {
         if (roleUserId && id) storeDepartment(orgDepartmentKey(roleUserId), id);
     }, [roleUserId]);
 
+    // can("project.create", departmentId) for a department permission,
+    // can("announcement.manage") for an organization one
+    const can = useCallback((permission, departmentId = null) => indexCan(permissions, permission, departmentId), [permissions]);
+    const canAnywhere = useCallback((permission) => indexCanAnywhere(permissions, permission), [permissions]);
+
     return (
-        <RoleContext.Provider value={{ userRole: activeRole, realUserRole, roleLoading, isSuperAdmin, isAdmin, membershipData, departments, activeDepartment, setActiveDepartment, orgDepartmentId, setOrgDepartment, simulatedRole, setSimulatedRole, canSimulate }}>
+        <RoleContext.Provider value={{ can, canAnywhere, roleName, userRole: activeRole, realUserRole, roleLoading, isSuperAdmin, isAdmin, membershipData, departments, activeDepartment, setActiveDepartment, orgDepartmentId, setOrgDepartment, simulatedRole, setSimulatedRole, canSimulate }}>
             {children}
         </RoleContext.Provider>
     );

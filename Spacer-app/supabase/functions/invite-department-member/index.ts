@@ -12,10 +12,10 @@
 //                          membership row so the department assignment is
 //                          already in place by the time they set a password.
 //
-// SECURITY: the caller's permission (admin/super_admin on this team) is
-// re-checked here using the service-role client, derived from their JWT —
+// SECURITY: the caller's permission (member.add in this department, see
+// docs/RBAC.md) is asked of the database as the caller, from their JWT —
 // never trusted from the request body. A tampered client call cannot add
-// someone without actually holding the role server-side.
+// someone without the database agreeing they may.
 //
 // Deploy: supabase functions deploy invite-department-member
 // Required secrets: SITE_URL, RESEND_API_KEY (optional), EMAIL_FROM (optional)
@@ -91,22 +91,18 @@ serve(async (req: Request) => {
         const inviterName = inviterProfile.name || inviterProfile.email || "A Spacer admin"
 
         // ── Permission check (server-side, can't be bypassed from the client).
-        //    Org admins (a super admin, or an admin with no department) are
-        //    asked as the CALLER through is_admin_of_org(), the same rule the
-        //    memberships policies use; department admins by their membership.
-        const [{ data: isOrgAdmin, error: orgAdminErr }, { data: callerMemberships, error: memErr }] = await Promise.all([
-            callerClient.rpc("is_admin_of_org", { p_org_id: organization_id }),
-            admin.from("memberships").select("role, team_space_id").eq("user_id", callerId),
-        ])
+        //    Asked as the CALLER: has_permission() answers for whoever's JWT
+        //    this is. Department admins have member.add in their department;
+        //    organization roles have it in every department of their organization.
+        const { data: mayAdd, error: permissionErr } = await callerClient.rpc("has_permission", {
+            p_permission: "member.add",
+            p_team_space_id: team_space_id,
+        })
 
-        if (orgAdminErr || memErr) return json({ error: "Could not verify permissions" }, 500)
+        if (permissionErr) return json({ error: "Could not verify permissions" }, 500)
 
-        const isAdminOnThisTeam = (callerMemberships || []).some(
-            (m: { role: string; team_space_id: string }) => m.team_space_id === team_space_id && m.role === "admin"
-        )
-
-        if (!isOrgAdmin && !isAdminOnThisTeam) {
-            return json({ error: "Only admins or super admins can add members to this department." }, 403)
+        if (!mayAdd) {
+            return json({ error: "You don't have permission to add members to this department." }, 403)
         }
 
         // ── Does an account already exist for this email?

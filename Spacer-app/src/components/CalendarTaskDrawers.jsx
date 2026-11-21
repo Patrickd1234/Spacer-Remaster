@@ -3,6 +3,8 @@ import CreateTaskModal from "../partials/CreateTaskModal"
 import { parseSubtasks } from "../taskStatus"
 import { dayKey } from "../general/generalFormat"
 import Select from "./Select"
+import TaskKeyBar from "../tasks/TaskKeyBar"
+import TaskComments from "../tasks/TaskComments"
 
 // Side drawers for the personal Calendar page: one day's schedule, and a task's details
 
@@ -94,7 +96,7 @@ export function DayScheduleDrawer({ date, items, organizationId, canAddEvent, on
                                             className="w-full text-left px-4 py-2.5 hover:bg-line transition-colors flex items-center gap-2 text-xs font-medium text-white cursor-pointer"
                                             onClick={() => { setIsMenuOpen(false); onAddEvent() }}
                                         >
-                                            <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Add Event
+                                            <span className="material-symbols-outlined text-[16px] text-purple-400">event</span> Schedule Meeting
                                         </button>
                                     )}
                                 </div>
@@ -125,7 +127,7 @@ export function DayScheduleDrawer({ date, items, organizationId, canAddEvent, on
                         <div className="flex flex-col items-center justify-center py-12 text-center text-muted space-y-2">
                             <span className="material-symbols-outlined text-4xl">calendar_today</span>
                             <p className="text-sm font-medium text-white">Nothing scheduled for this day</p>
-                            <p className="text-xs">Click the "+" button above to add a task{canAddEvent ? " or event" : ""}.</p>
+                            <p className="text-xs">Click the "+" button above to add a task{canAddEvent ? " or schedule a meeting" : ""}.</p>
                         </div>
                     ) : (
                         items.map((item) => <ScheduleItem key={item.id} item={item} onOpenTask={onOpenTask} onOpenEvent={onOpenEvent} />)
@@ -151,7 +153,7 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
 
     return (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full max-w-md bg-raised border-l border-line p-6 flex flex-col justify-between h-full text-white" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-raised border-l border-line p-6 flex flex-col justify-between h-full overflow-y-auto text-white" onClick={(e) => e.stopPropagation()}>
                 <div>
                     <div className="flex items-center justify-between pb-4 border-b border-line mb-6">
                         <h3 className="font-bold text-lg text-white">Task Details</h3>
@@ -160,6 +162,7 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                         </button>
                     </div>
                     <h2 className="text-xl font-bold text-white mb-2">{task.title}</h2>
+                    <TaskKeyBar task={task} className="mb-3" />
                     <p className="text-sm text-muted mb-4">{task.description || "No description provided."}</p>
 
                     <div className="mb-6 space-y-3">
@@ -245,6 +248,9 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                             <span className="text-muted">Due Date</span>
                             <span className="font-semibold text-white">{task.due_date ? new Date(task.due_date).toLocaleDateString() : "—"}</span>
                         </div>
+                    </div>
+                    <div className="mt-6">
+                        <TaskComments key={task.id} taskId={task.id} />
                     </div>
                 </div>
             </div>

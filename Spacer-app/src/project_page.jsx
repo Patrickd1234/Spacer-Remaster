@@ -31,6 +31,10 @@ import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
+import TaskKeyBar from "./tasks/TaskKeyBar"
+import TaskComments from "./tasks/TaskComments"
+import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
+import { MEETING_SAVED_EVENT } from "./appEvents"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -46,8 +50,10 @@ const BOARD_NOTICE_MS = 5000
 const TASK_COLUMNS = "id, project_id, organization_id, title, description, status, priority, due_date, assignee_id, sub_tasks, created_at, created_by"
 // Added by migration 20261031090000_sprints
 const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
-// Added by migration 20261117090000_cross_department_projects
+// Added by migration 20261120100000_cross_department_projects
 const DEPARTMENT_TASK_COLUMNS = "team_space_id, blocked_by_task_id, blocked_at"
+// Added by migration 20261119100000_task_keys
+const TASK_KEY_COLUMNS = "task_key_scope, task_number"
 
 // Wait for a burst of task changes (e.g. a drag that also logs) to settle before reloading the feed
 const ACTIVITY_RELOAD_DELAY_MS = 500
@@ -228,9 +234,8 @@ function ProjectPage() {
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [currentUserId, setCurrentUserId] = useState(null)
 
-    // ── Role comes from the global RoleContext — no local fetch needed
-    const { isSuperAdmin, isAdmin, departments: myDepartments } = useRole()
-    const canEditTaskDetails = isSuperAdmin || isAdmin || (selectedTask && selectedTask.assignee_id === currentUserId)
+    // The departments you're in (for cross-department projects)
+    const { departments: myDepartments } = useRole()
 
     // ── Delete project
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -238,6 +243,8 @@ function ProjectPage() {
     const [deleteProjectError, setDeleteProjectError] = useState("")
     // null while checking; then whether the server's can_manage_project allows a delete
     const [canDeleteProject, setCanDeleteProject] = useState(null)
+    // Task details: the project's managers (can_manage_project) and the task's assignee
+    const canEditTaskDetails = canDeleteProject === true || Boolean(selectedTask && selectedTask.assignee_id === currentUserId)
     // null while checking; then can_edit_project, the rule for adding tasks here
     const [canAddTasks, setCanAddTasks] = useState(null)
     const [projectDepartmentName, setProjectDepartmentName] = useState(null)
@@ -454,7 +461,7 @@ function ProjectPage() {
     // What the board shows, overdue split out; the Summary overview counts the same groups
     const tasksByColumn = groupTasksByColumn(project_tasks, boardColumns)
 
-    // ── Cross-department projects (migration 20261117090000): the project's
+    // ── Cross-department projects (migration 20261120100000): the project's
     // departments, lead first. Empty until that migration is applied.
     const [projectDepartments, setProjectDepartments] = useState([])
     const [departmentsVersion, setDepartmentsVersion] = useState(0)
@@ -806,7 +813,9 @@ function ProjectPage() {
             let data = null
             let error = null
             for (const columns of [
+                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
                 `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}`,
+                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
                 `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`,
                 TASK_COLUMNS,
             ]) {
@@ -1581,9 +1590,15 @@ function ProjectPage() {
                                             <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-muted flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
                                                 <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
                                             </button>
-                                            <div className="flex-1 flex items-center justify-center bg-raised rounded-xl border border-line/20 border-dashed p-6 text-center">
-                                                <p className="text-muted italic">Meeting creation functionality coming soon...</p>
-                                            </div>
+                                            <ScheduleMeetingModal
+                                                organizer={currentUserId && organizationId ? { id: currentUserId, organization_id: organizationId } : null}
+                                                defaultDate={selectedDateEvents || new Date()}
+                                                onClose={() => setCreatingInSidebar(null)}
+                                                onSaved={(meeting) => {
+                                                    setCreatingInSidebar(null)
+                                                    window.dispatchEvent(new CustomEvent(MEETING_SAVED_EVENT, { detail: meeting }))
+                                                }}
+                                            />
                                         </div>
                                     ) : (() => {
                                         const formatYMD = (date) => {
@@ -1830,7 +1845,8 @@ function ProjectPage() {
                         {/* Content */}
                         <div className="p-lg space-y-xl flex-1">
                             <div>
-                                <h1 className="font-headline-lg text-white font-bold mb-md leading-tight">{selectedTask.title}</h1>
+                                <h1 className="font-headline-lg text-white font-bold mb-sm leading-tight">{selectedTask.title}</h1>
+                                <TaskKeyBar task={selectedTask} className="mb-md" />
                                 <div className="flex flex-wrap gap-sm">
                                     {(() => {
                                         const isOverdue = isTaskOverdue(selectedTask);
@@ -2163,8 +2179,9 @@ function ProjectPage() {
                                 </div>
                             </div>
 
-                            <div className="pt-md mt-auto flex justify-between items-center text-[11px] text-muted border-t border-line/20">
-                                <span>ID: <span className="font-mono text-white opacity-70">{String(selectedTask.id).substring(0, 8)}</span></span>
+                            <TaskComments key={selectedTask.id} taskId={selectedTask.id} />
+
+                            <div className="pt-md mt-auto flex justify-end items-center text-[11px] text-muted border-t border-line/20">
                                 <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
                             </div>
                         </div>

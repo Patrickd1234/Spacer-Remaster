@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase } from "./supabase"
 import { fetchRecentActivity } from "./recentActivity"
+import { fetchEvents } from "./general/generalData"
 import { DEPARTMENT_CREATED_EVENT } from "./appEvents"
 import { StatCard, Panel } from "./components/DashboardParts"
 
@@ -98,20 +99,14 @@ export default function OrgOverview({ userId, orgId }) {
         return () => { active = false }
     }, [userId])
 
-    // Row-level security limits events to the user's organization
+    // Company-wide events only; people's private meetings stay off this page
     useEffect(() => {
         let active = true
-        const today = new Date().toISOString().slice(0, 10)
-        supabase
-            .from("calendar_events")
-            .select("id, title, event_date")
-            .gte("event_date", today)
-            .order("event_date", { ascending: true })
-            .limit(UPCOMING_EVENTS_LIMIT)
-            .then(({ data, error }) => {
-                if (error) console.error("Loading upcoming events failed:", error)
-                if (active) setUpcomingEvents(data || [])
-            })
+        const today = new Date()
+        const until = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate())
+        fetchEvents(today, until).then(({ data }) => {
+            if (active) setUpcomingEvents(data.slice(0, UPCOMING_EVENTS_LIMIT))
+        })
         return () => { active = false }
     }, [])
 

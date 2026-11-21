@@ -1,6 +1,8 @@
 import { supabase, getSessionUser } from "../supabase"
 import { createSignedLinks } from "../storageLinks"
 import { dayKey } from "./generalFormat"
+import { roleKey } from "../permissions"
+import { dbRefusalMessage } from "../orgExitRules"
 
 // Reads and writes for the General Space pages. Row-level security limits
 // every query to the signed-in user's organization; posting announcements
@@ -108,6 +110,36 @@ export async function setAnnouncementPinned(id, pinned) {
     return { data: null, error }
 }
 
+// Same form as createAnnouncement. A new cover replaces the old one; no file
+// keeps it. Only people with announcement.manage may do this (the policy
+// decides; the page only shows the button to them).
+export async function updateAnnouncement(announcement, form) {
+    let coverPath = announcement.cover_path
+    if (form.coverFile) {
+        const path = `announcements/${announcement.organization_id}/${crypto.randomUUID()}-${safeFileName(form.coverFile.name)}`
+        const { error } = await uploadImage(path, form.coverFile)
+        if (error) return { data: null, error }
+        coverPath = path
+    }
+    const { error } = await supabase.from("announcements").update({
+        title: form.title.trim(),
+        body: form.body.trim(),
+        category: form.category,
+        pinned: form.pinned,
+        cover_path: coverPath,
+        meeting_url: form.meetingUrl.trim() || null,
+        event_starts_at: form.startsAt ? new Date(form.startsAt).toISOString() : null,
+        event_ends_at: form.endsAt ? new Date(form.endsAt).toISOString() : null,
+    }).eq("id", announcement.id)
+    if (error) {
+        console.error("Updating announcement failed:", error)
+        if (coverPath !== announcement.cover_path) await removeImage(coverPath)
+    } else if (coverPath !== announcement.cover_path) {
+        await removeImage(announcement.cover_path)
+    }
+    return { data: null, error }
+}
+
 export async function deleteAnnouncement(announcement) {
     const { error } = await supabase.from("announcements").delete().eq("id", announcement.id)
     if (error) console.error("Deleting announcement failed:", error)
@@ -119,14 +151,20 @@ export async function deleteAnnouncement(announcement) {
 // Calendar events
 // ---------------------------------------------------------------------------
 
-// Events whose day falls between two dates (inclusive)
+// Before migration 20261119090000 there is no audience column (and no meetings)
+const isMissingColumn = (error) => error?.code === "42703" || error?.code === "PGRST204"
+
+// Company-wide events whose day falls between two dates (inclusive). Meetings
+// people schedule for chosen attendees stay on their personal calendars.
 export async function fetchEvents(from, to) {
-    const { data, error } = await supabase
+    const query = () => supabase
         .from("calendar_events")
         .select(EVENT_FIELDS)
         .gte("event_date", dayKey(from))
         .lte("event_date", dayKey(to))
         .order("event_date", { ascending: true })
+    let { data, error } = await query().eq("audience", "company")
+    if (isMissingColumn(error)) ({ data, error } = await query())
     if (error) console.error("Loading events failed:", error)
     return { data: data || [], error }
 }
@@ -174,10 +212,16 @@ export async function deleteEvent(id) {
 // Everyone's team memberships in the organization as { user_id, team_space_id, team_name, role }.
 // org_team_memberships() lets members see other people's teams; until that
 // migration is applied, fall back to the tables (members then see only their own teams).
+// Everyone's roles in the organization: { user_id, team_space_id (null =
+// organization-wide), team_name, role, role_key }. Falls back to the older
+// function (department roles only), then to the tables (your own teams).
 async function fetchOrgTeamMemberships() {
-    const { data, error } = await supabase.rpc("org_team_memberships")
+    const { data, error } = await supabase.rpc("org_member_roles")
     if (!error) return data || []
-    console.error("Loading organization teams failed, using your own teams:", error)
+    console.error("Loading organization roles failed, trying department roles:", error)
+    const older = await supabase.rpc("org_team_memberships")
+    if (!older.error) return (older.data || []).map((m) => ({ ...m, role_key: roleKey(m.team_space_id, m.role) }))
+    console.error("Loading organization teams failed, using your own teams:", older.error)
     const [{ data: memberships }, { data: teams }] = await Promise.all([
         supabase.from("memberships").select("user_id, team_space_id, role").not("team_space_id", "is", null),
         supabase.from("team_spaces").select("id, name"),
@@ -185,8 +229,33 @@ async function fetchOrgTeamMemberships() {
     const nameById = new Map((teams || []).map((t) => [t.id, t.name]))
     return (memberships || [])
         .filter((m) => nameById.has(m.team_space_id))
-        .map((m) => ({ ...m, team_name: nameById.get(m.team_space_id) }))
+        .map((m) => ({ ...m, team_name: nameById.get(m.team_space_id), role_key: roleKey(m.team_space_id, m.role) }))
 }
+
+// The organization's departments (what the viewer may see of them)
+export async function fetchDepartments() {
+    const { data, error } = await supabase.from("team_spaces").select("id, name").order("name")
+    if (error) console.error("Loading departments failed:", error)
+    return { data: data || [], error }
+}
+
+// Role changes go through the database functions, which check the caller
+// (member.assign_role) and refuse with their own wording (docs/RBAC.md).
+// roleKey: org_admin (teamId null), department_admin, team_lead, member, viewer.
+export async function assignRole(userId, teamId, key) {
+    const { error } = await supabase.rpc("assign_role", { p_user_id: userId, p_team_space_id: teamId, p_role_key: key })
+    if (error) console.error("Assigning role failed:", error)
+    return { data: null, error: dbRefusalMessage(error, "Couldn't change the role. Please try again.") }
+}
+
+export async function revokeRole(userId, teamId) {
+    const { error } = await supabase.rpc("revoke_role", { p_user_id: userId, p_team_space_id: teamId })
+    if (error) console.error("Revoking role failed:", error)
+    return { data: null, error: dbRefusalMessage(error, "Couldn't remove the role. Please try again.") }
+}
+
+// An organization-wide role, most powerful first
+const orgRoleOf = (rows) => (rows.some((m) => m.role_key === "owner") ? "owner" : rows.some((m) => m.role_key === "org_admin") ? "org_admin" : null)
 
 export async function fetchPeople({ limit } = {}) {
     let usersQuery = supabase.from("users").select(PERSON_FIELDS).order("name")
@@ -196,11 +265,14 @@ export async function fetchPeople({ limit } = {}) {
         console.error("Loading people failed:", error)
         return { data: [], teams: [], error }
     }
-    const teams = [...new Map(memberships.map((m) => [m.team_space_id, { id: m.team_space_id, name: m.team_name }])).values()]
+    const departmentRows = memberships.filter((m) => m.team_space_id != null)
+    const teams = [...new Map(departmentRows.map((m) => [m.team_space_id, { id: m.team_space_id, name: m.team_name }])).values()]
         .sort((a, b) => (a.name || "").localeCompare(b.name || ""))
     const people = (users || []).map((user) => ({
         ...user,
-        teams: memberships
+        // "owner" / "org_admin" / null: an organization-wide role
+        orgRole: orgRoleOf(memberships.filter((m) => m.user_id === user.id)),
+        teams: departmentRows
             .filter((m) => m.user_id === user.id)
             .map((m) => ({ id: m.team_space_id, name: m.team_name, role: m.role })),
     }))

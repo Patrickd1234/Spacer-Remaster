@@ -13,7 +13,7 @@
 --
 -- mfa_required_for_caller() is the single place that decides who must use it;
 -- to limit it to some roles again, make it check public.memberships.role.
--- Rollback: supabase/rollback/20261119090000_require_mfa_rollback.sql
+-- Rollback: supabase/rollback/20261120110000_require_mfa_rollback.sql
 
 -- Must the caller use two-factor? Every signed-in account must.
 create or replace function public.mfa_required_for_caller()

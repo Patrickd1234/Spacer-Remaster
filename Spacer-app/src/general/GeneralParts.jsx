@@ -85,7 +85,7 @@ export function PinnedTag() {
     )
 }
 
-const AVATAR_SIZES = { sm: "w-7 h-7 text-[10px]", md: "w-10 h-10 text-xs", lg: "w-16 h-16 text-lg" }
+const AVATAR_SIZES = { xs: "w-5 h-5 text-[8px]", sm:"w-7 h-7 text-[10px]", md: "w-10 h-10 text-xs", lg: "w-16 h-16 text-lg" }
 
 export function Avatar({ name, url, size = "md" }) {
     const classes = `${AVATAR_SIZES[size]} rounded-full shrink-0 overflow-hidden bg-line flex items-center justify-center font-semibold text-soft`

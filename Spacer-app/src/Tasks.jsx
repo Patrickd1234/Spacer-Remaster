@@ -8,6 +8,8 @@ import CreateTaskModal from "./partials/CreateTaskModal"
 import DepartmentTaskGroups from "./components/DepartmentTaskGroups"
 import Select from "./components/Select"
 import PlanetLoader from "./components/PlanetLoader"
+import TaskKeyBar from "./tasks/TaskKeyBar"
+import TaskComments from "./tasks/TaskComments"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -63,7 +65,7 @@ export default function Tasks() {
     const [todayText, setTodayText] = useState("")
     const [blockersText, setBlockersText] = useState("")
     const [standupSaving, setStandupSaving] = useState(false)
-    const [isLocalFallback, setIsLocalFallback] = useState(false)
+    const [standupLoadError, setStandupLoadError] = useState(false)
     const [currentUserProfile, setCurrentUserProfile] = useState(null)
     const [orgId, setOrgId] = useState(null)
     // Super admins pick which department's stand-ups to view
@@ -148,38 +150,21 @@ export default function Tasks() {
     const isStandupLoading = standupKey !== null && standupsLoadedFor !== standupKey
     const shownStandups = standupKey ? standups : []
 
-    // Local-storage fallback keeps the same per-department split
-    const readLocalStandups = (deptId) => {
-        const local = localStorage.getItem("spacers_daily_standups")
-        const rows = local ? JSON.parse(local) : []
-        return rows.filter(row => String(row.team_space_id) === String(deptId))
-    }
-
+    // Stand-ups are only ever saved to the database, so everyone in the
+    // department sees them. (Before the table existed they could fall back to
+    // this browser only; that fallback is gone.)
     const fetchStandups = async (currentOrgId, deptId) => {
-        try {
-            const { data, error } = await supabase
-                .from("daily_standups")
-                .select("*, user:users(name, email)")
-                .eq("organization_id", currentOrgId)
-                .eq("team_space_id", deptId)
-                .order("standup_date", { ascending: false })
-                .order("created_at", { ascending: false })
-
-            if (error) {
-                console.warn("daily_standups table fetch error, falling back to localStorage:", error)
-                setIsLocalFallback(true)
-                setStandups(readLocalStandups(deptId))
-            } else {
-                setStandups(data || [])
-                setIsLocalFallback(false)
-            }
-        } catch (err) {
-            console.error("Error fetching standups:", err)
-            setIsLocalFallback(true)
-            setStandups(readLocalStandups(deptId))
-        } finally {
-            setStandupsLoadedFor(`${currentOrgId}:${deptId}`)
-        }
+        const { data, error } = await supabase
+            .from("daily_standups")
+            .select("*, user:users(name, email)")
+            .eq("organization_id", currentOrgId)
+            .eq("team_space_id", deptId)
+            .order("standup_date", { ascending: false })
+            .order("created_at", { ascending: false })
+        if (error) console.error("Loading stand-ups failed:", error)
+        setStandups(error ? [] : data || [])
+        setStandupLoadError(Boolean(error))
+        setStandupsLoadedFor(`${currentOrgId}:${deptId}`)
     }
 
     // Waits for the organization. It used to fall back to browser-only stand-ups
@@ -209,54 +194,26 @@ export default function Tasks() {
         setStandupSaving(true)
 
         try {
-            const authData = { user: await getSessionUser() }
-            const uid = authData?.user?.id
-            
-            if (isLocalFallback) {
-                const newRow = {
-                    id: `std_${Date.now()}`,
-                    organization_id: orgId || "local",
+            const uid = (await getSessionUser())?.id
+            const { error } = await supabase
+                .from("daily_standups")
+                .insert({
+                    organization_id: orgId,
                     team_space_id: standupDepartmentId,
-                    user_id: uid || "local_user",
-                    standup_date: new Date().toISOString().split("T")[0],
+                    user_id: uid,
                     yesterday_work: yesterdayClean,
                     today_work: todayClean,
-                    blockers: blockersClean,
-                    created_at: new Date().toISOString(),
-                    user: {
-                        name: currentUserProfile?.name || authData?.user?.email || "Local User",
-                        email: currentUserProfile?.email || authData?.user?.email || "local@spacers.com"
-                    }
-                }
-                // Keep other departments' local rows; show only this department's
-                const local = localStorage.getItem("spacers_daily_standups")
-                const allLocal = [newRow, ...(local ? JSON.parse(local) : [])]
-                localStorage.setItem("spacers_daily_standups", JSON.stringify(allLocal))
-                setStandups([newRow, ...standups])
-                setYesterdayText("")
-                setTodayText("")
-                setBlockersText("")
-            } else {
-                const { error } = await supabase
-                    .from("daily_standups")
-                    .insert({
-                        organization_id: orgId,
-                        team_space_id: standupDepartmentId,
-                        user_id: uid,
-                        yesterday_work: yesterdayClean,
-                        today_work: todayClean,
-                        blockers: blockersClean
-                    })
-
-                if (error) {
-                    alert("Error saving standup: " + error.message)
-                } else {
-                    setYesterdayText("")
-                    setTodayText("")
-                    setBlockersText("")
-                    await fetchStandups(orgId, standupDepartmentId)
-                }
+                    blockers: blockersClean
+                })
+            if (error) {
+                console.error("Saving stand-up failed:", error)
+                alert("Your stand-up wasn't saved. Please try again.")
+                return
             }
+            setYesterdayText("")
+            setTodayText("")
+            setBlockersText("")
+            await fetchStandups(orgId, standupDepartmentId)
         } catch (err) {
             console.error("Error saving standup:", err)
         } finally {
@@ -475,10 +432,11 @@ export default function Tasks() {
                                             </Select>
                                         </label>
                                     )}
-                                    {isLocalFallback && (
-                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-semibold">
-                                            <span className="material-symbols-outlined text-[14px]">warning</span>
-                                            <span>Local storage mode</span>
+                                    {standupLoadError && (
+                                        <div role="alert" className="flex items-center gap-1.5 px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-semibold">
+                                            <span className="material-symbols-outlined text-[14px]">error</span>
+                                            <span>Couldn't load stand-ups.</span>
+                                            <button type="button" onClick={() => fetchStandups(orgId, standupDepartmentId)} className="underline hover:no-underline cursor-pointer">Try again</button>
                                         </div>
                                     )}
                                 </div>
@@ -646,7 +604,8 @@ export default function Tasks() {
                         </div>
                         <div className="p-6 space-y-6 flex-1">
                             <div>
-                                <h1 className="text-lg text-white font-bold leading-tight mb-3">{selectedTask.title || selectedTask.name || "Untitled"}</h1>
+                                <h1 className="text-lg text-white font-bold leading-tight mb-2">{selectedTask.title || selectedTask.name || "Untitled"}</h1>
+                                <TaskKeyBar task={selectedTask} className="mb-3" />
                                 <div className="flex flex-wrap gap-2">
                                     {selectedTask.priority && (
                                         <span className={`px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider ${PRIORITY_STYLE[selectedTask.priority] || PRIORITY_STYLE.low}`}>
@@ -695,6 +654,7 @@ export default function Tasks() {
                                     Open in Project
                                 </button>
                             )}
+                            <TaskComments key={selectedTask.id} taskId={selectedTask.id} />
                         </div>
                     </div>
                 </div>

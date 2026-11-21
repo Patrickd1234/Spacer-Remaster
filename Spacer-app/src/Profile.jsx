@@ -21,7 +21,7 @@ function Profile() {
 
     // Toast notification
     const [toast, setToast] = useState(null)
-    const { isSuperAdmin, isAdmin, membershipData } = useRole()
+    const { isSuperAdmin, isAdmin, roleName } = useRole()
 
     // Saved profile state
     const [profile, setProfile] = useState({
@@ -245,7 +245,7 @@ function Profile() {
                                                 {profile.name || "Unnamed User"}
                                             </h1>
                                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-accent-ink/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-blue-400/20' : 'bg-neutral-400/10 text-neutral-400 border border-neutral-400/20'}`}>
-                                                {isSuperAdmin ? 'Superadmin' : isAdmin ? 'Admin' : membershipData?.role || 'Member'}
+                                                {roleName}
                                             </span>
                                         </div>
 

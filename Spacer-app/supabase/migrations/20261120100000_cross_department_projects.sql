@@ -3,9 +3,9 @@
 -- tasks belong to a department and can wait on another department's task; and
 -- the project shows which department is holding it up (worked out in the app
 -- from tasks, never stored).
--- Rollback: supabase/rollback/20261117090000_cross_department_projects_rollback.sql
+-- Rollback: supabase/rollback/20261120100000_cross_department_projects_rollback.sql
 --
--- Includes 20261112100000_project_departments, so it is safe to run whether or
+-- Includes 20261120090000_project_departments, so it is safe to run whether or
 -- not that one has run (every step can run twice).
 --
 -- Access: members of any of a project's departments can see it and work on its
@@ -42,7 +42,7 @@ create index if not exists project_departments_team_space_idx
 insert into public.project_departments (project_id, team_space_id, lead_id, due_date, is_lead_department)
 select ps.id, ps.team_space_id, (select u.id from public.users u where u.id = ps.team_lead), ps.due_date, true
 from public.project_spaces ps
--- Rows from 20261112100000 were never the lead department, so there is nothing to
+-- Rows from 20261120090000 were never the lead department, so there is nothing to
 -- update; DO NOTHING also keeps a second run clear of project_departments_guard.
 on conflict (project_id, team_space_id) do nothing;
 

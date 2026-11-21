@@ -21,7 +21,7 @@ function Department() {
     const [mem_info, setMem_info] = useState([])
     const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
-    const { isSuperAdmin, isAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment, departments } = useRole()
+    const { isSuperAdmin, roleLoading, membershipData, activeDepartment, orgDepartmentId, setOrgDepartment, departments, can } = useRole()
     // Admins of any department switch departments from the sidebar, not the page dropdown
     const isAdminAnywhere = departments.some(d => d.role === "admin")
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -237,7 +237,7 @@ function Department() {
 
     // Opens the confirmation modal; the delete itself runs in confirmDeleteDept
     const handleDeleteDept = (teamId) => {
-        if (!teamId || !canManage) return;
+        if (!teamId || !canDeleteDepartment) return;
         const name = allTeams.find(t => t.id === teamId)?.name || "this department";
         setDeleteDeptError("");
         setDeptToDelete({ id: teamId, name });
@@ -327,8 +327,8 @@ function Department() {
         setInviteError("");
         setInviteSuccess("");
 
-        if (!canManage) {
-            setInviteError("Only admins or super admins can add members.");
+        if (!canAddMembers) {
+            setInviteError("You don't have permission to add members to this department.");
             return;
         }
         if (!activeTeam?.id) return;
@@ -383,7 +383,7 @@ function Department() {
 
     // Opens the confirmation window; the removal itself runs in confirmRemoveMember
     const handleRemoveMember = (targetUserId, name) => {
-        if (!targetUserId || !activeTeam?.id || !canManage) return;
+        if (!targetUserId || !activeTeam?.id || !canRemoveMembers) return;
         setRemoveMemberError("");
         setMemberToRemove({ userId: targetUserId, name: name || "this member" });
     };
@@ -425,9 +425,12 @@ function Department() {
         window.dispatchEvent(event);
     };
 
-    // Admins manage only departments where they are an admin (not ones they merely belong to)
-    const isAdminOfActiveDepartment = ["admin", "super_admin", "superadmin"].includes(activeDepartment?.role)
-    const canManage = isSuperAdmin || (isAdmin && isAdminOfActiveDepartment)
+    // What the database allows in the department on screen (docs/RBAC.md)
+    const shownDepartmentId = activeTeam?.id ?? null
+    const canAddMembers = can("member.add", shownDepartmentId)
+    const canRemoveMembers = can("member.remove", shownDepartmentId)
+    const canCreateDepartment = can("department.create")
+    const canDeleteDepartment = can("department.delete")
 
 const filteredMembers = mem_info.filter(m =>
     !searchQuery ||
@@ -492,7 +495,7 @@ return (
                         )}
                     </div>
 
-                    {canManage && (
+                    {(canAddMembers || canCreateDepartment) && (
                         <div className="flex items-center gap-3">
                             <button 
                                 onClick={() => { setAddMemberTab("existing"); setInviteError(""); setInviteSuccess(""); setShowAddMemberModal(true); }}
@@ -501,8 +504,7 @@ return (
                                 <span className="material-symbols-outlined text-[18px]">person_add</span>
                                 Add Member
                             </button>
-                            {/* Only super admins create departments here (hidden for admins; the database rule is unchanged) */}
-                            {isSuperAdmin && (
+                            {canCreateDepartment && (
                                 <button
                                     onClick={() => setShowCreateDeptModal(true)}
                                     className="px-4 py-2 bg-accent text-on-accent hover:bg-accent-hover text-xs font-semibold rounded-xl flex items-center gap-2 transition-all cursor-pointer"
@@ -618,7 +620,7 @@ return (
                                         <span className="material-symbols-outlined text-[14px]">chat</span> Message
                                     </button>
                                     <div className="flex items-center gap-3">
-                                        {canManage && (
+                                        {canRemoveMembers && (
                                             <button 
                                                 onClick={() => handleRemoveMember(member.user_id, member.name || member.email)}
                                                 className="text-red-400 hover:text-red-300 text-xs font-medium flex items-center gap-0.5 cursor-pointer"
@@ -765,10 +767,10 @@ return (
             </div>
         )}
 
-        {showCreateDeptModal && canManage && (
+        {showCreateDeptModal && canCreateDepartment && (
             <CreateDepartmentModal
                 organizationId={organizationId}
-                canAssignPeople={isSuperAdmin}
+                canAssignPeople={can("member.assign_role")}
                 onClose={() => setShowCreateDeptModal(false)}
                 onCreated={handleDeptCreated}
                 onFailed={() => setToast(failedToast)}

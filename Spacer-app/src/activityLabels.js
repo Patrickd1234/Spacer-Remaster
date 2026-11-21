@@ -25,6 +25,8 @@ export function describeActivity(row) {
         case "membership:updated": return { title: `Role changed to ${s.role || "member"}`, icon: "manage_accounts", badge: "Members" };
         case "membership:removed": return { title: "Left a department", icon: "group_remove", badge: "Members" };
         case "user:signup": return { title: "Joined Spacer", icon: "celebration", badge: "Account" };
+        case "organization:member_left": return { title: `${s.name || "Someone"} left the organization`, icon: "logout", badge: "Members" };
+        case "organization:member_removed": return { title: `Removed ${s.name || "someone"} from the organization`, icon: "person_remove", badge: "Members" };
         default: return { title: `${row.action.replace(/_/g, " ")} ${row.entity_type}`, icon: "history", badge: "Activity" };
     }
 }

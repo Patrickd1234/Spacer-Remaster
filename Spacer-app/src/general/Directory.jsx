@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { filterPeople, sortPeople, scopeDirectory } from "./generalFormat"
-import { fetchPeople, updateMyProfile, updateMyAvatar, setReportsTo } from "./generalData"
+import { fetchPeople, fetchDepartments, updateMyProfile, updateMyAvatar, setReportsTo } from "./generalData"
 import { useMyProfile } from "./useMyProfile"
 import { useRole } from "../RoleContext"
 import { GeneralShell, PageHeading, ErrorNote, INPUT_CLASS, COMPACT_SELECT_CLASS } from "./GeneralParts"
@@ -22,9 +22,9 @@ function readLayout() {
 // Screen 4: the people the viewer may see (see scopeDirectory). ?person=<id> opens a profile drawer;
 // search, filters and layout stay as they were when it closes.
 export default function Directory() {
-    const { profile, error: profileError, canManage, reload: reloadProfile } = useMyProfile()
+    const { profile, error: profileError, reload: reloadProfile } = useMyProfile()
     const [searchParams, setSearchParams] = useSearchParams()
-    const { isSuperAdmin, roleLoading } = useRole()
+    const { isSuperAdmin, roleLoading, can } = useRole()
     // Everyone in the organization; the drawer still names managers outside the scope
     const [everyone, setEveryone] = useState([])
     const [orgTeams, setOrgTeams] = useState([])
@@ -54,6 +54,16 @@ export default function Directory() {
         })
         return () => { active = false }
     }, [])
+
+    // Every department, for the role editor (only people who may assign roles see it)
+    const canAssignRoles = can("member.assign_role")
+    const [departments, setDepartments] = useState([])
+    useEffect(() => {
+        if (!canAssignRoles) return undefined
+        let active = true
+        fetchDepartments().then((result) => { if (active) setDepartments(result.data) })
+        return () => { active = false }
+    }, [canAssignRoles])
 
     const changeLayout = (next) => {
         setLayout(next)
@@ -198,7 +208,11 @@ export default function Directory() {
                             person={selected}
                             people={everyone}
                             isMe={myId !== null && selectedId === myId}
-                            canSetManager={canManage}
+                            canSetManager={can("directory.manage")}
+                            canRemove={can("member.remove_from_organization")}
+                            canAssignRoles={canAssignRoles}
+                            departments={departments}
+                            onRolesChanged={load}
                             onClose={close}
                             onMessage={() => openChat(selected)}
                             onEdit={() => setIsEditing(true)}

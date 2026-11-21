@@ -38,7 +38,7 @@ export default function TwoFactorSettings({ onNotify, onEnabled }) {
     }, [applyFactors]);
 
     // Required for every account, so it can't be turned off: the database would
-    // lock them out of their data (20261119090000_require_mfa.sql)
+    // lock them out of their data (20261120110000_require_mfa.sql)
     const [isRequired, setIsRequired] = useState(false);
     useEffect(() => {
         let active = true;
