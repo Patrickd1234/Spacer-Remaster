@@ -21,8 +21,13 @@ function Onboarding() {
                 .select("organization:organizations(id, name)")
                 .eq("id", user.id)
                 .maybeSingle()
-            if (error) console.error("Loading organization failed:", error)
-            if (active) setOrganization(data?.organization || null)
+            if (!active) return
+            if (error) {
+                // Say so now rather than only when Continue is pressed (B-03)
+                console.error("Loading organization failed:", error)
+                setErrorMsg("Your organization couldn't be loaded. Please reload the page.")
+            }
+            setOrganization(data?.organization || null)
         })
         return () => { active = false }
     }, [])

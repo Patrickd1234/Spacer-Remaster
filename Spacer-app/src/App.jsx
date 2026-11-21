@@ -169,7 +169,12 @@ function App() {
       .select('organization_id')
       .eq('id', currentUserId)
       .maybeSingle()
-    if (error) console.error('Loading organization failed:', error)
+    if (error) {
+      // Not the same as "no organization": don't send them to /welcome (B-03)
+      console.error('Loading organization failed:', error)
+      setOrgStatus({ userId: currentUserId, orgId: null, failed: true })
+      return false
+    }
     const orgId = data?.organization_id ?? null
     setOrgStatus({ userId: currentUserId, orgId })
     return Boolean(orgId)
@@ -241,6 +246,19 @@ function App() {
 
   // Signed in, organization or password status not known yet
   if (sessionReady && (orgStatus?.userId !== userId || passwordStatus?.userId !== userId)) return <PageLoader />
+  // The organization couldn't be read: offer a retry instead of the "get started" page
+  if (sessionReady && orgStatus?.failed) {
+    return (
+      <div role="alert" className="min-h-screen bg-panel flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-white text-lg font-semibold">We couldn't load your organization.</p>
+        <p className="text-muted text-sm max-w-sm">Check your connection and try again.</p>
+        <div className="flex gap-3">
+          <button type="button" onClick={() => setOrgStatus(null)} className="px-4 py-2 rounded-lg bg-accent text-black text-sm font-semibold">Try again</button>
+          <button type="button" onClick={() => supabase.auth.signOut()} className="px-4 py-2 rounded-lg border border-line text-muted text-sm">Sign out</button>
+        </div>
+      </div>
+    )
+  }
   const needsPassword = sessionReady && passwordStatus?.hasPassword === false
   const hasOrganization = Boolean(session) && Boolean(orgStatus?.orgId)
 
