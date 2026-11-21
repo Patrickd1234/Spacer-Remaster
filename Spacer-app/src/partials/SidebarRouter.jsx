@@ -453,17 +453,20 @@ export default function SidebarRouter(props) {
                     file_attachment: fileAttachment
                 });
 
-            if (error) {
-                console.warn("DB message save failed:", error.message);
-                if (fileAttachment) removeDmAttachment(fileAttachment.path);
-            }
+            if (error) throw error;
         } catch (err) {
+            // Not saved: take the message back out and give the text back (B-04)
             console.warn("Error sending message to DB:", err);
+            if (fileAttachment) removeDmAttachment(fileAttachment.path);
+            setChatMessages(prev => prev.filter(m => m.id !== messageId));
+            setNewMessage(current => current || msgContent);
+            setAttachError("Your message wasn't sent. Please try again.");
         }
     };
 
     const handleEditMessage = async (msgId, newText) => {
         if (!newText.trim() || !chatRecipient || !userId) return;
+        const previousMessages = chatMessages;
         try {
             const updatedMessages = chatMessages.map(msg => {
                 if (msg.id === msgId) {
@@ -475,29 +478,44 @@ export default function SidebarRouter(props) {
             setEditingMessageId(null);
             setEditingText("");
 
-            await supabase
+            const { data, error } = await supabase
                 .from("direct_messages")
                 .update({ content: newText.trim(), edited: true })
-                .eq("id", msgId);
+                .eq("id", msgId)
+                .select("id");
+            if (error) throw error;
+            // Row-level security can quietly update nothing
+            if (!data?.length) throw new Error("Message not updated");
         } catch (err) {
+            // Not saved: show the message as it was (B-04)
             console.warn("Edit message error:", err);
+            setChatMessages(previousMessages);
+            setAttachError("Your edit wasn't saved. Please try again.");
         }
     };
 
     const handleDeleteMessage = async (msgId) => {
         if (!chatRecipient || !userId) return;
+        const previousMessages = chatMessages;
         try {
             const attachmentPath = chatMessages.find(m => m.id === msgId)?.fileAttachment?.path;
             const updatedMessages = chatMessages.filter(m => m.id !== msgId);
             setChatMessages(updatedMessages);
 
-            const { error } = await supabase
+            const { data, error } = await supabase
                 .from("direct_messages")
                 .delete()
-                .eq("id", msgId);
-            if (!error && attachmentPath) await removeDmAttachment(attachmentPath);
+                .eq("id", msgId)
+                .select("id");
+            if (error) throw error;
+            // Row-level security can quietly delete nothing
+            if (!data?.length) throw new Error("Message not deleted");
+            if (attachmentPath) await removeDmAttachment(attachmentPath);
         } catch (err) {
+            // Not deleted: put the message back (B-04)
             console.warn("Delete message error:", err);
+            setChatMessages(previousMessages);
+            setAttachError("The message couldn't be deleted. Please try again.");
         }
     };
 

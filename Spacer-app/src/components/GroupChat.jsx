@@ -253,7 +253,10 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 
                 if (attInserts.length > 0) {
                     const { error: attError } = await supabase.from('message_attachments').insert(attInserts);
-                    if (attError) console.error('Error saving attachments:', attError);
+                    if (attError) {
+                        console.error('Error saving attachments:', attError);
+                        setFileError("Your message was sent, but its attachments couldn't be saved. Please try again.");
+                    }
                 }
             }
 
@@ -320,7 +323,15 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                     { channel_id: data.id, user_id: currentUserId }, // Add self
                     ...selectedMembers.map(uid => ({ channel_id: data.id, user_id: uid }))
                 ];
-                await supabase.from('chat_channel_members').insert(memberInserts);
+                const { error: membersError } = await supabase.from('chat_channel_members').insert(memberInserts);
+                // The channel exists but nobody was added: show it, and say so instead of closing as a success (B-04)
+                if (membersError) {
+                    console.error('Error adding channel members:', membersError);
+                    setChannels(prev => [...prev, data]);
+                    setActiveChannel(data);
+                    setCreateError(`The channel was created, but its members couldn't be added: ${membersError.message}`);
+                    return;
+                }
             }
 
             setChannels(prev => [...prev, data]);
@@ -342,8 +353,9 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                 channel_id: activeChannel.id,
                 user_id: uid
             }));
-            await supabase.from('chat_channel_members').insert(memberInserts);
-            
+            const { error } = await supabase.from('chat_channel_members').insert(memberInserts);
+            if (error) throw error;
+
             // Refresh members list
             fetchChannelMembers(activeChannel);
             setShowAddMemberModal(false);

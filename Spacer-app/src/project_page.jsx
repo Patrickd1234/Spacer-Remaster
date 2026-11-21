@@ -951,9 +951,19 @@ function ProjectPage() {
         fetchFiles()
     }
     const deleteFile = async (f) => {
-        await supabase.storage.from("project-files").remove([f.path])
-        const { error } = await supabase.from("project_files").delete().eq("id", f.id)
-        if (!error) {
+        // Record first, then the stored file: a refused delete must not leave a
+        // listed file whose contents are gone (B-04)
+        setUploadError("")
+        const { data: deleted, error } = await supabase.from("project_files").delete().eq("id", f.id).select("id")
+        if (error || !deleted?.length) {
+            if (error) console.error("Deleting file failed:", error)
+            setUploadError(`Couldn't delete "${f.name}". You may not have permission.`)
+            setConfirmDeleteId(null)
+            return
+        }
+        const { error: storageError } = await supabase.storage.from("project-files").remove([f.path])
+        if (storageError) console.error("Removing the stored file failed:", storageError)
+        {
             const userData = { user: await getSessionUser() }
             const logEntry = {
                 entity_type: "file",

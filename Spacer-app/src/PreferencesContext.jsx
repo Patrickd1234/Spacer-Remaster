@@ -146,12 +146,18 @@ export function PreferencesProvider({ children }) {
     const updatedPreferences = { ...preferences, [category]: updatedCategory };
     
     // Optimistic UI update
+    const previousPreferences = preferences;
     setPreferences(updatedPreferences);
 
-    // Persist to Supabase
-    await supabase.auth.updateUser({
+    // Persist to Supabase; on failure put the old values back and tell the caller (B-04)
+    const { error } = await supabase.auth.updateUser({
       data: { preferences: updatedPreferences }
     });
+    if (error) {
+      console.error("Saving preferences failed:", error);
+      setPreferences(previousPreferences);
+    }
+    return { error };
   };
 
   return (

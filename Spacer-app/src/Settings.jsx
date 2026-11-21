@@ -113,12 +113,20 @@ export default function Settings() {
     }
 
     const handleSaveNotifications = async (updated) => {
-        await updatePreferences("notifications", updated)
+        const { error } = await updatePreferences("notifications", updated)
+        if (error) {
+            showToast("Couldn't save your notification preferences. Please try again.", "error")
+            return
+        }
         showToast("Notification preferences updated!")
     }
 
     const handleSaveAppearance = async (updatedAppearance) => {
-        await updatePreferences("appearance", updatedAppearance)
+        const { error } = await updatePreferences("appearance", updatedAppearance)
+        if (error) {
+            showToast("Couldn't save your appearance preferences. Please try again.", "error")
+            return
+        }
         showToast("Appearance preferences saved!")
     }
 
