@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "node --test \"src/**/*.test.js\"",
     "preview": "vite preview",
-    "db:schema": "node scripts/dump-schema.mjs"
+    "db:schema": "node scripts/dump-schema.mjs",
+    "db:backup": "node scripts/backup-data.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",

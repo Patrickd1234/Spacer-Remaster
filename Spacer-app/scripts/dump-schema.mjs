@@ -1,18 +1,20 @@
 // Writes a read-only snapshot of the live database schema to supabase/schema/schema.sql.
 //
 // `supabase db dump` needs Docker, so this rebuilds the DDL from Postgres' own
-// catalog through `supabase db query --linked` (Management API, read-only).
+// catalog through `supabase db query --remote --read-only` (Management API).
 // The snapshot is for reading and diffing in git; it is NOT a migration.
 //
 // Usage: npm run db:schema
 
 import { spawnSync } from "node:child_process"
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs"
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const APP_DIR = join(dirname(fileURLToPath(import.meta.url)), "..")
+// The project `supabase link` saved; read-only so these scripts can never change the database
+const PROJECT_REF = JSON.parse(readFileSync(join(APP_DIR, "supabase", ".temp", "linked-project.json"), "utf8")).ref
 const OUT_FILE = join(APP_DIR, "supabase", "schema", "schema.sql")
 
 // Each query returns rows with a single `ddl` text column, already in order
@@ -137,7 +139,7 @@ function sleepSync(ms) {
 
 function runQueryOnce(file) {
   // One command string: npx needs a shell on Windows, and the temp path is quoted
-  const result = spawnSync(`npx supabase db query --linked -f "${file}"`, {
+  const result = spawnSync(`npx supabase db query --remote=${PROJECT_REF} --read-only -f "${file}"`, {
     cwd: APP_DIR,
     encoding: "utf8",
     shell: true,

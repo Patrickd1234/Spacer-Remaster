@@ -6,6 +6,8 @@
 -- Extensions
 -- ======================================================================
 
+-- extension pg_cron (schema pg_catalog, version 1.6.4)
+
 -- extension pg_net (schema extensions, version 0.20.4)
 
 -- extension pg_stat_statements (schema extensions, version 1.11)
@@ -40,7 +42,8 @@ create table public.activity_log (
   action text not null,
   prior_state jsonb,
   new_state jsonb,
-  created_at timestamp with time zone default now() not null
+  created_at timestamp with time zone default now() not null,
+  organization_id uuid
 );
 
 create table public.announcements (
@@ -51,7 +54,12 @@ create table public.announcements (
   body text not null,
   pinned boolean default false not null,
   created_at timestamp with time zone default now() not null,
-  updated_at timestamp with time zone default now() not null
+  updated_at timestamp with time zone default now() not null,
+  category text default 'company_update'::text not null,
+  cover_path text,
+  event_starts_at timestamp with time zone,
+  event_ends_at timestamp with time zone,
+  meeting_url text
 );
 
 create table public.attachments (
@@ -64,6 +72,15 @@ create table public.attachments (
   created_at timestamp with time zone default now() not null
 );
 
+create table public.calendar_event_attendees (
+  id uuid default gen_random_uuid() not null,
+  event_id uuid not null,
+  user_id uuid,
+  team_space_id uuid,
+  added_by uuid default auth.uid(),
+  created_at timestamp with time zone default now() not null
+);
+
 create table public.calendar_events (
   id uuid default gen_random_uuid() not null,
   organization_id uuid not null,
@@ -73,7 +90,13 @@ create table public.calendar_events (
   external_url text,
   created_by uuid,
   created_at timestamp with time zone default now() not null,
-  project_id uuid default gen_random_uuid()
+  project_id uuid default gen_random_uuid(),
+  starts_at timestamp with time zone,
+  ends_at timestamp with time zone,
+  category text default 'meeting'::text not null,
+  audience text default 'company'::text not null,
+  agenda jsonb default '[]'::jsonb not null,
+  repeat text default 'none'::text not null
 );
 
 create table public.chat_channel_members (
@@ -97,7 +120,8 @@ create table public.comments (
   task_id uuid not null,
   author_id uuid,
   body text not null,
-  created_at timestamp with time zone default now() not null
+  created_at timestamp with time zone default now() not null,
+  edited_at timestamp with time zone
 );
 
 create table public.daily_standups (
@@ -257,7 +281,8 @@ create table public.org_feed_items (
 create table public.organizations (
   id uuid default gen_random_uuid() not null,
   name text not null,
-  created_at timestamp with time zone default now() not null
+  created_at timestamp with time zone default now() not null,
+  task_key_prefix text not null
 );
 
 create table public.project_columns (
@@ -267,6 +292,17 @@ create table public.project_columns (
   base_status text not null,
   "position" integer default 0 not null,
   created_at timestamp with time zone default now() not null
+);
+
+create table public.project_departments (
+  project_id uuid not null,
+  team_space_id uuid not null,
+  created_at timestamp with time zone default now() not null,
+  lead_id uuid,
+  due_date date,
+  is_lead_department boolean default false not null,
+  status text default 'active'::text not null,
+  signed_off_at timestamp with time zone
 );
 
 create table public.project_files (
@@ -296,7 +332,62 @@ create table public.project_spaces (
   status text default 'active'::text not null,
   created_at timestamp with time zone default now() not null,
   search_vector tsvector generated always as (to_tsvector('english'::regconfig, COALESCE(name, ''::text))) stored,
-  team_lead uuid default gen_random_uuid()
+  team_lead uuid default gen_random_uuid(),
+  due_date date,
+  task_key_prefix text not null
+);
+
+create table public.rbac_permissions (
+  key text not null,
+  scope text not null,
+  description text not null
+);
+
+create table public.rbac_role_permissions (
+  role_key text not null,
+  permission_key text not null
+);
+
+create table public.rbac_roles (
+  key text not null,
+  name text not null,
+  scope text not null,
+  sort_order integer not null,
+  description text not null
+);
+
+create table public.sprints (
+  id uuid default gen_random_uuid() not null,
+  project_id uuid not null,
+  name text not null,
+  goal text,
+  starts_on date not null,
+  ends_on date not null,
+  status text default 'planned'::text not null,
+  committed_points integer,
+  committed_tasks integer,
+  completed_points integer,
+  completed_tasks integer,
+  started_at timestamp with time zone,
+  completed_at timestamp with time zone,
+  retro_went_well text,
+  retro_to_improve text,
+  retro_actions text,
+  created_by uuid default auth.uid(),
+  created_at timestamp with time zone default now() not null,
+  updated_at timestamp with time zone default now() not null
+);
+
+create table public.task_due_reminders (
+  task_id uuid not null,
+  due_date date not null,
+  sent_at timestamp with time zone default now() not null
+);
+
+create table public.task_key_counters (
+  scope_id uuid not null,
+  organization_id uuid not null,
+  next_number integer not null
 );
 
 create table public.tasks (
@@ -316,7 +407,15 @@ create table public.tasks (
   parent_task_id uuid,
   search_vector tsvector generated always as ((setweight(to_tsvector('english'::regconfig, COALESCE(title, ''::text)), 'A'::"char") || setweight(to_tsvector('english'::regconfig, COALESCE(description, ''::text)), 'B'::"char"))) stored,
   sub_tasks text,
-  column_id uuid
+  column_id uuid,
+  sprint_id uuid,
+  story_points smallint,
+  completed_at timestamp with time zone,
+  team_space_id uuid,
+  blocked_by_task_id uuid,
+  blocked_at timestamp with time zone,
+  task_key_scope uuid not null,
+  task_number integer not null
 );
 
 create table public.team_space_stats (
@@ -334,7 +433,8 @@ create table public.team_spaces (
   organization_id uuid not null,
   name text not null,
   created_at timestamp with time zone default now() not null,
-  description text
+  description text,
+  task_key_prefix text not null
 );
 
 create table public.users (
@@ -345,7 +445,12 @@ create table public.users (
   auth_provider text default 'email'::text not null,
   created_at timestamp with time zone default now() not null,
   search_vector tsvector generated always as (to_tsvector('english'::regconfig, ((COALESCE(name, ''::text) || ' '::text) || COALESCE(email, ''::text)))) stored,
-  description text
+  description text,
+  job_title text,
+  location text,
+  timezone text,
+  avatar_path text,
+  reports_to uuid
 );
 
 -- ======================================================================
@@ -357,6 +462,8 @@ alter table only public.activity_log add constraint activity_log_pkey PRIMARY KE
 alter table only public.announcements add constraint announcements_pkey PRIMARY KEY (id);
 
 alter table only public.attachments add constraint attachments_pkey PRIMARY KEY (id);
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_pkey PRIMARY KEY (id);
 
 alter table only public.calendar_events add constraint calendar_events_pkey PRIMARY KEY (id);
 
@@ -400,11 +507,25 @@ alter table only public.organizations add constraint organizations_pkey PRIMARY 
 
 alter table only public.project_columns add constraint project_columns_pkey PRIMARY KEY (id);
 
+alter table only public.project_departments add constraint project_departments_pkey PRIMARY KEY (project_id, team_space_id);
+
 alter table only public.project_files add constraint project_files_pkey PRIMARY KEY (id);
 
 alter table only public.project_members add constraint project_members_pkey PRIMARY KEY (id);
 
 alter table only public.project_spaces add constraint project_spaces_pkey PRIMARY KEY (id);
+
+alter table only public.rbac_permissions add constraint rbac_permissions_pkey PRIMARY KEY (key);
+
+alter table only public.rbac_role_permissions add constraint rbac_role_permissions_pkey PRIMARY KEY (role_key, permission_key);
+
+alter table only public.rbac_roles add constraint rbac_roles_pkey PRIMARY KEY (key);
+
+alter table only public.sprints add constraint sprints_pkey PRIMARY KEY (id);
+
+alter table only public.task_due_reminders add constraint task_due_reminders_pkey PRIMARY KEY (task_id, due_date);
+
+alter table only public.task_key_counters add constraint task_key_counters_pkey PRIMARY KEY (scope_id);
 
 alter table only public.tasks add constraint tasks_pkey PRIMARY KEY (id);
 
@@ -413,6 +534,10 @@ alter table only public.team_space_stats add constraint team_space_stats_pkey PR
 alter table only public.team_spaces add constraint team_spaces_pkey PRIMARY KEY (id);
 
 alter table only public.users add constraint users_pkey PRIMARY KEY (id);
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_team_unique UNIQUE (event_id, team_space_id);
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_user_unique UNIQUE (event_id, user_id);
 
 alter table only public.direct_message_reactions add constraint direct_message_reactions_message_id_user_id_key UNIQUE (message_id, user_id);
 
@@ -424,17 +549,45 @@ alter table only public.mfa_trusted_devices add constraint mfa_trusted_devices_t
 
 alter table only public.project_members add constraint project_members_project_id_user_id_key UNIQUE (project_id, user_id);
 
+alter table only public.tasks add constraint tasks_task_key_key UNIQUE (task_key_scope, task_number);
+
 alter table only public.users add constraint users_email_key UNIQUE (email);
 
+alter table only public.announcements add constraint announcements_category_check CHECK ((category = ANY (ARRAY['company_update'::text, 'policy'::text, 'event'::text, 'people_culture'::text])));
+
+alter table only public.announcements add constraint announcements_event_order_check CHECK (((event_ends_at IS NULL) OR (event_starts_at IS NULL) OR (event_ends_at >= event_starts_at)));
+
+alter table only public.announcements add constraint announcements_meeting_url_check CHECK ((meeting_url ~ '^https://'::text));
+
 alter table only public.announcements add constraint announcements_title_check CHECK ((char_length(title) > 0));
+
+alter table only public.announcements add constraint announcements_title_length_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)));
 
 alter table only public.attachments add constraint attachments_label_check CHECK ((label = ANY (ARRAY['document'::text, 'meeting'::text, 'other'::text])));
 
 alter table only public.attachments add constraint attachments_type_check CHECK ((type = ANY (ARRAY['file'::text, 'link'::text])));
 
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_one_target CHECK ((num_nonnulls(user_id, team_space_id) = 1));
+
+alter table only public.calendar_events add constraint calendar_events_agenda_check CHECK (is_valid_meeting_agenda(agenda));
+
+alter table only public.calendar_events add constraint calendar_events_audience_check CHECK ((audience = ANY (ARRAY['company'::text, 'invited'::text])));
+
+alter table only public.calendar_events add constraint calendar_events_category_check CHECK ((category = ANY (ARRAY['meeting'::text, 'holiday'::text, 'training'::text, 'social'::text, 'review'::text, 'other'::text])));
+
+alter table only public.calendar_events add constraint calendar_events_external_url_check CHECK ((external_url ~ '^https://'::text));
+
+alter table only public.calendar_events add constraint calendar_events_repeat_check CHECK ((repeat = ANY (ARRAY['none'::text, 'daily'::text, 'weekly'::text, 'monthly'::text])));
+
+alter table only public.calendar_events add constraint calendar_events_time_order_check CHECK (((ends_at IS NULL) OR (starts_at IS NULL) OR (ends_at >= starts_at)));
+
 alter table only public.calendar_events add constraint calendar_events_title_check CHECK ((char_length(title) > 0));
 
+alter table only public.calendar_events add constraint calendar_events_title_length_check CHECK (((char_length(title) >= 1) AND (char_length(title) <= 200)));
+
 alter table only public.comments add constraint comments_body_check CHECK ((char_length(body) > 0));
+
+alter table only public.comments add constraint comments_body_length_check CHECK (((char_length(btrim(body)) >= 1) AND (char_length(btrim(body)) <= 5000)));
 
 alter table only public.direct_message_reactions add constraint direct_message_reactions_emoji_check CHECK (((char_length(emoji) >= 1) AND (char_length(emoji) <= 16)));
 
@@ -448,23 +601,51 @@ alter table only public.memberships add constraint memberships_org_role_admin_on
 
 alter table only public.milestones add constraint milestones_name_check CHECK ((char_length(name) > 0));
 
-alter table only public.notifications add constraint notifications_reference_type_check CHECK ((reference_type = ANY (ARRAY['task'::text, 'comment'::text, 'announcement'::text])));
+alter table only public.notifications add constraint notifications_reference_type_check CHECK ((reference_type = ANY (ARRAY['task'::text, 'comment'::text, 'announcement'::text, 'project'::text, 'event'::text])));
 
-alter table only public.notifications add constraint notifications_type_check CHECK ((type = ANY (ARRAY['assignment'::text, 'mention'::text, 'status_change'::text])));
+alter table only public.notifications add constraint notifications_type_check CHECK ((type = ANY (ARRAY['assignment'::text, 'mention'::text, 'status_change'::text, 'project_added'::text, 'task_blocked'::text, 'task_unblocked'::text, 'department_nudge'::text])));
 
 alter table only public.organizations add constraint organizations_name_check CHECK ((char_length(name) > 0));
+
+alter table only public.organizations add constraint organizations_task_key_prefix_check CHECK ((task_key_prefix ~ '^[A-Z][A-Z0-9]{1,9}$'::text));
 
 alter table only public.project_columns add constraint project_columns_base_status_check CHECK ((base_status = ANY (ARRAY['todo'::text, 'in_progress'::text, 'done'::text])));
 
 alter table only public.project_columns add constraint project_columns_name_check CHECK (((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 40)));
 
+alter table only public.project_departments add constraint project_departments_status_check CHECK ((status = ANY (ARRAY['active'::text, 'signed_off'::text])));
+
 alter table only public.project_spaces add constraint project_spaces_name_check CHECK ((char_length(name) > 0));
 
 alter table only public.project_spaces add constraint project_spaces_status_check CHECK ((status = ANY (ARRAY['active'::text, 'archived'::text])));
 
+alter table only public.project_spaces add constraint project_spaces_task_key_prefix_check CHECK ((task_key_prefix ~ '^[A-Z][A-Z0-9]{1,11}$'::text));
+
+alter table only public.rbac_permissions add constraint rbac_permissions_scope_check CHECK ((scope = ANY (ARRAY['organization'::text, 'department'::text])));
+
+alter table only public.rbac_roles add constraint rbac_roles_scope_check CHECK ((scope = ANY (ARRAY['organization'::text, 'department'::text])));
+
+alter table only public.sprints add constraint sprints_dates_check CHECK ((ends_on >= starts_on));
+
+alter table only public.sprints add constraint sprints_goal_check CHECK (((goal IS NULL) OR (char_length(goal) <= 500)));
+
+alter table only public.sprints add constraint sprints_name_check CHECK (((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 80)));
+
+alter table only public.sprints add constraint sprints_retro_actions_check CHECK (((retro_actions IS NULL) OR (char_length(retro_actions) <= 2000)));
+
+alter table only public.sprints add constraint sprints_retro_to_improve_check CHECK (((retro_to_improve IS NULL) OR (char_length(retro_to_improve) <= 2000)));
+
+alter table only public.sprints add constraint sprints_retro_went_well_check CHECK (((retro_went_well IS NULL) OR (char_length(retro_went_well) <= 2000)));
+
+alter table only public.sprints add constraint sprints_status_check CHECK ((status = ANY (ARRAY['planned'::text, 'active'::text, 'completed'::text])));
+
+alter table only public.task_key_counters add constraint task_key_counters_next_number_check CHECK ((next_number > 0));
+
 alter table only public.tasks add constraint tasks_priority_check CHECK ((priority = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text, 'urgent'::text])));
 
 alter table only public.tasks add constraint tasks_status_check CHECK ((status = ANY (ARRAY['todo'::text, 'in_progress'::text, 'done'::text])));
+
+alter table only public.tasks add constraint tasks_story_points_check CHECK (((story_points IS NULL) OR (story_points = ANY (ARRAY[0, 1, 2, 3, 5, 8, 13, 21]))));
 
 alter table only public.tasks add constraint tasks_title_check CHECK ((char_length(title) > 0));
 
@@ -472,7 +653,19 @@ alter table only public.team_spaces add constraint team_spaces_description_check
 
 alter table only public.team_spaces add constraint team_spaces_name_check CHECK ((char_length(name) > 0));
 
+alter table only public.team_spaces add constraint team_spaces_task_key_prefix_check CHECK ((task_key_prefix ~ '^[A-Z][A-Z0-9]{1,9}$'::text));
+
+alter table only public.users add constraint users_job_title_length_check CHECK ((char_length(job_title) <= 100));
+
+alter table only public.users add constraint users_location_length_check CHECK ((char_length(location) <= 100));
+
+alter table only public.users add constraint users_reports_to_not_self_check CHECK ((reports_to IS DISTINCT FROM id));
+
+alter table only public.users add constraint users_timezone_length_check CHECK ((char_length(timezone) <= 64));
+
 alter table only public.activity_log add constraint activity_log_actor_id_fkey FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE SET NULL;
+
+alter table only public.activity_log add constraint activity_log_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
 
 alter table only public.announcements add constraint announcements_author_id_fkey FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL;
 
@@ -481,6 +674,14 @@ alter table only public.announcements add constraint announcements_organization_
 alter table only public.attachments add constraint attachments_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
 
 alter table only public.attachments add constraint attachments_task_id_fkey FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE;
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_added_by_fkey FOREIGN KEY (added_by) REFERENCES users(id) ON DELETE SET NULL;
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_event_id_fkey FOREIGN KEY (event_id) REFERENCES calendar_events(id) ON DELETE CASCADE;
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE CASCADE;
+
+alter table only public.calendar_event_attendees add constraint calendar_event_attendees_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
 alter table only public.calendar_events add constraint calendar_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
 
@@ -558,6 +759,12 @@ alter table only public.org_feed_items add constraint org_feed_items_team_space_
 
 alter table only public.project_columns add constraint project_columns_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
 
+alter table only public.project_departments add constraint project_departments_lead_id_fkey FOREIGN KEY (lead_id) REFERENCES users(id) ON DELETE SET NULL;
+
+alter table only public.project_departments add constraint project_departments_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
+
+alter table only public.project_departments add constraint project_departments_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE CASCADE;
+
 alter table only public.project_files add constraint project_files_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
 
 alter table only public.project_files add constraint project_files_task_id_fkey FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE SET NULL;
@@ -568,7 +775,21 @@ alter table only public.project_members add constraint project_members_user_id_f
 
 alter table only public.project_spaces add constraint project_spaces_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE CASCADE;
 
+alter table only public.rbac_role_permissions add constraint rbac_role_permissions_permission_key_fkey FOREIGN KEY (permission_key) REFERENCES rbac_permissions(key) ON DELETE CASCADE;
+
+alter table only public.rbac_role_permissions add constraint rbac_role_permissions_role_key_fkey FOREIGN KEY (role_key) REFERENCES rbac_roles(key) ON DELETE CASCADE;
+
+alter table only public.sprints add constraint sprints_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+alter table only public.sprints add constraint sprints_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
+
+alter table only public.task_due_reminders add constraint task_due_reminders_task_id_fkey FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE;
+
+alter table only public.task_key_counters add constraint task_key_counters_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
+
 alter table only public.tasks add constraint tasks_assignee_id_fkey FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL;
+
+alter table only public.tasks add constraint tasks_blocked_by_task_id_fkey FOREIGN KEY (blocked_by_task_id) REFERENCES tasks(id) ON DELETE SET NULL;
 
 alter table only public.tasks add constraint tasks_column_id_fkey FOREIGN KEY (column_id) REFERENCES project_columns(id) ON DELETE SET NULL;
 
@@ -582,6 +803,10 @@ alter table only public.tasks add constraint tasks_parent_task_id_fkey FOREIGN K
 
 alter table only public.tasks add constraint tasks_project_id_fkey FOREIGN KEY (project_id) REFERENCES project_spaces(id) ON DELETE CASCADE;
 
+alter table only public.tasks add constraint tasks_sprint_id_fkey FOREIGN KEY (sprint_id) REFERENCES sprints(id) ON DELETE SET NULL;
+
+alter table only public.tasks add constraint tasks_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE SET NULL;
+
 alter table only public.team_space_stats add constraint team_space_stats_team_space_id_fkey FOREIGN KEY (team_space_id) REFERENCES team_spaces(id) ON DELETE CASCADE;
 
 alter table only public.team_spaces add constraint team_spaces_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
@@ -590,23 +815,39 @@ alter table only public.users add constraint users_id_fkey FOREIGN KEY (id) REFE
 
 alter table only public.users add constraint users_organization_id_fkey FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE;
 
+alter table only public.users add constraint users_reports_to_fkey FOREIGN KEY (reports_to) REFERENCES users(id) ON DELETE SET NULL;
+
 -- ======================================================================
 -- Indexes
 -- ======================================================================
 
 CREATE INDEX activity_log_entity_idx ON public.activity_log USING btree (entity_type, entity_id, created_at DESC);
 
+CREATE INDEX activity_log_organization_created_idx ON public.activity_log USING btree (organization_id, created_at DESC);
+
+CREATE INDEX announcements_org_created_idx ON public.announcements USING btree (organization_id, created_at DESC);
+
 CREATE INDEX announcements_org_idx ON public.announcements USING btree (organization_id, pinned, created_at DESC);
 
 CREATE INDEX attachments_task_idx ON public.attachments USING btree (task_id);
 
+CREATE INDEX calendar_event_attendees_team_idx ON public.calendar_event_attendees USING btree (team_space_id);
+
+CREATE INDEX calendar_event_attendees_user_idx ON public.calendar_event_attendees USING btree (user_id);
+
+CREATE INDEX calendar_events_org_date_idx ON public.calendar_events USING btree (organization_id, event_date);
+
 CREATE INDEX calendar_events_org_idx ON public.calendar_events USING btree (organization_id, event_date);
+
+CREATE INDEX calendar_events_org_repeat_idx ON public.calendar_events USING btree (organization_id) WHERE (repeat <> 'none'::text);
 
 CREATE INDEX comments_task_idx ON public.comments USING btree (task_id);
 
 CREATE INDEX daily_standups_team_space_date_idx ON public.daily_standups USING btree (team_space_id, standup_date DESC);
 
 CREATE INDEX direct_message_reactions_message_id_idx ON public.direct_message_reactions USING btree (message_id);
+
+CREATE INDEX direct_messages_attachment_path_idx ON public.direct_messages USING btree (((file_attachment ->> 'path'::text))) WHERE (file_attachment ? 'path'::text);
 
 CREATE INDEX invitations_email_idx ON public.invitations USING btree (email);
 
@@ -638,13 +879,23 @@ CREATE INDEX org_feed_org_idx ON public.org_feed_items USING btree (organization
 
 CREATE INDEX project_columns_project_position_idx ON public.project_columns USING btree (project_id, "position");
 
+CREATE UNIQUE INDEX project_departments_one_lead ON public.project_departments USING btree (project_id) WHERE is_lead_department;
+
+CREATE INDEX project_departments_team_space_idx ON public.project_departments USING btree (team_space_id);
+
 CREATE INDEX idx_project_files_task_id ON public.project_files USING btree (task_id);
 
 CREATE INDEX project_spaces_search_idx ON public.project_spaces USING gin (search_vector);
 
 CREATE INDEX project_spaces_team_space_idx ON public.project_spaces USING btree (team_space_id);
 
+CREATE UNIQUE INDEX sprints_one_active_per_project ON public.sprints USING btree (project_id) WHERE (status = 'active'::text);
+
+CREATE INDEX sprints_project_id_idx ON public.sprints USING btree (project_id);
+
 CREATE INDEX tasks_assignee_idx ON public.tasks USING btree (assignee_id, status);
+
+CREATE INDEX tasks_blocked_by_idx ON public.tasks USING btree (blocked_by_task_id) WHERE (blocked_by_task_id IS NOT NULL);
 
 CREATE INDEX tasks_column_id_idx ON public.tasks USING btree (column_id);
 
@@ -655,6 +906,8 @@ CREATE INDEX tasks_parent_idx ON public.tasks USING btree (parent_task_id);
 CREATE INDEX tasks_project_idx ON public.tasks USING btree (project_id, status);
 
 CREATE INDEX tasks_search_idx ON public.tasks USING gin (search_vector);
+
+CREATE INDEX tasks_sprint_id_idx ON public.tasks USING btree (sprint_id) WHERE (sprint_id IS NOT NULL);
 
 CREATE INDEX users_search_idx ON public.users USING gin (search_vector);
 
@@ -668,6 +921,25 @@ CREATE INDEX users_search_idx ON public.users USING gin (search_vector);
 -- Functions
 -- ======================================================================
 
+CREATE OR REPLACE FUNCTION public.activity_log_set_organization()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO ''
+AS $function$
+begin
+  if current_user in ('authenticated', 'anon') then
+    new.organization_id := public.current_org_id();
+  elsif new.organization_id is null then
+    new.organization_id := coalesce(
+      public.current_org_id(),
+      (select u.organization_id from public.users u where u.id = new.actor_id)
+    );
+  end if;
+  return new;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.add_user_to_membership()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -677,6 +949,102 @@ BEGIN
     VALUES (NEW.id, NEW.role); -- Adjust 'NEW.role' or use a default like 'member'
     RETURN NEW;
 END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.assert_may_change_roles(p_user_id uuid, p_org_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if auth.uid() is null then
+    raise exception 'Sign in first.' using errcode = '42501', hint = 'rbac';
+  end if;
+  if not mfa_satisfied() then
+    raise exception 'Enter your authenticator code first.' using errcode = '42501', hint = 'rbac';
+  end if;
+  if p_org_id is null or not has_org_permission('member.assign_role', p_org_id) then
+    raise exception 'Only an organization admin can change roles.' using errcode = '42501', hint = 'rbac';
+  end if;
+  if exists (select 1 from memberships m where m.user_id = p_user_id and m.role = 'super_admin') then
+    raise exception 'The owner''s roles can''t be changed here.' using errcode = '42501', hint = 'rbac';
+  end if;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.assign_role(p_user_id uuid, p_team_space_id uuid, p_role_key text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_org uuid;
+begin
+  select organization_id into v_org from users where id = p_user_id;
+  if v_org is null or v_org <> current_org_id() then
+    raise exception 'That person is not in your organization.' using errcode = 'P0001', hint = 'rbac';
+  end if;
+  perform assert_may_change_roles(p_user_id, v_org);
+
+  if p_role_key = 'org_admin' then
+    if p_team_space_id is not null then
+      raise exception 'Organization Admin covers the whole organization, not one department.' using errcode = '22023', hint = 'rbac';
+    end if;
+    insert into memberships (user_id, team_space_id, role) values (p_user_id, null, 'admin')
+    on conflict (user_id) where team_space_id is null do nothing;
+    return;
+  end if;
+
+  if p_role_key not in ('department_admin', 'team_lead', 'member', 'viewer') then
+    raise exception 'Unknown role.' using errcode = '22023', hint = 'rbac';
+  end if;
+  if p_team_space_id is null
+     or not exists (select 1 from team_spaces t where t.id = p_team_space_id and t.organization_id = v_org) then
+    raise exception 'Choose a department in your organization.' using errcode = '22023', hint = 'rbac';
+  end if;
+
+  insert into memberships (user_id, team_space_id, role)
+  values (p_user_id, p_team_space_id, case when p_role_key = 'department_admin' then 'admin' else p_role_key end::membership_role)
+  on conflict (user_id, team_space_id) do update set role = excluded.role;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.calendar_event_attendees_notify()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_actor_name text;
+  v_event calendar_events%rowtype;
+  v_body text;
+  v_user uuid;
+begin
+  select * into v_event from calendar_events where id = new.event_id;
+  if v_event.id is null then
+    return new;
+  end if;
+  select name into v_actor_name from users where id = auth.uid();
+  v_body := coalesce(v_actor_name, 'Someone') || ' invited you to "' || v_event.title || '" on '
+    || to_char(v_event.event_date, 'FMDy, FMDD FMMon');
+
+  for v_user in
+    select new.user_id where new.user_id is not null
+    union
+    select m.user_id from memberships m where new.team_space_id is not null and m.team_space_id = new.team_space_id
+  loop
+    -- Inviting yourself isn't news
+    if v_user is distinct from auth.uid() then
+      perform notify_user(v_user, 'meeting_invite', 'event', new.event_id, v_body);
+    end if;
+  end loop;
+  return new;
+end;
 $function$
 ;
 
@@ -693,7 +1061,23 @@ AS $function$
         team_role_at_least(ps.team_space_id, 'member')
         or is_project_member(ps.id)
         or is_admin_of_org(team_space_org(ps.team_space_id))
+        or extra_department_role_at_least(ps.id, 'member')
       )
+  );
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.can_manage_calendar_event(p_event_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1 from calendar_events e
+    where e.id = p_event_id
+      and e.organization_id = current_org_id()
+      and (e.created_by = auth.uid() or (e.audience = 'company' and has_permission('event.manage')))
   );
 $function$
 ;
@@ -719,10 +1103,7 @@ CREATE OR REPLACE FUNCTION public.can_manage_channel_scope(p_project_id uuid, p_
  SET search_path TO 'public'
 AS $function$
   select (p_project_id is not null and can_manage_project(p_project_id))
-      or (p_department_id is not null and (
-            team_role_at_least(p_department_id, 'team_lead')
-            or is_admin_of_org(team_space_org(p_department_id))
-         ));
+      or (p_department_id is not null and has_permission('chat.manage', p_department_id));
 $function$
 ;
 
@@ -735,10 +1116,23 @@ AS $function$
   select exists (
     select 1 from project_spaces ps
     where ps.id = p_project_id
-      and (
-        team_role_at_least(ps.team_space_id, 'team_lead')
-        or is_admin_of_org(team_space_org(ps.team_space_id))
-      )
+      and has_permission('project.manage', ps.team_space_id)
+  );
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.can_moderate_task_comments(p_task_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1 from tasks t
+    where t.id = p_task_id
+      and t.organization_id = current_org_id()
+      and case when t.project_id is null then has_permission('task.manage_unfiled')
+               else can_manage_project(t.project_id) end
   );
 $function$
 ;
@@ -781,6 +1175,21 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.can_see_calendar_event(p_event_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1 from calendar_events e
+    where e.id = p_event_id
+      and e.organization_id = current_org_id()
+      and (e.audience = 'company' or e.created_by = auth.uid() or is_event_attendee(e.id))
+  );
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.can_see_channel(p_channel_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -817,6 +1226,7 @@ CREATE OR REPLACE FUNCTION public.claim_pending_invites()
 AS $function$
 declare
   v_email text;
+  v_org uuid;
   v_invite record;
 begin
   select email into v_email from users where id = auth.uid();
@@ -825,8 +1235,14 @@ begin
   end if;
 
   for v_invite in
-    select * from invites where lower(email) = lower(v_email) and accepted_at is null
+    select * from invites
+    where lower(email) = lower(v_email) and accepted_at is null
+    order by created_at
   loop
+    -- Re-read each time: the first claimed invite may have just set it
+    select organization_id into v_org from users where id = auth.uid();
+    continue when v_org is not null and v_org <> v_invite.organization_id;
+
     update users set organization_id = v_invite.organization_id
       where id = auth.uid() and organization_id is null;
 
@@ -840,32 +1256,127 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.comments_before_update()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+begin
+  new.task_id := old.task_id;
+  new.author_id := old.author_id;
+  new.created_at := old.created_at;
+  if new.body is distinct from old.body then
+    new.edited_at := now();
+  end if;
+  return new;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.comments_notify()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
- SET search_path TO 'public'
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   v_actor_name text;
-  v_task_title text;
-  v_org_id uuid;
-  mentioned record;
+  v_task record;
+  v_mentioned uuid[] := '{}';
+  v_person record;
+  v_user uuid;
 begin
   select name into v_actor_name from users where id = auth.uid();
-  select title, organization_id into v_task_title, v_org_id from tasks where id = new.task_id;
+  select title, organization_id, assignee_id, created_by into v_task from tasks where id = new.task_id;
 
-  for mentioned in
-    select u.id, u.name from users u
-    where u.organization_id = v_org_id
+  -- "@Full Name" in the text
+  for v_person in
+    select u.id from users u
+    where u.organization_id = v_task.organization_id
+      and u.name is not null and u.name <> ''
       and position('@' || u.name in new.body) > 0
-      and u.id != new.author_id
+      and u.id is distinct from new.author_id
   loop
-    perform notify_user(mentioned.id, 'mention', 'comment', new.id,
-      coalesce(v_actor_name, 'Someone') || ' mentioned you on "' || v_task_title || '"');
+    v_mentioned := v_mentioned || v_person.id;
+    perform notify_user(v_person.id, 'mention', 'comment', new.id,
+      coalesce(v_actor_name, 'Someone') || ' mentioned you on "' || v_task.title || '"');
+  end loop;
+
+  -- The assignee and creator hear about every comment (once, and not about their own)
+  foreach v_user in array array_remove(array[v_task.assignee_id, v_task.created_by], null) loop
+    if v_user is distinct from new.author_id and not (v_user = any (v_mentioned)) then
+      v_mentioned := v_mentioned || v_user;
+      perform notify_user(v_user, 'comment', 'comment', new.id,
+        coalesce(v_actor_name, 'Someone') || ' commented on "' || v_task.title || '"');
+    end if;
   end loop;
 
   return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.complete_sprint(p_sprint_id uuid, p_carry_over_to uuid DEFAULT NULL::uuid, p_went_well text DEFAULT NULL::text, p_to_improve text DEFAULT NULL::text, p_actions text DEFAULT NULL::text)
+ RETURNS sprints
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_sprint sprints;
+  v_done_points integer;
+  v_done_tasks integer;
+  v_open_tasks integer;
+begin
+  -- Permission first: locking the row needs update rights, which members lack
+  select * into v_sprint from sprints where id = p_sprint_id;
+  if not found then
+    raise exception 'Sprint not found' using errcode = 'P0002';
+  end if;
+  if not can_manage_project(v_sprint.project_id) then
+    raise exception 'Only project managers can complete a sprint' using errcode = '42501';
+  end if;
+  select * into v_sprint from sprints where id = p_sprint_id for update;
+  if v_sprint.status <> 'active' then
+    raise exception 'Only the active sprint can be completed' using errcode = '22023';
+  end if;
+  if p_carry_over_to is not null and not exists (
+    select 1 from sprints
+    where id = p_carry_over_to and project_id = v_sprint.project_id and status = 'planned'
+  ) then
+    raise exception 'Unfinished work can only move to a planned sprint of this project' using errcode = '22023';
+  end if;
+
+  select coalesce(sum(story_points) filter (where status = 'done'), 0),
+         count(*) filter (where status = 'done'),
+         count(*) filter (where status <> 'done')
+    into v_done_points, v_done_tasks, v_open_tasks
+    from tasks where sprint_id = p_sprint_id;
+
+  update tasks set sprint_id = p_carry_over_to
+  where sprint_id = p_sprint_id and status <> 'done';
+
+  update sprints set
+    status = 'completed',
+    completed_at = now(),
+    completed_points = v_done_points,
+    completed_tasks = v_done_tasks,
+    retro_went_well = nullif(btrim(p_went_well), ''),
+    retro_to_improve = nullif(btrim(p_to_improve), ''),
+    retro_actions = nullif(btrim(p_actions), '')
+  where id = p_sprint_id
+  returning * into v_sprint;
+
+  -- completionPercent / completedCount / totalTasks: the feed's existing wording
+  insert into activity_log (entity_type, entity_id, actor_id, action, new_state)
+  values ('sprint', v_sprint.id, auth.uid(), 'sprint_completed', jsonb_build_object(
+    'project_id', v_sprint.project_id, 'name', v_sprint.name,
+    'completedCount', v_done_tasks, 'totalTasks', v_done_tasks + v_open_tasks,
+    'completionPercent', case when v_done_tasks + v_open_tasks = 0 then 0
+                              else round(100.0 * v_done_tasks / (v_done_tasks + v_open_tasks)) end,
+    'completedPoints', v_done_points, 'committedPoints', v_sprint.committed_points,
+    'carriedOver', v_open_tasks));
+
+  return v_sprint;
 end;
 $function$
 ;
@@ -877,6 +1388,111 @@ CREATE OR REPLACE FUNCTION public.current_org_id()
  SET search_path TO 'public'
 AS $function$
   select organization_id from users where id = auth.uid();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.default_project_key_code(p_name text)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+declare
+  v_words text[];
+  v_code text;
+begin
+  v_words := array_remove(
+    regexp_split_to_array(upper(regexp_replace(coalesce(p_name, ''), '[^A-Za-z0-9]+', ' ', 'g')), '\s+'),
+    '');
+  if coalesce(array_length(v_words, 1), 0) >= 2 then
+    select string_agg(left(w, 1), '' order by i) into v_code
+    from unnest(v_words[1:3]) with ordinality as t(w, i);
+  elsif coalesce(array_length(v_words, 1), 0) = 1 then
+    v_code := left(v_words[1], 1)
+      || regexp_replace(regexp_replace(substr(v_words[1], 2), '[AEIOUYH]', '', 'g'), '(.)\1+', '\1', 'g');
+    if char_length(v_code) < 2 then
+      v_code := v_words[1];
+    end if;
+    v_code := left(v_code, 3);
+  end if;
+  return coalesce(nullif(v_code, ''), 'P');
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.default_task_key_prefix(p_name text)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+declare
+  v_words text[];
+  v_prefix text;
+begin
+  v_words := array_remove(
+    regexp_split_to_array(upper(regexp_replace(coalesce(p_name, ''), '[^A-Za-z0-9]+', ' ', 'g')), '\s+'),
+    '');
+  if coalesce(array_length(v_words, 1), 0) >= 2 then
+    select string_agg(left(w, 1), '' order by i) into v_prefix
+    from unnest(v_words[1:3]) with ordinality as t(w, i);
+  else
+    v_prefix := left(coalesce(v_words[1], ''), 3);
+  end if;
+  v_prefix := regexp_replace(v_prefix, '^[0-9]+', '');
+  if char_length(v_prefix) < 2 then
+    return 'TASK';
+  end if;
+  return v_prefix;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.dispatch_edge_webhook()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  v_url text;
+  v_secret text;
+begin
+  select decrypted_secret into v_url from vault.decrypted_secrets where name = 'project_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'edge_webhook_secret';
+  if v_url is null or v_secret is null then
+    raise warning 'Webhook to % skipped: add the project_url and edge_webhook_secret Vault secrets', tg_argv[0];
+    return null;
+  end if;
+
+  perform net.http_post(
+    url := rtrim(v_url, '/') || '/functions/v1/' || tg_argv[0],
+    body := jsonb_build_object(
+      'type', tg_op,
+      'table', tg_table_name,
+      'schema', tg_table_schema,
+      'record', to_jsonb(new),
+      'old_record', case when tg_op = 'UPDATE' then to_jsonb(old) end
+    ),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-webhook-secret', v_secret),
+    timeout_milliseconds := 5000
+  );
+  return null;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.extra_department_role_at_least(p_project_id uuid, p_min membership_role)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from project_departments pd
+    where pd.project_id = p_project_id
+      and team_role_at_least(pd.team_space_id, p_min)
+  );
 $function$
 ;
 
@@ -930,6 +1546,17 @@ begin
   )
   on conflict do nothing;
 
+  -- Logging must never block account creation
+  begin
+    insert into public.activity_log (entity_type, entity_id, actor_id, action, new_state)
+    values (
+      'user', new.id, new.id, 'signup',
+      jsonb_build_object('email', new.email, 'full_name', new.raw_user_meta_data ->> 'full_name')
+    );
+  exception when others then
+    raise warning 'handle_new_user: could not log signup for %: %', new.id, sqlerrm;
+  end;
+
   return new;
 end;
 $function$
@@ -942,10 +1569,67 @@ CREATE OR REPLACE FUNCTION public.has_channel_scope_access(p_project_id uuid, p_
  SET search_path TO 'public'
 AS $function$
   select (p_project_id is not null and has_project_access(p_project_id))
-      or (p_department_id is not null and (
-            has_team_access(p_department_id)
-            or is_admin_of_org(team_space_org(p_department_id))
-         ));
+      or (p_department_id is not null and has_permission('department.view', p_department_id));
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.has_extra_department_access(p_project_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1 from project_departments pd
+    where pd.project_id = p_project_id
+      and has_team_access(pd.team_space_id)
+  );
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.has_org_permission(p_permission text, p_org_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select p_org_id is not null and p_org_id = current_org_id() and has_permission(p_permission);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.has_password()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select coalesce(u.encrypted_password, '') <> ''
+  from auth.users u
+  where u.id = auth.uid();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.has_permission(p_permission text, p_team_space_id uuid DEFAULT NULL::uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from memberships m
+    join rbac_roles r on r.key = membership_role_key(m.team_space_id, m.role)
+    join rbac_role_permissions rp on rp.role_key = r.key
+    where m.user_id = auth.uid()
+      and rp.permission_key = p_permission
+      and (
+        (r.scope = 'organization'
+          and (p_team_space_id is null or team_space_org(p_team_space_id) = current_org_id()))
+        or (r.scope = 'department'
+          and m.team_space_id = p_team_space_id
+          and team_space_org(m.team_space_id) = current_org_id())
+      )
+  );
 $function$
 ;
 
@@ -962,6 +1646,7 @@ AS $function$
         has_team_access(ps.team_space_id)
         or is_project_member(ps.id)
         or is_admin_of_org(team_space_org(ps.team_space_id))
+        or has_extra_department_access(ps.id)
       )
   );
 $function$
@@ -997,6 +1682,19 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.has_verified_mfa_factor()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select exists (
+    select 1 from auth.mfa_factors f
+    where f.user_id = auth.uid() and f.status = 'verified'
+  );
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.is_admin_of_org(p_org_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -1017,6 +1715,16 @@ AS $function$
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.is_department_member(p_user_id uuid, p_team_space_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (select 1 from memberships where user_id = p_user_id and team_space_id = p_team_space_id);
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.is_dm_participant(p_message_id uuid)
  RETURNS boolean
  LANGUAGE sql
@@ -1026,6 +1734,22 @@ AS $function$
   select exists (
     select 1 from direct_messages
     where id = p_message_id and auth.uid() in (sender_id, receiver_id)
+  );
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.is_event_attendee(p_event_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (
+    select 1 from calendar_event_attendees a
+    where a.event_id = p_event_id
+      and (a.user_id = auth.uid()
+           or exists (select 1 from memberships m
+                      where m.team_space_id = a.team_space_id and m.user_id = auth.uid()))
   );
 $function$
 ;
@@ -1100,6 +1824,118 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.is_valid_meeting_agenda(p_agenda jsonb)
+ RETURNS boolean
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+  select jsonb_typeof(p_agenda) = 'array'
+    and jsonb_array_length(p_agenda) <= 20
+    and not exists (
+      select 1 from jsonb_array_elements(p_agenda) item
+      where jsonb_typeof(item) <> 'object'
+         or jsonb_typeof(item -> 'text') is distinct from 'string'
+         or jsonb_typeof(item -> 'done') is distinct from 'boolean'
+         or char_length(item ->> 'text') not between 1 and 200
+    );
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.launch_organization(p_user_id uuid, p_organization_name text, p_team_spaces jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_current_org uuid;
+  v_founder_email text;
+  v_org organizations;
+  v_team team_spaces;
+  v_team_input jsonb;
+  v_teams jsonb := '[]'::jsonb;
+  v_invites jsonb := '[]'::jsonb;
+  v_invite record;
+begin
+  if coalesce(btrim(p_organization_name), '') = '' then
+    raise exception 'organization_name is required' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_team_spaces) is distinct from 'array'
+     or jsonb_array_length(p_team_spaces) not between 1 and 5 then
+    raise exception 'team_spaces must contain 1 to 5 entries' using errcode = '22023';
+  end if;
+
+  -- Row lock: a second launch from the same user (double click, two tabs) waits
+  -- here, then sees the organization the first one set and stops
+  select organization_id, lower(email) into v_current_org, v_founder_email
+  from users where id = p_user_id
+  for update;
+  if not found then
+    raise exception 'Profile not found' using errcode = 'P0002';
+  end if;
+  if v_current_org is not null then
+    raise exception 'You already belong to an organization.' using errcode = '23505';
+  end if;
+
+  insert into organizations (name) values (btrim(p_organization_name)) returning * into v_org;
+  update users set organization_id = v_org.id where id = p_user_id;
+  insert into memberships (user_id, team_space_id, role) values (p_user_id, null, 'admin');
+
+  for v_team_input in select value from jsonb_array_elements(p_team_spaces) loop
+    continue when coalesce(btrim(v_team_input ->> 'name'), '') = '';
+
+    insert into team_spaces (organization_id, name)
+    values (v_org.id, btrim(v_team_input ->> 'name'))
+    returning * into v_team;
+    v_teams := v_teams || to_jsonb(v_team);
+
+    -- One invite per address per team; if the lead is also listed as a member,
+    -- the lead role wins. The founder never invites themselves.
+    for v_invite in
+      select distinct on (e.email) e.email, e.role
+      from (
+        select lower(btrim(v_team_input ->> 'team_lead_email')) as email, 'team_lead'::membership_role as role, 0 as rank
+        union all
+        select lower(btrim(m)), 'member'::membership_role, 1
+        from jsonb_array_elements_text(coalesce(v_team_input -> 'member_emails', '[]'::jsonb)) as m
+      ) e
+      where coalesce(e.email, '') <> '' and e.email <> v_founder_email
+      order by e.email, e.rank
+    loop
+      insert into invites (organization_id, team_space_id, email, role, invited_by)
+      values (v_org.id, v_team.id, v_invite.email, v_invite.role, p_user_id);
+      v_invites := v_invites || jsonb_build_object(
+        'email', v_invite.email,
+        'role', v_invite.role,
+        'team_space_id', v_team.id,
+        'team_name', v_team.name
+      );
+    end loop;
+  end loop;
+
+  if jsonb_array_length(v_teams) = 0 then
+    raise exception 'At least one team space needs a name' using errcode = '22023';
+  end if;
+
+  return jsonb_build_object('organization', to_jsonb(v_org), 'team_spaces', v_teams, 'invites', v_invites);
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.leads_project_department(p_project_id uuid, p_team_space_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select team_role_at_least(p_team_space_id, 'team_lead')
+      or exists (
+        select 1 from project_departments
+        where project_id = p_project_id and team_space_id = p_team_space_id and lead_id = auth.uid()
+      );
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.membership_org(p_team_space_id uuid, p_user_id uuid)
  RETURNS uuid
  LANGUAGE sql
@@ -1110,6 +1946,54 @@ AS $function$
     when p_team_space_id is not null then (select organization_id from team_spaces where id = p_team_space_id)
     else (select organization_id from users where id = p_user_id)
   end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.membership_role_key(p_team_space_id uuid, p_role membership_role)
+ RETURNS text
+ LANGUAGE sql
+ IMMUTABLE
+ SET search_path TO ''
+AS $function$
+  select case
+    when p_role = 'super_admin' then 'owner'
+    when p_role = 'admin' and p_team_space_id is null then 'org_admin'
+    when p_role = 'admin' then 'department_admin'
+    else p_role::text
+  end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.memberships_guard_org_roles()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_org uuid;
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return coalesce(new, old);
+  end if;
+  if old.role = 'super_admin' and not exists (
+       select 1 from memberships m where m.user_id = auth.uid() and m.role = 'super_admin') then
+    raise exception 'The owner''s roles can''t be changed here.' using errcode = '42501', hint = 'rbac';
+  end if;
+  if membership_role_key(old.team_space_id, old.role) in ('owner', 'org_admin')
+     and (tg_op = 'DELETE' or membership_role_key(new.team_space_id, new.role) not in ('owner', 'org_admin')) then
+    select organization_id into v_org from users where id = old.user_id;
+    if exists (select 1 from users u where u.organization_id = v_org and u.id <> old.user_id)
+       and not exists (
+         select 1 from memberships m join users u on u.id = m.user_id
+         where u.organization_id = v_org and u.id <> old.user_id
+           and membership_role_key(m.team_space_id, m.role) in ('owner', 'org_admin')
+       ) then
+      raise exception 'They are the only organization admin. Make someone else an organization admin first.'
+        using errcode = 'P0001', hint = 'rbac';
+    end if;
+  end if;
+  return coalesce(new, old);
+end;
 $function$
 ;
 
@@ -1135,6 +2019,16 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.mfa_required_for_caller()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select auth.uid() is not null;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.mfa_satisfied()
  RETURNS boolean
  LANGUAGE sql
@@ -1142,11 +2036,37 @@ CREATE OR REPLACE FUNCTION public.mfa_satisfied()
  SET search_path TO ''
 AS $function$
   select coalesce(auth.jwt() ->> 'aal', 'aal1') = 'aal2'
-      or not exists (
-        select 1 from auth.mfa_factors f
-        where f.user_id = auth.uid() and f.status = 'verified'
-      )
+      or (not public.mfa_required_for_caller() and not public.has_verified_mfa_factor())
       or public.is_trusted_device();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.mfa_setup_required()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+  select public.mfa_required_for_caller()
+     and not public.has_verified_mfa_factor();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.my_permissions()
+ RETURNS TABLE(team_space_id uuid, permission text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select distinct
+    case when r.scope = 'organization' then null else m.team_space_id end,
+    rp.permission_key
+  from memberships m
+  join rbac_roles r on r.key = membership_role_key(m.team_space_id, m.role)
+  join rbac_role_permissions rp on rp.role_key = r.key
+  where m.user_id = auth.uid()
+    and mfa_satisfied()
+    and (r.scope = 'organization' or team_space_org(m.team_space_id) = current_org_id());
 $function$
 ;
 
@@ -1166,6 +2086,132 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.nudge_department(p_project_id uuid, p_team_space_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_lead uuid;
+  v_actor text;
+  v_project text;
+  v_department text;
+begin
+  if not (can_manage_project(p_project_id)
+          or exists (select 1 from project_departments where project_id = p_project_id and lead_id = auth.uid())) then
+    raise exception 'Only project managers and department leads can send a nudge' using errcode = '42501';
+  end if;
+  select lead_id into v_lead from project_departments where project_id = p_project_id and team_space_id = p_team_space_id;
+  if v_lead is null then
+    raise exception 'That department has no lead to nudge' using errcode = 'P0002';
+  end if;
+  if exists (
+    select 1 from activity_log
+    where action = 'department_nudged' and entity_id = p_project_id and actor_id = auth.uid()
+      and new_state ->> 'team_space_id' = p_team_space_id::text
+      and created_at > now() - interval '1 hour'
+  ) then
+    raise exception 'You already nudged this department in the last hour' using errcode = 'P0001';
+  end if;
+
+  select name into v_actor from users where id = auth.uid();
+  select name into v_project from project_spaces where id = p_project_id;
+  select name into v_department from team_spaces where id = p_team_space_id;
+  perform notify_user(v_lead, 'department_nudge', 'project', p_project_id,
+    coalesce(v_actor, 'Someone') || ' nudged ' || coalesce(v_department, 'your department')
+      || ' about "' || coalesce(v_project, 'a project') || '"');
+  insert into activity_log (entity_type, entity_id, actor_id, action, new_state)
+  values ('project', p_project_id, auth.uid(), 'department_nudged',
+          jsonb_build_object('project_id', p_project_id, 'team_space_id', p_team_space_id, 'department', v_department));
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.org_member_roles()
+ RETURNS TABLE(user_id uuid, team_space_id uuid, team_name text, role text, role_key text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select m.user_id, m.team_space_id, t.name::text, m.role::text, membership_role_key(m.team_space_id, m.role)
+  from memberships m
+  join users u on u.id = m.user_id
+  left join team_spaces t on t.id = m.team_space_id
+  where u.organization_id = current_org_id()
+    and (m.team_space_id is null or t.organization_id = u.organization_id)
+    and mfa_satisfied();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.org_team_memberships()
+ RETURNS TABLE(user_id uuid, team_space_id uuid, team_name text, role text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select m.user_id, t.id, t.name::text, m.role::text
+  from memberships m
+  join team_spaces t on t.id = m.team_space_id
+  join users u on u.id = m.user_id
+  where t.organization_id = current_org_id()
+    and u.organization_id = t.organization_id
+    and mfa_satisfied();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.project_departments_guard()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_project_due date;
+  v_lead_team uuid;
+begin
+  select due_date, team_space_id into v_project_due, v_lead_team from project_spaces where id = new.project_id;
+  if new.is_lead_department and new.team_space_id is distinct from v_lead_team then
+    raise exception 'The lead department must be the project''s own department' using errcode = '23514';
+  end if;
+  -- Checked only when the date is set, so a later, earlier project deadline
+  -- doesn't stop a lead signing off
+  if (tg_op = 'INSERT' or new.due_date is distinct from old.due_date)
+     and new.due_date is not null and v_project_due is not null and new.due_date > v_project_due then
+    raise exception 'A department can''t be due after the project''s overall deadline' using errcode = '23514';
+  end if;
+  -- A department's lead must belong to that department
+  if new.lead_id is not null and (tg_op = 'INSERT' or new.lead_id is distinct from old.lead_id)
+     and auth.uid() is not null
+     and not is_department_member(new.lead_id, new.team_space_id) then
+    raise exception 'A department''s lead must be a member of that department' using errcode = '23514';
+  end if;
+  -- A department's lead (not a project manager) may only sign the part off or undo that
+  if tg_op = 'UPDATE' and auth.uid() is not null and not can_manage_project(new.project_id)
+     and (new.lead_id, new.due_date, new.is_lead_department, new.team_space_id, new.project_id)
+         is distinct from (old.lead_id, old.due_date, old.is_lead_department, old.team_space_id, old.project_id) then
+    raise exception 'Only project managers can change a department''s lead or due date' using errcode = '42501';
+  end if;
+  if new.status = 'signed_off' and (tg_op = 'INSERT' or old.status is distinct from 'signed_off') then
+    new.signed_off_at := now();
+  elsif new.status = 'active' then
+    new.signed_off_at := null;
+  end if;
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.project_has_department(p_project_id uuid, p_team_space_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (select 1 from project_spaces where id = p_project_id and team_space_id = p_team_space_id)
+      or exists (select 1 from project_departments where project_id = p_project_id and team_space_id = p_team_space_id);
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.project_id_from_storage_path(p_name text)
  RETURNS uuid
  LANGUAGE plpgsql
@@ -1175,6 +2221,96 @@ begin
   return split_part(p_name, '/', 1)::uuid;
 exception when invalid_text_representation then
   return null;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.project_members_notify()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_actor_name text;
+  v_project_name text;
+begin
+  -- Joining a project yourself isn't news
+  if new.user_id is null or new.user_id = auth.uid() then
+    return new;
+  end if;
+  select name into v_actor_name from users where id = auth.uid();
+  select name into v_project_name from project_spaces where id = new.project_id;
+  perform notify_user(new.user_id, 'project_added', 'project', new.project_id,
+    coalesce(v_actor_name, 'Someone') || ' added you to "' || coalesce(v_project_name, 'a project') || '"');
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.project_spaces_set_task_key_prefix()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_org uuid;
+begin
+  if new.task_key_prefix is null then
+    new.task_key_prefix := unique_project_key_prefix(new.team_space_id, new.name, new.id);
+    return new;
+  end if;
+  select organization_id into v_org from team_spaces where id = new.team_space_id;
+  if task_key_prefix_taken(v_org, new.task_key_prefix, new.id) then
+    raise exception 'The task key prefix % is already used in this organization', new.task_key_prefix
+      using errcode = '23505';
+  end if;
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.queue_due_soon_reminders()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_count integer;
+begin
+  with due as (
+    select t.id, t.title, t.due_date, t.project_id, t.organization_id, u.email, p.name as project_name
+    from tasks t
+    join users u on u.id = t.assignee_id
+    join auth.users au on au.id = t.assignee_id
+    left join project_spaces p on p.id = t.project_id
+    where t.status <> 'done'
+      and t.due_date between current_date and current_date + 1
+      and u.email is not null
+      and coalesce(au.raw_user_meta_data #>> '{preferences,notifications,emailAlerts}', 'true') <> 'false'
+      and coalesce(au.raw_user_meta_data #>> '{preferences,notifications,taskAssigned}', 'true') <> 'false'
+      and not exists (select 1 from task_due_reminders r where r.task_id = t.id and r.due_date = t.due_date)
+  ),
+  remembered as (
+    insert into task_due_reminders (task_id, due_date)
+    select id, due_date from due
+    returning task_id
+  )
+  insert into notification_queue (organization_id, recipient_email, notification, payload)
+  select d.organization_id, d.email, 'deadline_incoming', jsonb_build_object(
+    'task_name', d.title,
+    'project_name', d.project_name,
+    'task_id', d.id,
+    'project_id', d.project_id,
+    'due_label', case when d.due_date = current_date then 'today' else 'tomorrow' end,
+    'due_date', to_char(d.due_date, 'FMDay, FMMonth FMDD'))
+  from due d
+  join remembered r on r.task_id = d.id;
+
+  get diagnostics v_count = row_count;
+  return v_count;
 end;
 $function$
 ;
@@ -1207,6 +2343,220 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.remove_from_organization(p_user_id uuid DEFAULT NULL::uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_caller uuid := auth.uid();
+  v_target uuid := coalesce(p_user_id, auth.uid());
+  v_is_leaving boolean;
+  v_org uuid;
+  v_name text;
+  v_email text;
+  v_target_is_org_admin boolean;
+begin
+  if v_caller is null then
+    raise exception 'Sign in first.' using errcode = '42501', hint = 'org_exit';
+  end if;
+  if not mfa_satisfied() then
+    raise exception 'Enter your authenticator code first.' using errcode = '42501', hint = 'org_exit';
+  end if;
+
+  v_is_leaving := v_target = v_caller;
+
+  select organization_id into v_org from users where id = v_target;
+  if v_org is null then
+    raise exception 'That person is not in an organization.' using errcode = 'P0001', hint = 'org_exit';
+  end if;
+
+  -- One exit per organization at a time. Without this, two admins leaving at
+  -- the same moment would each still see the other as an admin and both get
+  -- through, leaving nobody in charge. Every check below runs after the lock.
+  perform 1 from organizations where id = v_org for update;
+
+  select name, email into v_name, v_email
+  from users where id = v_target and organization_id = v_org for update;
+  if not found then
+    raise exception 'That person is not in an organization.' using errcode = 'P0001', hint = 'org_exit';
+  end if;
+
+  select exists (
+    select 1 from memberships m
+    where m.user_id = v_target
+      and membership_role_key(m.team_space_id, m.role) in (select r.key from rbac_roles r where r.scope = 'organization')
+  ) into v_target_is_org_admin;
+
+  if v_is_leaving then
+    if v_target_is_org_admin
+       and exists (select 1 from users u where u.organization_id = v_org and u.id <> v_target)
+       and not exists (
+         select 1 from memberships m
+         join users u on u.id = m.user_id
+         where u.organization_id = v_org
+           and u.id <> v_target
+           and membership_role_key(m.team_space_id, m.role) in (select r.key from rbac_roles r where r.scope = 'organization')
+       ) then
+      raise exception 'You are the only organization admin. Make someone else an admin before you leave.'
+        using errcode = 'P0001', hint = 'org_exit';
+    end if;
+  else
+    if not has_org_permission('member.remove_from_organization', v_org) then
+      raise exception 'Only an organization admin can remove people.' using errcode = '42501', hint = 'org_exit';
+    end if;
+    if v_target_is_org_admin then
+      raise exception 'Organization admins can''t be removed. They have to leave themselves.'
+        using errcode = 'P0001', hint = 'org_exit';
+    end if;
+  end if;
+
+  -- Unfinished work goes back to "unassigned" so someone picks it up;
+  -- finished tasks keep their name
+  update tasks set assignee_id = null
+  where assignee_id = v_target and organization_id = v_org and status <> 'done';
+
+  delete from project_members pm
+  using project_spaces ps, team_spaces ts
+  where pm.user_id = v_target
+    and ps.id = pm.project_id
+    and ts.id = ps.team_space_id
+    and ts.organization_id = v_org;
+
+  -- A person is in one organization at a time, so every channel and
+  -- membership they hold belongs to this one
+  delete from chat_channel_members where user_id = v_target;
+  delete from memberships where user_id = v_target;
+
+  -- A channel's creator can always read and manage it (can_see_channel,
+  -- can_manage_channel), member or not. The channels stay; whoever manages
+  -- the project or department still manages them.
+  update chat_channels set created_by = null where created_by = v_target;
+
+  -- A pending invite would pull them straight back in at the next sign-in
+  -- (claim_pending_invites)
+  delete from invites
+  where organization_id = v_org and accepted_at is null and lower(email) = lower(v_email);
+  delete from invitations
+  where organization_id = v_org and status = 'pending'
+    and (invited_user_id = v_target or lower(email) = lower(v_email));
+
+  -- Their bell only held this organization's tasks and projects
+  delete from notifications where user_id = v_target;
+
+  update users set reports_to = null
+  where reports_to = v_target and organization_id = v_org;
+
+  update users set organization_id = null, reports_to = null, job_title = null
+  where id = v_target;
+
+  -- organization_id is given here: by now the person leaving has none, so the
+  -- insert trigger could not work it out. new_state names who left, for the feed.
+  insert into activity_log (entity_type, entity_id, actor_id, action, prior_state, new_state, organization_id)
+  values (
+    'organization', v_org, v_caller,
+    case when v_is_leaving then 'member_left' else 'member_removed' end,
+    jsonb_build_object('user_id', v_target, 'name', v_name, 'email', v_email),
+    jsonb_build_object('user_id', v_target, 'name', v_name),
+    v_org
+  );
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.revoke_role(p_user_id uuid, p_team_space_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_org uuid;
+begin
+  select organization_id into v_org from users where id = p_user_id;
+  if v_org is null or v_org <> current_org_id() then
+    raise exception 'That person is not in your organization.' using errcode = 'P0001', hint = 'rbac';
+  end if;
+  perform assert_may_change_roles(p_user_id, v_org);
+
+  -- One exit per organization at a time, like remove_from_organization
+  perform 1 from organizations where id = v_org for update;
+
+  if p_team_space_id is null then
+    if exists (select 1 from users u where u.organization_id = v_org and u.id <> p_user_id)
+       and not exists (
+         select 1 from memberships m join users u on u.id = m.user_id
+         where u.organization_id = v_org and u.id <> p_user_id
+           and membership_role_key(m.team_space_id, m.role) in ('owner', 'org_admin')
+       ) then
+      raise exception 'They are the only organization admin. Make someone else an organization admin first.'
+        using errcode = 'P0001', hint = 'rbac';
+    end if;
+    delete from memberships where user_id = p_user_id and team_space_id is null;
+  else
+    delete from memberships m
+    using team_spaces t
+    where m.user_id = p_user_id and m.team_space_id = p_team_space_id
+      and t.id = m.team_space_id and t.organization_id = v_org;
+  end if;
+
+  if not found then
+    raise exception 'They don''t hold that role.' using errcode = 'P0001', hint = 'rbac';
+  end if;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.set_default_task_key_prefix()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+begin
+  if new.task_key_prefix is null then
+    new.task_key_prefix := default_task_key_prefix(new.name);
+  end if;
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.set_reports_to(p_user_id uuid, p_manager_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_org uuid := current_org_id();
+begin
+  if v_org is null or not has_permission('directory.manage') then
+    raise exception 'Only an organization admin can change who someone reports to' using errcode = '42501';
+  end if;
+  if p_user_id = p_manager_id then
+    raise exception 'Someone cannot report to themselves' using errcode = '22023';
+  end if;
+  if not exists (select 1 from users where id = p_user_id and organization_id = v_org)
+     or (p_manager_id is not null and not exists (select 1 from users where id = p_manager_id and organization_id = v_org)) then
+    raise exception 'Both people must be in your organization' using errcode = '22023';
+  end if;
+  -- No loops: the new manager can't already report (directly or not) to this person
+  if p_manager_id is not null and exists (
+    with recursive chain(id) as (
+      select reports_to from users where id = p_manager_id
+      union
+      select u.reports_to from users u join chain c on u.id = c.id where u.reports_to is not null
+    )
+    select 1 from chain where id = p_user_id
+  ) then
+    raise exception 'That would make a reporting loop' using errcode = '22023';
+  end if;
+  update users set reports_to = p_manager_id where id = p_user_id;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.set_updated_at()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1214,6 +2564,49 @@ AS $function$
 begin
   new.updated_at = now();
   return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.start_sprint(p_sprint_id uuid)
+ RETURNS sprints
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_sprint sprints;
+begin
+  -- Permission first: locking the row needs update rights, which members lack
+  select * into v_sprint from sprints where id = p_sprint_id;
+  if not found then
+    raise exception 'Sprint not found' using errcode = 'P0002';
+  end if;
+  if not can_manage_project(v_sprint.project_id) then
+    raise exception 'Only project managers can start a sprint' using errcode = '42501';
+  end if;
+  select * into v_sprint from sprints where id = p_sprint_id for update;
+  if v_sprint.status <> 'planned' then
+    raise exception 'Only a planned sprint can be started' using errcode = '22023';
+  end if;
+  if exists (select 1 from sprints where project_id = v_sprint.project_id and status = 'active') then
+    raise exception 'Complete the active sprint first' using errcode = '22023';
+  end if;
+
+  update sprints set
+    status = 'active',
+    started_at = now(),
+    committed_points = (select coalesce(sum(story_points), 0) from tasks where sprint_id = p_sprint_id),
+    committed_tasks = (select count(*) from tasks where sprint_id = p_sprint_id)
+  where id = p_sprint_id
+  returning * into v_sprint;
+
+  insert into activity_log (entity_type, entity_id, actor_id, action, new_state)
+  values ('sprint', v_sprint.id, auth.uid(), 'sprint_started', jsonb_build_object(
+    'project_id', v_sprint.project_id, 'name', v_sprint.name, 'goal', v_sprint.goal,
+    'ends_on', v_sprint.ends_on,
+    'committedPoints', v_sprint.committed_points, 'totalTasks', v_sprint.committed_tasks));
+
+  return v_sprint;
 end;
 $function$
 ;
@@ -1227,6 +2620,132 @@ begin
   return split_part(p_name, '/', p_position)::uuid;
 exception when invalid_text_representation then
   return null;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.task_block_creates_cycle(p_task uuid, p_blocker uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_current uuid := p_blocker;
+  v_steps int := 0;
+begin
+  while v_current is not null and v_steps < 1000 loop
+    if v_current = p_task then return true; end if;
+    select blocked_by_task_id into v_current from tasks where id = v_current;
+    v_steps := v_steps + 1;
+  end loop;
+  return false;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.task_department_lead(p_task_id uuid)
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select pd.lead_id
+  from tasks t
+  join project_spaces ps on ps.id = t.project_id
+  join project_departments pd on pd.project_id = t.project_id and pd.team_space_id = coalesce(t.team_space_id, ps.team_space_id)
+  where t.id = p_task_id;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.task_key_prefix_taken(p_org_id uuid, p_prefix text, p_except_project uuid DEFAULT NULL::uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select exists (select 1 from organizations where id = p_org_id and task_key_prefix = p_prefix)
+      or exists (select 1 from project_spaces p join team_spaces t on t.id = p.team_space_id
+                 where t.organization_id = p_org_id and p.task_key_prefix = p_prefix
+                   and p.id is distinct from p_except_project);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.task_key_prefixes()
+ RETURNS TABLE(scope_id uuid, prefix text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  select id, task_key_prefix from organizations where id = current_org_id()
+  union all
+  select p.id, p.task_key_prefix
+  from project_spaces p join team_spaces t on t.id = p.team_space_id
+  where t.organization_id = current_org_id();
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tasks_assign_number()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+begin
+  if tg_op = 'UPDATE' then
+    new.task_key_scope := old.task_key_scope;
+    new.task_number := old.task_number;
+    return new;
+  end if;
+  new.task_key_scope := coalesce(new.project_id, new.organization_id);
+  insert into task_key_counters (scope_id, organization_id, next_number)
+  values (new.task_key_scope, new.organization_id, 2)
+  on conflict (scope_id) do update set next_number = task_key_counters.next_number + 1
+  returning next_number - 1 into new.task_number;
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tasks_block_notify()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_actor text;
+  v_blocker tasks%rowtype;
+  v_lead uuid;
+  v_waiting record;
+begin
+  select name into v_actor from users where id = auth.uid();
+
+  -- A new block: tell the lead of the department being waited on
+  if new.blocked_by_task_id is not null and new.blocked_by_task_id is distinct from old.blocked_by_task_id then
+    select * into v_blocker from tasks where id = new.blocked_by_task_id;
+    v_lead := task_department_lead(v_blocker.id);
+    if v_lead is not null and v_lead is distinct from auth.uid() then
+      perform notify_user(v_lead, 'task_blocked', 'task', v_blocker.id,
+        coalesce(v_actor, 'Someone') || ' is waiting on "' || v_blocker.title || '" to finish "' || new.title || '"');
+    end if;
+  end if;
+
+  -- The task is done: every task waiting on it can go ahead
+  if new.status = 'done' and old.status is distinct from 'done' then
+    perform set_config('spacer.auto_unblock', 'on', true);
+    for v_waiting in
+      update tasks set blocked_by_task_id = null where blocked_by_task_id = new.id
+      returning id, title, assignee_id, created_by
+    loop
+      if coalesce(v_waiting.assignee_id, v_waiting.created_by) is distinct from auth.uid() then
+        perform notify_user(coalesce(v_waiting.assignee_id, v_waiting.created_by), 'task_unblocked', 'task', v_waiting.id,
+          '"' || new.title || '" is done, so "' || v_waiting.title || '" can go ahead');
+      end if;
+    end loop;
+    perform set_config('spacer.auto_unblock', 'off', true);
+  end if;
+  return new;
 end;
 $function$
 ;
@@ -1249,17 +2768,94 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.tasks_guard_department()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_blocker_project uuid;
+  v_auto boolean := coalesce(current_setting('spacer.auto_unblock', true), '') = 'on';
+begin
+  -- A task moved to another project drops its old department and block (no
+  -- block-rights check for that: the mover isn't choosing to clear it)
+  if tg_op = 'UPDATE' and new.project_id is distinct from old.project_id then
+    if new.team_space_id is not distinct from old.team_space_id then new.team_space_id := null; end if;
+    if new.blocked_by_task_id is not distinct from old.blocked_by_task_id then
+      new.blocked_by_task_id := null;
+      v_auto := true;
+    end if;
+  end if;
+
+  if new.team_space_id is not null and new.project_id is not null
+     and not project_has_department(new.project_id, new.team_space_id) then
+    raise exception 'That department isn''t working on this project' using errcode = '23514';
+  end if;
+
+  if new.blocked_by_task_id is distinct from (case when tg_op = 'UPDATE' then old.blocked_by_task_id end) then
+    if new.blocked_by_task_id is not null then
+      select project_id into v_blocker_project from tasks where id = new.blocked_by_task_id;
+      if v_blocker_project is distinct from new.project_id then
+        raise exception 'A task can only wait on a task in the same project' using errcode = '23514';
+      end if;
+      if task_block_creates_cycle(new.id, new.blocked_by_task_id) then
+        raise exception 'That would make the two tasks wait on each other' using errcode = '23514';
+      end if;
+      new.blocked_at := now();
+    else
+      new.blocked_at := null;
+    end if;
+
+    -- Who may set or clear a block (finishing the blocking task clears it for everyone)
+    if tg_op = 'UPDATE' and auth.uid() is not null and not v_auto
+       and auth.uid() is distinct from old.assignee_id
+       and auth.uid() is distinct from old.created_by
+       and not leads_project_department(old.project_id, coalesce(old.team_space_id,
+             (select team_space_id from project_spaces where id = old.project_id)))
+       and not can_manage_project(old.project_id) then
+      raise exception 'Only the task''s owner, its department lead or an admin can set or clear a block' using errcode = '42501';
+    end if;
+  end if;
+  return new;
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tasks_guard_due_date()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if auth.uid() is not null
+     and new.due_date is distinct from old.due_date
+     and not (
+       case
+         when old.project_id is not null then can_manage_project(old.project_id)
+         else has_org_permission('task.manage_unfiled', old.organization_id)
+       end
+     ) then
+    raise exception 'Only project managers and admins can change a task''s deadline'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.tasks_log_activity()
  RETURNS trigger
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
+declare
+  v_quiet text[] := array['sprint_id', 'story_points', 'completed_at', 'updated_at', 'search_vector'];
 begin
   if tg_op = 'INSERT' then
     insert into activity_log (entity_type, entity_id, actor_id, action, prior_state, new_state)
     values ('task', new.id, auth.uid(), 'created', null, to_jsonb(new));
-  elsif tg_op = 'UPDATE' then
+  elsif tg_op = 'UPDATE' and (to_jsonb(new) - v_quiet) is distinct from (to_jsonb(old) - v_quiet) then
     insert into activity_log (entity_type, entity_id, actor_id, action, prior_state, new_state)
     values ('task', new.id, auth.uid(), 'updated', to_jsonb(old), to_jsonb(new));
   end if;
@@ -1314,6 +2910,42 @@ begin
     perform refresh_team_space_stats(v_team_space_id);
   end if;
   return coalesce(new, old);
+end;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tasks_sprint_rules()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.status = 'done' and (tg_op = 'INSERT' or old.status is distinct from 'done') then
+    new.completed_at := now();
+  elsif new.status <> 'done' then
+    new.completed_at := null;
+  end if;
+
+  if tg_op = 'UPDATE' and new.sprint_id is not distinct from old.sprint_id
+     and new.project_id is not distinct from old.project_id then
+    return new;
+  end if;
+
+  if new.sprint_id is not null and not exists (
+    select 1 from sprints s
+    where s.id = new.sprint_id and s.project_id = new.project_id and s.status <> 'completed'
+  ) then
+    raise exception 'A task can only join an unfinished sprint of its own project' using errcode = '22023';
+  end if;
+
+  if auth.uid() is not null
+     and (tg_op = 'INSERT' and new.sprint_id is not null
+          or tg_op = 'UPDATE' and new.sprint_id is distinct from old.sprint_id)
+     and not can_manage_project(new.project_id) then
+    raise exception 'Only project managers can plan sprints' using errcode = '42501';
+  end if;
+
+  return new;
 end;
 $function$
 ;
@@ -1405,6 +3037,32 @@ end;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.unique_project_key_prefix(p_team_space_id uuid, p_project_name text, p_except_project uuid DEFAULT NULL::uuid)
+ RETURNS text
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_org uuid;
+  v_base text;
+  v_try text;
+  v_n integer := 1;
+begin
+  select organization_id, task_key_prefix || default_project_key_code(p_project_name)
+    into v_org, v_base
+    from team_spaces where id = p_team_space_id;
+  v_base := left(v_base, 12);
+  v_try := v_base;
+  while task_key_prefix_taken(v_org, v_try, p_except_project) loop
+    v_n := v_n + 1;
+    v_try := left(v_base, 12 - char_length(v_n::text)) || v_n;
+  end loop;
+  return v_try;
+end;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.users_guard_protected_columns()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -1419,6 +3077,11 @@ begin
   ) then
     raise exception 'Not allowed to change id, organization, email or auth provider';
   end if;
+  if current_user in ('authenticated', 'anon')
+     and new.reports_to is distinct from old.reports_to
+     and not public.has_permission('directory.manage') then
+    raise exception 'Only an organization admin can change who someone reports to';
+  end if;
   return new;
 end;
 $function$
@@ -1428,9 +3091,19 @@ $function$
 -- Function privileges (null acl = default: PUBLIC may execute)
 -- ======================================================================
 
+-- activity_log_set_organization(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- add_user_to_membership(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- assert_may_change_roles(p_user_id uuid, p_org_id uuid): {postgres=X/postgres,service_role=X/postgres}
+
+-- assign_role(p_user_id uuid, p_team_space_id uuid, p_role_key text): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- calendar_event_attendees_notify(): {postgres=X/postgres,service_role=X/postgres}
+
 -- can_edit_project(p_project_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- can_manage_calendar_event(p_event_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- can_manage_channel(p_channel_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1438,7 +3111,11 @@ $function$
 
 -- can_manage_project(p_project_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- can_moderate_task_comments(p_task_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- can_see_activity(p_actor_id uuid, p_entity_type text, p_entity_id uuid, p_new_state jsonb): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- can_see_calendar_event(p_event_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- can_see_channel(p_channel_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1446,9 +3123,21 @@ $function$
 
 -- claim_pending_invites(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
--- comments_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+-- comments_before_update(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- comments_notify(): {postgres=X/postgres,service_role=X/postgres}
+
+-- complete_sprint(p_sprint_id uuid, p_carry_over_to uuid, p_went_well text, p_to_improve text, p_actions text): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- current_org_id(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- default_project_key_code(p_name text): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- default_task_key_prefix(p_name text): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- dispatch_edge_webhook(): {postgres=X/postgres,service_role=X/postgres}
+
+-- extra_department_role_at_least(p_project_id uuid, p_min membership_role): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- forget_trusted_devices(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1458,17 +3147,31 @@ $function$
 
 -- has_channel_scope_access(p_project_id uuid, p_department_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- has_extra_department_access(p_project_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- has_org_permission(p_permission text, p_org_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- has_password(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- has_permission(p_permission text, p_team_space_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- has_project_access(p_project_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- has_task_access(p_task_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- has_team_access(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- has_verified_mfa_factor(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- is_admin_of_org(p_org_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- is_channel_member(p_channel_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- is_department_member(p_user_id uuid, p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- is_dm_participant(p_message_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- is_event_attendee(p_event_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- is_member_of_project_in_team(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1478,29 +3181,89 @@ $function$
 
 -- is_trusted_device(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- is_valid_meeting_agenda(p_agenda jsonb): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- launch_organization(p_user_id uuid, p_organization_name text, p_team_spaces jsonb): {postgres=X/postgres,service_role=X/postgres}
+
+-- leads_project_department(p_project_id uuid, p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- membership_org(p_team_space_id uuid, p_user_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- membership_role_key(p_team_space_id uuid, p_role membership_role): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- memberships_guard_org_roles(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- memberships_log_activity(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- mfa_required_for_caller(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- mfa_satisfied(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- mfa_setup_required(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- my_permissions(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- notify_user(p_user_id uuid, p_type text, p_reference_type text, p_reference_id uuid, p_body text): {postgres=X/postgres,service_role=X/postgres}
 
+-- nudge_department(p_project_id uuid, p_team_space_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- org_member_roles(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- org_team_memberships(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- project_departments_guard(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- project_has_department(p_project_id uuid, p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- project_id_from_storage_path(p_name text): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- project_members_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- project_spaces_set_task_key_prefix(): {postgres=X/postgres,service_role=X/postgres}
+
+-- queue_due_soon_reminders(): {postgres=X/postgres,service_role=X/postgres}
 
 -- refresh_team_space_stats(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- remove_from_organization(p_user_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- revoke_role(p_user_id uuid, p_team_space_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- set_default_task_key_prefix(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- set_reports_to(p_user_id uuid, p_manager_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- set_updated_at(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- start_sprint(p_sprint_id uuid): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- storage_path_uuid(p_name text, p_position integer): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- task_block_creates_cycle(p_task uuid, p_blocker uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- task_department_lead(p_task_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- task_key_prefix_taken(p_org_id uuid, p_prefix text, p_except_project uuid): {postgres=X/postgres,service_role=X/postgres}
+
+-- task_key_prefixes(): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- tasks_assign_number(): {postgres=X/postgres,service_role=X/postgres}
+
+-- tasks_block_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
 -- tasks_column_matches_project(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- tasks_guard_department(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- tasks_guard_due_date(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_log_activity(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_notify(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- tasks_refresh_stats(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+
+-- tasks_sprint_rules(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- team_role(p_team_space_id uuid): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
@@ -1512,6 +3275,8 @@ $function$
 
 -- trust_this_device(p_user_agent text): {postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
+-- unique_project_key_prefix(p_team_space_id uuid, p_project_name text, p_except_project uuid): {postgres=X/postgres,service_role=X/postgres}
+
 -- users_guard_protected_columns(): {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
 
 -- ======================================================================
@@ -1520,13 +3285,47 @@ $function$
 
 CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
+CREATE TRIGGER activity_log_set_organization BEFORE INSERT ON public.activity_log FOR EACH ROW EXECUTE FUNCTION activity_log_set_organization();
+
 CREATE TRIGGER announcements_set_updated_at BEFORE UPDATE ON public.announcements FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER calendar_event_attendees_notify_trigger AFTER INSERT ON public.calendar_event_attendees FOR EACH ROW EXECUTE FUNCTION calendar_event_attendees_notify();
+
+CREATE TRIGGER comments_before_update BEFORE UPDATE ON public.comments FOR EACH ROW EXECUTE FUNCTION comments_before_update();
 
 CREATE TRIGGER comments_notify_trigger AFTER INSERT ON public.comments FOR EACH ROW EXECUTE FUNCTION comments_notify();
 
+CREATE TRIGGER memberships_guard_org_roles BEFORE DELETE OR UPDATE ON public.memberships FOR EACH ROW EXECUTE FUNCTION memberships_guard_org_roles();
+
 CREATE TRIGGER memberships_log_activity_trigger AFTER INSERT OR DELETE OR UPDATE ON public.memberships FOR EACH ROW EXECUTE FUNCTION memberships_log_activity();
 
+CREATE TRIGGER notification_queue_send_email AFTER INSERT ON public.notification_queue FOR EACH ROW EXECUTE FUNCTION dispatch_edge_webhook('send_email');
+
+CREATE TRIGGER organizations_set_task_key_prefix BEFORE INSERT ON public.organizations FOR EACH ROW EXECUTE FUNCTION set_default_task_key_prefix();
+
+CREATE TRIGGER project_departments_guard BEFORE INSERT OR UPDATE ON public.project_departments FOR EACH ROW EXECUTE FUNCTION project_departments_guard();
+
+CREATE TRIGGER project_members_email_on_insert AFTER INSERT ON public.project_members FOR EACH ROW EXECUTE FUNCTION dispatch_edge_webhook('send-notification');
+
+CREATE TRIGGER project_members_notify_trigger AFTER INSERT ON public.project_members FOR EACH ROW EXECUTE FUNCTION project_members_notify();
+
+CREATE TRIGGER project_spaces_set_task_key_prefix BEFORE INSERT OR UPDATE OF task_key_prefix ON public.project_spaces FOR EACH ROW EXECUTE FUNCTION project_spaces_set_task_key_prefix();
+
+CREATE TRIGGER sprints_set_updated_at BEFORE UPDATE ON public.sprints FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER tasks_assign_number BEFORE INSERT OR UPDATE OF task_key_scope, task_number ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_assign_number();
+
+CREATE TRIGGER tasks_block_notify AFTER UPDATE OF blocked_by_task_id, status ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_block_notify();
+
 CREATE TRIGGER tasks_column_matches_project BEFORE INSERT OR UPDATE OF column_id, project_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_column_matches_project();
+
+CREATE TRIGGER tasks_email_assignee_on_insert AFTER INSERT ON public.tasks FOR EACH ROW WHEN ((new.assignee_id IS NOT NULL)) EXECUTE FUNCTION dispatch_edge_webhook('send-notification');
+
+CREATE TRIGGER tasks_email_assignee_on_update AFTER UPDATE OF assignee_id ON public.tasks FOR EACH ROW WHEN (((new.assignee_id IS NOT NULL) AND (new.assignee_id IS DISTINCT FROM old.assignee_id))) EXECUTE FUNCTION dispatch_edge_webhook('send-notification');
+
+CREATE TRIGGER tasks_guard_department BEFORE INSERT OR UPDATE OF team_space_id, blocked_by_task_id, project_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_guard_department();
+
+CREATE TRIGGER tasks_guard_due_date BEFORE UPDATE OF due_date ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_guard_due_date();
 
 CREATE TRIGGER tasks_log_activity_trigger AFTER INSERT OR UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_log_activity();
 
@@ -1535,6 +3334,10 @@ CREATE TRIGGER tasks_notify_trigger AFTER INSERT OR UPDATE ON public.tasks FOR E
 CREATE TRIGGER tasks_refresh_stats_trigger AFTER INSERT OR DELETE OR UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_refresh_stats();
 
 CREATE TRIGGER tasks_set_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TRIGGER tasks_sprint_rules BEFORE INSERT OR UPDATE OF status, sprint_id, project_id ON public.tasks FOR EACH ROW EXECUTE FUNCTION tasks_sprint_rules();
+
+CREATE TRIGGER team_spaces_set_task_key_prefix BEFORE INSERT ON public.team_spaces FOR EACH ROW EXECUTE FUNCTION set_default_task_key_prefix();
 
 CREATE TRIGGER users_guard_protected_columns BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION users_guard_protected_columns();
 
@@ -1547,6 +3350,8 @@ alter table public.activity_log enable row level security;
 alter table public.announcements enable row level security;
 
 alter table public.attachments enable row level security;
+
+alter table public.calendar_event_attendees enable row level security;
 
 alter table public.calendar_events enable row level security;
 
@@ -1590,11 +3395,25 @@ alter table public.organizations enable row level security;
 
 alter table public.project_columns enable row level security;
 
+alter table public.project_departments enable row level security;
+
 alter table public.project_files enable row level security;
 
 alter table public.project_members enable row level security;
 
 alter table public.project_spaces enable row level security;
+
+alter table public.rbac_permissions enable row level security;
+
+alter table public.rbac_role_permissions enable row level security;
+
+alter table public.rbac_roles enable row level security;
+
+alter table public.sprints enable row level security;
+
+alter table public.task_due_reminders enable row level security;
+
+alter table public.task_key_counters enable row level security;
 
 alter table public.tasks enable row level security;
 
@@ -1612,23 +3431,28 @@ create policy activity_log_insert on public.activity_log as permissive for inser
   with check ((actor_id = auth.uid()));
 
 create policy activity_log_select on public.activity_log as permissive for select to authenticated
-  using (can_see_activity(actor_id, entity_type, entity_id, new_state));
+  using (((organization_id = current_org_id()) AND
+CASE
+    WHEN (entity_type = 'organization'::text) THEN ((actor_id = auth.uid()) OR has_permission('member.remove_from_organization'::text))
+    ELSE can_see_activity(actor_id, entity_type, entity_id, new_state)
+END));
 
 create policy mfa_required on public.activity_log as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
 create policy announcements_delete on public.announcements as permissive for delete to public
-  using (((organization_id = current_org_id()) AND (is_org_admin() OR (author_id = auth.uid()))));
+  using (((organization_id = current_org_id()) AND has_permission('announcement.manage'::text)));
 
 create policy announcements_insert on public.announcements as permissive for insert to public
-  with check (((organization_id = current_org_id()) AND is_org_admin()));
+  with check (((organization_id = current_org_id()) AND has_permission('announcement.manage'::text)));
 
 create policy announcements_select on public.announcements as permissive for select to public
   using ((organization_id = current_org_id()));
 
 create policy announcements_update on public.announcements as permissive for update to public
-  using (((organization_id = current_org_id()) AND (is_org_admin() OR (author_id = auth.uid()))));
+  using (((organization_id = current_org_id()) AND has_permission('announcement.manage'::text)))
+  with check (((organization_id = current_org_id()) AND has_permission('announcement.manage'::text)));
 
 create policy mfa_required on public.announcements as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1647,11 +3471,33 @@ create policy mfa_required on public.attachments as restrictive for all to authe
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
-create policy calendar_events_insert on public.calendar_events as permissive for insert to public
-  with check (((organization_id = current_org_id()) AND is_org_admin()));
+create policy calendar_event_attendees_delete on public.calendar_event_attendees as permissive for delete to authenticated
+  using ((can_manage_calendar_event(event_id) OR (user_id = auth.uid())));
 
-create policy calendar_events_select on public.calendar_events as permissive for select to public
-  using ((organization_id = current_org_id()));
+create policy calendar_event_attendees_insert on public.calendar_event_attendees as permissive for insert to authenticated
+  with check ((can_manage_calendar_event(event_id) AND (added_by = auth.uid()) AND ((user_id IS NULL) OR (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = calendar_event_attendees.user_id) AND (u.organization_id = current_org_id()))))) AND ((team_space_id IS NULL) OR (team_space_org(team_space_id) = current_org_id()))));
+
+create policy calendar_event_attendees_select on public.calendar_event_attendees as permissive for select to authenticated
+  using (can_see_calendar_event(event_id));
+
+create policy mfa_required on public.calendar_event_attendees as restrictive for all to authenticated
+  using (mfa_satisfied())
+  with check (mfa_satisfied());
+
+create policy calendar_events_delete on public.calendar_events as permissive for delete to authenticated
+  using (((organization_id = current_org_id()) AND ((created_by = auth.uid()) OR ((audience = 'company'::text) AND has_permission('event.manage'::text)))));
+
+create policy calendar_events_insert on public.calendar_events as permissive for insert to authenticated
+  with check (((organization_id = current_org_id()) AND (has_permission('event.manage'::text) OR ((audience = 'invited'::text) AND (created_by = auth.uid())))));
+
+create policy calendar_events_select on public.calendar_events as permissive for select to authenticated
+  using (((organization_id = current_org_id()) AND ((audience = 'company'::text) OR (created_by = auth.uid()) OR is_event_attendee(id))));
+
+create policy calendar_events_update on public.calendar_events as permissive for update to authenticated
+  using (((organization_id = current_org_id()) AND ((created_by = auth.uid()) OR ((audience = 'company'::text) AND has_permission('event.manage'::text)))))
+  with check (((organization_id = current_org_id()) AND (has_permission('event.manage'::text) OR ((audience = 'invited'::text) AND (created_by = auth.uid())))));
 
 create policy mfa_required on public.calendar_events as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1689,11 +3535,18 @@ create policy mfa_required on public.chat_channels as restrictive for all to aut
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
+create policy comments_delete on public.comments as permissive for delete to authenticated
+  using (((author_id = auth.uid()) OR can_moderate_task_comments(task_id)));
+
 create policy comments_insert on public.comments as permissive for insert to public
   with check ((has_task_access(task_id) AND (author_id = auth.uid())));
 
 create policy comments_select on public.comments as permissive for select to public
   using (has_task_access(task_id));
+
+create policy comments_update on public.comments as permissive for update to authenticated
+  using (((author_id = auth.uid()) AND has_task_access(task_id)))
+  with check (((author_id = auth.uid()) AND has_task_access(task_id)));
 
 create policy mfa_required on public.comments as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1753,33 +3606,31 @@ create policy mfa_required on public.email_tickets as restrictive for all to aut
   with check (mfa_satisfied());
 
 create policy "Admins can view invitations for their org" on public.invitations as permissive for select to public
-  using ((EXISTS ( SELECT 1
-   FROM memberships m
-  WHERE ((m.user_id = auth.uid()) AND (m.team_space_id = invitations.team_space_id) AND (m.role = ANY (ARRAY['admin'::membership_role, 'super_admin'::membership_role]))))));
+  using (has_permission('invitation.view'::text, team_space_id));
 
 create policy mfa_required on public.invitations as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
 create policy invites_select on public.invites as permissive for select to public
-  using (((organization_id = current_org_id()) AND is_org_admin()));
+  using (((organization_id = current_org_id()) AND has_permission('member.invite'::text)));
 
 create policy mfa_required on public.invites as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
 create policy memberships_delete on public.memberships as permissive for delete to public
-  using ((is_admin_of_org(membership_org(team_space_id, user_id)) OR ((team_space_id IS NOT NULL) AND team_role_at_least(team_space_id, 'team_lead'::membership_role))));
+  using ((has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)) OR ((team_space_id IS NOT NULL) AND has_permission('member.remove'::text, team_space_id))));
 
 create policy memberships_insert on public.memberships as permissive for insert to public
-  with check (is_admin_of_org(membership_org(team_space_id, user_id)));
+  with check (has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)));
 
 create policy memberships_select on public.memberships as permissive for select to public
-  using (((user_id = auth.uid()) OR is_admin_of_org(membership_org(team_space_id, user_id)) OR ((team_space_id IS NOT NULL) AND has_team_access(team_space_id))));
+  using (((user_id = auth.uid()) OR has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)) OR ((team_space_id IS NOT NULL) AND has_permission('department.view'::text, team_space_id))));
 
 create policy memberships_update on public.memberships as permissive for update to public
-  using (is_admin_of_org(membership_org(team_space_id, user_id)))
-  with check (is_admin_of_org(membership_org(team_space_id, user_id)));
+  using (has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)))
+  with check (has_org_permission('member.assign_role'::text, membership_org(team_space_id, user_id)));
 
 create policy mfa_required on public.memberships as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1841,17 +3692,17 @@ create policy mfa_required on public.milestones as restrictive for all to authen
   with check (mfa_satisfied());
 
 create policy milestones_insert on public.milestones as permissive for insert to public
-  with check (team_role_at_least(( SELECT project_spaces.team_space_id
-   FROM project_spaces
-  WHERE (project_spaces.id = milestones.project_id)), 'team_lead'::membership_role));
+  with check (has_permission('milestone.manage'::text, ( SELECT ps.team_space_id
+   FROM project_spaces ps
+  WHERE (ps.id = milestones.project_id))));
 
 create policy milestones_select on public.milestones as permissive for select to public
   using (has_project_access(project_id));
 
 create policy milestones_update on public.milestones as permissive for update to public
-  using (team_role_at_least(( SELECT project_spaces.team_space_id
-   FROM project_spaces
-  WHERE (project_spaces.id = milestones.project_id)), 'team_lead'::membership_role));
+  using (has_permission('milestone.manage'::text, ( SELECT ps.team_space_id
+   FROM project_spaces ps
+  WHERE (ps.id = milestones.project_id))));
 
 create policy mfa_required on public.notification_queue as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1872,7 +3723,7 @@ create policy mfa_required on public.org_feed_items as restrictive for all to au
   with check (mfa_satisfied());
 
 create policy org_feed_insert on public.org_feed_items as permissive for insert to public
-  with check (((organization_id = current_org_id()) AND (is_org_admin() OR ((team_space_id IS NOT NULL) AND team_role_at_least(team_space_id, 'team_lead'::membership_role)))));
+  with check (((organization_id = current_org_id()) AND has_permission('feed.post'::text, team_space_id)));
 
 create policy org_feed_select on public.org_feed_items as permissive for select to public
   using ((organization_id = current_org_id()));
@@ -1885,8 +3736,8 @@ create policy organizations_select on public.organizations as permissive for sel
   using ((id = current_org_id()));
 
 create policy organizations_update_admin on public.organizations as permissive for update to public
-  using (((id = current_org_id()) AND is_org_admin()))
-  with check (((id = current_org_id()) AND is_org_admin()));
+  using (((id = current_org_id()) AND has_permission('organization.update'::text)))
+  with check (((id = current_org_id()) AND has_permission('organization.update'::text)));
 
 create policy mfa_required on public.project_columns as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1904,6 +3755,23 @@ create policy project_columns_select on public.project_columns as permissive for
 create policy project_columns_update on public.project_columns as permissive for update to authenticated
   using (can_manage_project(project_id))
   with check (can_manage_project(project_id));
+
+create policy project_departments_delete on public.project_departments as permissive for delete to authenticated
+  using (can_manage_project(project_id));
+
+create policy project_departments_insert on public.project_departments as permissive for insert to authenticated
+  with check ((can_manage_project(project_id) AND (team_space_org(team_space_id) = ( SELECT team_space_org(ps.team_space_id) AS team_space_org
+   FROM project_spaces ps
+  WHERE (ps.id = project_departments.project_id))) AND (team_space_id <> ( SELECT ps.team_space_id
+   FROM project_spaces ps
+  WHERE (ps.id = project_departments.project_id))) AND (team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id)))));
+
+create policy project_departments_select on public.project_departments as permissive for select to authenticated
+  using (has_project_access(project_id));
+
+create policy project_departments_update on public.project_departments as permissive for update to authenticated
+  using ((can_manage_project(project_id) OR (lead_id = auth.uid())))
+  with check ((can_manage_project(project_id) OR (lead_id = auth.uid())));
 
 create policy mfa_required on public.project_files as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -1938,24 +3806,50 @@ create policy mfa_required on public.project_spaces as restrictive for all to au
   with check (mfa_satisfied());
 
 create policy project_spaces_delete on public.project_spaces as permissive for delete to authenticated
-  using ((team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id))));
+  using (has_permission('project.delete'::text, team_space_id));
 
 create policy project_spaces_insert on public.project_spaces as permissive for insert to public
-  with check ((team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id))));
+  with check (has_permission('project.create'::text, team_space_id));
 
 create policy project_spaces_select on public.project_spaces as permissive for select to public
-  using ((has_team_access(team_space_id) OR is_project_member(id) OR is_admin_of_org(team_space_org(team_space_id))));
+  using ((has_team_access(team_space_id) OR is_project_member(id) OR is_admin_of_org(team_space_org(team_space_id)) OR has_extra_department_access(id)));
 
 create policy project_spaces_update on public.project_spaces as permissive for update to public
-  using ((team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id))))
-  with check ((team_role_at_least(team_space_id, 'team_lead'::membership_role) OR is_admin_of_org(team_space_org(team_space_id))));
+  using (has_permission('project.manage'::text, team_space_id))
+  with check (has_permission('project.manage'::text, team_space_id));
+
+create policy rbac_permissions_select on public.rbac_permissions as permissive for select to authenticated
+  using (true);
+
+create policy rbac_role_permissions_select on public.rbac_role_permissions as permissive for select to authenticated
+  using (true);
+
+create policy rbac_roles_select on public.rbac_roles as permissive for select to authenticated
+  using (true);
+
+create policy mfa_required on public.sprints as restrictive for all to authenticated
+  using (mfa_satisfied())
+  with check (mfa_satisfied());
+
+create policy sprints_delete on public.sprints as permissive for delete to authenticated
+  using ((can_manage_project(project_id) AND (status = 'planned'::text)));
+
+create policy sprints_insert on public.sprints as permissive for insert to authenticated
+  with check ((can_manage_project(project_id) AND (status = 'planned'::text)));
+
+create policy sprints_select on public.sprints as permissive for select to authenticated
+  using (has_project_access(project_id));
+
+create policy sprints_update on public.sprints as permissive for update to authenticated
+  using (can_manage_project(project_id))
+  with check (can_manage_project(project_id));
 
 create policy mfa_required on public.tasks as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
 create policy tasks_delete on public.tasks as permissive for delete to authenticated
-  using (((created_by = auth.uid()) OR ((project_id IS NULL) AND is_admin_of_org(organization_id)) OR ((project_id IS NOT NULL) AND can_manage_project(project_id))));
+  using (((created_by = auth.uid()) OR ((project_id IS NULL) AND has_org_permission('task.manage_unfiled'::text, organization_id)) OR ((project_id IS NOT NULL) AND can_manage_project(project_id))));
 
 create policy tasks_insert on public.tasks as permissive for insert to public
   with check (((organization_id = current_org_id()) AND ((project_id IS NULL) OR can_edit_project(project_id))));
@@ -1972,24 +3866,24 @@ create policy mfa_required on public.team_space_stats as restrictive for all to 
   with check (mfa_satisfied());
 
 create policy team_space_stats_select on public.team_space_stats as permissive for select to public
-  using (has_team_access(team_space_id));
+  using (has_permission('department.view'::text, team_space_id));
 
 create policy mfa_required on public.team_spaces as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
 
 create policy team_spaces_delete_admin on public.team_spaces as permissive for delete to authenticated
-  using (((organization_id = current_org_id()) AND is_org_admin()));
+  using (((organization_id = current_org_id()) AND has_permission('department.delete'::text)));
 
 create policy team_spaces_insert_admin on public.team_spaces as permissive for insert to public
-  with check (((organization_id = current_org_id()) AND is_org_admin()));
+  with check (((organization_id = current_org_id()) AND has_permission('department.create'::text)));
 
 create policy team_spaces_select on public.team_spaces as permissive for select to public
-  using (((organization_id = current_org_id()) AND (has_team_access(id) OR is_org_admin() OR is_member_of_project_in_team(id))));
+  using (((organization_id = current_org_id()) AND (has_permission('department.view'::text, id) OR is_member_of_project_in_team(id))));
 
 create policy team_spaces_update_admin on public.team_spaces as permissive for update to public
-  using (((organization_id = current_org_id()) AND is_org_admin()))
-  with check (((organization_id = current_org_id()) AND is_org_admin()));
+  using (((organization_id = current_org_id()) AND has_permission('department.update'::text)))
+  with check (((organization_id = current_org_id()) AND has_permission('department.update'::text)));
 
 create policy mfa_required on public.users as restrictive for all to authenticated
   using (mfa_satisfied())
@@ -2018,6 +3912,28 @@ create policy chat_attachments_objects_insert on storage.objects as permissive f
 create policy chat_attachments_objects_select on storage.objects as permissive for select to authenticated
   using (((bucket_id = 'chat-attachments'::text) AND can_see_channel(storage_path_uuid(name, 1))));
 
+create policy dm_attachments_objects_delete on storage.objects as permissive for delete to authenticated
+  using (((bucket_id = 'dm-attachments'::text) AND (storage_path_uuid(name, 1) = auth.uid())));
+
+create policy dm_attachments_objects_insert on storage.objects as permissive for insert to authenticated
+  with check (((bucket_id = 'dm-attachments'::text) AND (storage_path_uuid(name, 1) = auth.uid()) AND (storage_path_uuid(name, 2) IS NOT NULL)));
+
+create policy dm_attachments_objects_select on storage.objects as permissive for select to authenticated
+  using (((bucket_id = 'dm-attachments'::text) AND ((storage_path_uuid(name, 1) = auth.uid()) OR (EXISTS ( SELECT 1
+   FROM direct_messages dm
+  WHERE (((dm.file_attachment ->> 'path'::text) = objects.name) AND (dm.sender_id = storage_path_uuid(objects.name, 1)) AND ((auth.uid() = dm.sender_id) OR (auth.uid() = dm.receiver_id))))))));
+
+create policy general_media_delete on storage.objects as permissive for delete to authenticated
+  using (((bucket_id = 'general-media'::text) AND (((split_part(name, '/'::text, 1) = 'avatars'::text) AND (storage_path_uuid(name, 2) = auth.uid())) OR ((split_part(name, '/'::text, 1) = 'announcements'::text) AND (storage_path_uuid(name, 2) = current_org_id()) AND has_permission('announcement.manage'::text)))));
+
+create policy general_media_insert on storage.objects as permissive for insert to authenticated
+  with check (((bucket_id = 'general-media'::text) AND (((split_part(name, '/'::text, 1) = 'avatars'::text) AND (storage_path_uuid(name, 2) = auth.uid())) OR ((split_part(name, '/'::text, 1) = 'announcements'::text) AND (storage_path_uuid(name, 2) = current_org_id()) AND has_permission('announcement.manage'::text)))));
+
+create policy general_media_select on storage.objects as permissive for select to authenticated
+  using (((bucket_id = 'general-media'::text) AND (((split_part(name, '/'::text, 1) = 'avatars'::text) AND (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = storage_path_uuid(objects.name, 2)) AND ((u.id = auth.uid()) OR (u.organization_id = current_org_id())))))) OR ((split_part(name, '/'::text, 1) = 'announcements'::text) AND (storage_path_uuid(name, 2) = current_org_id())))));
+
 create policy mfa_required on storage.objects as restrictive for all to authenticated
   using (mfa_satisfied())
   with check (mfa_satisfied());
@@ -2035,129 +3951,7 @@ create policy project_files_objects_select on storage.objects as permissive for 
 -- Table privileges for API roles
 -- ======================================================================
 
-grant delete, insert, references, select, trigger, truncate, update on public.activity_log to anon;
 
-grant delete, insert, references, select, trigger, truncate, update on public.activity_log to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.announcements to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.announcements to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.attachments to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.attachments to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.calendar_events to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.calendar_events to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channel_members to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channel_members to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channels to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.chat_channels to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.comments to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.comments to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.daily_standups to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.daily_standups to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.direct_message_reactions to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.direct_message_reactions to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.direct_messages to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.direct_messages to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.email_tickets to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.email_tickets to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.invitations to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.invitations to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.invites to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.invites to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.memberships to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.memberships to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.message_attachments to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.message_attachments to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.message_reactions to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.message_reactions to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.messages to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.messages to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.mfa_trusted_devices to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.mfa_trusted_devices to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.milestones to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.milestones to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.notification_queue to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.notification_queue to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.notifications to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.notifications to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.org_feed_items to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.org_feed_items to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.organizations to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.organizations to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_columns to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_columns to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_files to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_files to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_members to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_members to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_spaces to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.project_spaces to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.tasks to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.tasks to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.team_space_stats to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.team_space_stats to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.team_spaces to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.team_spaces to authenticated;
-
-grant delete, insert, references, select, trigger, truncate, update on public.users to anon;
-
-grant delete, insert, references, select, trigger, truncate, update on public.users to authenticated;
 
 -- ======================================================================
 -- Realtime publication
@@ -2190,5 +3984,9 @@ alter publication supabase_realtime add table public.team_space_stats;
 -- ======================================================================
 
 -- bucket chat-attachments: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/gif,application/pdf,text/plain}
+
+-- bucket dm-attachments: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,text/csv,application/zip,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation}
+
+-- bucket general-media: public=f, file_size_limit=5242880, allowed_mime_types={image/jpeg,image/png,image/webp,image/gif}
 
 -- bucket project-files: public=f, file_size_limit=none, allowed_mime_types=any
