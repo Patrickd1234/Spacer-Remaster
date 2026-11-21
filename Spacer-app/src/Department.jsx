@@ -78,7 +78,8 @@ function Department() {
                         .eq("id", uid)
                         .maybeSingle();
 
-                    let orgId = dbUser?.organization_id || sessionUser?.user_metadata?.organization_id;
+                    // Only from the users table: user_metadata is editable by the user (D-06)
+                    let orgId = dbUser?.organization_id;
 
                     if (!orgId && teamId) {
                         const { data: tsData } = await supabase

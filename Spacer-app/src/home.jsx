@@ -36,7 +36,8 @@ function Home() {
                 setUserData(profile || { id: sessionUser.id, email: sessionUser.email })
                 if (!isSuperAdmin) return
 
-                let resolvedOrgId = profile?.organization_id || sessionUser.user_metadata?.organization_id
+                // Only from the users table: user_metadata is editable by the user (D-06)
+                let resolvedOrgId = profile?.organization_id
                 if (!resolvedOrgId && membershipData?.team_space_id) {
                     const { data: tsData } = await supabase.from("team_spaces").select("organization_id").eq("id", membershipData.team_space_id).maybeSingle()
                     resolvedOrgId = tsData?.organization_id
