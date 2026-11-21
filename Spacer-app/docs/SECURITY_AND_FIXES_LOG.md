@@ -1,6 +1,6 @@
 # Spacer: Security Hardening & Fixes Log
 
-**Period:** 16–19 October 2026
+**Period:** 16–19 October 2026, updated 21 November 2026
 **Scope:** `Spacer-reMastered/Spacer-app` (React 19 + Vite + Supabase project `vrzepdjjjpodztqkfsbh`)
 **Reference:** issue IDs (S-, D-, B-, F-, X-, P-) come from `Spacer_Production_Readiness_Review.docx` (15 Oct 2026).
 
@@ -31,7 +31,7 @@ This document records what was changed, why, how it was verified, and what is st
 | Area | Status |
 |---|---|
 | Signup confirmation emails (Resend + `spacer.ink`) | ✅ Live |
-| Row-level security on all 28 public tables | ✅ Live (was off on 22) |
+| Row-level security on all public tables (28 in Oct, 39 on 21 Nov) | ✅ Live (was off on 22); re-checked 21 Nov |
 | Project-only access (project members without department membership) | ✅ Live |
 | Email edge functions locked to webhooks | ✅ Live |
 | Private storage for project files + chat attachments | ✅ Live |
@@ -42,6 +42,12 @@ This document records what was changed, why, how it was verified, and what is st
 | Two-factor (Supabase MFA) + password change | ✅ Live (19 Oct) |
 | "Remember this device for 7 days" | ✅ Live (19 Oct) |
 | GitHub / Slack / API tokens | ✅ Shown as "Coming soon" (fakes removed) |
+| Two-factor required for every account, with a fixed exemption list | ✅ Live (19–21 Nov, §7) |
+| Two-factor rule on every user-data table (incl. `project_departments`) | ✅ Live (21 Nov) |
+| CAPTCHA (Cloudflare Turnstile) on sign-in, sign-up, reset | ✅ In the app (19 Nov); on only when `VITE_TURNSTILE_SITE_KEY` is set |
+| Password rules: 8+ chars, upper + lower case, number, symbol | ✅ Live (19 Nov), checked again on the server |
+| Permission-based access (RBAC) | ✅ Live (12–20 Nov), see `docs/RBAC.md` |
+| D-06: organization and user id only from the database / session | ✅ Done (21 Nov) |
 
 > **Rollout note:** the MFA migration was applied before deploying the edge functions that call `mfa_satisfied()`. Keep that order for any future change to those functions' database dependencies.
 
@@ -183,7 +189,7 @@ New implementation:
   - revokes that verification session;
   - updates the password via the admin API;
   - signs out the user's **other** sessions.
-- Minimum length is now **8**. Google-only accounts get a clear message.
+- Minimum length is now **8**. Google-only accounts get a clear message. (Tightened on 19 Nov: see "Password rules" below.)
 - Frontend: `src/passwordChange.js`; a "Current Password" field in Settings → Security.
 - `Profile.jsx`'s password handler was updated too, but Profile renders no password form (dead code).
 
@@ -203,6 +209,26 @@ At the user's request, the code isn't asked on every sign-in.
   - another user can't use your token;
   - access stops after "forget".
 - **Not yet confirmed:** whether Supabase Storage applies the header for remembered sessions. Check that project files open after a remembered sign-in.
+
+### Two-factor required for every account (19–21 Nov)
+- Migration `20261120110000_require_mfa` (written as `20261119090000` on `Test-phase`, renumbered on `22's`): a signed-in account gets **no data** until it has an authenticator and has passed it (`aal2`) or uses a remembered device. `mfa_required_for_caller()` is the one place that decides who must use it.
+- The app checks `mfa_setup_required()` after sign-in and shows `MfaSetupRequired` instead of an empty app. Settings no longer offers "Turn off 2FA" to accounts that must use it.
+- Edge functions follow the same rule through `_shared/mfa.ts`.
+
+### Exemption list (21 Nov)
+- Migration `20261121090000_mfa_exempt_users`: table `mfa_exempt_users` (RLS on, no policies, no grants), so only the SQL Editor can read or change it. `mfa_required_for_caller()` skips accounts on it.
+- Filled with the **16 `@redtech.inc` accounts** that existed on 21 Nov, by user id. People who sign up later with that domain are not exempt. The migration refused to run unless the count was exactly 16.
+- An exempt account that has set up an authenticator is still asked for its code until the factor is removed (one account on 21 Nov).
+- Add someone: `insert into public.mfa_exempt_users (user_id, reason) select id, '<why>' from auth.users where email = '<email>';`. Remove: `delete from public.mfa_exempt_users where user_id = (select id from auth.users where email = '<email>');`.
+
+### `project_departments` two-factor rule (21 Nov)
+- The table (cross-department projects) was created without the restrictive `mfa_required` policy. Migration `20261121100000_project_departments_mfa` adds it. Checked live afterwards.
+- Tables without `mfa_required`, on purpose: `mfa_exempt_users`, `task_due_reminders`, `task_key_counters` (no policies, unreachable from the app) and `rbac_roles`, `rbac_permissions`, `rbac_role_permissions` (role and permission names only, readable by signed-in users).
+
+### CAPTCHA and password rules (19 Nov)
+- **CAPTCHA:** Cloudflare Turnstile on Login, Signup, Forgot Password and the "resend confirmation" buttons (`src/captcha.js`). Off until `VITE_TURNSTILE_SITE_KEY` is set; Supabase's CAPTCHA protection must be on with the matching secret.
+- **Passwords:** 8+ characters with an uppercase and a lowercase letter, a number and a symbol, matching Supabase's "lowercase, uppercase letters, digits and symbols" setting. Shown under every password field, checked on sign-up, reset, first password and Settings, and again in `change-password` on the server.
+- `change-password` verifies the current password with the service-role key so Supabase's sign-in CAPTCHA can't block it.
 
 ### React Compiler gotcha
 The project uses the React Compiler, which reads values used inside event handlers **during render** to memoize them. `TwoFactorSettings` read `factor.id` in a handler while `factor` was `null`, which crashed the Security tab into a blank page. Use optional chaining (`factor?.id`) for state that can be null, even inside handlers.
@@ -256,8 +282,19 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261017140000_dm_pins_and_reactions.sql` | ✅ | ✅ |
 | `20261018090000_enforce_mfa.sql` | ✅ | ✅ |
 | `20261019090000_mfa_trusted_devices.sql` | ✅ | ✅ |
+| `20261026090000` to `20261112090000` (15 migrations: notify lock, project columns, standups, atomic launch, DM attachments bucket, sprints, notifications, deadlines, leave/remove from organization, and others) | ✅ | ✅ |
+| `20261112100000_rbac_foundation.sql`, `20261112110000_rbac_rules.sql`, `20261114090000_assign_roles.sql` | ✅ | ✅ |
+| `20261113090000_activity_log_organization.sql` | ✅ | ✅ |
+| `20261119090000_meetings.sql`, `20261119100000_task_keys.sql`, `20261119120000_task_comments.sql` | ✅ | ✅ |
+| `20261120090000_project_departments.sql`, `20261120100000_cross_department_projects.sql`, `20261120120000_cross_department_permissions.sql` | ✅ | ✅ |
+| `20261120110000_require_mfa.sql` | ✅ | ✅ |
+| `20261120130000_user_availability` | ✅ | ❌ **file in no branch**: applied live, never committed |
+| `20261121090000_mfa_exempt_users.sql` | ✅ | ✅ |
+| `20261121100000_project_departments_mfa.sql` | ✅ | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
+
+Since November migrations are applied with `supabase db push` or the SQL Editor; the live list is in `supabase_migrations.schema_migrations`. `Test-phase` and `22's` once used the same numbers for different migrations; `22's` renumbered (`2e4ea8b`) and `Test-phase` took that in (`cd22380`). Until `user_availability` is committed, `supabase db push` refuses to run: use the SQL Editor.
 
 ---
 
@@ -270,8 +307,9 @@ Undo scripts restore the **previous, insecure** state. Use them only to unblock 
 - **User lost their authenticator:** Supabase → Authentication → Users → user → remove MFA factor. Supabase TOTP has no backup codes.
 - **Read-only database checks** (CLI is logged in):
   ```bash
-  npx supabase db query --linked --project-ref vrzepdjjjpodztqkfsbh "select ..."
+  npx supabase db query --remote=vrzepdjjjpodztqkfsbh --read-only "select ..."
   ```
+- **Snapshots:** `npm run db:schema` writes the live structure to `supabase/schema/schema.sql`; `npm run db:backup` saves every public table's rows to `supabase/backups/<time>/` (git-ignored, real user data; not `auth` users or stored files). Both are read-only.
 - **Duplicate account (deferred):** one person has a login with no profile because a typo'd second account holds the same email in its profile. A tested merge script exists (kept out of the repo because it contains a personal email). There are also ~10 test signups from 21 Aug with fake domains.
 
 ---
@@ -281,21 +319,21 @@ Undo scripts restore the **previous, insecure** state. Use them only to unblock 
 - **Database changes:** each migration was first run inside `BEGIN … ROLLBACK` against production. It simulated users via `SET LOCAL ROLE authenticated` plus `request.jwt.claims` (anonymous, org admin, department admin, project-only member, other-organization user), and checked both allowed and forbidden actions. Nothing was persisted until the user ran the migration.
 - **Edge functions:** `deno check` type-check before deploy; unauthenticated/anon calls confirmed as 401.
 - **Frontend:** `eslint` (no new problems introduced; several files ended with fewer) and `vite build` after every change; production-preview route smoke test after the dependency upgrade.
-- **Not covered:** there is still **no automated test suite**. Flows were verified manually by the user in the browser.
+- **Tests:** `npm test` runs 218 unit tests (21 Nov). There are still no end-to-end browser tests; flows are verified manually by the user in the browser.
 
 ---
 
 ## 13. Remaining work (by priority)
 
+**Done since 19 Oct:** S-01 (`.env` untracked, `.env.example`), P-01 (Tailwind built, no CDN), P-02 (`vercel.json` rewrite), D-06 (Department/Home read the organization only from `users`; Reports takes the user id from the session), P-07 error boundary (`components/ErrorBoundary.jsx`) and unit tests.
+
 **Before launch (Critical/High)**
-1. S-01: untrack `.env` and root `node_modules`, add `.env.example`.
-2. P-03: production URLs (`SITE_URL`, Supabase redirect URLs, Google OAuth).
-3. P-02: SPA rewrite rule on the host.
-4. P-01: build Tailwind instead of loading it from the CDN.
-5. B-04: errors swallowed while the UI shows success.
-6. B-03: onboarding fails silently.
-7. D-06: org/identity read from user-editable metadata or localStorage.
-8. P-07: error boundary, monitoring, tests. (A missing error boundary turned a single component crash into a blank page on 19 Oct.)
+1. P-03: production URLs (`SITE_URL`, Supabase redirect URLs, Google OAuth).
+2. B-04: errors swallowed while the UI shows success.
+3. B-03: onboarding fails silently.
+4. P-07: monitoring (no error reporting from the live site yet).
+5. Commit `20261120130000_user_availability` (applied live, in no branch).
+6. Confirm project files open after a remembered-device sign-in (§7).
 
 **Medium:** F-07 invented data, F-05 standups localStorage fallback, B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-05 email change half-applied, X-08/X-03 DM base64 attachments and file-name sanitising, P-04 polling and unbounded queries, B-05 sprint completion not logged.
 
