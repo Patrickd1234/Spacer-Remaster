@@ -53,7 +53,8 @@ export default function Reports() {
   const [lastUpdated, setLastUpdated] = useState(null)
 
   // Current session & profile
-  const [currentUserId, setCurrentUserId] = useState(() => localStorage.getItem("userId") || null)
+  // Set from the signed-in session in fetchReportData, never from browser storage (D-06)
+  const [currentUserId, setCurrentUserId] = useState(null)
   const [organizationId, setOrganizationId] = useState(null)
   const [userAssignedProjectIds, setUserAssignedProjectIds] = useState(new Set())
   const [adminTeamSpaceIds, setAdminTeamSpaceIds] = useState(new Set())
@@ -122,12 +123,8 @@ export default function Reports() {
 
     try {
       // 1. Get authenticated user
-      let userId = localStorage.getItem("userId")
-      if (!userId) {
-        const authData = { user: await getSessionUser() }
-        userId = authData?.user?.id
-        if (userId) localStorage.setItem("userId", userId)
-      }
+      // From the session, not localStorage: browser storage is editable (D-06)
+      const userId = (await getSessionUser())?.id
       if (!userId) {
         setLoading(false)
         setIsRefreshing(false)
