@@ -6,6 +6,7 @@ import { RemoveFromOrganizationButton } from "../components/OrgExitControls"
 import { roleKey, roleName } from "../permissions"
 import { canEditRoles } from "./roleAssignment"
 import RoleEditor from "./RoleEditor"
+import AwayBadge, { AwayDot } from "../availability/AwayBadge"
 const MAX_TAGS = 2
 const TIME_ZONES = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : []
 
@@ -119,11 +120,12 @@ export function PersonCard({ person, isSelected, onOpen }) {
             aria-current={isSelected ? "true" : undefined}
             className={`w-full text-left p-4 rounded-xl border bg-panel transition-colors cursor-pointer flex flex-col items-start gap-2 ${isSelected ? "border-accent-ink/60" : "border-line hover:border-line-strong"}`}
         >
-            <Avatar name={person.name} url={person.avatarUrl} size="lg" />
+            <span className="relative inline-flex shrink-0"><Avatar name={person.name} url={person.avatarUrl} size="lg" /><AwayDot person={person} isDecorative /></span>
             <div className="min-w-0 w-full">
                 <p className="text-sm font-semibold text-white truncate">{person.name}</p>
                 <p className="text-xs text-muted truncate">{person.job_title || "No title yet"}</p>
             </div>
+            <AwayBadge person={person} />
             <TeamTags teams={person.teams} />
         </button>
     )
@@ -137,11 +139,12 @@ export function PersonRow({ person, isSelected, onOpen }) {
             aria-current={isSelected ? "true" : undefined}
             className={`w-full text-left px-4 py-3 flex items-center gap-3 border-b border-line last:border-b-0 transition-colors cursor-pointer ${isSelected ? "bg-raised" : "hover:bg-raised"}`}
         >
-            <Avatar name={person.name} url={person.avatarUrl} />
+            <span className="relative inline-flex shrink-0"><Avatar name={person.name} url={person.avatarUrl} /><AwayDot person={person} isDecorative /></span>
             <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-white truncate">{person.name}</p>
                 <p className="text-xs text-muted truncate">{person.job_title || "No title yet"}</p>
             </div>
+            <AwayBadge person={person} />
             <div className="hidden md:block"><TeamTags teams={person.teams} /></div>
         </button>
     )
@@ -184,6 +187,9 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, canRemove, 
             <div>
                 <h2 className="text-lg font-semibold text-white">{person.name}</h2>
                 <p className="text-sm text-muted">{person.job_title || "No title yet"}</p>
+                {/* The note shows in the tooltip and, here, in full */}
+                <AwayBadge person={person} className="mt-2" />
+                {person.away_back_on && person.away_note && <p className="text-xs text-muted mt-1">{person.away_note}</p>}
             </div>
             <TeamTags teams={person.teams} />
             <div className="flex gap-2">

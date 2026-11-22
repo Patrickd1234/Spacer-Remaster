@@ -5,6 +5,9 @@ import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import { describeActivity, timeAgo } from "./activityLabels"
 import PlanetLoader from "./components/PlanetLoader"
+import AvailabilityCard from "./availability/AvailabilityCard"
+import AwayBadge from "./availability/AwayBadge"
+import { useAwayPeriods } from "./availability/availabilityData"
 
 function initials(name, email) {
     const source = (name || email || "").trim()
@@ -22,6 +25,8 @@ function Profile() {
     // Toast notification
     const [toast, setToast] = useState(null)
     const { isSuperAdmin, isAdmin, roleName } = useRole()
+    const awayPeriods = useAwayPeriods()
+    const myAwayPeriod = awayPeriods.get(userId)
 
     // Saved profile state
     const [profile, setProfile] = useState({
@@ -63,9 +68,11 @@ function Profile() {
 
             setUserId(authUser.id)
 
+            // Only columns that exist: asking for unknown ones (phone, website, …) failed
+            // the whole query, so the page fell back to the sign-in details
             const { data, error } = await supabase
                 .from("users")
-                .select("id, name, email, phone, job_title, department, location, bio, website")
+                .select("id, name, email, job_title, location, description")
                 .eq("id", authUser.id)
                 .maybeSingle()
 
@@ -78,12 +85,12 @@ function Profile() {
             const next = {
                 name: data?.name || authUser.user_metadata?.full_name || "",
                 email: data?.email || authUser.email || "",
-                phone: data?.phone || "",
+                phone: "",
                 job_title: data?.job_title || "",
-                department: data?.department || "",
+                department: "",
                 location: data?.location || "",
-                bio: authUser.user_metadata?.bio || data?.bio || "",
-                website: data?.website || ""
+                bio: authUser.user_metadata?.bio || data?.description || "",
+                website: ""
             }
             setProfile(next)
             setDraft(next)
@@ -115,7 +122,8 @@ function Profile() {
             })
             setActivityFeed((activityRes.data || []).map(row => ({ ...describeActivity(row), time: timeAgo(row.created_at), id: row.id })))
 
-            if (!data) {
+            // Only when the row is really missing, not when reading it failed
+            if (!data && !error) {
                 if (import.meta.env.DEV) {
                     console.info("No users row for this account yet — creating one")
                 }
@@ -235,7 +243,7 @@ function Profile() {
                                                 {initials(profile.name, profile.email)}
                                             </div>
                                         </div>
-                                        <span className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-2 border-panel shadow-md" title="Online & Active" />
+                                        {/* No green "online" dot: there is no presence to show. Away status sits by the role. */}
                                     </div>
 
                                     {/* Identity Details */}
@@ -247,6 +255,7 @@ function Profile() {
                                             <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold uppercase tracking-wider ${isSuperAdmin ? 'bg-primary-fixed/10 text-primary-fixed border border-accent-ink/20' : isAdmin ? 'bg-secondary-fixed/10 text-secondary-fixed border border-blue-400/20' : 'bg-neutral-400/10 text-neutral-400 border border-neutral-400/20'}`}>
                                                 {roleName}
                                             </span>
+                                            {myAwayPeriod && <AwayBadge person={myAwayPeriod} />}
                                         </div>
 
                                         <div className="flex items-center gap-4 text-sm font-medium text-soft pt-1 flex-wrap">
@@ -326,6 +335,7 @@ function Profile() {
                                                 {profile.bio || "No bio provided."}
                                             </p>
                                         </div>
+                                        <AvailabilityCard userId={userId} period={myAwayPeriod} />
                                     </div>
 
                                     {/* Right Column: Activity Stream */}
