@@ -161,20 +161,8 @@ function Profile() {
             }
         })
 
-        // Also update Auth email if changed
-        if (draft.email !== profile.email) {
-            const { error: authError } = await supabase.auth.updateUser({ email: draft.email })
-            if (authError) {
-                if (import.meta.env.DEV) {
-                    console.error("Error updating auth email:", authError)
-                }
-                showToast("Could not update email: " + authError.message, "error")
-            }
-        }
-
-        setSaving(false)
-
         if (error || authMetaError) {
+            setSaving(false)
             if (import.meta.env.DEV) {
                 console.error("DB or Auth Update error:", error || authMetaError)
             }
@@ -182,9 +170,29 @@ function Profile() {
             return
         }
 
-        setProfile(draft)
+        // An email change only takes effect once the links sent to the old and
+        // new address are clicked; until then the old email stays (X-05)
+        const emailChanged = draft.email !== profile.email
+        let emailError = null
+        if (emailChanged) {
+            const { error: authError } = await supabase.auth.updateUser({ email: draft.email })
+            emailError = authError
+            if (authError && import.meta.env.DEV) {
+                console.error("Error updating auth email:", authError)
+            }
+        }
+
+        setSaving(false)
+        setProfile({ ...draft, email: profile.email })
         setIsEditing(false)
-        showToast("Profile details updated successfully!", "success")
+
+        if (emailError) {
+            showToast("Your profile was saved, but the email wasn't changed: " + emailError.message, "error")
+        } else if (emailChanged) {
+            showToast("Profile saved. To change your email, click the confirmation links sent to your old and new address.", "success")
+        } else {
+            showToast("Profile details updated successfully!", "success")
+        }
     }
 
     const stats = [
