@@ -288,13 +288,14 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261119090000_meetings.sql`, `20261119100000_task_keys.sql`, `20261119120000_task_comments.sql` | ✅ | ✅ |
 | `20261120090000_project_departments.sql`, `20261120100000_cross_department_projects.sql`, `20261120120000_cross_department_permissions.sql` | ✅ | ✅ |
 | `20261120110000_require_mfa.sql` | ✅ | ✅ |
-| `20261120130000_user_availability` | ✅ | ❌ **file in no branch**: applied live, never committed |
+| `20261120130000_user_availability.sql` | ✅ | ✅ (committed on `22's` on 22 Nov, merged in `cf0f14a`) |
 | `20261121090000_mfa_exempt_users.sql` | ✅ | ✅ |
 | `20261121100000_project_departments_mfa.sql` | ✅ | ✅ |
+| `20261121110000_sync_user_email.sql` | ✅ | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
 
-Since November migrations are applied with `supabase db push` or the SQL Editor; the live list is in `supabase_migrations.schema_migrations`. `Test-phase` and `22's` once used the same numbers for different migrations; `22's` renumbered (`2e4ea8b`) and `Test-phase` took that in (`cd22380`). Until `user_availability` is committed, `supabase db push` refuses to run: use the SQL Editor.
+Since November migrations are applied with `supabase db push` or the SQL Editor; the live list is in `supabase_migrations.schema_migrations`. `Test-phase` and `22's` once used the same numbers for different migrations; `22's` renumbered (`2e4ea8b`) and `Test-phase` took that in (`cd22380`). Since `cf0f14a` the repo has every migration on the live database.
 
 ---
 
@@ -325,17 +326,14 @@ Since November migrations are applied with `supabase db push` or the SQL Editor;
 
 ## 13. Remaining work (by priority)
 
-**Done since 19 Oct:** S-01 (`.env` untracked, `.env.example`), P-01 (Tailwind built, no CDN), P-02 (`vercel.json` rewrite), D-06 (Department/Home read the organization only from `users`; Reports takes the user id from the session), P-07 error boundary (`components/ErrorBoundary.jsx`) and unit tests.
+**Done since 19 Oct:** S-01 (`.env` untracked, `.env.example`), P-01 (Tailwind built, no CDN), P-02 (`vercel.json` rewrite), D-06 (Department/Home read the organization only from `users`; Reports takes the user id from the session), P-07 error boundary (`components/ErrorBoundary.jsx`) and unit tests, B-04 (failed saves in DMs, group chat, preferences and file deletes now say so, `1331640`), B-03 (a failed organization load shows a retry screen instead of `/welcome`, `3f92d63`), F-07 and F-05 (seat bar, unsaved auto-join switch and the stand-ups' browser fallback removed on `22's`, `9046f61`), X-05 (confirmed email changes copied to `users`; Profile says when confirmation is needed, `57d860d`).
 
 **Before launch (Critical/High)**
 1. P-03: production URLs (`SITE_URL`, Supabase redirect URLs, Google OAuth).
-2. B-04: errors swallowed while the UI shows success.
-3. B-03: onboarding fails silently.
-4. P-07: monitoring (no error reporting from the live site yet).
-5. Commit `20261120130000_user_availability` (applied live, in no branch).
-6. Confirm project files open after a remembered-device sign-in (§7).
+2. P-07: monitoring (no error reporting from the live site yet).
+3. Confirm project files open after a remembered-device sign-in (§7).
 
-**Medium:** F-07 invented data, F-05 standups localStorage fallback, B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-05 email change half-applied, X-08/X-03 DM base64 attachments and file-name sanitising, P-04 polling and unbounded queries, B-05 sprint completion not logged.
+**Medium:** B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-08/X-03 DM attachment file-name sanitising (base64 attachments replaced by a private bucket on 30 Oct), P-04 polling and unbounded queries, B-05 sprint completion not logged.
 
 **Low:** B-08 small bugs, P-05 bundle size, P-06 very large files, P-08 lint, account cleanup, signup activity-log insert.
 
