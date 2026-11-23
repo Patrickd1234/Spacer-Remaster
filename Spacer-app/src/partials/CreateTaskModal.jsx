@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
 import Select from "../components/Select";
+import { useAwayPeriods } from "../availability/availabilityData";
+import { assignWarning, assigneeOptionLabel, dayKeyOf, withAvailability } from "../availability/availability";
 
 const byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
 
@@ -98,6 +100,11 @@ export default function CreateTaskModal({ projectId, organizationId: organizatio
         : departments[0]?.team_space_id ?? "";
     const [projects, setProjects] = useState([]);
     const [users, setUsers] = useState([]);
+    // Who is away, so the list can say so and warn when the due date falls in it
+    const awayPeriods = useAwayPeriods();
+    const today = dayKeyOf();
+    const assignableUsers = withAvailability(users, awayPeriods);
+    const awayWarning = assignWarning(assignableUsers.find((u) => u.id === assigneeId), { today, dueDate });
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
     // The user's own organization, looked up when the page didn't pass one
@@ -353,7 +360,7 @@ export default function CreateTaskModal({ projectId, organizationId: organizatio
                             className={fieldClass}
                         >
                             <option value="">Unassigned</option>
-                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            {assignableUsers.map(u => <option key={u.id} value={u.id}>{assigneeOptionLabel(u, today)}</option>)}
                         </Select>
                     </div>
                     <div>
@@ -365,6 +372,13 @@ export default function CreateTaskModal({ projectId, organizationId: organizatio
                         <CustomDropdown options={PRIORITY_OPTIONS} value={priority} onChange={setPriority} placeholder="Priority" icon="flag" />
                     </div>
                 </div>
+
+                {/* A heads-up only: the task can still be assigned */}
+                {awayWarning && (
+                    <p role="status" className="text-xs text-amber-300 flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[14px]" aria-hidden="true">event_busy</span>{awayWarning}
+                    </p>
+                )}
 
                 {error && (
                     <p className="text-xs text-red-400 flex items-center gap-1.5">

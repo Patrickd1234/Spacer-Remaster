@@ -8,6 +8,8 @@ import { GeneralShell, PageHeading, ErrorNote, INPUT_CLASS, COMPACT_SELECT_CLASS
 import { PanelMessage } from "../components/DashboardParts"
 import { PersonCard, PersonRow, ProfileDrawer, EditProfileForm, FilterMenu, ActiveFilters } from "./DirectoryParts"
 import Select from "../components/Select"
+import { useAwayPeriods } from "../availability/availabilityData"
+import { withAvailability } from "../availability/availability"
 
 const LAYOUT_KEY = "directory_layout"
 
@@ -75,9 +77,12 @@ export default function Directory() {
         : profileError ? "error"
         : roleLoading || !profile ? "loading"
         : "ready"
+    // Away periods are loaded separately, so the Directory still works before
+    // migration 20261120130000 is applied (nobody shows as away then)
+    const awayPeriods = useAwayPeriods()
     const { people, teams } = useMemo(
-        () => scopeDirectory(everyone, orgTeams, { viewerId: profile?.id ?? null, isSuperAdmin }),
-        [everyone, orgTeams, profile?.id, isSuperAdmin]
+        () => scopeDirectory(withAvailability(everyone, awayPeriods), orgTeams, { viewerId: profile?.id ?? null, isSuperAdmin }),
+        [everyone, awayPeriods, orgTeams, profile?.id, isSuperAdmin]
     )
     const jobTitles = useMemo(() => [...new Set(people.map((p) => p.job_title).filter(Boolean))].sort(), [people])
     const visible = useMemo(() => sortPeople(filterPeople(people, { query, teamId, jobTitle }), order), [people, query, teamId, jobTitle, order])

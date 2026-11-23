@@ -33,6 +33,8 @@ import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
 import TaskKeyBar from "./tasks/TaskKeyBar"
 import TaskComments from "./tasks/TaskComments"
+import AwayBadge, { AwayDot } from "./availability/AwayBadge"
+import { useAwayPeriods } from "./availability/availabilityData"
 import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
 import { MEETING_SAVED_EVENT } from "./appEvents"
 
@@ -226,6 +228,8 @@ function ProjectPage() {
     const [dragOverColumn, setDragOverColumn] = useState(null)
     const [selectedTask, setSelectedTask] = useState(null)
     const [orgUsers, setOrgUsers] = useState([])
+    // Who is away now or later (empty until migration 20261120130000 is applied)
+    const awayPeriods = useAwayPeriods()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
     const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
@@ -1483,10 +1487,11 @@ function ProjectPage() {
                                                                 {(() => {
                                                                     const assignee = orgUsers.find(u => u.id === task.assignee_id);
                                                                     return task.assignee_id ? (
-                                                                        <div className="w-5 h-5 rounded-full bg-surface1 border border-line flex items-center justify-center" title={assignee?.name || 'Assigned'}>
+                                                                        <div className="relative w-5 h-5 rounded-full bg-surface1 border border-line flex items-center justify-center" title={assignee?.name || 'Assigned'}>
                                                                             <span className="text-[9px] font-bold text-muted uppercase">
                                                                                 {assignee?.name?.charAt(0) || '?'}
                                                                             </span>
+                                                                            <AwayDot person={awayPeriods.get(task.assignee_id)} />
                                                                         </div>
                                                                     ) : null;
                                                                 })()}
@@ -2169,7 +2174,10 @@ function ProjectPage() {
                                                 <div className="w-6 h-6 rounded-full bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
                                                     {assignee.name.charAt(0)}
                                                 </div>
-                                                <p className="text-sm text-white font-semibold">{assignee.name}</p>
+                                                <div className="min-w-0 space-y-1">
+                                                    <p className="text-sm text-white font-semibold">{assignee.name}</p>
+                                                    <AwayBadge person={awayPeriods.get(assignee.id)} />
+                                                </div>
                                             </div>
                                         ) : (
                                             <p className="text-sm text-white mt-1 italic opacity-70">Unassigned</p>
