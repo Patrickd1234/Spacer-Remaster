@@ -333,7 +333,7 @@ Since November migrations are applied with `supabase db push` or the SQL Editor;
 - Domain `spacer.ink` (Namecheap): `A @` and `CNAME www` point to Vercel; `spacer.ink` redirects (308) to `https://www.spacer.ink`. The five Resend records on the domain stay (email sending). `https://spacer-rust.vercel.app` still works.
 - Public pages, readable signed in or not: `/privacy` (`f08e1d5`) and `/terms` (`25e2381`), operator Nospace Ltd, shared layout `src/legal/LegalPage.jsx`. Starting drafts, not a legal review.
 - `SITE_URL` secret = `https://www.spacer.ink`. Supabase Auth: Site URL `https://www.spacer.ink`; Redirect URLs include `https://www.spacer.ink/**` and `https://spacer-rust.vercel.app/**`.
-- Google sign-in: new Google Cloud project "Spacer" (consent screen External, authorized domain `spacer.ink`) and a new web client, which Supabase now uses (Client ID checked via `/auth/v1/authorize`). The app code needed no change: it builds return links from `window.location.origin`.
+- Google sign-in: new Google Cloud project "Spacer" (consent screen External and published, authorized domain `spacer.ink`) and a new web client, which Supabase now uses (Client ID checked via `/auth/v1/authorize`). The app code needed no change: it builds return links from `window.location.origin`.
 - Verified 24 Nov: Google sign-in from `www.spacer.ink` returns there signed in; a password-reset email opens `https://www.spacer.ink/reset-password`.
 
 **Before launch (Critical/High)**
