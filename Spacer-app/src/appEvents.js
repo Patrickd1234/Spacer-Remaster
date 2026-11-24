@@ -6,3 +6,6 @@ export const TASK_CREATED_EVENT = "task_created";
 export const MEETING_SAVED_EVENT = "meeting_saved";
 // Someone changed their own away period (availability/AvailabilityCard); detail is { userId }
 export const AVAILABILITY_SAVED_EVENT = "availability_saved";
+// Someone changed or removed their own photo (generalData.updateMyAvatar /
+// removeMyAvatar); detail is { userId, path }, path null when removed
+export const AVATAR_CHANGED_EVENT = "avatar_changed";

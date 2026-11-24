@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { Avatar, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote } from "./GeneralParts"
-import { validateImage } from "./generalData"
+import PhotoField from "../avatars/PhotoField"
 import Select from "../components/Select"
 import { RemoveFromOrganizationButton } from "../components/OrgExitControls"
 import { roleKey, roleName } from "../permissions"
@@ -265,14 +265,6 @@ export function EditProfileForm({ person, onSave, onClose }) {
     const [isSaving, setIsSaving] = useState(false)
     const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
-    const handleAvatar = (e) => {
-        const file = e.target.files?.[0] || null
-        const invalid = file && validateImage(file)
-        setErrorMsg(invalid || "")
-        setAvatarFile(invalid ? null : file)
-        if (invalid) e.target.value = ""
-    }
-
     const handleSubmit = async (e) => {
         e.preventDefault()
         if (!form.name.trim()) {
@@ -289,9 +281,8 @@ export function EditProfileForm({ person, onSave, onClose }) {
     return (
         <Modal title="Edit your profile" onClose={onClose}>
             <form onSubmit={handleSubmit} className="space-y-4">
-                <Field label="Photo" hint="JPG, PNG, WebP or GIF, up to 5 MB.">
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/gif" onChange={handleAvatar} className="text-xs text-soft" />
-                </Field>
+                {/* The file is kept until Save, so Cancel leaves the photo as it was */}
+                <PhotoField name={form.name || person.name} url={person.avatarUrl} onPick={setAvatarFile} />
                 <Field label="Name"><input className={INPUT_CLASS} value={form.name} onChange={set("name")} maxLength={100} required /></Field>
                 <Field label="Job title"><input className={INPUT_CLASS} value={form.job_title} onChange={set("job_title")} maxLength={100} placeholder="e.g. Product Designer" /></Field>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -3,6 +3,7 @@ import { createSignedLinks } from "../storageLinks"
 import { dayKey } from "./generalFormat"
 import { roleKey } from "../permissions"
 import { dbRefusalMessage } from "../orgExitRules"
+import { AVATAR_CHANGED_EVENT } from "../appEvents"
 
 // Reads and writes for the General Space pages. Row-level security limits
 // every query to the signed-in user's organization; posting announcements
@@ -296,7 +297,22 @@ export async function updateMyAvatar(profile, file) {
         return saved
     }
     await removeImage(profile.avatar_path)
+    announceAvatarChange(profile.id, path)
     return { data: path, error: null }
+}
+
+export async function removeMyAvatar(profile) {
+    if (!profile.avatar_path) return { data: null, error: null }
+    const saved = await updateMyProfile(profile.id, { avatar_path: null })
+    if (saved.error) return saved
+    await removeImage(profile.avatar_path)
+    announceAvatarChange(profile.id, null)
+    return { data: null, error: null }
+}
+
+// Tells the sidebar, Settings and Profile (avatars/myAvatar.js) to show the new photo
+function announceAvatarChange(userId, path) {
+    window.dispatchEvent(new CustomEvent(AVATAR_CHANGED_EVENT, { detail: { userId, path } }))
 }
 
 export async function setReportsTo(userId, managerId) {

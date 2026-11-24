@@ -10,6 +10,7 @@ import ComingSoonCard from "./components/ComingSoonCard"
 import { changePassword } from "./passwordChange"
 import { passwordStrengthError, PASSWORD_HINT } from "./passwordRules"
 import { LeaveOrganizationButton } from "./components/OrgExitControls"
+import { useMyAvatar } from "./avatars/myAvatar"
 
 export default function Settings() {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -18,6 +19,7 @@ export default function Settings() {
     const [toast, setToast] = useState(null)
     const { preferences, updatePreferences } = usePreferences()
     const { roleName, can } = useRole()
+    const { url: avatarUrl, handleImageError } = useMyAvatar()
 
     const notifications = preferences?.notifications || {}
     const appearance = preferences?.appearance || {}
@@ -298,8 +300,10 @@ export default function Settings() {
                                     </div>
 
                                     <div className="flex items-center gap-lg p-md rounded-xl bg-panel border border-line">
-                                        <div className="w-16 h-16 rounded-2xl bg-primary-container text-on-accent font-bold text-2xl flex items-center justify-center border-2 border-primary-fixed/40">
-                                            {user.name ? user.name.slice(0, 2).toUpperCase() : "U"}
+                                        <div className="w-16 h-16 rounded-2xl overflow-hidden bg-primary-container text-on-accent font-bold text-2xl flex items-center justify-center border-2 border-primary-fixed/40">
+                                            {avatarUrl
+                                                ? <img src={avatarUrl} alt="" onError={handleImageError} className="w-full h-full object-cover" />
+                                                : user.name ? user.name.slice(0, 2).toUpperCase() : "U"}
                                         </div>
                                         <div className="space-y-1">
                                             <h3 className="text-lg font-bold text-white">{user.name}</h3>
