@@ -4,6 +4,7 @@ import ChatMessage from './ChatMessage';
 import UploadingBubble from './UploadingBubble';
 import { createSignedLinks } from '../storageLinks';
 import PlanetLoader from "./PlanetLoader";
+import PersonPhoto from "../avatars/PersonPhoto";
 
 const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
 
@@ -715,8 +716,8 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                 ) : (
                                     activeChannelMembers.map(member => (
                                         <div key={member.id || member.user_id} className="flex items-center gap-3 text-sm text-white/90 p-2 hover:bg-white/5 rounded-lg transition-colors">
-                                            <div className="w-8 h-8 rounded-full bg-[var(--primary-color)]/20 text-accent-ink flex items-center justify-center font-bold">
-                                                {(member.name || member.email || '?').charAt(0).toUpperCase()}
+                                            <div className="w-8 h-8 rounded-full overflow-hidden bg-[var(--primary-color)]/20 text-accent-ink flex items-center justify-center font-bold">
+                                                <PersonPhoto userId={member.user_id || member.id} fallback={(member.name || member.email || '?').charAt(0).toUpperCase()} />
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="font-medium">{member.name || 'Unknown User'}</span>

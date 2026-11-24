@@ -102,7 +102,7 @@ function CommentEditor({ value, onChange, onSubmit, people, selfId, placeholder,
                             onMouseEnter={() => setActiveIndex(index)}
                             className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] text-white cursor-pointer ${index === activeIndex ? "bg-surface2" : ""}`}
                         >
-                            <Avatar name={person.name} size="xs" />
+                            <Avatar name={person.name} userId={person.id} size="xs" />
                             <span className="truncate">{person.name}</span>
                         </li>
                     ))}
@@ -157,7 +157,7 @@ function CommentItem({ comment, selfId, canModerate, people, names, onSaved, onD
 
     return (
         <li className="group flex gap-2.5">
-            <Avatar name={authorName} size="sm" />
+            <Avatar name={authorName} userId={comment.author_id} size="sm" />
             <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
                     <span className="font-semibold text-white">{isMine ? "You" : authorName}</span>

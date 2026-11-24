@@ -7,6 +7,7 @@ import { attachmentDisplay, dmAttachmentPath, formatFileSize, validateDmAttachme
 import { removeDmAttachment, uploadDmAttachment, withDmAttachmentLinks } from "../dmAttachments";
 import UploadingBubble from "../components/UploadingBubble";
 import PlanetLoader from "../components/PlanetLoader";
+import PersonPhoto from "../avatars/PersonPhoto";
 
 // How close (px) to the bottom of the DM list still counts as "at the bottom"
 const NEAR_BOTTOM_PX = 120;
@@ -691,8 +692,10 @@ export default function SidebarRouter(props) {
                                 </button>
                             ) : null}
                             
-                            <div className="w-5 h-5 rounded-full bg-faint/20 text-accent-ink flex items-center justify-center font-bold text-[10px]">
-                                {chatRecipient ? (chatRecipient.name || "?").charAt(0).toUpperCase() : (activeGroupChat ? "#" : "M")}
+                            <div className="w-5 h-5 rounded-full overflow-hidden bg-faint/20 text-accent-ink flex items-center justify-center font-bold text-[10px]">
+                                {chatRecipient
+                                    ? <PersonPhoto userId={chatRecipient.user_id} fallback={(chatRecipient.name || "?").charAt(0).toUpperCase()} />
+                                    : (activeGroupChat ? "#" : "M")}
                             </div>
                             
                             <h4 className="text-white font-semibold text-xs truncate flex items-center gap-1.5">
@@ -832,8 +835,8 @@ export default function SidebarRouter(props) {
                                                             className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"
                                                         >
                                                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                                                <div className="w-8 h-8 rounded-xl bg-line flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
-                                                                    {(item.name || "?").charAt(0)}
+                                                                <div className="w-8 h-8 rounded-xl overflow-hidden bg-line flex items-center justify-center font-bold text-white text-xs uppercase shrink-0">
+                                                                    <PersonPhoto userId={item.user_id} fallback={(item.name || "?").charAt(0)} />
                                                                 </div>
                                                                 <div className="overflow-hidden flex-1">
                                                                     <div className="flex items-center justify-between gap-1">

@@ -13,6 +13,7 @@ import { createdToast, failedToast } from "./createDepartment";
 import { DEPARTMENT_CREATED_EVENT } from "./appEvents";
 import Select from "./components/Select";
 import PlanetLoader from "./components/PlanetLoader";
+import PersonPhoto from "./avatars/PersonPhoto";
 
 function Department() {
     const [userId, setUserId] = useState(null)
@@ -598,8 +599,8 @@ return (
                         {filteredMembers.map((member) => (
                             <div key={member.user_id || member.id} className="bg-raised border border-line rounded-xl p-5 flex flex-col justify-between hover:border-line-strong transition-all group">
                                 <div className="flex items-start justify-between mb-4">
-                                    <div className="w-12 h-12 rounded-xl bg-surface2 border border-line-strong flex items-center justify-center font-bold text-white text-lg">
-                                        {(member.name || member.email || "?").charAt(0).toUpperCase()}
+                                    <div className="w-12 h-12 rounded-xl overflow-hidden bg-surface2 border border-line-strong flex items-center justify-center font-bold text-white text-lg">
+                                        <PersonPhoto userId={member.user_id || member.id} fallback={(member.name || member.email || "?").charAt(0).toUpperCase()} />
                                     </div>
                                     <span className="bg-faint/20 text-accent-ink border border-faint/30 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
                                         {member.membershipRole || member.role || "Member"}

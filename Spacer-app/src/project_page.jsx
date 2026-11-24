@@ -37,6 +37,7 @@ import AwayBadge, { AwayDot } from "./availability/AwayBadge"
 import { useAwayPeriods } from "./availability/availabilityData"
 import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
 import { MEETING_SAVED_EVENT } from "./appEvents"
+import PersonPhoto from "./avatars/PersonPhoto"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -1218,7 +1219,7 @@ function ProjectPage() {
                                             visibleActivity.map(activity => (
                                                 <div key={activity.id} className="flex gap-sm">
                                                     <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-line flex items-center justify-center font-bold text-xs text-muted uppercase">
-                                                        {activity.actor?.name?.charAt(0) || '?'}
+                                                        <PersonPhoto userId={activity.actor_id} fallback={activity.actor?.name?.charAt(0) || '?'} />
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="text-xs leading-snug">
@@ -1488,8 +1489,9 @@ function ProjectPage() {
                                                                     const assignee = orgUsers.find(u => u.id === task.assignee_id);
                                                                     return task.assignee_id ? (
                                                                         <div className="relative w-5 h-5 rounded-full bg-surface1 border border-line flex items-center justify-center" title={assignee?.name || 'Assigned'}>
-                                                                            <span className="text-[9px] font-bold text-muted uppercase">
-                                                                                {assignee?.name?.charAt(0) || '?'}
+                                                                            {/* Clipped on its own so the away dot can sit outside the circle */}
+                                                                            <span className="w-full h-full rounded-full overflow-hidden flex items-center justify-center text-[9px] font-bold text-muted uppercase">
+                                                                                <PersonPhoto userId={task.assignee_id} fallback={assignee?.name?.charAt(0) || '?'} />
                                                                             </span>
                                                                             <AwayDot person={awayPeriods.get(task.assignee_id)} />
                                                                         </div>
@@ -2171,8 +2173,8 @@ function ProjectPage() {
                                         const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
                                         return assignee ? (
                                             <div className="flex items-center gap-sm mt-1">
-                                                <div className="w-6 h-6 rounded-full bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
-                                                    {assignee.name.charAt(0)}
+                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
+                                                    <PersonPhoto userId={assignee.id} fallback={assignee.name.charAt(0)} />
                                                 </div>
                                                 <div className="min-w-0 space-y-1">
                                                     <p className="text-sm text-white font-semibold">{assignee.name}</p>
@@ -2336,8 +2338,8 @@ function ProjectPage() {
                                     available.map(user => (
                                         <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-raised border border-line/50 hover:border-accent-ink/30 transition-colors group">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-line flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
-                                                    {user.name?.charAt(0) || "?"}
+                                                <div className="w-9 h-9 rounded-full overflow-hidden bg-line flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
+                                                    <PersonPhoto userId={user.id} fallback={user.name?.charAt(0) || "?"} />
                                                 </div>
                                                 <div>
                                                     <p className="text-white text-[13px] font-semibold">{user.name}</p>

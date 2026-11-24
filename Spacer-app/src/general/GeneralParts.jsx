@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import Sidebar from "../partials/SidebarRouter"
 import Header from "../partials/header"
 import { TONE_CLASSES, categoryOf, initials, eventStart } from "./generalFormat"
+import { usePersonPhoto, handlePhotoError } from "../avatars/peoplePhotos"
 
 // Building blocks shared by the General Space pages
 
@@ -87,10 +88,19 @@ export function PinnedTag() {
 
 const AVATAR_SIZES = { xs: "w-5 h-5 text-[8px]", sm:"w-7 h-7 text-[10px]", md: "w-10 h-10 text-xs", lg: "w-16 h-16 text-lg" }
 
-export function Avatar({ name, url, size = "md", onError = undefined }) {
+// Pass `url` when the list already has the photo's link, or `userId` to look
+// it up in the organization's photos (avatars/peoplePhotos.js)
+export function Avatar({ name, url = null, userId = null, size = "md", onError = undefined }) {
+    if (!url && userId) return <StoredAvatar name={name} userId={userId} size={size} />
     const classes = `${AVATAR_SIZES[size]} rounded-full shrink-0 overflow-hidden bg-line flex items-center justify-center font-semibold text-soft`
     if (url) return <img src={url} alt="" onError={onError} className={`${classes} object-cover`} />
     return <span className={classes} aria-hidden="true">{initials(name)}</span>
+}
+
+// Separate so only avatars that need the lookup subscribe to it
+function StoredAvatar({ name, userId, size }) {
+    const url = usePersonPhoto(userId)
+    return <Avatar name={name} url={url} size={size} onError={handlePhotoError} />
 }
 
 // "OCT / 30" block used in event lists

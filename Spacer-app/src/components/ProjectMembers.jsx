@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import { ErrorNote } from "../general/GeneralParts"
 import PlanetLoader from "./PlanetLoader"
+import PersonPhoto from "../avatars/PersonPhoto"
 
 // A project's Members tab. Two kinds of people show up: explicit project
 // members, and people who are only here because a task is assigned to them.
@@ -19,8 +20,8 @@ function MemberCard({ member, isExplicit, isMe, canManage, isAdding, onRemove, o
     return (
         <div className="bg-raised border border-line rounded-xl p-4 flex flex-col gap-3 h-full transition-colors hover:border-line-strong">
             <div className="flex items-start justify-between gap-2">
-                <div className="w-12 h-12 rounded-xl border border-line bg-surface1 flex items-center justify-center text-muted font-bold text-lg uppercase">
-                    {member.name?.charAt(0) || "?"}
+                <div className="w-12 h-12 rounded-xl overflow-hidden border border-line bg-surface1 flex items-center justify-center text-muted font-bold text-lg uppercase">
+                    <PersonPhoto userId={member.id} fallback={member.name?.charAt(0) || "?"} />
                 </div>
                 <span
                     title={isExplicit ? "Added to this project" : "On this project through an assigned task"}

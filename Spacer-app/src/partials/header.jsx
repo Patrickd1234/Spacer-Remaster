@@ -16,6 +16,7 @@ import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
 import CreateMenu from "./CreateMenu";
 import PlanetLoader from "../components/PlanetLoader";
+import PersonPhoto from "../avatars/PersonPhoto";
 
 // `breadcrumb` ({ icon, label }) is optional; pages that show their own keep it off.
 // The header sits under the fixed sidebar, so `insetLeft` (px) moves the breadcrumb clear of it.
@@ -413,8 +414,8 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
-                                                            <div className="w-5 h-5 rounded-full bg-line-strong flex items-center justify-center text-[10px] font-bold">
-                                                                {u.name.charAt(0).toUpperCase()}
+                                                            <div className="w-5 h-5 rounded-full overflow-hidden bg-line-strong flex items-center justify-center text-[10px] font-bold">
+                                                                <PersonPhoto userId={u.id} fallback={u.name.charAt(0).toUpperCase()} />
                                                             </div>
                                                             <div className="flex flex-col truncate">
                                                                 <span>{u.name}</span>

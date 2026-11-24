@@ -300,3 +300,9 @@ This log tracks development work and code changes made for this project.
   - Shown in `SidebarProfile.jsx`, the Settings account summary and the Profile header; initials when there's no photo.
   - No database change. Step 4 (other people's photos in chat, project page, task comments, header search) is next.
   - Checked: `npm test` 255/255, ESLint clean on the changed files, `vite build` succeeds. Checked in a browser by the user: works.
+
+- Profile photos, step 4: other people's photos.
+  - `src/avatars/peoplePhotos.js`: `usePersonPhoto(userId)`, one shared list of everyone's photo in the organization. One query (`users` id and `avatar_path`, which row-level security limits to the caller's organization, capped at 1,000) and one batch of signed links, shared by every avatar on the page. Loaded again every 50 minutes, which also picks up photos other people changed; after a broken image (at most every 30 s); after sign-in or two-factor; and updated at once by `AVATAR_CHANGED_EVENT`. Pure rules in `peoplePhotosState.js` (7 tests).
+  - `src/avatars/PersonPhoto.jsx` fills an existing avatar frame with the photo, or the initial it showed before. Used in chat (direct-message list, chat header, channel members), header search, Department members, project members, the project page (activity, task assignee chips, task detail assignee, add-member list) and the Create Department picker.
+  - `Avatar` (`general/GeneralParts.jsx`) takes `userId` to look the photo up when the list has no link: task comments (author and mention picker) and meeting guests.
+  - No database change. Checked: `npm test` 262/262, `vite build` succeeds, ESLint 0 errors on the changed files (8 existing hook-dependency warnings in GroupChat, SidebarRouter, project_page and Department, not on changed lines). Checked in a browser by the user: works.
