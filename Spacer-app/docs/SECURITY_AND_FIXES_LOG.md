@@ -1,6 +1,6 @@
 # Spacer: Security Hardening & Fixes Log
 
-**Period:** 16–19 October 2026, updated 21 November 2026
+**Period:** 16–19 October 2026, updated 24 November 2026
 **Scope:** `Spacer-reMastered/Spacer-app` (React 19 + Vite + Supabase project `vrzepdjjjpodztqkfsbh`)
 **Reference:** issue IDs (S-, D-, B-, F-, X-, P-) come from `Spacer_Production_Readiness_Review.docx` (15 Oct 2026).
 
@@ -48,6 +48,7 @@ This document records what was changed, why, how it was verified, and what is st
 | Password rules: 8+ chars, upper + lower case, number, symbol | ✅ Live (19 Nov), checked again on the server |
 | Permission-based access (RBAC) | ✅ Live (12–20 Nov), see `docs/RBAC.md` |
 | D-06: organization and user id only from the database / session | ✅ Done (21 Nov) |
+| P-03: production address `https://www.spacer.ink`, Google sign-in, public `/privacy` and `/terms` | ✅ Live (24 Nov, §13) |
 
 > **Rollout note:** the MFA migration was applied before deploying the edge functions that call `mfa_satisfied()`. Keep that order for any future change to those functions' database dependencies.
 
@@ -148,7 +149,7 @@ All function source now lives in `supabase/functions/`. Previously only `invite-
 
 Shared helpers: `_shared/cors.ts`, `_shared/webhookAuth.ts` (constant-time service-key check), `_shared/html.ts` (`escapeHtml`, `safeUrl`), `_shared/mfa.ts` (`requireMfa`).
 
-**Secrets** (Edge Functions → Secrets): `RESEND_API_KEY` (mayormoris account), `EMAIL_FROM` = `Spacer <noreply@spacer.ink>`, `SITE_URL`. `RESEND_API_KEY_NOTIFICATION` was deleted (unused).
+**Secrets** (Edge Functions → Secrets): `RESEND_API_KEY` (mayormoris account), `EMAIL_FROM` = `Spacer <noreply@spacer.ink>`, `SITE_URL` = `https://www.spacer.ink` (since 24 Nov; was `https://spacer-rust.vercel.app`). `RESEND_API_KEY_NOTIFICATION` was deleted (unused).
 
 **Deploy command:**
 ```bash
@@ -326,12 +327,18 @@ Since November migrations are applied with `supabase db push` or the SQL Editor;
 
 ## 13. Remaining work (by priority)
 
-**Done since 19 Oct:** S-01 (`.env` untracked, `.env.example`), P-01 (Tailwind built, no CDN), P-02 (`vercel.json` rewrite), D-06 (Department/Home read the organization only from `users`; Reports takes the user id from the session), P-07 error boundary (`components/ErrorBoundary.jsx`) and unit tests, B-04 (failed saves in DMs, group chat, preferences and file deletes now say so, `1331640`), B-03 (a failed organization load shows a retry screen instead of `/welcome`, `3f92d63`), F-07 and F-05 (seat bar, unsaved auto-join switch and the stand-ups' browser fallback removed on `22's`, `9046f61`), X-05 (confirmed email changes copied to `users`; Profile says when confirmation is needed, `57d860d`).
+**Done since 19 Oct:** S-01 (`.env` untracked, `.env.example`), P-01 (Tailwind built, no CDN), P-02 (`vercel.json` rewrite), D-06 (Department/Home read the organization only from `users`; Reports takes the user id from the session), P-07 error boundary (`components/ErrorBoundary.jsx`) and unit tests, B-04 (failed saves in DMs, group chat, preferences and file deletes now say so, `1331640`), B-03 (a failed organization load shows a retry screen instead of `/welcome`, `3f92d63`), F-07 and F-05 (seat bar, unsaved auto-join switch and the stand-ups' browser fallback removed on `22's`, `9046f61`), X-05 (confirmed email changes copied to `users`; Profile says when confirmation is needed, `57d860d`), P-03 (24 Nov, below).
+
+**P-03, production URLs (24 Nov):**
+- Domain `spacer.ink` (Namecheap): `A @` and `CNAME www` point to Vercel; `spacer.ink` redirects (308) to `https://www.spacer.ink`. The five Resend records on the domain stay (email sending). `https://spacer-rust.vercel.app` still works.
+- Public pages, readable signed in or not: `/privacy` (`f08e1d5`) and `/terms` (`25e2381`), operator Nospace Ltd, shared layout `src/legal/LegalPage.jsx`. Starting drafts, not a legal review.
+- `SITE_URL` secret = `https://www.spacer.ink`. Supabase Auth: Site URL `https://www.spacer.ink`; Redirect URLs include `https://www.spacer.ink/**` and `https://spacer-rust.vercel.app/**`.
+- Google sign-in: new Google Cloud project "Spacer" (consent screen External, authorized domain `spacer.ink`) and a new web client, which Supabase now uses (Client ID checked via `/auth/v1/authorize`). The app code needed no change: it builds return links from `window.location.origin`.
+- Verified 24 Nov: Google sign-in from `www.spacer.ink` returns there signed in; a password-reset email opens `https://www.spacer.ink/reset-password`.
 
 **Before launch (Critical/High)**
-1. P-03: production URLs (`SITE_URL`, Supabase redirect URLs, Google OAuth).
-2. P-07: monitoring (no error reporting from the live site yet).
-3. Confirm project files open after a remembered-device sign-in (§7).
+1. P-07: monitoring (no error reporting from the live site yet).
+2. Confirm project files open after a remembered-device sign-in (§7).
 
 **Medium:** B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-08/X-03 DM attachment file-name sanitising (base64 attachments replaced by a private bucket on 30 Oct), P-04 polling and unbounded queries, B-05 sprint completion not logged.
 
