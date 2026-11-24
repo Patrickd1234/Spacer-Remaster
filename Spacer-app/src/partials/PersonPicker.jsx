@@ -1,3 +1,5 @@
+import PersonPhoto from "../avatars/PersonPhoto"
+
 // Building blocks for choosing people from the organization in the Create
 // Department form: initials avatar, single-select lead list, multi-select grid.
 
@@ -11,8 +13,8 @@ const initialsOf = (person) =>
 
 export function Avatar({ person, size = "w-7 h-7" }) {
     return (
-        <div className={`${size} rounded-full bg-surface2 border border-line flex items-center justify-center shrink-0 text-[10px] font-bold text-primary-fixed`}>
-            {initialsOf(person)}
+        <div className={`${size} rounded-full overflow-hidden bg-surface2 border border-line flex items-center justify-center shrink-0 text-[10px] font-bold text-primary-fixed`}>
+            <PersonPhoto userId={person.id} fallback={initialsOf(person)} />
         </div>
     )
 }

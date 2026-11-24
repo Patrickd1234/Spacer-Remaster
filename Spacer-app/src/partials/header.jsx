@@ -16,6 +16,7 @@ import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
 import CreateMenu from "./CreateMenu";
 import PlanetLoader from "../components/PlanetLoader";
+import PersonPhoto from "../avatars/PersonPhoto";
 
 // `breadcrumb` ({ icon, label }) is optional; pages that show their own keep it off.
 // The header sits under the fixed sidebar, so `insetLeft` (px) moves the breadcrumb clear of it.
@@ -30,8 +31,10 @@ const PERSONAL_MESSAGES = {
     task_blocked: "Another department is waiting on your department's task.",
     task_unblocked: "The task you were waiting on is done.",
     department_nudge: "Your department is holding up a project.",
+    department_invite: "Accept or decline it on your Home page.",
+    department_invite_reply: "See the project's Departments tab.",
 }
-const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble", task_blocked: "hourglass_top", task_unblocked: "lock_open", department_nudge: "campaign" }
+const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble", task_blocked: "hourglass_top", task_unblocked: "lock_open", department_nudge: "campaign", department_invite: "handshake", department_invite_reply: "handshake" }
 
 function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();
@@ -413,8 +416,8 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                                                             onMouseEnter={() => setSearchIndex(itemIndex)}
                                                             onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
                                                         >
-                                                            <div className="w-5 h-5 rounded-full bg-line-strong flex items-center justify-center text-[10px] font-bold">
-                                                                {u.name.charAt(0).toUpperCase()}
+                                                            <div className="w-5 h-5 rounded-full overflow-hidden bg-line-strong flex items-center justify-center text-[10px] font-bold">
+                                                                <PersonPhoto userId={u.id} fallback={u.name.charAt(0).toUpperCase()} />
                                                             </div>
                                                             <div className="flex flex-col truncate">
                                                                 <span>{u.name}</span>

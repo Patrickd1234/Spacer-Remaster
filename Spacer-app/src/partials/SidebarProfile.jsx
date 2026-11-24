@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { supabase } from "../supabase"
+import { useMyAvatar } from "../avatars/myAvatar"
 
 // Signed-in user at the bottom of the sidebar, with profile/settings/log out menu
 export default function SidebarProfile({ name, email, isExpanded }) {
     const navigate = useNavigate()
     const menuRef = useRef(null)
     const [isOpen, setIsOpen] = useState(false)
+    const { url: avatarUrl, handleImageError } = useMyAvatar()
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -24,8 +26,10 @@ export default function SidebarProfile({ name, email, isExpanded }) {
     }
 
     const avatar = (
-        <div className="w-9 h-9 rounded-full bg-line-strong text-white flex items-center justify-center font-bold text-[14px] border border-line shrink-0">
-            {name.charAt(0).toUpperCase()}
+        <div className="w-9 h-9 rounded-full overflow-hidden bg-line-strong text-white flex items-center justify-center font-bold text-[14px] border border-line shrink-0">
+            {avatarUrl
+                ? <img src={avatarUrl} alt="" onError={handleImageError} className="w-full h-full object-cover" />
+                : name.charAt(0).toUpperCase()}
         </div>
     )
 

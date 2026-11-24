@@ -60,6 +60,11 @@ export function openBlocker(task, tasksById) {
 }
 const indexTasks = (tasks) => new Map(tasks.map((t) => [String(t.id), t]))
 
+// The one meaning of "overdue" on screen (card count, banner, delay list): open,
+// past its due date, and not waiting on another task, since that lateness isn't
+// its department's. The grace days only decide when a department turns Delayed.
+const isOwnOverdue = (task, tasksById, now) => overdueDays(task, now) > 0 && !openBlocker(task, tasksById)
+
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`
 
 function joinWords(words) {
@@ -131,7 +136,7 @@ export function summarizeDepartments({ departments = [], tasks = [], now = new D
             id,
             ...figures,
             progress: own.length > 0 ? done / own.length : 0,
-            overdue: open.filter((t) => overdueDays(t, now) > 0 && !isWaiting(t)).length,
+            overdue: open.filter((t) => isOwnOverdue(t, byId, now)).length,
             waitingOnOthers: blocked.length,
             signedOff: dept.status === "signed_off",
             // The delay status; the saved sign-off is `signedOff`
@@ -163,10 +168,11 @@ export function delayCulprits(summaries) {
 // Banner text for the department named as holding the project up
 export function culpritHeadline(culprit, summaries, tasks, now = new Date()) {
     const nameOf = (id) => summaries.find((s) => s.id === String(id))?.name || "Another department"
+    const leadId = summaries.find((s) => s.is_lead_department)?.id ?? summaries[0]?.id
+    const byId = indexTasks(tasks)
     const lateDays = tasks
-        .filter((t) => departmentOf(t, summaries.find((s) => s.is_lead_department)?.id) === culprit.id)
+        .filter((t) => departmentOf(t, leadId) === culprit.id && isOwnOverdue(t, byId, now))
         .map((t) => overdueDays(t, now))
-        .filter((days) => days > 0)
         .sort((a, b) => b - a)
     const parts = []
     if (lateDays.length > 0) {
@@ -182,12 +188,13 @@ export function culpritHeadline(culprit, summaries, tasks, now = new Date()) {
 }
 
 /**
- * The open tasks behind the delay: late tasks in a culprit department, and any
- * of its tasks another department is waiting on. Most overdue first.
+ * The open tasks behind the delay: overdue tasks in a culprit department (the
+ * same ones its card and the banner count), and any of its tasks another
+ * department is waiting on. Most overdue first.
  */
-export function delayingTasks(tasks, summaries, now = new Date(), rules = {}) {
-    const settings = { ...DEFAULT_DELAY_RULES, ...rules }
+export function delayingTasks(tasks, summaries, now = new Date()) {
     const leadId = summaries.find((s) => s.is_lead_department)?.id ?? summaries[0]?.id
+    const byId = indexTasks(tasks)
     const culprits = new Set(delayCulprits(summaries).map((s) => s.id))
     return tasks
         .filter((t) => !isDone(t) && culprits.has(departmentOf(t, leadId)))
@@ -201,10 +208,11 @@ export function delayingTasks(tasks, summaries, now = new Date(), rules = {}) {
                 task: t,
                 departmentId: departmentOf(t, leadId),
                 overdueDays: overdueDays(t, now),
+                isOverdue: isOwnOverdue(t, byId, now),
                 blocks: [...counts].map(([departmentId, count]) => ({ departmentId, count })),
             }
         })
-        .filter((row) => row.overdueDays > settings.overdueGraceDays || row.blocks.length > 0)
+        .filter((row) => row.isOverdue || row.blocks.length > 0)
         .sort((a, b) => b.overdueDays - a.overdueDays)
 }
 

@@ -1,6 +1,6 @@
 // Must a signed-in user set up two-factor before using Spacers?
-// Every account must (the database refuses data without it, see
-// 20261120110000_require_mfa.sql).
+// The server decides (mfa_setup_required()). Optional since 24 Nov 2026
+// (20261124100000_mfa_optional.sql), so today the answer is always no.
 // Kept free of imports so `npm test` can load it without Supabase.
 
 /**

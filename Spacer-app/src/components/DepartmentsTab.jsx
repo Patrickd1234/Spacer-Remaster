@@ -4,6 +4,7 @@ import {
     departmentNote, daysBetween, DEPARTMENT_STATUS,
 } from "../crossDepartment"
 import { nudgeDepartment, setDepartmentSignOff } from "../crossDepartmentData"
+import { cancelDepartmentInvite } from "../departmentInvitesData"
 
 // Colours per status tone (the light theme remaps these text colours to deep inks)
 const TONES = {
@@ -29,8 +30,10 @@ const Pill = ({ tone, children }) => <span className={`px-2.5 py-0.5 rounded-ful
 
 // The Departments tab of a cross-department project (design screen 2): who is
 // holding the project up, progress per department, who waits on whom, and the
-// tasks behind the delay. `canManage`: the server's can_manage_project.
-export default function DepartmentsTab({ projectId, projectDueDate, departments, tasks, orgUsers, currentUserId, canManage, onResolve, onOpenTask, onDepartmentsChanged }) {
+// tasks behind the delay, and invites still waiting for an answer.
+// `departments`: the ones working on it; `invitedDepartments`: status "invited".
+// `canManage`: the server's can_manage_project.
+export default function DepartmentsTab({ projectId, projectDueDate, departments, invitedDepartments = [], tasks, orgUsers, currentUserId, canManage, onResolve, onOpenTask, onDepartmentsChanged }) {
     const [notice, setNotice] = useState(null)
     const [busyId, setBusyId] = useState(null)
     const now = new Date()
@@ -50,6 +53,13 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
         const { error } = await nudgeDepartment(projectId, summary.team_space_id)
         setBusyId(null)
         setNotice(error ? { isError: true, text: error } : { isError: false, text: `${summary.name}'s lead has been nudged.` })
+    }
+    const cancelInvite = async (department) => {
+        setBusyId(department.team_space_id)
+        const { error } = await cancelDepartmentInvite(projectId, department.team_space_id)
+        setBusyId(null)
+        setNotice(error ? { isError: true, text: error } : { isError: false, text: `The invite to ${department.name} was cancelled.` })
+        if (!error) onDepartmentsChanged?.()
     }
     const signOff = async (summary, isSignedOff) => {
         setBusyId(summary.id)
@@ -87,6 +97,31 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                 </div>
             )}
             {notice && <p role="status" className={`text-xs ${notice.isError ? "text-red-400" : "text-accent-ink"}`}>{notice.text}</p>}
+
+            {invitedDepartments.length > 0 && (
+                <section>
+                    <Heading>Invited, waiting for a reply</Heading>
+                    <div className="space-y-sm">
+                        {invitedDepartments.map((d) => (
+                            <div key={d.team_space_id} className="rounded-xl border border-dashed border-line-strong bg-panel px-md py-sm flex items-center gap-md flex-wrap">
+                                <div className="flex-1 min-w-[200px]">
+                                    <p className="text-sm font-semibold text-white">{d.name}</p>
+                                    <p className="text-[11px] text-muted mt-0.5">
+                                        {d.invited_at ? `Invited ${formatDay(d.invited_at)}` : "Invited"}
+                                        {d.due_date && ` · proposed due ${formatDay(d.due_date)}`}
+                                        . Its leads accept or decline from their Home page.
+                                    </p>
+                                </div>
+                                {canManage && (
+                                    <button type="button" disabled={busyId === d.team_space_id} onClick={() => cancelInvite(d)} className="px-md py-1.5 rounded-lg border border-line text-xs font-bold text-soft hover:text-white hover:bg-line transition-colors disabled:opacity-50 cursor-pointer">
+                                        Cancel invite
+                                    </button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
 
             <section>
                 <Heading>Department progress</Heading>

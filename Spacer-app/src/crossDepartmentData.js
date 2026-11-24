@@ -4,45 +4,72 @@ import { supabase } from "./supabase"
 // Each call resolves to { error: string | null } (plus data where it reads),
 // with a message fit to show on screen; the details go to the console.
 
-// Postgres codes for "column/table/function doesn't exist": the migration isn't applied yet
-const MISSING_CODES = new Set(["42703", "42P01", "PGRST202", "PGRST204", "PGRST200"])
-export const isMissingSchema = (error) => Boolean(error && MISSING_CODES.has(error.code))
-export const MIGRATION_NOTE = "Cross-department projects need a database update: run the 20261120100000_cross_department_projects migration in Supabase."
-
-// The raise exception messages in the migration are written for people; show those as they are
-const readable = (error, fallback) => (error?.code === "42501" || error?.code === "23514" || error?.code === "P0001" || error?.code === "P0002")
+// The raise exception messages in the migrations are written for people; show those as they are
+export const readable = (error, fallback) => (["42501", "23514", "22023", "P0001", "P0002"].includes(error?.code))
     ? error.message
     : fallback
 
-const DEPARTMENT_COLUMNS = "team_space_id, lead_id, due_date, is_lead_department, status, signed_off_at, team_space:team_spaces(name), lead:users(name)"
+const DEPARTMENT_COLUMNS = "team_space_id, lead_id, due_date, is_lead_department, status, signed_off_at, invited_at, team_space:team_spaces(name), lead:users(name)"
 
 /**
- * A project's departments, lead department first.
- * `available` is false until the migration is applied; the caller then falls back
- * to the project's own department.
+ * Every department of the caller's organization, { id, name } by name
+ * (organization_departments(): team_spaces only shows a team lead their own).
+ */
+export async function fetchOrganizationDepartments() {
+    const { data, error } = await supabase.rpc("organization_departments")
+    if (error) {
+        console.error("Loading the organization's departments failed:", error)
+        return { data: [], error: "Couldn't load the organization's departments." }
+    }
+    return { data: data || [], error: null }
+}
+
+/**
+ * A project's departments, lead department first, invited ones included
+ * (status "invited"). Empty on failure; callers then fall back to the
+ * project's own department.
  */
 export async function fetchProjectDepartments(projectId) {
     const { data, error } = await supabase
         .from("project_departments")
         .select(DEPARTMENT_COLUMNS)
         .eq("project_id", projectId)
-    if (isMissingSchema(error)) return { data: [], available: false, error: null }
     if (error) {
         console.error("Loading the project's departments failed:", error)
-        return { data: [], available: true, error: "Couldn't load this project's departments." }
+        return { data: [], error: "Couldn't load this project's departments." }
     }
+    // An invited department's name isn't readable through team_spaces
+    const isMissingName = (data || []).some((row) => !row.team_space?.name)
+    const names = isMissingName ? new Map((await fetchOrganizationDepartments()).data.map((d) => [String(d.id), d.name])) : new Map()
     const departments = (data || [])
         .map((row) => ({
             team_space_id: row.team_space_id,
-            name: row.team_space?.name || "Department",
+            name: row.team_space?.name || names.get(String(row.team_space_id)) || "Department",
             lead_id: row.lead_id,
             lead_name: row.lead?.name || null,
             due_date: row.due_date,
             is_lead_department: row.is_lead_department,
             status: row.status,
+            invited_at: row.invited_at,
         }))
         .sort((a, b) => Number(b.is_lead_department) - Number(a.is_lead_department) || a.name.localeCompare(b.name))
-    return { data: departments, available: true, error: null }
+    return { data: departments, error: null }
+}
+
+/**
+ * Creates a project with its departments, leads and log entry in one
+ * transaction (create_project(); `args` from newProject.js createProjectArgs).
+ * Resolves to { data: { project, invitedDepartmentIds }, error: null } or
+ * { data: null, error }. project is the project_spaces row.
+ */
+export async function createProject(args) {
+    const { data, error } = await supabase.rpc("create_project", args)
+    if (!error) return { data: { project: data?.project, invitedDepartmentIds: data?.invited_department_ids || [] }, error: null }
+    console.error("Creating the project failed:", error)
+    if (error.code === "PGRST202") {
+        return { data: null, error: "Creating projects needs a database update: run the 20261124120000_create_project migration in Supabase." }
+    }
+    return { data: null, error: readable(error, "Couldn't create the project. Please try again.") }
 }
 
 export async function updateTaskDepartment(taskId, teamSpaceId) {

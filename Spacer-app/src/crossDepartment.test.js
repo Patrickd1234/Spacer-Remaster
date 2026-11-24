@@ -165,3 +165,30 @@ test("the board filter shows one department, or only tasks still waiting", () =>
     assert.deepEqual(show({ departmentId: OPS, isBlockedOnly: false }), ["o"])
     assert.deepEqual(show({ departmentId: null, isBlockedOnly: true }), ["s"])
 })
+
+test("the banner, the card and the delay list count the same overdue tasks", () => {
+    // IT: i1 5 days late (Support waits on it), i5 1 day late, i4 7 days late
+    // but itself waiting on Operations, so not IT's fault
+    const list = [
+        task("o2", OPS),
+        task("i1", IT, { due_date: "2026-11-12" }),
+        task("i5", IT, { due_date: "2026-11-16" }),
+        task("i4", IT, { due_date: "2026-11-10", blocked_by_task_id: "o2", blocked_at: "2026-11-10T09:00:00" }),
+        task("s1", SUPPORT, { blocked_by_task_id: "i1", blocked_at: "2026-11-12T09:00:00" }),
+    ]
+    const summaries = summarizeDepartments({ departments, tasks: list, now: NOW })
+    const it = byId(summaries)[IT]
+    const { detail } = culpritHeadline(it, summaries, list, NOW)
+    const listed = delayingTasks(list, summaries, NOW).filter((r) => r.departmentId === IT && r.overdueDays > 0)
+
+    assert.equal(it.overdue, 2)
+    assert.match(detail, /^2 tasks are overdue \(5 and 1 days\)\./)
+    assert.deepEqual(listed.map((r) => r.task.id), ["i1", "i5"])
+})
+
+test("one day overdue shows as overdue, though the department isn't delayed for it", () => {
+    const list = [task("a", IT, { due_date: "2026-11-16" })]
+    const [it] = summarizeDepartments({ departments: [departments[2]], tasks: list, now: NOW })
+    assert.equal(it.overdue, 1)
+    assert.equal(it.status, "on_track")
+})

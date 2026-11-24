@@ -5,6 +5,7 @@ import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import OrgOverview from "./OrgOverview"
 import MySpace from "./myspace/MySpace"
+import DepartmentInvites from "./partials/DepartmentInvites"
 import GreetingSky from "./myspace/GreetingSky"
 import { greetingFor } from "./myspace/taskStats"
 import { StatCardSkeleton } from "./components/DashboardParts"
@@ -90,6 +91,7 @@ function Home() {
                                     </h1>
                                     <p className="text-muted text-sm mt-1">Organization's overview and activity.</p>
                                 </section>
+                                <DepartmentInvites />
                                 <OrgOverview userId={userData.id} orgId={orgId} />
                             </>
                         )}

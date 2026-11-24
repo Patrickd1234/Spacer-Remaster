@@ -8,6 +8,9 @@ import PlanetLoader from "./components/PlanetLoader"
 import AvailabilityCard from "./availability/AvailabilityCard"
 import AwayBadge from "./availability/AwayBadge"
 import { useAwayPeriods } from "./availability/availabilityData"
+import { useMyAvatar } from "./avatars/myAvatar"
+import PhotoField from "./avatars/PhotoField"
+import { updateMyAvatar, removeMyAvatar } from "./general/generalData"
 
 function initials(name, email) {
     const source = (name || email || "").trim()
@@ -27,6 +30,8 @@ function Profile() {
     const { isSuperAdmin, isAdmin, roleName } = useRole()
     const awayPeriods = useAwayPeriods()
     const myAwayPeriod = awayPeriods.get(userId)
+    const { path: avatarPath, url: avatarUrl, isLoading: isAvatarLoading, handleImageError } = useMyAvatar()
+    const [isSavingPhoto, setIsSavingPhoto] = useState(false)
 
     // Saved profile state
     const [profile, setProfile] = useState({
@@ -203,6 +208,26 @@ function Profile() {
         }
     }
 
+    // The photo saves at once, apart from Edit Details. Both need the current
+    // path loaded, so the old file is deleted instead of left behind.
+    const handlePickPhoto = async (file) => {
+        setIsSavingPhoto(true)
+        const { error } = await updateMyAvatar({ id: userId, avatar_path: avatarPath }, file)
+        setIsSavingPhoto(false)
+        if (error) return "Couldn't save your photo. Please try again."
+        showToast("Photo updated")
+        return null
+    }
+
+    const handleRemovePhoto = async () => {
+        setIsSavingPhoto(true)
+        const { error } = await removeMyAvatar({ id: userId, avatar_path: avatarPath })
+        setIsSavingPhoto(false)
+        if (error) return "Couldn't remove your photo. Please try again."
+        showToast("Photo removed")
+        return null
+    }
+
     const stats = [
         { label: "Projects", value: overview?.projects ?? "–", icon: "folder_open", color: "text-secondary-fixed" },
         { label: "Open Tasks", value: overview?.openTasks ?? "–", icon: "pending_actions", color: "text-amber-400" },
@@ -247,8 +272,10 @@ function Profile() {
                                     {/* Avatar with Status Ring */}
                                     <div className="relative group">
                                         <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-[var(--primary-color)] to-emerald-600 p-[2px] shadow-xl">
-                                            <div className="w-full h-full rounded-[14px] bg-raised flex items-center justify-center text-3xl font-extrabold text-primary-accent tracking-wider">
-                                                {initials(profile.name, profile.email)}
+                                            <div className="w-full h-full rounded-[14px] overflow-hidden bg-raised flex items-center justify-center text-3xl font-extrabold text-primary-accent tracking-wider">
+                                                {avatarUrl
+                                                    ? <img src={avatarUrl} alt="" onError={handleImageError} className="w-full h-full object-cover" />
+                                                    : initials(profile.name, profile.email)}
                                             </div>
                                         </div>
                                         {/* No green "online" dot: there is no presence to show. Away status sits by the role. */}
@@ -419,6 +446,19 @@ function Profile() {
                                             </button>
                                         </div>
                                     )}
+                                </div>
+
+                                <div>
+                                    <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-2">Photo</p>
+                                    <PhotoField
+                                        name={profile.name || profile.email}
+                                        url={avatarUrl}
+                                        onPick={handlePickPhoto}
+                                        onRemove={handleRemovePhoto}
+                                        isBusy={isSavingPhoto}
+                                        isDisabled={isAvatarLoading || !userId}
+                                        onImageError={handleImageError}
+                                    />
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">

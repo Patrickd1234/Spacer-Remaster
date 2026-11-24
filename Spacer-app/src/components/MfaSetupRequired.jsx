@@ -2,8 +2,9 @@ import { supabase } from "../supabase";
 import RocketLogo from "./RocketLogo";
 import TwoFactorSettings from "./TwoFactorSettings";
 
-// Full-screen step after sign-in for anyone who hasn't set up two-factor yet.
-// Shown by App.jsx; the database gives an account no data until it's done
+// Full-screen step after sign-in for anyone who hasn't set up two-factor yet,
+// when two-factor is required (not since 20261124100000_mfa_optional.sql).
+// Shown by App.jsx; the database gives such an account no data until it's done
 // (20261120110000_require_mfa.sql).
 export default function MfaSetupRequired({ onEnabled }) {
     const handleSignOut = async () => {

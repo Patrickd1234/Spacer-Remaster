@@ -77,7 +77,7 @@ Department permissions are asked about one department. Organization roles have e
 | `member.add` add or invite people to the department | | | | yes | yes |
 | `invitation.view` see the department's pending invitations | | | | yes | yes |
 
-Organization permissions (Organization Admin and Owner only): `organization.update`, `department.create`, `department.update`, `department.delete`, `member.assign_role`, `member.invite`, `member.remove_from_organization`, `announcement.manage`, `event.manage`, `task.manage_unfiled` (named `task.delete_unfiled` until step 3), `directory.manage`.
+Organization permissions (Organization Admin and Owner only): `organization.update`, `department.create`, `department.update`, `department.delete`, `member.assign_role`, `member.invite`, `member.remove_from_organization`, `member.reset_two_factor` (added 24 Nov, `20261124110000_mfa_recovery`), `announcement.manage`, `event.manage`, `task.manage_unfiled` (named `task.delete_unfiled` until step 3), `directory.manage`.
 
 The live list is always `select * from rbac_permissions` and `select * from rbac_role_permissions`.
 
@@ -89,7 +89,8 @@ has_permission('announcement.manage')               -- an organization permissio
 has_org_permission('member.invite', <organization id>)  -- same, and the organization must be the caller's
 ```
 
-- An organization role counts in every department of the caller's own organization and in no other organization.
+- An organization role counts in every department of the caller's own organization and in no other organization. Since `20261124090000_pin_org_roles_to_org`, the membership that grants it must itself be in the caller's organization: an Owner row (`super_admin`) on another organization's department grants nothing. Before that, such a row made its holder Owner of whatever organization they were in.
+- A membership's department must be in its person's organization; the insert and update policies on `memberships` refuse anything else.
 - A department role counts only in its own department, and only while that department is in the caller's organization.
 - The functions read `auth.uid()`, so they answer for whoever is signed in. They are `security definer` and not callable by `anon`.
 
@@ -137,6 +138,7 @@ What asks `can(...)` as of step 4:
 | Announcements: create, edit others' | `announcement.manage` |
 | Directory: set who someone reports to | `directory.manage` |
 | Directory: remove from organization | `member.remove_from_organization` |
+| Directory: reset someone's two-factor | `member.reset_two_factor` (the server also allows only the Owner to reset an organization admin) |
 | Directory: change someone's roles | `member.assign_role` (and the database checks again) |
 | Announcements: edit, pin, delete | `announcement.manage`; being the author is no longer enough (step 5 migration) |
 | Department page: Add Member | `member.add` in that department |
@@ -198,12 +200,15 @@ npx supabase db query --remote --yes -f supabase/checks/rbac_parity.sql
 | `20261112100000_rbac_foundation` | `supabase/rollback/20261112100000_rbac_foundation_rollback.sql` | Tables, seed data, `has_permission`, `has_org_permission`, `my_permissions`, `membership_role_key` |
 | `20261112110000_rbac_rules` | `supabase/rollback/20261112110000_rbac_rules_rollback.sql` | 5 helpers, 4 functions and 28 policies moved onto `has_permission()` |
 | `20261114090000_assign_roles` | `supabase/rollback/20261114090000_assign_roles_rollback.sql` | `assign_role`, `revoke_role`, `org_member_roles`, the `memberships_guard_org_roles` trigger, announcement edit and delete need `announcement.manage` |
+| `20261124090000_pin_org_roles_to_org` (applied 24 Nov 2026) | `supabase/rollback/20261124090000_pin_org_roles_to_org_rollback.sql` | Organization roles count only in their own organization (`has_permission`, `my_permissions`, `is_org_admin`); `memberships_insert`/`memberships_update` require the department to be in the person's organization. Closes a cross-organization Owner grant. Dry run on live: attack blocked, 0 of 27 people's permissions changed |
+| `20261124140000_team_spaces_select_org_roles` (not applied) | `supabase/rollback/20261124140000_team_spaces_select_org_roles_rollback.sql` | Fixes a regression of `pin_org_roles_to_org`: creating a department (insert ... returning) failed for organization admins and the Owner, because `has_permission('department.view', id)` looks the new row's organization up before it's visible. `team_spaces_select` also accepts `has_org_permission('department.view', organization_id)`. Dry run on live: the create works for an Organization Admin and the Owner, still refused for a Department Admin; 0 of 40 people's access changed |
 
 The step 3 rollback was generated from the live definitions before the change and tested: applying the migration and then the rollback leaves every answer as it was. Roll back in reverse order.
 
 ## 9. Open items
 
-- Delete the three cross-organization memberships (they no longer give any access).
+- `memberships_guard_org_roles` and `remove_from_organization` still recognise an Owner by any `super_admin` row. Harmless once the migration above stops foreign rows being written; pin them too if those functions are touched again.
+- ~~Delete the three cross-organization memberships.~~ Gone: checked on live 24 Nov 2026, no membership points outside its person's organization.
 - Step 4, remaining: Reports, the notifications bell and the Directory scope still read role names (section 4). Once they and the deployed edge functions no longer need them, drop `is_org_admin`, `is_admin_of_org`, `has_team_access`, `team_role` and `team_role_at_least`.
 - Nothing in step 4 was checked in a browser.
 - Step 5, remaining: ownership transfer, and deciding who is Owner in each organization. Today one person holds the old `super_admin` role (in Spacer); every other organization's founder is an Organization Admin, who can do everything an Owner can except be protected from other admins.

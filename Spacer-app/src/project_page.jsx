@@ -37,6 +37,7 @@ import AwayBadge, { AwayDot } from "./availability/AwayBadge"
 import { useAwayPeriods } from "./availability/availabilityData"
 import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
 import { MEETING_SAVED_EVENT } from "./appEvents"
+import PersonPhoto from "./avatars/PersonPhoto"
 
 const ACCEPTED = [
     "image/*", "application/pdf", "application/msword",
@@ -239,7 +240,7 @@ function ProjectPage() {
     const [currentUserId, setCurrentUserId] = useState(null)
 
     // The departments you're in (for cross-department projects)
-    const { departments: myDepartments } = useRole()
+    const { departments: myDepartments, can } = useRole()
 
     // ── Delete project
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
@@ -467,7 +468,10 @@ function ProjectPage() {
 
     // ── Cross-department projects (migration 20261120100000): the project's
     // departments, lead first. Empty until that migration is applied.
-    const [projectDepartments, setProjectDepartments] = useState([])
+    // Every row, invited ones included; projectDepartments are the ones working on it
+    const [allProjectDepartments, setProjectDepartments] = useState([])
+    const projectDepartments = allProjectDepartments.filter((d) => d.status !== "invited")
+    const invitedDepartments = allProjectDepartments.filter((d) => d.status === "invited")
     const [departmentsVersion, setDepartmentsVersion] = useState(0)
     const [departmentFilter, setDepartmentFilter] = useState({ departmentId: null, isBlockedOnly: false })
     const [hasLoadedDepartments, setHasLoadedDepartments] = useState(false)
@@ -520,6 +524,8 @@ function ProjectPage() {
     }, [project_id])
     const leadDepartmentId = projectDepartments[0]?.team_space_id ?? teamSpaceId
     const isCrossDepartment = projectDepartments.length > 1
+    // The Departments tab also shows invites still waiting for an answer
+    const hasDepartmentsTab = isCrossDepartment || invitedDepartments.length > 0
     // The board can show one department, or only blocked tasks; the Summary still counts everything
     const tasksById = new Map(project_tasks.map((t) => [String(t.id), t]))
     const boardTasks = isCrossDepartment
@@ -532,16 +538,16 @@ function ProjectPage() {
     const taskModalDepartments = isCrossDepartment ? projectDepartments : []
 
     // Same rule as the database's tasks_guard_department: the task's assignee or
-    // creator, a lead of its department, or a project manager
+    // creator, a lead of its department (its named lead, or project.manage there:
+    // leads_project_department), or a project manager
     const canBlockTask = (task) => {
         if (!task || !currentUserId) return false
         const department = String(task.team_space_id ?? leadDepartmentId)
-        const myRole = myDepartments.find((m) => String(m.team_space_id) === department)?.role
         return canDeleteProject === true
             || task.assignee_id === currentUserId
             || task.created_by === currentUserId
             || projectDepartments.some((d) => String(d.team_space_id) === department && d.lead_id === currentUserId)
-            || ["team_lead", "admin", "super_admin"].includes(myRole)
+            || can("project.manage", department)
     }
     const patchTask = (taskId, changes) => {
         setProjectTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...changes } : t)))
@@ -1107,7 +1113,7 @@ function ProjectPage() {
                             { id: "summary", label: "Summary", icon: "dashboard" },
                             { id: "tasks", label: "Orbit", icon: "view_kanban" },
                             // Only projects shared by more than one department
-                            ...(isCrossDepartment ? [{ id: "departments", label: "Departments", icon: "lan" }] : []),
+                            ...(hasDepartmentsTab ? [{ id: "departments", label: "Departments", icon: "lan" }] : []),
                             { id: "calendar", label: "Calendar", icon: "calendar_month" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
@@ -1218,7 +1224,7 @@ function ProjectPage() {
                                             visibleActivity.map(activity => (
                                                 <div key={activity.id} className="flex gap-sm">
                                                     <div className="w-8 h-8 shrink-0 rounded-full overflow-hidden bg-line flex items-center justify-center font-bold text-xs text-muted uppercase">
-                                                        {activity.actor?.name?.charAt(0) || '?'}
+                                                        <PersonPhoto userId={activity.actor_id} fallback={activity.actor?.name?.charAt(0) || '?'} />
                                                     </div>
                                                     <div className="flex-1">
                                                         <p className="text-xs leading-snug">
@@ -1254,6 +1260,9 @@ function ProjectPage() {
                                                             {activity.action === "sprint_started" && (
                                                                 <>started <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span> with {activity.new_state?.totalTasks} task{activity.new_state?.totalTasks === 1 ? "" : "s"}{activity.new_state?.committedPoints > 0 && ` (${activity.new_state.committedPoints} pts)`}</>
                                                             )}
+                                                            {["department_invited", "department_joined", "department_declined"].includes(activity.action) && (
+                                                                <>{{ department_invited: "invited", department_joined: "accepted the invite for", department_declined: "declined the invite for" }[activity.action]} <span className="text-primary-fixed-dim font-bold">{activity.new_state?.department || "a department"}</span>{activity.action === "department_invited" ? " to work on this project" : ""}</>
+                                                            )}
                                                             {activity.action === "department_nudged" && (
                                                                 <>nudged <span className="text-primary-fixed-dim font-bold">{activity.new_state?.department || "a department"}</span> about this project</>
                                                             )}
@@ -1273,11 +1282,12 @@ function ProjectPage() {
                     )}
 
                     {/* Sprint Tab */}
-                    {activeTab === "departments" && isCrossDepartment && (
+                    {activeTab === "departments" && hasDepartmentsTab && (
                         <DepartmentsTab
                             projectId={project_id}
                             projectDueDate={project_due_date}
                             departments={projectDepartments}
+                            invitedDepartments={invitedDepartments}
                             tasks={project_tasks}
                             orgUsers={orgUsers}
                             currentUserId={currentUserId}
@@ -1488,8 +1498,9 @@ function ProjectPage() {
                                                                     const assignee = orgUsers.find(u => u.id === task.assignee_id);
                                                                     return task.assignee_id ? (
                                                                         <div className="relative w-5 h-5 rounded-full bg-surface1 border border-line flex items-center justify-center" title={assignee?.name || 'Assigned'}>
-                                                                            <span className="text-[9px] font-bold text-muted uppercase">
-                                                                                {assignee?.name?.charAt(0) || '?'}
+                                                                            {/* Clipped on its own so the away dot can sit outside the circle */}
+                                                                            <span className="w-full h-full rounded-full overflow-hidden flex items-center justify-center text-[9px] font-bold text-muted uppercase">
+                                                                                <PersonPhoto userId={task.assignee_id} fallback={assignee?.name?.charAt(0) || '?'} />
                                                                             </span>
                                                                             <AwayDot person={awayPeriods.get(task.assignee_id)} />
                                                                         </div>
@@ -2171,8 +2182,8 @@ function ProjectPage() {
                                         const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
                                         return assignee ? (
                                             <div className="flex items-center gap-sm mt-1">
-                                                <div className="w-6 h-6 rounded-full bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
-                                                    {assignee.name.charAt(0)}
+                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
+                                                    <PersonPhoto userId={assignee.id} fallback={assignee.name.charAt(0)} />
                                                 </div>
                                                 <div className="min-w-0 space-y-1">
                                                     <p className="text-sm text-white font-semibold">{assignee.name}</p>
@@ -2336,8 +2347,8 @@ function ProjectPage() {
                                     available.map(user => (
                                         <div key={user.id} className="flex items-center justify-between p-3 rounded-xl bg-raised border border-line/50 hover:border-accent-ink/30 transition-colors group">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-line flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
-                                                    {user.name?.charAt(0) || "?"}
+                                                <div className="w-9 h-9 rounded-full overflow-hidden bg-line flex items-center justify-center font-bold text-[14px] text-white uppercase shrink-0">
+                                                    <PersonPhoto userId={user.id} fallback={user.name?.charAt(0) || "?"} />
                                                 </div>
                                                 <div>
                                                     <p className="text-white text-[13px] font-semibold">{user.name}</p>

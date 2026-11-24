@@ -89,6 +89,8 @@ export const fetchPersonalNotifications = async (userId, limit = NOTIFICATION_LI
 // Where a personal notification leads; tasks need their project, and comments
 // their task, looked up on click
 export const personalNotificationPath = async (notification) => {
+    // An invited department can't open the project yet; the invite is answered on Home
+    if (notification.type === "department_invite") return "/"
     if (notification.reference_type === "project") return `/project_page/${notification.reference_id}`
     if (notification.reference_type === "event") return "/calendar"
     let taskId = notification.reference_type === "task" ? notification.reference_id : null

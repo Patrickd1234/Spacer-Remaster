@@ -17,7 +17,7 @@ function GuestList({ attendees, selfId }) {
                 <li key={`${a.kind}:${a.id}`} className="flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full bg-raised border border-line text-xs text-white">
                     {a.kind === "team"
                         ? <span className="material-symbols-outlined text-[15px] text-blue-300 px-0.5">groups</span>
-                        : <Avatar name={a.name} size="xs" />}
+                        : <Avatar name={a.name} userId={a.id} size="xs" />}
                     {a.kind === "user" && a.id === selfId ? "You" : a.name}
                 </li>
             ))}

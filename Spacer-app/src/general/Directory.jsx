@@ -215,6 +215,7 @@ export default function Directory() {
                             isMe={myId !== null && selectedId === myId}
                             canSetManager={can("directory.manage")}
                             canRemove={can("member.remove_from_organization")}
+                            canResetTwoFactor={can("member.reset_two_factor")}
                             canAssignRoles={canAssignRoles}
                             departments={departments}
                             onRolesChanged={load}

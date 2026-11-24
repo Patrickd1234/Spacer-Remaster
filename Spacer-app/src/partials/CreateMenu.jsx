@@ -22,7 +22,9 @@ async function loadProjectContext(projectId) {
         if (error) console.error("Loading the open project for a new task failed:", error)
         return null
     }
-    return { projectId: project.id, teamSpaceId: project.team_space_id, departments: departments.length > 1 ? departments : [] }
+    // Invited departments (not answered yet) can't hold tasks
+    const working = departments.filter((d) => d.status !== "invited")
+    return { projectId: project.id, teamSpaceId: project.team_space_id, departments: working.length > 1 ? working : [] }
 }
 
 const SUPER_ADMIN_ITEMS = [
@@ -168,7 +170,9 @@ export default function CreateMenu({ isSuperAdmin }) {
                 />
             )}
             {openModal === "project" && (
-                <CreateProjectModal onClose={() => setOpenModal(null)} onCreated={() => setOpenModal(null)} />
+                // The form closes itself once everything saved; it stays open to show a
+                // partly failed create. The sidebar hears PROJECT_CREATED_EVENT.
+                <CreateProjectModal onClose={() => setOpenModal(null)} />
             )}
             {openModal === "meeting" && (
                 <ScheduleMeetingModal
