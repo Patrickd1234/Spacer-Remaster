@@ -34,6 +34,7 @@ const Announcements = lazy(() => import('./general/Announcements'))
 const CompanyCalendar = lazy(() => import('./general/CompanyCalendar'))
 const Directory = lazy(() => import('./general/Directory'))
 const Privacy = lazy(() => import('./Privacy'))
+const Terms = lazy(() => import('./Terms'))
 
 // Pages that set the password themselves, so the gate below leaves them alone
 const SETS_OWN_PASSWORD = new Set(['/accept-invite', '/reset-password'])
@@ -290,6 +291,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPassword />} />
             {/* Public, signed in or not: Google's consent screen links here */}
             <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             {/* Always reachable: the invite magic-link itself establishes a session
                 before a password is set, so this can't be gated behind `session`
                 the way other routes are. */}

@@ -1,11 +1,8 @@
-import { Link } from "react-router-dom"
-import RocketLogo from "./components/RocketLogo"
+import LegalPage, { OPERATOR_NAME } from "./legal/LegalPage"
 
 // Public privacy policy (/privacy). Google's OAuth consent screen links here.
 // Keep it in line with what the app really stores and which services it uses.
 const LAST_UPDATED = "24 November 2026"
-const OPERATOR_NAME = "Nospace Ltd"
-const CONTACT_EMAIL = "pinoka@openspace.finance"
 
 const SECTIONS = [
     {
@@ -82,49 +79,6 @@ const SECTIONS = [
     },
 ]
 
-function PolicySection({ section }) {
-    return (
-        <section className="mb-10">
-            <h2 className="text-[19px] font-semibold text-white mb-3">{section.title}</h2>
-            {section.body?.map((text) => (
-                <p key={text} className="text-muted text-[15px] leading-relaxed mb-3">{text}</p>
-            ))}
-            {section.list && (
-                <ul className="list-disc pl-5 space-y-2 text-muted text-[15px] leading-relaxed mb-3">
-                    {section.list.map((item) => <li key={item}>{item}</li>)}
-                </ul>
-            )}
-            {section.after && <p className="text-muted text-[15px] leading-relaxed">{section.after}</p>}
-        </section>
-    )
-}
-
 export default function Privacy() {
-    return (
-        <div className="min-h-screen bg-panel">
-            <header className="border-b border-line/50">
-                <div className="max-w-[720px] mx-auto px-6 py-5 flex items-center justify-between">
-                    <Link to="/" className="flex items-center gap-2">
-                        <RocketLogo size={26} />
-                        <span className="text-[15px] font-bold tracking-widest text-white">Spacer</span>
-                    </Link>
-                    <Link to="/login" className="text-muted hover:text-white text-[14px] transition-colors">Sign in</Link>
-                </div>
-            </header>
-
-            <main className="max-w-[720px] mx-auto px-6 py-12">
-                <h1 className="text-[34px] font-bold text-white tracking-tight mb-2">Privacy Policy</h1>
-                <p className="text-muted text-[14px] mb-12">Last updated {LAST_UPDATED}</p>
-
-                {SECTIONS.map((section) => <PolicySection key={section.title} section={section} />)}
-
-                <section className="border-t border-line/50 pt-8">
-                    <h2 className="text-[19px] font-semibold text-white mb-3">Contact</h2>
-                    <p className="text-muted text-[15px] leading-relaxed">
-                        Questions or requests: <a href={`mailto:${CONTACT_EMAIL}`} className="text-accent-ink hover:underline">{CONTACT_EMAIL}</a>
-                    </p>
-                </section>
-            </main>
-        </div>
-    )
+    return <LegalPage title="Privacy Policy" lastUpdated={LAST_UPDATED} sections={SECTIONS} />
 }
