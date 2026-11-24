@@ -42,7 +42,7 @@ This document records what was changed, why, how it was verified, and what is st
 | Two-factor (Supabase MFA) + password change | ✅ Live (19 Oct) |
 | "Remember this device for 7 days" | ✅ Live (19 Oct) |
 | GitHub / Slack / API tokens | ✅ Shown as "Coming soon" (fakes removed) |
-| Two-factor required for every account, with a fixed exemption list | ✅ Live (19–21 Nov, §7) |
+| Two-factor required for every account, with a fixed exemption list | ↩️ Turned off 24 Nov (optional again, by decision): `20261124100000_mfa_optional` |
 | Two-factor rule on every user-data table (incl. `project_departments`) | ✅ Live (21 Nov) |
 | CAPTCHA (Cloudflare Turnstile) on sign-in, sign-up, reset | ✅ In the app (19 Nov); on only when `VITE_TURNSTILE_SITE_KEY` is set |
 | Password rules: 8+ chars, upper + lower case, number, symbol | ✅ Live (19 Nov), checked again on the server |
@@ -215,6 +215,20 @@ At the user's request, the code isn't asked on every sign-in.
 - Migration `20261120110000_require_mfa` (written as `20261119090000` on `Test-phase`, renumbered on `22's`): a signed-in account gets **no data** until it has an authenticator and has passed it (`aal2`) or uses a remembered device. `mfa_required_for_caller()` is the one place that decides who must use it.
 - The app checks `mfa_setup_required()` after sign-in and shows `MfaSetupRequired` instead of an empty app. Settings no longer offers "Turn off 2FA" to accounts that must use it.
 - Edge functions follow the same rule through `_shared/mfa.ts`.
+
+### Two-factor optional again (24 Nov)
+- Decided by the team: CAPTCHA (Cloudflare Turnstile) is on, and required two-factor was switched off. It was first done by hand in the SQL Editor; migration `20261124100000_mfa_optional` records it (`mfa_required_for_caller()` returns false).
+- Nobody is asked to set up two-factor, and an account without an authenticator gets its data with a password only. An account that has one still must enter its code (or use a remembered device). Settings offers turning it off again (after a code).
+- Note: CAPTCHA stops scripted sign-in attempts; it doesn't protect an account whose password is known. Turn the requirement back on with the rollback `20261124100000_mfa_optional_rollback.sql` (keeps the exemption list).
+
+### Two-factor recovery (24 Nov)
+- Before: no recovery codes; a lost phone meant an admin deleting the factor in the Supabase dashboard. Migration `20261124110000_mfa_recovery` + edge function `mfa-recovery` add two ways back in (the user chose both).
+- **Recovery codes.** 10 one-time codes shown once after turning two-factor on, and on demand in Settings ("Create new codes", which asks for an authenticator code). Only a session that just passed a code (`aal2`) can create them; a remembered device isn't enough. Stored as `sha256(user id:code)`; tables `mfa_recovery_codes` and `mfa_recovery_attempts` have RLS on, no policies, no grants. 5 wrong codes in 15 minutes lock recovery for that person (advisory lock per person, so parallel guesses count). Turning two-factor off deletes the codes.
+- **Using a code.** The code screen has "Lost your phone? Use a recovery code" (a password session, `aal1`). The edge function checks the code, deletes the person's authenticators through the admin API, then `finish_two_factor_reset()` deletes their other codes and remembered devices, signs out their other sessions (rows in `auth.sessions`; the one that used the code stays), logs `user:two_factor_reset` and emails them.
+- **Admin reset.** Directory → person → "Reset two-factor", for holders of `member.reset_two_factor` (Owner and Organization Admin) who have two-factor on and signed in with their code (`aal2`; a password or a remembered device isn't enough). `check_two_factor_reset()` refuses: yourself, people in another organization, and an organization admin unless the caller is the Owner. Same clean-up, log and email.
+- A recovery code is given back if removing the authenticator fails afterwards. Wrong attempts older than a day are deleted.
+- Known limits: someone with a person's password can lock that person's recovery for 15 minutes at a time (they can't use up real codes). An Owner with no codes and no other Owner needs the Supabase dashboard (Authentication → Users → the user → delete the MFA factor). Access tokens already issued work until they expire (about an hour) after other sessions are signed out. Codes are hashed with the user id but no server secret, so a database leak would let someone brute-force one code (50 bits) offline.
+- After either, the person signs in with a password only until they set two-factor up again (it's optional); if two-factor is required again, they get the setup screen.
 
 ### Exemption list (21 Nov)
 - Migration `20261121090000_mfa_exempt_users`: table `mfa_exempt_users` (RLS on, no policies, no grants), so only the SQL Editor can read or change it. `mfa_required_for_caller()` skips accounts on it.

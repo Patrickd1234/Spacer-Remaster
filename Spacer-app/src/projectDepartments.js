@@ -75,3 +75,21 @@ export function addableProjectMembers(rows = [], departments = [], excludeIds = 
         }))
         .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
+
+// A change to one department card on the Collab form. Picking another
+// department forgets the old lead (who may not be in the new one), so the new
+// department's default lead applies; "" stays an explicit "No lead".
+export function applyDepartmentChange(department, changes) {
+    const isNewDepartment = "teamSpaceId" in changes
+        && String(changes.teamSpaceId) !== String(department.teamSpaceId)
+        && !("leadId" in changes);
+    return { ...department, ...changes, ...(isNewDepartment ? { leadId: undefined } : {}) };
+}
+
+// The lead a department card shows and saves: the pick while that person is
+// still one of the department's members, "" for "No lead", else the default.
+// `choices` is departmentLeadOptions()'s { options, defaultId }.
+export function resolveDepartmentLead(leadId, { options = [], defaultId = "" } = {}) {
+    if (leadId === "" || options.some((o) => o.id === leadId)) return leadId;
+    return defaultId;
+}

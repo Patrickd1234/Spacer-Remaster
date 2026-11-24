@@ -22,3 +22,18 @@ test("an action with no label of its own reads as plain words, not a code name",
     const row = { entity_type: "sprint", action: "sprint_started", new_state: {} };
     assert.equal(describeActivity(row).title, "sprint started sprint");
 });
+
+test("describeActivity names a two-factor reset by how it happened", () => {
+    const viaCode = { entity_type: "user", action: "two_factor_reset", new_state: { method: "recovery_code", name: "Dana K" } };
+    const byAdmin = { entity_type: "user", action: "two_factor_reset", new_state: { method: "admin_reset", name: "Dana K" } };
+    assert.equal(describeActivity(viaCode).title, "Used a recovery code to sign in");
+    assert.equal(describeActivity(byAdmin).title, "Reset two-factor for Dana K");
+    assert.equal(describeActivity(byAdmin).badge, "Account");
+});
+
+test("department invites, joins and declines name the department and project", () => {
+    const state = { department: "Development", project_name: "Nightfall" };
+    assert.equal(describeActivity({ entity_type: "project", action: "department_invited", new_state: state }).title, "Invited Development to “Nightfall”");
+    assert.equal(describeActivity({ entity_type: "project", action: "department_joined", new_state: state }).title, "Development joined “Nightfall”");
+    assert.equal(describeActivity({ entity_type: "project", action: "department_declined", new_state: state }).title, "Development declined to work on “Nightfall”");
+});

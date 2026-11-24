@@ -77,7 +77,7 @@ Department permissions are asked about one department. Organization roles have e
 | `member.add` add or invite people to the department | | | | yes | yes |
 | `invitation.view` see the department's pending invitations | | | | yes | yes |
 
-Organization permissions (Organization Admin and Owner only): `organization.update`, `department.create`, `department.update`, `department.delete`, `member.assign_role`, `member.invite`, `member.remove_from_organization`, `announcement.manage`, `event.manage`, `task.manage_unfiled` (named `task.delete_unfiled` until step 3), `directory.manage`.
+Organization permissions (Organization Admin and Owner only): `organization.update`, `department.create`, `department.update`, `department.delete`, `member.assign_role`, `member.invite`, `member.remove_from_organization`, `member.reset_two_factor` (added 24 Nov, `20261124110000_mfa_recovery`), `announcement.manage`, `event.manage`, `task.manage_unfiled` (named `task.delete_unfiled` until step 3), `directory.manage`.
 
 The live list is always `select * from rbac_permissions` and `select * from rbac_role_permissions`.
 
@@ -138,6 +138,7 @@ What asks `can(...)` as of step 4:
 | Announcements: create, edit others' | `announcement.manage` |
 | Directory: set who someone reports to | `directory.manage` |
 | Directory: remove from organization | `member.remove_from_organization` |
+| Directory: reset someone's two-factor | `member.reset_two_factor` (the server also allows only the Owner to reset an organization admin) |
 | Directory: change someone's roles | `member.assign_role` (and the database checks again) |
 | Announcements: edit, pin, delete | `announcement.manage`; being the author is no longer enough (step 5 migration) |
 | Department page: Add Member | `member.add` in that department |
@@ -200,6 +201,7 @@ npx supabase db query --remote --yes -f supabase/checks/rbac_parity.sql
 | `20261112110000_rbac_rules` | `supabase/rollback/20261112110000_rbac_rules_rollback.sql` | 5 helpers, 4 functions and 28 policies moved onto `has_permission()` |
 | `20261114090000_assign_roles` | `supabase/rollback/20261114090000_assign_roles_rollback.sql` | `assign_role`, `revoke_role`, `org_member_roles`, the `memberships_guard_org_roles` trigger, announcement edit and delete need `announcement.manage` |
 | `20261124090000_pin_org_roles_to_org` (applied 24 Nov 2026) | `supabase/rollback/20261124090000_pin_org_roles_to_org_rollback.sql` | Organization roles count only in their own organization (`has_permission`, `my_permissions`, `is_org_admin`); `memberships_insert`/`memberships_update` require the department to be in the person's organization. Closes a cross-organization Owner grant. Dry run on live: attack blocked, 0 of 27 people's permissions changed |
+| `20261124140000_team_spaces_select_org_roles` (not applied) | `supabase/rollback/20261124140000_team_spaces_select_org_roles_rollback.sql` | Fixes a regression of `pin_org_roles_to_org`: creating a department (insert ... returning) failed for organization admins and the Owner, because `has_permission('department.view', id)` looks the new row's organization up before it's visible. `team_spaces_select` also accepts `has_org_permission('department.view', organization_id)`. Dry run on live: the create works for an Organization Admin and the Owner, still refused for a Department Admin; 0 of 40 people's access changed |
 
 The step 3 rollback was generated from the live definitions before the change and tested: applying the migration and then the rollback leaves every answer as it was. Roll back in reverse order.
 

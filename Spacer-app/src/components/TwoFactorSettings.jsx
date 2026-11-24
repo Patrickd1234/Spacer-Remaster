@@ -1,22 +1,34 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabase";
 import { clearTrustedDevice, TRUSTED_DEVICE_DAYS } from "../trustedDevice";
+import { clearMyRecoveryCodes, createRecoveryCodes, fetchRecoveryCodesLeft } from "../mfaRecoveryData";
+import RecoveryCodesPanel from "./RecoveryCodesPanel";
 
 const CODE_LENGTH = 6;
 
 // Two-factor authentication with Supabase Auth MFA (authenticator app / TOTP).
 //   Enable:  enroll -> scan QR -> enter a code to verify the factor
 //   Disable: enter a current code (re-verifies), then unenroll
+//   Recovery codes: shown once after enabling; "Create new codes" asks for a
+//   code first (the server only makes them for a session that just passed one)
 // Once enabled, sign-in asks for a code (App.jsx) and the database refuses
 // data to sessions that skipped it (mfa_required policies).
 export default function TwoFactorSettings({ onNotify, onEnabled }) {
     const [factor, setFactor] = useState(null);       // verified TOTP factor, if any
     const [loading, setLoading] = useState(true);
-    const [mode, setMode] = useState("idle");         // idle | enrolling | disabling
+    const [mode, setMode] = useState("idle");         // idle | enrolling | disabling | regenerating
     const [enrollment, setEnrollment] = useState(null); // { id, qrCode, secret }
     const [code, setCode] = useState("");
     const [error, setError] = useState("");
     const [busy, setBusy] = useState(false);
+    const [recoveryCodes, setRecoveryCodes] = useState(null); // shown once, then dropped
+    const [codesLeft, setCodesLeft] = useState(null);
+    // Called when the codes panel is closed after enabling (MfaSetupRequired waits for it)
+    const [isEnabling, setIsEnabling] = useState(false);
+
+    const loadCodesLeft = useCallback(async () => {
+        setCodesLeft(await fetchRecoveryCodesLeft());
+    }, []);
 
     const applyFactors = useCallback(({ data, error: listError }) => {
         if (listError) console.error("Error loading two-factor status:", listError);
@@ -34,11 +46,14 @@ export default function TwoFactorSettings({ onNotify, onEnabled }) {
         supabase.auth.mfa.listFactors().then(result => {
             if (active) applyFactors(result);
         });
+        fetchRecoveryCodesLeft().then(left => {
+            if (active) setCodesLeft(left);
+        });
         return () => { active = false; };
     }, [applyFactors]);
 
-    // Required for every account, so it can't be turned off: the database would
-    // lock them out of their data (20261120110000_require_mfa.sql)
+    // When two-factor is required it can't be turned off: the database would
+    // lock them out of their data. Optional since 20261124100000_mfa_optional.sql
     const [isRequired, setIsRequired] = useState(false);
     useEffect(() => {
         let active = true;
@@ -104,6 +119,35 @@ export default function TwoFactorSettings({ onNotify, onEnabled }) {
         return true;
     };
 
+    // After a code was just entered (aal2): make codes and show them once
+    const issueRecoveryCodes = async () => {
+        const { data: codes, error: codesError } = await createRecoveryCodes();
+        if (codesError) {
+            onNotify?.(`${codesError} You can create them later under Two-Factor Authentication.`, "error");
+            return false;
+        }
+        setRecoveryCodes(codes);
+        setCodesLeft(codes.length);
+        return true;
+    };
+
+    const closeRecoveryCodes = () => {
+        setRecoveryCodes(null);
+        if (isEnabling) {
+            setIsEnabling(false);
+            onEnabled?.();
+        }
+    };
+
+    const confirmRegenerate = async (e) => {
+        e.preventDefault();
+        const factorId = factor?.id;
+        if (!factorId) return;
+        if (!(await verifyCode(factorId))) return;
+        reset();
+        await issueRecoveryCodes();
+    };
+
     // Optional chaining on factor/enrollment below is required: the React
     // Compiler reads these values during render to memoize the handlers, and
     // they're null until 2FA is set up (plain `.id` crashed the Settings page).
@@ -114,7 +158,9 @@ export default function TwoFactorSettings({ onNotify, onEnabled }) {
         reset();
         await loadFactor();
         onNotify?.("Two-factor authentication is on. You'll be asked for a code when you sign in.", "success");
-        onEnabled?.();
+        // Show the codes first; onEnabled runs when they're closed
+        if (await issueRecoveryCodes()) setIsEnabling(true);
+        else onEnabled?.();
     };
 
     const confirmDisable = async (e) => {
@@ -128,13 +174,15 @@ export default function TwoFactorSettings({ onNotify, onEnabled }) {
             setError(unenrollError.message);
             return;
         }
-        // Remembered devices are meaningless without two-factor
+        // Remembered devices and recovery codes are meaningless without two-factor
         await supabase.rpc("forget_trusted_devices");
         clearTrustedDevice();
+        await clearMyRecoveryCodes();
         // Drop the now-meaningless second-factor level from this session
         await supabase.auth.refreshSession();
         reset();
         await loadFactor();
+        await loadCodesLeft();
         onNotify?.("Two-factor authentication has been turned off.", "info");
     };
 
@@ -234,6 +282,34 @@ export default function TwoFactorSettings({ onNotify, onEnabled }) {
                         </button>
                     </div>
                 </form>
+            )}
+
+            {mode === "regenerating" && factor && (
+                <form onSubmit={confirmRegenerate} className="space-y-md border-t border-line pt-md">
+                    <p className="text-xs text-white">Enter a current code from your authenticator app. Your old recovery codes will stop working.</p>
+                    <div className="flex flex-wrap items-center gap-sm">
+                        {codeInput}
+                        <button type="submit" disabled={busy} className="px-md py-2 bg-primary-container text-on-accent font-semibold rounded-xl disabled:opacity-50">
+                            {busy ? "Checking..." : "Create new codes"}
+                        </button>
+                        <button type="button" onClick={reset} disabled={busy} className="px-md py-2 text-muted hover:text-white text-xs">
+                            Cancel
+                        </button>
+                    </div>
+                </form>
+            )}
+
+            {recoveryCodes && <RecoveryCodesPanel codes={recoveryCodes} onDone={closeRecoveryCodes} />}
+
+            {factor && mode === "idle" && !recoveryCodes && codesLeft !== null && (
+                <p className={`text-xs ${codesLeft === 0 ? "text-[#f59e0b]" : "text-muted"}`}>
+                    {codesLeft === 0
+                        ? "You have no recovery codes. Without them, losing your phone means asking an admin to reset two-factor."
+                        : `Recovery codes: ${codesLeft} left, for when you lose your phone.`}{" "}
+                    <button type="button" onClick={() => { setMode("regenerating"); setError(""); }} disabled={busy} className="underline hover:text-white disabled:opacity-50">
+                        Create new codes
+                    </button>
+                </p>
             )}
 
             {factor && mode === "idle" && (

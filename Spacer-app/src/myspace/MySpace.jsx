@@ -7,6 +7,7 @@ import { StatCard, StatCardSkeleton, Panel, PanelLink, PanelMessage } from "../c
 import { TaskCard, TaskCardSkeleton, ActivityList, ActivitySkeleton, MeetingRow, MeetingSkeleton } from "./MySpaceParts"
 import { useResource } from "./useResource"
 import GreetingSky from "./GreetingSky"
+import DepartmentInvites from "../partials/DepartmentInvites"
 import { fetchUpcomingMeetings } from "../meetings/meetingData"
 import { localDateKey, summarizeTasks, boardTasks, greetingFor } from "./taskStats"
 
@@ -167,6 +168,8 @@ export default function MySpace({ userId, displayName }) {
                 <h1 className="text-2xl font-semibold text-white">{greeting}, {displayName} <GreetingSky greeting={greeting} /></h1>
                 <p className="text-muted text-sm mt-1">Here's what's happening with your work today.</p>
             </section>
+
+            <DepartmentInvites />
 
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatRow tasksState={tasksState} todayKey={todayKey} onRetry={reloadTasks} />

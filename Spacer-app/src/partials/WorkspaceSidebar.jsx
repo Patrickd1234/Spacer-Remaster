@@ -10,6 +10,7 @@ import { projectsInDepartment } from "../projectDepartments"
 import { readSavedOrgName, saveOrgName } from "../orgNameCache"
 import { readSavedProjectList, saveProjectList } from "../projectListCache"
 import { visibleProjects } from "../projectVisibility"
+import { PROJECT_CREATED_EVENT } from "../appEvents"
 
 // Projects (among `projectIds`) the signed-in user was added to or has a task in.
 // On a failed lookup that part counts as none, so nothing extra is shown.
@@ -77,10 +78,11 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                 saveProjectList({ projects: [], links: [] })
                 return
             }
-            // Projects whose extra departments (project_departments) include these.
+            // Projects whose extra departments (project_departments) include these
+            // (not invites still waiting for an answer).
             // On failure, fall back to main-department projects only.
             const { data: linkRows, error: linkError } = await supabase
-                .from("project_departments").select("project_id, team_space_id").in("team_space_id", ids)
+                .from("project_departments").select("project_id, team_space_id").in("team_space_id", ids).neq("status", "invited")
             if (linkError) console.error("Loading projects' extra departments failed:", linkError)
             const links = linkError ? [] : (linkRows || [])
             const linkedIds = [...new Set(links.map((l) => l.project_id))]
@@ -114,6 +116,26 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
         load()
         return () => { active = false }
     }, [teamKey, teamsReady, isOrgAdmin, roleKey])
+
+    // A project created anywhere (this sidebar's button or the header's Create
+    // menu) is listed at once, if it belongs to one of the user's departments
+    useEffect(() => {
+        const addCreatedProject = (event) => {
+            const { project, extraDepartmentIds = [] } = event.detail || {}
+            if (!project?.id) return
+            const teamIds = new Set(teamKey ? teamKey.split(",") : [])
+            const links = extraDepartmentIds.filter((id) => teamIds.has(String(id))).map((id) => ({ project_id: project.id, team_space_id: id }))
+            if (!teamIds.has(String(project.team_space_id)) && links.length === 0) return
+            const nextProjects = mergeProjects(projects, [project])
+            const nextLinks = [...projectLinks, ...links]
+            setProjects(nextProjects)
+            setProjectLinks(nextLinks)
+            // Saved so the new project's page shows its name at once
+            saveProjectList({ projects: nextProjects, links: nextLinks })
+        }
+        window.addEventListener(PROJECT_CREATED_EVENT, addCreatedProject)
+        return () => window.removeEventListener(PROJECT_CREATED_EVENT, addCreatedProject)
+    }, [teamKey, projects, projectLinks])
 
     useEffect(() => {
         let active = true
@@ -260,22 +282,8 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
             </aside>
 
             {showCreateModal && (
-                <CreateProjectModal
-                    onClose={() => setShowCreateModal(false)}
-                    onCreated={(newProject, extraDepartmentIds = []) => {
-                        // Only list it if it belongs to one of the user's departments
-                        const inTeams = (id) => teams.some((t) => String(t.id) === String(id))
-                        const links = extraDepartmentIds.filter(inTeams).map((id) => ({ project_id: newProject?.id, team_space_id: id }))
-                        if (inTeams(newProject?.team_space_id) || links.length > 0) {
-                            const nextProjects = mergeProjects(projects, [newProject])
-                            const nextLinks = [...projectLinks, ...links]
-                            setProjects(nextProjects)
-                            setProjectLinks(nextLinks)
-                            // Saved so the new project's page shows its name at once
-                            saveProjectList({ projects: nextProjects, links: nextLinks })
-                        }
-                    }}
-                />
+                // Lists the new project through PROJECT_CREATED_EVENT (above)
+                <CreateProjectModal onClose={() => setShowCreateModal(false)} />
             )}
         </>
     )

@@ -3,6 +3,7 @@
 const STATUS_NAMES = { todo: "Backlog", in_progress: "Doing", done: "Done" };
 
 const quoted = (text) => (text ? `“${text}”` : "a task");
+const projectName = (s) => (s.project_name ? `“${s.project_name}”` : "a project");
 
 // Human label, icon and category for one activity_log row
 export function describeActivity(row) {
@@ -16,6 +17,9 @@ export function describeActivity(row) {
         case "task:deleted": return { title: `Deleted task ${quoted(s.title)}`, icon: "delete", badge: "Tasks" };
         case "project:created": return { title: `Created project ${quoted(s.project_name || s.name)}`, icon: "create_new_folder", badge: "Projects" };
         case "project:project_deleted": return { title: "Deleted a project", icon: "folder_delete", badge: "Projects" };
+        case "project:department_invited": return { title: `Invited ${s.department || "a department"} to ${projectName(s)}`, icon: "handshake", badge: "Projects" };
+        case "project:department_joined": return { title: `${s.department || "A department"} joined ${projectName(s)}`, icon: "group_add", badge: "Projects" };
+        case "project:department_declined": return { title: `${s.department || "A department"} declined to work on ${projectName(s)}`, icon: "do_not_disturb_on", badge: "Projects" };
         case "department:department_deleted": return { title: "Deleted a department", icon: "domain_disabled", badge: "Departments" };
         case "file:file_added": return { title: `Uploaded ${quoted(s.name)}`, icon: "upload_file", badge: "Files" };
         case "file:file_removed": return { title: `Removed file ${quoted(s.name)}`, icon: "scan_delete", badge: "Files" };
@@ -26,6 +30,11 @@ export function describeActivity(row) {
         case "membership:removed": return { title: "Left a department", icon: "group_remove", badge: "Members" };
         case "user:signup": return { title: "Joined Spacer", icon: "celebration", badge: "Account" };
         case "organization:member_left": return { title: `${s.name || "Someone"} left the organization`, icon: "logout", badge: "Members" };
+        case "user:two_factor_reset": return {
+            title: s.method === "recovery_code" ? "Used a recovery code to sign in" : `Reset two-factor for ${s.name || "someone"}`,
+            icon: "phonelink_erase",
+            badge: "Account",
+        };
         case "organization:member_removed": return { title: `Removed ${s.name || "someone"} from the organization`, icon: "person_remove", badge: "Members" };
         default: return { title: `${row.action.replace(/_/g, " ")} ${row.entity_type}`, icon: "history", badge: "Activity" };
     }

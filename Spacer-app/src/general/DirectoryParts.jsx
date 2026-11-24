@@ -3,6 +3,7 @@ import { Avatar, Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, Erro
 import PhotoField from "../avatars/PhotoField"
 import Select from "../components/Select"
 import { RemoveFromOrganizationButton } from "../components/OrgExitControls"
+import ResetTwoFactorButton from "../components/ResetTwoFactorButton"
 import { roleKey, roleName } from "../permissions"
 import { canEditRoles } from "./roleAssignment"
 import RoleEditor from "./RoleEditor"
@@ -164,7 +165,7 @@ function InfoLine({ icon, children }) {
 }
 
 // Right-side profile drawer. Shows only what the viewer's access returns.
-export function ProfileDrawer({ person, people, isMe, canSetManager, canRemove, canAssignRoles = false, departments = [], onClose, onMessage, onEdit, onSetManager, onRemoved, onRolesChanged }) {
+export function ProfileDrawer({ person, people, isMe, canSetManager, canRemove, canResetTwoFactor = false, canAssignRoles = false, departments = [], onClose, onMessage, onEdit, onSetManager, onRemoved, onRolesChanged }) {
     const manager = people.find((p) => p.id === person.reports_to)
     const time = localTime(person.timezone)
     const showRoleEditor = canEditRoles({ person, viewerId: isMe ? person.id : null, canAssign: canAssignRoles })
@@ -243,9 +244,10 @@ export function ProfileDrawer({ person, people, isMe, canSetManager, canRemove, 
             </DrawerSection>
 
             {/* The database also refuses if the person holds an organization role */}
-            {canRemove && !isMe && (
+            {(canRemove || canResetTwoFactor) && !isMe && (
                 <div className="pt-3 border-t border-line space-y-2">
-                    <RemoveFromOrganizationButton key={person.id} person={person} onRemoved={onRemoved} />
+                    {canResetTwoFactor && <ResetTwoFactorButton key={`2fa-${person.id}`} person={person} />}
+                    {canRemove && <RemoveFromOrganizationButton key={person.id} person={person} onRemoved={onRemoved} />}
                 </div>
             )}
         </aside>

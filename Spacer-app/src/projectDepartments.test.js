@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addableDepartments, projectsInDepartment, teamLeadOptions, departmentLeadOptions, addableProjectMembers } from "./projectDepartments.js";
+import { addableDepartments, projectsInDepartment, teamLeadOptions, departmentLeadOptions, addableProjectMembers, applyDepartmentChange, resolveDepartmentLead } from "./projectDepartments.js";
 
 const spaces = [
     { id: "a", name: "Design" },
@@ -100,4 +100,28 @@ test("people to add come from the project's departments, once each, by name", ()
 
 test("rows without a user are skipped", () => {
     assert.deepEqual(addableProjectMembers([{ team_space_id: "a", user: null }], [], new Set()), []);
+});
+
+test("switching a card to another department gives it that department's default lead", () => {
+    const card = { teamSpaceId: "a", leadId: "u1", dueDate: "2026-12-01" };
+    const next = applyDepartmentChange(card, { teamSpaceId: "b" });
+    assert.equal(next.teamSpaceId, "b");
+    assert.equal(next.leadId, undefined);
+    assert.equal(next.dueDate, "2026-12-01");
+    assert.equal(resolveDepartmentLead(next.leadId, { options: [{ id: "u9" }], defaultId: "u9" }), "u9");
+});
+
+test("other card changes keep the department's lead", () => {
+    const card = { teamSpaceId: "a", leadId: "u1", dueDate: "" };
+    assert.equal(applyDepartmentChange(card, { dueDate: "2026-12-01" }).leadId, "u1");
+    assert.equal(applyDepartmentChange(card, { teamSpaceId: "a" }).leadId, "u1");
+    assert.equal(applyDepartmentChange(card, { leadId: "" }).leadId, "");
+});
+
+test("a department's lead: the pick if still a member, 'No lead' if chosen, else the default", () => {
+    const choices = { options: [{ id: "u1" }, { id: "u2" }], defaultId: "u1" };
+    assert.equal(resolveDepartmentLead("u2", choices), "u2");
+    assert.equal(resolveDepartmentLead("", choices), "");
+    assert.equal(resolveDepartmentLead("gone", choices), "u1");
+    assert.equal(resolveDepartmentLead(undefined, choices), "u1");
 });
