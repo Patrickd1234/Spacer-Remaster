@@ -279,3 +279,16 @@ This log tracks development work and code changes made for this project.
   - Code review (no critical or high findings). Fixed: a failed reload used to empty the away list, and an older reload could overwrite a newer one. A save now shows at once, from the event, instead of after the reload. The return date's picker starts the day after the first day away. Screen readers hear the note, and the avatar dot next to a badge is no longer read twice.
   - Checked: `npm test` 230/230, `vite build` succeeds, ESLint 0 errors on the changed files (1 existing warning in `project_page.jsx`). `db push --dry-run --remote` lists only `20261120130000_user_availability`, which isn't applied yet. Nothing has been checked in a browser.
   - Known limit: a tab left open past midnight keeps the list it loaded until the next save or page load, but each badge works out "today" itself.
+
+## 2026-11-24
+
+- Review question from the user: what happens when someone is super admin in one organization and a member in another? By design they can't be: a person is in one organization (`users.organization_id`), the invite paths refuse anyone already in another organization, and leaving deletes every membership.
+- Found a hole that creates exactly that situation and makes the person **owner of the organization where they are only a member** (critical):
+  - A `super_admin` membership reads as Owner whatever department it points at. `has_permission()`, `my_permissions()` and `is_org_admin()` counted it in the caller's current organization without checking that its department was in that organization.
+  - `memberships_insert` only asked whether the caller may assign roles in the department's organization, not whether the person being added is in it, and no trigger covers inserts.
+  - So the owner of any organization (anyone can launch one) could insert `(an account in organization B, a department of their own, 'super_admin')`. That account then held every permission in B.
+- Migration `supabase/migrations/20261124090000_pin_org_roles_to_org.sql` (rollback in `supabase/rollback/`): organization roles count only when the membership is in the caller's organization, and `memberships_insert`/`memberships_update` require the department to be in the person's organization.
+- Checked on live, read-only: no membership points at a department outside its person's organization (the three old ones noted on 12 Nov are gone), so no data cleanup is needed.
+- Dry run on live in one rolled-back block: before the fix, the insert was allowed and the account got `member.assign_role`, `organization.update` and admin of its organization (23 organization-wide permissions). After: the insert is refused (42501), and even a row written past the policies gives nothing (0 permissions). Every member's `my_permissions()` and `is_admin_of_org()` answers are unchanged: 0 of 27 people differ.
+- Applied by the user with `db push` the same day. Checked on live afterwards: the insert is refused (42501), a row forced in past the policies gives 0 permissions, and `db push --dry-run` reports up to date. No app change is needed. `RoleContext.jsx` still treats any `super_admin` row as organization-wide for showing controls; once the database can't hold a foreign one, that is cosmetic.
+- Docs: `Spacer-app/docs/RBAC.md` (sections 3, 8, 9), `Spacer-app/docs/SECURITY_AND_FIXES_LOG.md`.

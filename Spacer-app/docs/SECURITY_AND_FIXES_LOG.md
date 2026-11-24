@@ -48,6 +48,7 @@ This document records what was changed, why, how it was verified, and what is st
 | Password rules: 8+ chars, upper + lower case, number, symbol | ✅ Live (19 Nov), checked again on the server |
 | Permission-based access (RBAC) | ✅ Live (12–20 Nov), see `docs/RBAC.md` |
 | D-06: organization and user id only from the database / session | ✅ Done (21 Nov) |
+| Cross-organization Owner grant: an organization's owner could make an account in another organization its Owner | ✅ Live (24 Nov, `20261124090000_pin_org_roles_to_org`); attack re-tested on live and refused. See `docs/RBAC.md` §3 |
 
 > **Rollout note:** the MFA migration was applied before deploying the edge functions that call `mfa_satisfied()`. Keep that order for any future change to those functions' database dependencies.
 
@@ -292,6 +293,7 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261121090000_mfa_exempt_users.sql` | ✅ | ✅ |
 | `20261121100000_project_departments_mfa.sql` | ✅ | ✅ |
 | `20261121110000_sync_user_email.sql` | ✅ | ✅ |
+| `20261124090000_pin_org_roles_to_org.sql` | ✅ (24 Nov) | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
 
