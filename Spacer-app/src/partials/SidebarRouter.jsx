@@ -5,6 +5,7 @@ import { useRole } from "../RoleContext";
 import { withDmAttachmentLinks } from "../dmAttachments";
 import { dmReadStamp, latestDmPerContact, mapDmRow, mergeDmMessages } from "../dmThread";
 import PlanetLoader from "../components/PlanetLoader";
+import { KEEPS_CHAT_OPEN_ATTR } from "../components/chatOverlay";
 
 // The chat window is downloaded the first time it opens, not with every page.
 // Hovering or focusing a Messages button starts the download early.
@@ -265,6 +266,8 @@ export default function SidebarRouter(props) {
     useEffect(() => {
         if (!showChatModal || isChatMinimized) return undefined;
         const handlePointerDown = (e) => {
+            // An attachment preview opened from the chat is part of it
+            if (e.target.closest?.(`[${KEEPS_CHAT_OPEN_ATTR}]`)) return;
             if (chatPanelRef.current && !chatPanelRef.current.contains(e.target)) setShowChatModal(false);
         };
         document.addEventListener("pointerdown", handlePointerDown);

@@ -310,6 +310,7 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261121110000_sync_user_email.sql` | ✅ | ✅ |
 | `20261124090000_pin_org_roles_to_org.sql` | ✅ (24 Nov) | ✅ |
 | `20261126090000_realtime_direct_messages.sql` | ⏳ not yet | ✅ |
+| `20261126100000_delete_channel_message.sql` | ⏳ not yet | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
 

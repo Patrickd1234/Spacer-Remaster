@@ -1,9 +1,14 @@
 import { useState } from 'react';
 import { supabase } from '../supabase';
+import AttachmentPreview from './AttachmentPreview';
+import { safeHttpsUrl } from '../safeUrl';
 
-export default function ChatMessage({ message, currentUserId, onReply }) {
+export default function ChatMessage({ message, currentUserId, onReply, onDelete }) {
     const isMine = message.user_id === currentUserId;
     const [showReactions, setShowReactions] = useState(false);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    // The attachment open in the preview, or null
+    const [previewFile, setPreviewFile] = useState(null);
 
     const handleReaction = async (emoji) => {
         // Optimistic update could go here
@@ -16,22 +21,20 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                 .eq('emoji', emoji)
                 .maybeSingle();
 
-            if (existingReaction) {
-                // Remove reaction
-                await supabase
+            // Clicking an emoji I already reacted with removes my reaction
+            const { error } = existingReaction
+                ? await supabase
                     .from('message_reactions')
                     .delete()
-                    .eq('id', existingReaction.id);
-            } else {
-                // Add reaction
-                await supabase
+                    .eq('id', existingReaction.id)
+                : await supabase
                     .from('message_reactions')
                     .insert({
                         message_id: message.id,
                         user_id: currentUserId,
                         emoji
                     });
-            }
+            if (error) throw error;
         } catch (error) {
             console.error('Error reacting to message:', error);
         }
@@ -78,18 +81,39 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                                     {att.file_type?.startsWith('image') ? 'image' : 'description'}
                                 </span>
                             );
-                            // signed_url is a short-lived link created when messages load
+                            // signed_url is a short-lived link created when messages load;
+                            // clicking opens a preview (with a download button)
+                            const openPreview = () => setPreviewFile({ name: att.file_name, type: att.file_type, url: att.signed_url });
+                            const thumbnailSrc = att.file_type?.startsWith('image/') ? safeHttpsUrl(att.signed_url) : null;
+                            if (thumbnailSrc) {
+                                return (
+                                    <button
+                                        type="button"
+                                        key={att.id}
+                                        onClick={openPreview}
+                                        title="Open preview"
+                                        className="block rounded-lg overflow-hidden cursor-zoom-in hover:opacity-90 transition-opacity"
+                                    >
+                                        <img
+                                            src={thumbnailSrc}
+                                            alt={att.file_name}
+                                            loading="lazy"
+                                            className="max-h-[160px] max-w-[220px] object-cover"
+                                        />
+                                    </button>
+                                );
+                            }
                             return att.signed_url ? (
-                                <a
+                                <button
+                                    type="button"
                                     key={att.id}
-                                    href={att.signed_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className={`flex items-center gap-2 p-2 rounded text-sm ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-white/5 hover:bg-white/10'} transition-colors`}
+                                    onClick={openPreview}
+                                    title="Open preview"
+                                    className={`flex items-center gap-2 p-2 rounded text-sm text-left cursor-pointer ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-white/5 hover:bg-white/10'} transition-colors`}
                                 >
                                     {icon}
                                     <span className="truncate max-w-[150px]">{att.file_name}</span>
-                                </a>
+                                </button>
                             ) : (
                                 <div
                                     key={att.id}
@@ -122,6 +146,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                                 <button
                                     key={emoji}
                                     onClick={() => handleReaction(emoji)}
+                                    title={hasReacted ? 'Remove your reaction' : `React with ${emoji}`}
                                     className={`text-xs px-2 py-0.5 rounded-full border ${
                                         hasReacted 
                                             ? 'bg-[var(--primary-color)]/20 border-accent-ink text-accent-ink' 
@@ -135,8 +160,8 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                     </div>
                 )}
 
-                {/* Hover Actions */}
-                <div className={`absolute top-0 ${isMine ? 'left-[-70px]' : 'right-[-70px]'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 bg-panel rounded-lg border border-white/10 p-1 shadow-lg`}>
+                {/* Hover Actions (stay visible while a delete is being confirmed) */}
+                <div className={`absolute top-0 ${isMine ? 'right-full mr-2' : 'left-full ml-2'} ${confirmingDelete ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity flex gap-1 bg-panel rounded-lg border border-white/10 p-1 shadow-lg`}>
                     <button 
                         onClick={() => setShowReactions(!showReactions)}
                         className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white"
@@ -151,7 +176,36 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                     >
                         <span className="material-symbols-outlined text-sm">reply</span>
                     </button>
-                    
+                    {/* My own messages: first click asks, second deletes */}
+                    {isMine && onDelete && (confirmingDelete ? (
+                        <>
+                            <button
+                                type="button"
+                                onClick={() => { setConfirmingDelete(false); onDelete(message); }}
+                                className="px-1.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs font-semibold whitespace-nowrap"
+                            >
+                                Delete?
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setConfirmingDelete(false)}
+                                className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-white"
+                                title="Keep message"
+                            >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={() => setConfirmingDelete(true)}
+                            className="p-1 rounded hover:bg-white/10 text-white/70 hover:text-red-400"
+                            title="Delete message"
+                        >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                    ))}
+
                     {/* Reaction Picker Popup */}
                     {showReactions && (
                         <div className={`absolute top-full mt-1 ${isMine ? 'right-0' : 'left-0'} flex gap-1 bg-surface2 p-2 rounded-lg shadow-xl border border-white/10 z-10`}>
@@ -168,6 +222,7 @@ export default function ChatMessage({ message, currentUserId, onReply }) {
                     )}
                 </div>
             </div>
+            <AttachmentPreview file={previewFile} onClose={() => setPreviewFile(null)} />
         </div>
     );
 }

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import ChatMessage from './ChatMessage';
 import UploadingBubble from './UploadingBubble';
-import { createSignedLinks } from '../storageLinks';
+import { createReusedSignedLinks } from '../storageLinks';
 import PlanetLoader from "./PlanetLoader";
 import PersonPhoto from "../avatars/PersonPhoto";
 
@@ -149,7 +149,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             // Attachments store a storage path; sign them so they can be opened.
             // Fetched newest first (for the limit), shown oldest first.
             const rows = (data || []).reverse();
-            const linkByPath = await createSignedLinks(
+            const linkByPath = await createReusedSignedLinks(
                 CHAT_ATTACHMENTS_BUCKET,
                 rows.flatMap(m => (m.message_attachments || []).map(att => att.file_url))
             );
@@ -179,6 +179,20 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                     },
                     () => {
                         fetchMessages(channelId); // Re-fetch to get relations easily
+                    }
+                )
+                // Deletes can't be filtered by channel (Realtime sends only the
+                // deleted row's id), so drop the message here if it's shown
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'DELETE',
+                        schema: 'public',
+                        table: 'messages'
+                    },
+                    (payload) => {
+                        const deletedId = payload.old?.id;
+                        if (deletedId) setMessages(prev => prev.filter(m => m.id !== deletedId));
                     }
                 )
                 .on(
@@ -272,6 +286,29 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
             console.error('Error sending message:', error);
         } finally {
             setUploading([]);
+        }
+    };
+
+    // Delete one of my messages. Its files go first: the storage policy only
+    // lets the author remove them while the message still exists. The database
+    // function keeps other people's replies (migration 20261126100000).
+    const handleDeleteMessage = async (message) => {
+        const previousMessages = messages;
+        setFileError('');
+        setMessages(prev => prev.filter(m => m.id !== message.id));
+        try {
+            const paths = (message.message_attachments || []).map(att => att.file_url).filter(Boolean);
+            if (paths.length > 0) {
+                const { error: storageError } = await supabase.storage.from(CHAT_ATTACHMENTS_BUCKET).remove(paths);
+                if (storageError) console.error('Error removing message files:', storageError);
+            }
+            const { error } = await supabase.rpc('delete_channel_message', { p_message_id: message.id });
+            if (error) throw error;
+        } catch (error) {
+            // Not deleted: put the message back
+            console.error('Error deleting message:', error);
+            setMessages(previousMessages);
+            setFileError("The message couldn't be deleted. Please try again.");
         }
     };
 
@@ -521,6 +558,7 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                                     message={msg} 
                                     currentUserId={currentUserId}
                                     onReply={setReplyingTo}
+                                    onDelete={handleDeleteMessage}
                                 />
                             ))}
                             <UploadingBubble files={uploading} />

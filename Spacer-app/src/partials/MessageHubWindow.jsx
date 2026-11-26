@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { supabase } from "../supabase";
 import GroupChat from "../components/LazyGroupChat";
+import AttachmentPreview from "../components/AttachmentPreview";
+import { downloadUrl } from "../downloadLinks";
 import { attachmentDisplay, dmAttachmentName, dmAttachmentPath, formatFileSize, validateDmAttachment } from "../dmAttachmentFiles";
 import { removeDmAttachment, uploadDmAttachment, withDmAttachmentLinks } from "../dmAttachments";
 import UploadingBubble from "../components/UploadingBubble";
@@ -28,6 +31,9 @@ export default function MessageHubWindow({
     isSendingRef, dmUploading, setDmUploading, showAttachmentMenu, setShowAttachmentMenu,
     imageInputRef, docInputRef,
 }) {
+    // The attachment open in the preview, or null
+    const [previewFile, setPreviewFile] = useState(null);
+
     const handleMessagesScroll = (e) => {
         const el = e.currentTarget;
         isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
@@ -562,24 +568,40 @@ export default function MessageHubWindow({
                                                     {msg.fileAttachment && (() => {
                                                         // Signed storage link, or a checked legacy data URL; unsafe ones aren't rendered
                                                         const { imageSrc, downloadHref } = attachmentDisplay(msg.fileAttachment);
+                                                        // Stored files open in a preview; old inline (data URL) ones don't
+                                                        const preview = msg.fileAttachment.path && msg.fileAttachment.url
+                                                            ? { name: msg.fileAttachment.name, type: msg.fileAttachment.type, url: msg.fileAttachment.url }
+                                                            : null;
+                                                        const openPreview = preview ? () => setPreviewFile(preview) : undefined;
+                                                        const fileLabel = (
+                                                            <>
+                                                                <span className="material-symbols-outlined text-lg">description</span>
+                                                                <div className="overflow-hidden">
+                                                                    <p className="truncate font-semibold text-[10px]">{msg.fileAttachment.name}</p>
+                                                                    <p className="text-[8px] opacity-75">{msg.fileAttachment.size}</p>
+                                                                </div>
+                                                            </>
+                                                        );
                                                         return (
                                                         <div className="mb-2 p-1.5 rounded-lg bg-black/20 border border-white/5 max-w-[240px]">
                                                             {imageSrc ? (
                                                                 <img
                                                                     src={imageSrc}
                                                                     alt={msg.fileAttachment.name}
-                                                                    className="max-h-[140px] rounded object-cover max-w-full"
+                                                                    onClick={openPreview}
+                                                                    title={preview ? "Open preview" : undefined}
+                                                                    className={`max-h-[140px] rounded object-cover max-w-full ${preview ? "cursor-zoom-in" : ""}`}
                                                                 />
                                                             ) : (
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="material-symbols-outlined text-lg">description</span>
-                                                                    <div className="overflow-hidden">
-                                                                        <p className="truncate font-semibold text-[10px]">{msg.fileAttachment.name}</p>
-                                                                        <p className="text-[8px] opacity-75">{msg.fileAttachment.size}</p>
-                                                                    </div>
+                                                                    {preview ? (
+                                                                        <button type="button" onClick={openPreview} title="Open preview" className="flex items-center gap-2 overflow-hidden text-left cursor-pointer hover:opacity-80">
+                                                                            {fileLabel}
+                                                                        </button>
+                                                                    ) : fileLabel}
                                                                     {downloadHref && (
                                                                         <a
-                                                                            href={downloadHref}
+                                                                            href={preview ? downloadUrl(downloadHref, msg.fileAttachment.name) : downloadHref}
                                                                             download={msg.fileAttachment.name || "attachment"}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
@@ -779,6 +801,7 @@ export default function MessageHubWindow({
                     ) : null}
                 </>
             )}
+            <AttachmentPreview file={previewFile} onClose={() => setPreviewFile(null)} />
         </div>
     );
 }

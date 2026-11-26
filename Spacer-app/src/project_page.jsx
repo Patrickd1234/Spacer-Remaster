@@ -16,6 +16,7 @@ import { TASK_CREATED_EVENT, announceProjectRenamed } from "./appEvents"
 import { fetchProjectDepartments, updateTaskDepartment, setTaskBlock } from "./crossDepartmentData"
 import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
+import { downloadUrl } from "./downloadLinks"
 import { statusFromSubtasks } from "./taskStatus"
 import { deleteWorkspaceItem } from "./workspaceDelete"
 import {
@@ -1791,7 +1792,7 @@ function ProjectPage() {
                                                                 <button type="button" title="Preview"
                                                                     onClick={(e) => { e.stopPropagation(); setReviewFile(f) }}
                                                                     className="material-symbols-outlined text-muted hover:text-white transition-colors text-[18px]">visibility</button>
-                                                                <a href={f.url} download={f.name} target="_blank" rel="noreferrer"
+                                                                <a href={downloadUrl(f.url, f.name)} download={f.name} target="_blank" rel="noreferrer"
                                                                     title="Download" onClick={(e) => e.stopPropagation()}
                                                                     className="material-symbols-outlined text-muted hover:text-white transition-colors text-[18px]">download</a>
                                                                 <button type="button" title="Delete"
@@ -2160,7 +2161,7 @@ function ProjectPage() {
                                                                         visibility
                                                                     </button>
                                                                     <a
-                                                                        href={f.url}
+                                                                        href={downloadUrl(f.url, f.name)}
                                                                         download={f.name}
                                                                         target="_blank"
                                                                         rel="noreferrer"

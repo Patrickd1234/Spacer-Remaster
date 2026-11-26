@@ -12,6 +12,7 @@
  */
 
 import { safeHttpsUrl } from "../safeUrl";
+import { downloadUrl } from "../downloadLinks";
 
 const ICON_MAP = {
   "application/pdf": "picture_as_pdf",
@@ -36,6 +37,8 @@ export default function DocViewer({ file, onClose }) {
   const type = file.type || "";
   // Only https links are previewed or downloaded; anything else (javascript:, data:) is dropped
   const url = safeHttpsUrl(file.url);
+  // Download buttons save the file rather than opening it in a new tab
+  const saveUrl = downloadUrl(url, name);
   const isImage = type.startsWith("image/");
   const isPDF = type === "application/pdf";
   const isOffice =
@@ -66,7 +69,7 @@ export default function DocViewer({ file, onClose }) {
           <p className="text-white font-semibold text-sm flex-1 truncate">{name}</p>
           {url && (
             <a
-              href={url}
+              href={saveUrl}
               download={name}
               target="_blank"
               rel="noreferrer"
@@ -121,7 +124,7 @@ export default function DocViewer({ file, onClose }) {
               <p className="text-white font-semibold">{name}</p>
               <p className="text-muted text-sm">Preview not available for this file type.</p>
               <a
-                href={url}
+                href={saveUrl}
                 download={name}
                 target="_blank"
                 rel="noreferrer"

@@ -14,6 +14,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase, getSessionUser } from "../supabase";
 import { withSignedUrls } from "../projectFiles";
+import { downloadUrl } from "../downloadLinks";
 import PlanetLoader from "./PlanetLoader";
 
 const ACCEPTED = [
@@ -288,7 +289,7 @@ export default function ProjectPanel({ project, onClose, onPreview }) {
                         visibility
                       </button>
                       <a
-                        href={f.url}
+                        href={downloadUrl(f.url, f.name)}
                         download={f.name}
                         target="_blank"
                         rel="noreferrer"
