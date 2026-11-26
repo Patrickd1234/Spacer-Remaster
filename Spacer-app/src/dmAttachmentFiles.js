@@ -35,10 +35,32 @@ export function formatFileSize(bytes) {
     return mb >= 0.1 ? `${mb.toFixed(2)} MB` : `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-// Storage keys can't hold every character a file name can; keep it readable
+// Storage keys can't hold every character a file name can; keep it readable.
+// Leading dots go too, so the last part is never "." or ".." (or hidden).
 export function dmAttachmentPath(senderId, messageId, fileName) {
-    const safeName = String(fileName).replace(/[^\w.-]+/g, "_").slice(-100) || "file";
+    const safeName = String(fileName ?? "").replace(/[^\w.-]+/g, "_").slice(-100).replace(/^\.+/, "") || "file";
     return `${senderId}/${messageId}/${safeName}`;
+}
+
+export const DM_ATTACHMENT_NAME_MAX = 120;
+
+// Control characters, and the Unicode marks that reorder text (a right-to-left
+// override can make "fdp.exe" read as "exe.pdf")
+// Built from escaped text so the source holds no invisible characters itself.
+// Matching control characters is the point here, so the lint rule is off for it.
+// eslint-disable-next-line no-control-regex
+const HIDDEN_CHARS = new RegExp("[\\u0000-\\u001F\\u007F-\\u009F\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]", "g");
+
+// The file name shown in the chat and offered when downloading (X-03/X-08):
+// what the sender's file was called, minus anything that hides or spoofs part
+// of it, with no folders, and short enough to fit.
+export function dmAttachmentName(fileName) {
+    const parts = String(fileName ?? "").replace(HIDDEN_CHARS, "").split(/[\\/]+/);
+    const name = parts.filter((p) => p && !/^\.+$/.test(p)).join("_").trim() || "file";
+    if (name.length <= DM_ATTACHMENT_NAME_MAX) return name;
+    const dot = name.lastIndexOf(".");
+    const ext = dot > 0 && name.length - dot <= 10 ? name.slice(dot) : "";
+    return `${name.slice(0, DM_ATTACHMENT_NAME_MAX - ext.length - 1)}…${ext}`;
 }
 
 // What to show for an attachment: an image source, a download link, or neither.
