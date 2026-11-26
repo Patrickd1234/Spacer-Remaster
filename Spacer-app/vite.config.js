@@ -19,5 +19,22 @@ export default defineConfig(({ mode }) => {
       react(),
       babel({ presets: [reactCompilerPreset()] })
     ],
+    build: {
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              // React and the router change only when upgraded, so they get a
+              // file of their own: browsers keep it cached across our deploys
+              // and re-download only the app code that changed
+              {
+                name: 'react-vendor',
+                test: /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/,
+              },
+            ],
+          },
+        },
+      },
+    },
   }
 })

@@ -29,8 +29,8 @@ async function loadMyProjectIds(projectIds) {
 
 // Sidebar for every role. Super admins see all of the organization's departments
 // under Team Spaces; everyone else sees the departments they belong to.
-// `unreadMessages` / `isMessagesOpen` / `onOpenMessages` come from SidebarRouter, which owns the chat window.
-export default function WorkspaceSidebar({ userEmail = "", userData = null, onCollapsedChange, unreadMessages = 0, isMessagesOpen = false, onOpenMessages }) {
+// `unreadMessages` / `isMessagesOpen` / `onOpenMessages` / `onPreloadMessages` come from SidebarRouter, which owns the chat window.
+export default function WorkspaceSidebar({ userEmail = "", userData = null, onCollapsedChange, unreadMessages = 0, isMessagesOpen = false, onOpenMessages, onPreloadMessages }) {
     const navigate = useNavigate()
     const location = useLocation()
     const { pathname } = location
@@ -285,7 +285,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                         {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={pathname === `/project_page/${p.id}`} />)}
                     </NavSection>
 
-                    <NavButton icon="chat" label="Messages" onClick={onOpenMessages} isActive={isMessagesOpen} isExpanded={isExpanded} badge={unreadMessages} />
+                    <NavButton icon="chat" label="Messages" onClick={onOpenMessages} onPreload={onPreloadMessages} isActive={isMessagesOpen} isExpanded={isExpanded} badge={unreadMessages} />
                     <NavLink to="/calendar" icon="calendar_today" label="Calendar" isActive={pathname === "/calendar"} isExpanded={isExpanded} />
                     <NavLink to="/reports" icon="bar_chart" label="Reports" isActive={pathname === "/reports"} isExpanded={isExpanded} />
                 </nav>

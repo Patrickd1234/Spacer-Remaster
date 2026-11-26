@@ -4,7 +4,7 @@ import { supabase, getSessionUser } from "./supabase";
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useLocation } from "react-router-dom";
 import { useRole } from "./RoleContext";
-import GroupChat from "./components/GroupChat";
+import GroupChat from "./components/LazyGroupChat";
 import Toast from "./components/Toast";
 import DepartmentSwitcher from "./partials/DepartmentSwitcher";
 import CreateDepartmentModal from "./partials/CreateDepartmentModal";

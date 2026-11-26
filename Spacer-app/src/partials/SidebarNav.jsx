@@ -20,9 +20,10 @@ export function NavLink({ to, icon, label, isActive, isExpanded, badge = 0 }) {
     )
 }
 
-export function NavButton({ icon, label, onClick, isActive = false, isExpanded, badge = 0 }) {
+// onPreload: called on hover or focus, before a click (e.g. to start a download)
+export function NavButton({ icon, label, onClick, onPreload, isActive = false, isExpanded, badge = 0 }) {
     return (
-        <button type="button" onClick={onClick} title={isExpanded ? undefined : label} aria-pressed={isActive} className={`${ROW} ${isActive ? ACTIVE_ITEM : INACTIVE_ITEM} relative`}>
+        <button type="button" onClick={onClick} onPointerEnter={onPreload} onFocus={onPreload} title={isExpanded ? undefined : label} aria-pressed={isActive} className={`${ROW} ${isActive ? ACTIVE_ITEM : INACTIVE_ITEM} relative`}>
             <span className="material-symbols-outlined text-[20px]">{icon}</span>
             {isExpanded && <span className="font-medium text-[14px] flex-1 truncate">{label}</span>}
             {badge > 0 && (isExpanded
