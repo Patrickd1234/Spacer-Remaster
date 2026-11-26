@@ -916,6 +916,13 @@ function ProjectPage() {
         }
     }, [project_id])
 
+    // Recent Activity again, for entries the database writes itself that no task
+    // change announces, e.g. a completed sprint (B-05)
+    const reloadActivity = async () => {
+        const { data, error } = await fetchProjectActivity(project_id)
+        if (!error) setActivityLog(data)
+    }
+
     // ── Delete this project
     const handleDeleteProject = async () => {
         setDeletingProject(true)
@@ -1329,6 +1336,7 @@ function ProjectPage() {
                             canManage={canDeleteProject === true}
                             members={projectMembers}
                             onOpenTask={setSelectedTask}
+                            onActivityLogged={reloadActivity}
                         />
                     )}
 

@@ -114,7 +114,7 @@ function PlannedSprint({ sprint, tasks, velocity, canManage, canStart, renderTas
 
 // The Sprint tab: the active sprint, planning (backlog and upcoming sprints) and history.
 // tasks / onTasksChange are the project page's task list and its setter.
-export default function SprintTab({ projectId, tasks, onTasksChange, canManage, members, onOpenTask }) {
+export default function SprintTab({ projectId, tasks, onTasksChange, canManage, members, onOpenTask, onActivityLogged }) {
     const [sprints, setSprints] = useState([])
     const [status, setStatus] = useState("loading")
     const [canEstimate, setCanEstimate] = useState(false)
@@ -200,6 +200,8 @@ export default function SprintTab({ projectId, tasks, onTasksChange, canManage, 
         setSprints((prev) => prev.map((s) => (s.id === data.id ? data : s)))
         onTasksChange((prev) => prev.map((t) => (t.sprint_id === sprint.id && t.status !== "done" ? { ...t, sprint_id: options.carryOverTo } : t)))
         setCompleting(null)
+        // complete_sprint logged "sprint_completed"; show it in Recent Activity now (B-05)
+        onActivityLogged?.()
         return null
     }
 
