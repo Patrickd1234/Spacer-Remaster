@@ -1,4 +1,5 @@
 import { isTaskOverdue } from "./boardGrouping.js"
+import { statusGroup } from "./taskStatuses.js"
 
 // Status of a project on the Reports page's Project Workspaces, from its task
 // counts: all tasks done is "done", any overdue task makes it "attention"
@@ -9,10 +10,10 @@ export function projectStatus({ total, done, overdue }) {
     return "in_progress"
 }
 
-// A task the project's Orbit board shows under Doing: saved as in progress and
-// not overdue (overdue tasks show under Overdue instead; see boardGrouping.js)
+// A task the project's Orbit board shows under Doing (or Waiting, In review):
+// in progress and not overdue (overdue tasks show under Overdue instead; see boardGrouping.js)
 export function isInDoingColumn(task, now = new Date()) {
-    return task.status === "in_progress" && !isTaskOverdue(task, now)
+    return statusGroup(task.status) === "in_progress" && !isTaskOverdue(task, now)
 }
 
 // Whether a project shows under a status filter. In Progress lists only

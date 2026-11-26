@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { taskChanges, buildTaskHistory } from "./taskHistory.js"
+import { taskChanges, buildTaskHistory, dependencyLines } from "./taskHistory.js"
 
 const names = {
     personName: (id) => ({ ada: "Ada Obi" })[id],
@@ -51,4 +51,17 @@ test("history: newest first, app duplicates and empty changes dropped", () => {
     assert.equal(history[0].actorName, "Ada")
     assert.equal(history[1].actorName, "Ada Obi")
     assert.deepEqual(history[1].lines, ["created this task"])
+})
+
+test("dependency rows read as lines, with the department and the note", () => {
+    const s = { blocker_title: "Create screens", blocker_department: "Design", note: "Need the final screens" }
+    assert.deepEqual(dependencyLines("dependency_added", s), ["made it wait on “Create screens” (Design): “Need the final screens”"])
+    assert.deepEqual(dependencyLines("dependency_removed", { blocker_title: "API" }), ["stopped it waiting on “API”"])
+    assert.deepEqual(dependencyLines("unblocked", s), ["finished “Create screens” (Design), so this task was unblocked automatically"])
+    const entries = buildTaskHistory([
+        { id: 1, action: "unblocked", actor_id: "ada", created_at: "2026-11-26T10:24:00Z", new_state: s },
+        { id: 2, action: "dependency_added", actor_id: "ada", created_at: "2026-11-25T14:17:00Z", new_state: s },
+        { id: 3, action: "something_else", actor_id: "ada", created_at: "2026-11-25T14:18:00Z", new_state: {} },
+    ], names)
+    assert.deepEqual(entries.map((e) => e.kind), ["unblocked", "dependency_added"])
 })

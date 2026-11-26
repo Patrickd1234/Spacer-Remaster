@@ -7,6 +7,7 @@ import { useTaskKeyPrefixes } from "../tasks/taskKeyPrefixes"
 import { TaskKeyText } from "../tasks/TaskKeyBar"
 import { requestCreate, OPEN_PALETTE_EVENT } from "../appEvents"
 import PersonPhoto from "../avatars/PersonPhoto"
+import { TASK_STATUSES } from "../taskStatuses"
 
 // Search and jump to anything, like Ctrl+K in ClickUp, Jira or Linear: tasks
 // (by title, words in the description, or key), projects, people, pages and
@@ -14,7 +15,7 @@ import PersonPhoto from "../avatars/PersonPhoto"
 // search button; "?" shows every shortcut; "C" creates a task from anywhere.
 
 const SEARCH_DELAY_MS = 150
-const STATUS_NAMES = { todo: "Backlog", in_progress: "Doing", done: "Done" }
+const STATUS_NAMES = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.boardName]))
 
 const PAGES = [
     { id: "page-home", icon: "home", label: "Home", keywords: "my space organization overview dashboard", path: "/" },

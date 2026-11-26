@@ -10,6 +10,7 @@ import Select from "./components/Select"
 import PlanetLoader from "./components/PlanetLoader"
 import TaskKeyBar from "./tasks/TaskKeyBar"
 import TaskComments from "./tasks/TaskComments"
+import { statusGroup, statusLabel } from "./taskStatuses"
 
 const PRIORITY_STYLE = {
     urgent: "bg-red-500/15 text-red-400 border-red-500/30",
@@ -222,7 +223,8 @@ export default function Tasks() {
     }
 
     const todoTasks = tasks.filter(t => t.status === "todo")
-    const inProgressTasks = tasks.filter(t => t.status === "in_progress")
+    // Waiting and In review count as in progress on this three-column board
+    const inProgressTasks = tasks.filter(t => statusGroup(t.status) === "in_progress")
     const doneTasks = tasks.filter(t => t.status === "done")
     const overdueTasks = tasks.filter(t => t.status !== "done" && t.due_date && new Date(t.due_date) < new Date())
     const openCount = todoTasks.length + inProgressTasks.length
@@ -613,7 +615,7 @@ export default function Tasks() {
                                         </span>
                                     )}
                                     <span className="px-3 py-1 rounded border text-xs font-bold uppercase tracking-wider bg-surface1 border-line/50 text-muted">
-                                        {selectedTask.status ? selectedTask.status.replace("_", " ") : "todo"}
+                                        {statusLabel(selectedTask.status)}
                                     </span>
                                 </div>
                             </div>

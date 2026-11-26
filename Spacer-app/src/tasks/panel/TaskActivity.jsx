@@ -13,6 +13,13 @@ const TABS = [
     { key: "history", label: "History" },
 ]
 
+// Dependency entries get a marker instead of a photo (design screen 09)
+const KIND_ICONS = {
+    unblocked: { icon: "check", tone: "bg-accent text-on-accent" },
+    dependency_added: { icon: "link", tone: "bg-surface2 border border-line text-soft" },
+    dependency_removed: { icon: "link_off", tone: "bg-surface2 border border-line text-muted" },
+}
+
 function TaskHistoryList({ taskId, version, names }) {
     const [state, setState] = useState({ rows: [], error: null, loadedFor: null })
     const loadKey = `${taskId}|${version}`
@@ -37,9 +44,15 @@ function TaskHistoryList({ taskId, version, names }) {
         <ol className="relative space-y-4 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-px before:bg-line">
             {entries.map((entry) => (
                 <li key={entry.id} className="relative flex gap-3">
-                    <span className="relative z-10 w-6 h-6 rounded-full overflow-hidden bg-surface2 border border-line flex items-center justify-center text-[10px] font-bold text-muted uppercase shrink-0">
-                        <PersonPhoto userId={entry.actorId} fallback={entry.actorName.charAt(0)} />
-                    </span>
+                    {KIND_ICONS[entry.kind] ? (
+                        <span className={`relative z-10 w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${KIND_ICONS[entry.kind].tone}`}>
+                            <span className="material-symbols-outlined text-[15px]" aria-hidden="true">{KIND_ICONS[entry.kind].icon}</span>
+                        </span>
+                    ) : (
+                        <span className="relative z-10 w-6 h-6 rounded-full overflow-hidden bg-surface2 border border-line flex items-center justify-center text-[10px] font-bold text-muted uppercase shrink-0">
+                            <PersonPhoto userId={entry.actorId} fallback={entry.actorName.charAt(0)} />
+                        </span>
+                    )}
                     <div className="min-w-0 pt-0.5">
                         <p className="text-[13px] text-soft leading-snug">
                             <span className="font-semibold text-white">{entry.actorName}</span>{" "}

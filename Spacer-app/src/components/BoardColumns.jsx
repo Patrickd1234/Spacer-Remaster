@@ -135,9 +135,9 @@ export function BoardColumnHeader({
 
 // Common column ideas: one click fills the name and a sensible status
 const COLUMN_SUGGESTIONS = [
-    { name: "Review", baseStatus: "in_progress" },
-    { name: "Testing", baseStatus: "in_progress" },
-    { name: "Blocked", baseStatus: "todo" },
+    { name: "Review", baseStatus: "in_review" },
+    { name: "Testing", baseStatus: "in_review" },
+    { name: "Blocked", baseStatus: "waiting" },
     { name: "On hold", baseStatus: "todo" },
     { name: "Ready", baseStatus: "todo" },
 ]
@@ -145,6 +145,8 @@ const COLUMN_SUGGESTIONS = [
 const STATUS_OPTIONS = [
     { value: "todo", label: "To do", dot: "bg-muted", hint: "Cards here count as not started." },
     { value: "in_progress", label: "In progress", dot: "bg-[#3b82f6]", hint: "Cards here count as being worked on." },
+    { value: "waiting", label: "Waiting", dot: "bg-amber-400", hint: "Cards here are waiting on other work. They go back on their own once what they wait on is done." },
+    { value: "in_review", label: "In review", dot: "bg-violet-400", hint: "Cards here are done and being checked." },
     { value: "done", label: "Done", dot: "bg-[var(--primary-color)]", hint: "Cards here count as finished and never show as overdue." },
 ]
 

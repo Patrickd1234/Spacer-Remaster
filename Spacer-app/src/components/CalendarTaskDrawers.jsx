@@ -228,6 +228,8 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                             >
                                 <option value="todo" className="bg-raised">Backlog / To Do</option>
                                 <option value="in_progress" className="bg-raised">Doing / In Progress</option>
+                                <option value="waiting" className="bg-raised">Waiting</option>
+                                <option value="in_review" className="bg-raised">In Review</option>
                                 <option value="done" className="bg-raised">Done</option>
                             </Select>
                         </div>

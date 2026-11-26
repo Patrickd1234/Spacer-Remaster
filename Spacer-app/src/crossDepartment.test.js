@@ -262,7 +262,10 @@ const deps = (...pairs) => pairs.map(([task_id, blocker_task_id, created_at = "2
 test("dependencies attach to their tasks, each with when the wait began", () => {
     const list = attachDependencies([task("a", DEV), task("b", DEV), task("c", DESIGN)], deps(["c", "a"], ["c", "b", "2026-11-10T09:00:00"]))
     const c = list.find((t) => t.id === "c")
-    assert.deepEqual(c.blocked_by, [{ id: "a", blocked_at: "2026-11-16T09:00:00" }, { id: "b", blocked_at: "2026-11-10T09:00:00" }])
+    assert.deepEqual(c.blocked_by, [
+        { id: "a", blocked_at: "2026-11-16T09:00:00", resolved_at: null, note: null },
+        { id: "b", blocked_at: "2026-11-10T09:00:00", resolved_at: null, note: null },
+    ])
     assert.deepEqual(list.find((t) => t.id === "a").blocked_by, [])
 })
 

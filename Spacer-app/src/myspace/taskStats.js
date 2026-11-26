@@ -1,4 +1,5 @@
 import { parseSubtasks } from "../taskStatus.js";
+import { TASK_STATUSES } from "../taskStatuses.js";
 
 // Pure helpers behind the My Space dashboard (tested in taskStats.test.js).
 // tasks.due_date is a date column ("YYYY-MM-DD"), compared against the local day.
@@ -39,7 +40,7 @@ export function taskProgress(task) {
     return { done, total, percent };
 }
 
-const STATUS_LABELS = { todo: "To do", in_progress: "In progress", done: "Done" };
+const STATUS_LABELS = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.label]));
 export const statusLabel = (task, todayKey) =>
     dueState(task, todayKey) === "overdue" ? "Overdue" : STATUS_LABELS[task.status] || "To do";
 

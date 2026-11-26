@@ -64,7 +64,7 @@ export default function CalendarView() {
         if (!task) return
 
         // Subtasks drive the status; with none left the task keeps its current status
-        const newStatus = statusFromSubtasks(newSubtasks) ?? task.status
+        const newStatus = statusFromSubtasks(newSubtasks, task.status) ?? task.status
         const statusChanged = newStatus !== task.status
 
         const serialized = JSON.stringify(newSubtasks)

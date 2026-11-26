@@ -67,14 +67,17 @@ export function overdueDays(task, now = new Date()) {
 const departmentOf = (task, leadId) => String(task.team_space_id ?? leadId ?? "")
 
 /**
- * Tasks with their dependencies: each gets `blocked_by` [{ id, blocked_at }]
- * from task_dependencies rows { task_id, blocker_task_id, created_at }.
+ * Tasks with their dependencies: each gets `blocked_by` [{ id, blocked_at,
+ * resolved_at, note }] from task_dependencies rows { task_id, blocker_task_id,
+ * created_at, resolved_at, note }.
  */
 export function attachDependencies(tasks = [], dependencies = []) {
     const byTask = new Map()
     for (const d of dependencies) {
         const key = String(d.task_id)
-        byTask.set(key, [...(byTask.get(key) || []), { id: String(d.blocker_task_id), blocked_at: d.created_at }])
+        byTask.set(key, [...(byTask.get(key) || []), {
+            id: String(d.blocker_task_id), blocked_at: d.created_at, resolved_at: d.resolved_at ?? null, note: d.note ?? null,
+        }])
     }
     return tasks.map((t) => ({ ...t, blocked_by: byTask.get(String(t.id)) || [] }))
 }

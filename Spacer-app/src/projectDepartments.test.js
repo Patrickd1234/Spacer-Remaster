@@ -111,6 +111,13 @@ test("switching a card to another department gives it that department's default 
     assert.equal(resolveDepartmentLead(next.leadId, { options: [{ id: "u9" }], defaultId: "u9" }), "u9");
 });
 
+test("switching a card's department forgets its picked members", () => {
+    const card = { teamSpaceId: "a", leadId: "u1", memberIds: ["u2"] };
+    assert.deepEqual(applyDepartmentChange(card, { teamSpaceId: "b" }).memberIds, []);
+    assert.deepEqual(applyDepartmentChange(card, { teamSpaceId: "a" }).memberIds, ["u2"]);
+    assert.deepEqual(applyDepartmentChange(card, { memberIds: ["u3"] }).memberIds, ["u3"]);
+});
+
 test("other card changes keep the department's lead", () => {
     const card = { teamSpaceId: "a", leadId: "u1", dueDate: "" };
     assert.equal(applyDepartmentChange(card, { dueDate: "2026-12-01" }).leadId, "u1");

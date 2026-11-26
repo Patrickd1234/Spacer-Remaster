@@ -43,7 +43,7 @@ function useAssignablePeople(projectId, teamSpaceId) {
 }
 
 export default function TaskProperties({
-    task, columns, columnKey, departmentId, people, awayPeriods,
+    task, columns, columnKey, departmentId, people, awayPeriods, statusNote = null,
     canEdit, canMove, canEditDeadline, onMove, onSave, onDeadlineSave,
 }) {
     const [errors, setErrors] = useState({})
@@ -77,6 +77,12 @@ export default function TaskProperties({
                 >
                     {columns.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
                 </Select>
+                {statusNote && (
+                    <p className="flex items-center gap-1 px-2 pt-1 text-[11px] font-medium text-amber-300">
+                        <span className="material-symbols-outlined text-[13px]" aria-hidden="true">schedule</span>
+                        {statusNote}
+                    </p>
+                )}
             </Row>
 
             <Row label="Priority" htmlFor="task-priority" error={errors.priority}>
@@ -115,7 +121,7 @@ export default function TaskProperties({
             </Row>
 
             <Row label="Due date">
-                <div className="px-2">
+                <div id="task-due-date" className="px-2">
                     <TaskDeadline key={task.id} dueDate={task.due_date} canEdit={canEditDeadline} onSave={onDeadlineSave} />
                 </div>
             </Row>

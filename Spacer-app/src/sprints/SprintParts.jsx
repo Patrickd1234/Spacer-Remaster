@@ -2,6 +2,7 @@ import { useState } from "react"
 import Select from "../components/Select"
 import { Modal, Field, INPUT_CLASS, PrimaryButton, SecondaryButton, ErrorNote } from "../general/GeneralParts"
 import { POINT_OPTIONS, NAME_MAX, GOAL_MAX, validateSprint, sprintTotals, dateRange } from "./sprintMath"
+import { statusGroup } from "../taskStatuses"
 
 // Pieces of the Sprint tab. They only render and report clicks; SprintTab owns the data.
 
@@ -56,7 +57,8 @@ export function TasksByStatus({ tasks, renderTask }) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {TASK_GROUPS.map((group) => {
-                const inGroup = tasks.filter((t) => t.status === group.status)
+                // Waiting and In review sit with In progress
+                const inGroup = tasks.filter((t) => statusGroup(t.status) === group.status)
                 return (
                     <section key={group.status} className="space-y-2 min-w-0">
                         <h4 className="flex items-center justify-between text-xs font-medium text-muted">

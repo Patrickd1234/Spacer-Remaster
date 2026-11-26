@@ -9,6 +9,7 @@ import { useRole } from "./RoleContext"
 import { projectStatus, isInDoingColumn, matchesStatusFilter } from "./projectStatus"
 import PlanetLoader from "./components/PlanetLoader"
 import DepartmentScorecard from "./components/DepartmentScorecard"
+import { statusGroup } from "./taskStatuses"
 
 const STATUS_COLORS = {
   todo: "#818cf8",
@@ -105,9 +106,12 @@ export default function Reports() {
     if (subtasks.length > 0) {
       if (subtasks.every((st) => st.done)) return "done"
       if (subtasks.some((st) => st.done)) return "in_progress"
+      // A Waiting or In review task stays there until every item is ticked (taskStatus.js)
+      if (task.status === "waiting" || task.status === "in_review") return "in_progress"
       return "todo"
     }
-    return task.status || "todo"
+    // Waiting and In review count as in progress here
+    return statusGroup(task.status)
   }, [parseSubtasks])
 
   const isTaskOverdue = useCallback((task, effectiveStatus) => {

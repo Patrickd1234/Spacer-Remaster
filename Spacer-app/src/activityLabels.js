@@ -1,6 +1,8 @@
 // Turns activity_log rows into human-readable feed items.
 
-const STATUS_NAMES = { todo: "Backlog", in_progress: "Doing", done: "Done" };
+import { TASK_STATUSES } from "./taskStatuses.js";
+
+const STATUS_NAMES = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.boardName]));
 
 const quoted = (text) => (text ? `“${text}”` : "a task");
 const projectName = (s) => (s.project_name ? `“${s.project_name}”` : "a project");
@@ -14,6 +16,9 @@ export function describeActivity(row) {
         case "task:updated": return { title: `Updated task ${quoted(s.title)}`, icon: "edit_note", badge: "Tasks" };
         case "task:status_changed": return { title: `Moved ${quoted(s.title)} to ${STATUS_NAMES[s.status] || s.status}`, icon: "swap_horiz", badge: "Tasks" };
         case "task:priority_changed": return { title: `Set ${quoted(s.title)} to ${s.priority} priority`, icon: "flag", badge: "Tasks" };
+        case "task:dependency_added": return { title: `${quoted(s.title)} now waits on ${quoted(s.blocker_title)}${s.blocker_department ? ` (${s.blocker_department})` : ""}`, icon: "link", badge: "Tasks" };
+        case "task:dependency_removed": return { title: `${quoted(s.title)} no longer waits on ${quoted(s.blocker_title)}`, icon: "link_off", badge: "Tasks" };
+        case "task:unblocked": return { title: `${quoted(s.title)} was unblocked: ${quoted(s.blocker_title)} is done`, icon: "check_circle", badge: "Tasks" };
         case "task:deleted": return { title: `Deleted task ${quoted(s.title)}`, icon: "delete", badge: "Tasks" };
         case "project:created": return { title: `Created project ${quoted(s.project_name || s.name)}`, icon: "create_new_folder", badge: "Projects" };
         case "project:project_deleted": return { title: "Deleted a project", icon: "folder_delete", badge: "Projects" };

@@ -9,6 +9,8 @@ const byName = (a, b) => (a.name || "").localeCompare(b.name || "", undefined, {
 const STATUS_OPTIONS = [
     { value: "todo", label: "To-do" },
     { value: "in_progress", label: "In progress" },
+    { value: "waiting", label: "Waiting" },
+    { value: "in_review", label: "In review" },
     { value: "done", label: "Done" },
 ];
 

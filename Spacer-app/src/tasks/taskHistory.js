@@ -4,9 +4,10 @@
 // "status_changed" and "priority_changed" entries repeat what the database
 // already logged, so they are skipped. No imports, so `npm test` can load it.
 import { parseSubtasks } from "../taskStatus.js"
+import { TASK_STATUSES } from "../taskStatuses.js"
 
 const PRIORITY_NAMES = { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" }
-const DEFAULT_STATUS_NAMES = { todo: "Backlog", in_progress: "Doing", done: "Done" }
+const DEFAULT_STATUS_NAMES = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.boardName]))
 
 const quoted = (text) => `“${text}”`
 const itemText = (item) => String(item?.title ?? item?.text ?? "").trim() || "an item"
@@ -64,20 +65,40 @@ export function taskChanges(before = {}, after = {}, names = {}) {
     return lines
 }
 
+const blockerText = (s) => `${quoted(s.blocker_title || "another task")}${s.blocker_department ? ` (${s.blocker_department})` : ""}`
+
+// Dependency rows (20261128110000_task_waiting): added, removed, unblocked
+export function dependencyLines(action, s = {}) {
+    if (action === "dependency_added") return [`made it wait on ${blockerText(s)}${s.note ? `: ${quoted(s.note)}` : ""}`]
+    if (action === "dependency_removed") return [`stopped it waiting on ${blockerText(s)}`]
+    if (action === "unblocked") return [`finished ${blockerText(s)}, so this task was unblocked automatically`]
+    return []
+}
+
+const SHOWN_ACTIONS = new Set(["created", "updated", "dependency_added", "dependency_removed", "unblocked"])
+
+const historyLines = (row, names) => {
+    if (row.action === "created") return ["created this task"]
+    if (row.action === "updated") return taskChanges(row.prior_state || {}, row.new_state || {}, names)
+    return dependencyLines(row.action, row.new_state || {})
+}
+
 /**
  * activity_log rows about one task (any order) as History entries, newest
- * first: { id, actorId, actorName, at, lines }. Rows that change nothing
- * shown are dropped.
+ * first: { id, actorId, actorName, at, lines, kind }. Rows that change nothing
+ * shown are dropped. `kind` is the row's action, so dependency entries can
+ * stand out.
  */
 export function buildTaskHistory(rows = [], names = {}) {
     return rows
-        .filter((row) => row.action === "created" || row.action === "updated")
+        .filter((row) => SHOWN_ACTIONS.has(row.action))
         .map((row) => ({
             id: row.id,
             actorId: row.actor_id,
             actorName: row.actor?.name || names.personName?.(row.actor_id) || "Someone",
             at: row.created_at,
-            lines: row.action === "created" ? ["created this task"] : taskChanges(row.prior_state || {}, row.new_state || {}, names),
+            kind: row.action,
+            lines: historyLines(row, names),
         }))
         .filter((entry) => entry.lines.length > 0)
         .sort((a, b) => String(b.at).localeCompare(String(a.at)))

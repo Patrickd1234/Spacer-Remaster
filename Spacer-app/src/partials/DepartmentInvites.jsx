@@ -3,6 +3,8 @@ import Select from "../components/Select"
 import { getSessionUser } from "../supabase"
 import { fetchMyDepartmentInvites, fetchDepartmentPeople, respondToDepartmentInvite } from "../departmentInvitesData"
 import { announceProjectCreated } from "../appEvents"
+import MemberPicker from "./createProject/MemberPicker"
+import { toggleMember } from "../newProject"
 
 const fieldClass = "w-full bg-canvas border border-line rounded-lg px-3 py-2 text-[13px] text-white focus:outline-none focus:border-accent-ink/50 transition-all"
 const buttonClass = "px-md py-1.5 rounded-lg text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
@@ -16,18 +18,23 @@ const inviteKey = (invite) => `${invite.project_id}:${invite.team_space_id}`
 
 // Accepting: pick who leads the department's part (you, if you're in it, by
 // default; a lead is needed so nudges and "waiting on you" notices reach
-// someone) and, optionally, change the proposed due date (on or before the
-// project's deadline)
+// someone), confirm or change who works on it (the inviter's proposal to start
+// with; only they and the department's managers can open the project) and,
+// optionally, change the proposed due date (on or before the project's deadline)
 function AcceptForm({ invite, isSaving, onConfirm, onBack }) {
     const [people, setPeople] = useState(null)
     const [pickedLeadId, setLeadId] = useState(null)
     const [myId, setMyId] = useState(null)
     const [dueDate, setDueDate] = useState(invite.due_date || "")
+    // null until changed here: the inviter's proposal is then kept as it is
+    const [memberIds, setMemberIds] = useState(null)
+    const [loadError, setLoadError] = useState(null)
     useEffect(() => {
         let active = true
-        Promise.all([fetchDepartmentPeople(invite.team_space_id), getSessionUser()]).then(([{ data }, user]) => {
+        Promise.all([fetchDepartmentPeople(invite.team_space_id), getSessionUser()]).then(([{ data, error }, user]) => {
             if (!active) return
-            setPeople(data)
+            setPeople(error ? null : data)
+            setLoadError(error)
             setMyId(user?.id ?? null)
         })
         return () => { active = false }
@@ -35,24 +42,42 @@ function AcceptForm({ invite, isSaving, onConfirm, onBack }) {
     const hasPeople = (people || []).length > 0
     const leadId = pickedLeadId ?? ((people || []).some((p) => p.id === myId) ? myId : "")
     // A department with nobody in it yet can join without a lead
-    const canJoin = people !== null && (!hasPeople || Boolean(leadId))
+    const canJoin = people !== null && !loadError && (!hasPeople || Boolean(leadId))
+    const pickerPeople = (people || []).map((p) => ({ id: p.id, name: p.name || "Unnamed", jobTitle: p.job_title || "" }))
+    // People who left the department since the proposal drop out
+    const keptIds = (memberIds ?? invite.proposed_member_ids ?? []).filter((id) => pickerPeople.some((p) => p.id === id))
 
     return (
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-sm items-end pt-sm border-t border-line/40">
-            <label className="space-y-1">
-                <span className="block text-[11px] text-muted">Who leads {invite.department_name}&apos;s part</span>
-                <Select className={fieldClass} value={leadId} onChange={(e) => setLeadId(e.target.value)} disabled={!people}>
-                    <option value="">{people === null ? "Loading people…" : hasPeople ? "Pick who leads it" : "Nobody in the department yet"}</option>
-                    {(people || []).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-                </Select>
-            </label>
-            <label className="space-y-1">
-                <span className="block text-[11px] text-muted">Due</span>
-                <input type="date" className={`${fieldClass} [color-scheme:dark]`} value={dueDate} max={invite.project_due_date || undefined} onChange={(e) => setDueDate(e.target.value)} />
-            </label>
-            <div className="flex gap-sm">
+        <div className="space-y-sm pt-sm border-t border-line/40">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-sm items-end">
+                <label className="space-y-1">
+                    <span className="block text-[11px] text-muted">Who leads {invite.department_name}&apos;s part</span>
+                    <Select className={fieldClass} value={leadId} onChange={(e) => setLeadId(e.target.value)} disabled={!people}>
+                        <option value="">{people === null ? "Loading people…" : hasPeople ? "Pick who leads it" : "Nobody in the department yet"}</option>
+                        {(people || []).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                    </Select>
+                </label>
+                <label className="space-y-1">
+                    <span className="block text-[11px] text-muted">Due</span>
+                    <input type="date" className={`${fieldClass} [color-scheme:dark]`} value={dueDate} max={invite.project_due_date || undefined} onChange={(e) => setDueDate(e.target.value)} />
+                </label>
+            </div>
+            <div className="space-y-1.5">
+                <p className="text-[12px] font-semibold text-white">Who works on it ({keptIds.length + (leadId && !keptIds.includes(leadId) ? 1 : 0)})</p>
+                <p className="text-[11px] text-muted">Only these people and {invite.department_name}&apos;s managers can open the project.</p>
+                <MemberPicker
+                    departmentName={invite.department_name}
+                    people={pickerPeople}
+                    selectedIds={keptIds}
+                    leadId={leadId}
+                    isLoading={people === null && !loadError}
+                    onToggle={(userId) => setMemberIds(toggleMember(keptIds, userId))}
+                />
+            </div>
+            {loadError && <p role="alert" className="text-xs text-red-400">{loadError} Reload the page to try again.</p>}
+            <div className="flex gap-sm justify-end">
                 <button type="button" onClick={onBack} disabled={isSaving} className={`${buttonClass} border border-line text-soft hover:text-white hover:bg-line`}>Back</button>
-                <button type="button" onClick={() => onConfirm({ leadId, dueDate })} disabled={isSaving || !canJoin} title={canJoin ? undefined : "Pick who leads the department's part"} className={`${buttonClass} bg-accent text-on-accent hover:bg-accent-hover`}>
+                <button type="button" onClick={() => onConfirm({ leadId, dueDate, memberIds: memberIds === null ? null : keptIds })} disabled={isSaving || !canJoin} title={canJoin ? undefined : "Pick who leads the department's part"} className={`${buttonClass} bg-accent text-on-accent hover:bg-accent-hover`}>
                     {isSaving ? "Joining…" : "Join the project"}
                 </button>
             </div>
@@ -65,11 +90,11 @@ function InviteCard({ invite, onAnswered }) {
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState(null)
 
-    const answer = async (isAccepting, { leadId = null, dueDate = null } = {}) => {
+    const answer = async (isAccepting, { leadId = null, dueDate = null, memberIds = null } = {}) => {
         setIsSaving(true)
         setError(null)
         const { error: answerError } = await respondToDepartmentInvite({
-            projectId: invite.project_id, teamSpaceId: invite.team_space_id, isAccepting, leadId,
+            projectId: invite.project_id, teamSpaceId: invite.team_space_id, isAccepting, leadId, memberIds,
             dueDate: dueDate && dueDate !== invite.due_date ? dueDate : null,
         })
         setIsSaving(false)

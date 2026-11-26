@@ -30,7 +30,8 @@ import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
 import { findSavedProject } from "./projectListCache"
-import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
+import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn, withStatusColumns } from "./boardGrouping"
+import { statusInfo, statusLabel } from "./taskStatuses"
 import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
 import TaskPanel from "./tasks/panel/TaskPanel"
@@ -55,6 +56,12 @@ import { AwayDot } from "./availability/AwayBadge"
 import { useAwayPeriods } from "./availability/availabilityData"
 import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
 import { MEETING_SAVED_EVENT } from "./appEvents"
+import Toast from "./components/Toast"
+import MarkWaitingModal from "./tasks/panel/MarkWaitingModal"
+import TaskWaitingSection from "./tasks/panel/TaskWaitingSection"
+import UnblockedBanner from "./tasks/panel/UnblockedBanner"
+import useTaskWaiting from "./tasks/panel/useTaskWaiting"
+import { waitingLabel, newlyUnblocked } from "./tasks/waiting"
 import PersonPhoto from "./avatars/PersonPhoto"
 import { ACCEPTED, MAX_FILE_SIZE_MB, validateFile, getFileStyle, formatBytes } from "./fileUploads"
 
@@ -107,10 +114,7 @@ async function fetchProjectActivity(projectId) {
     return { data: data || [], error }
 }
 
-// Board column names for each task status
-const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
-// Column dot colour by the status a column stands for
-const STATUS_DOT = { todo: "bg-line", in_progress: "bg-[#3b82f6]", done: "bg-primary-fixed-dim" }
+
 
 
 
@@ -165,6 +169,7 @@ function ProjectPage() {
     const [savedProject] = useState(() => findSavedProject(project_id))
     const [project_name, setProjectName] = useState(savedProject?.name || "")
     const [project_due_date, setProjectDueDate] = useState(savedProject?.due_date || "")
+    const [projectDescription, setProjectDescription] = useState("")
     const [isProjectLoaded, setIsProjectLoaded] = useState(false)
     // Until the first load, the Tasks tab shows the board's or list's shape
     const [isTasksLoaded, setIsTasksLoaded] = useState(false)
@@ -264,7 +269,9 @@ function ProjectPage() {
     const [dragOver, setDragOver] = useState(false)
     const [boardNotice, setBoardNotice] = useState("")
     // Custom board columns (project_columns); defaults until the project customises them
-    const [boardColumns, setBoardColumns] = useState(DEFAULT_COLUMNS)
+    const [savedBoardColumns, setBoardColumns] = useState(DEFAULT_COLUMNS)
+    // Plus a column for any status with tasks but no column of its own
+    const boardColumns = withStatusColumns(savedBoardColumns, project_tasks)
     const [columnsAvailable, setColumnsAvailable] = useState(true)
     const [columnSaving, setColumnSaving] = useState(false)
     const [draggingColumnKey, setDraggingColumnKey] = useState(null)
@@ -298,7 +305,7 @@ function ProjectPage() {
         if (!task) return
 
         // Subtasks drive the status; with none left the task keeps its current status
-        const newStatus = statusFromSubtasks(newSubtasks) ?? task.status
+        const newStatus = statusFromSubtasks(newSubtasks, task.status) ?? task.status
         const statusChanged = newStatus !== task.status
 
         const serialized = JSON.stringify(newSubtasks)
@@ -348,12 +355,14 @@ function ProjectPage() {
     // Default columns are saved the first time someone customises the board
     const withSavedColumns = async () => {
         const { columns, error } = await ensureSavedColumns(project_id, boardColumns)
+        // Keep whatever was saved, even when a later step failed, so a retry
+        // doesn't insert the same columns again
+        if (columns !== boardColumns) setBoardColumns(columns)
         if (error) {
             console.error("Error saving board columns:", error)
             columnSaveFailed()
             return null
         }
-        if (columns !== boardColumns) setBoardColumns(columns)
         return columns
     }
 
@@ -548,6 +557,29 @@ function ProjectPage() {
             invalidateHoldups()
         }
         return error
+    }
+    // Mark as Waiting / Add dependency for the open task (design screen 05),
+    // and the notices for it and for a task of yours being unblocked
+    const [panelToast, setPanelToast] = useState(null)
+    const closePanelToast = useCallback(() => setPanelToast(null), [])
+    const taskWaiting = useTaskWaiting({
+        task: selectedTask,
+        tasks: linkedTasks,
+        departments: taskModalDepartments,
+        canSetFor: canBlockTask,
+        notify: setPanelToast,
+        onSaved: async ({ isWaiting }) => {
+            if (isWaiting && selectedTask) patchTask(selectedTask.id, { status: "waiting", column_id: null })
+            const { data, error } = await fetchTaskDependencies(project_id)
+            if (!error) setTaskDependencies(data)
+            invalidateHoldups()
+        },
+    })
+    // Change assignee / Adjust due date: open those pickers in the panel
+    const openPanelControl = (selector) => {
+        const control = document.querySelector(selector)
+        control?.focus()
+        control?.click()
     }
     const handleRemoveDependency = async (taskId, blockerId) => {
         const { error } = await removeTaskDependency(taskId, blockerId)
@@ -894,6 +926,7 @@ function ProjectPage() {
             if (project) {
                 setProjectName(project.name || "")
                 setProjectDueDate(project.due_date || "")
+                setProjectDescription(project.description || "")
                 if (project.team_space_id) setTeamSpaceId(project.team_space_id)
             }
             // Always found, even when the project or its lead department can't be read
@@ -972,6 +1005,13 @@ function ProjectPage() {
     // Activity, so the board and the Departments tab show who is holding things
     // up without a refresh; a change to its departments (an invite answered, a
     // part signed off) reloads those.
+    // What the live reload compares with, to tell you when a task of yours is unblocked
+    const tasksSeenRef = useRef([])
+    const currentUserRef = useRef(null)
+    useEffect(() => {
+        tasksSeenRef.current = project_tasks
+        currentUserRef.current = currentUserId
+    }, [project_tasks, currentUserId])
     useEffect(() => {
         if (!project_id) return
         let reloadTimer = null
@@ -983,6 +1023,16 @@ function ProjectPage() {
                 if (!dependencies.error) setTaskDependencies(dependencies.data)
                 if (tasks.error) { console.error("Reloading tasks failed:", tasks.error); return }
                 const fresh = tasks.data || []
+                const unblocked = newlyUnblocked(tasksSeenRef.current, fresh, currentUserRef.current)
+                if (unblocked.length > 0) {
+                    setPanelToast({
+                        type: "success",
+                        title: "Task unblocked",
+                        message: unblocked.length === 1
+                            ? `You can continue working on “${unblocked[0].title}”.`
+                            : `${unblocked.length} of your tasks can go ahead.`,
+                    })
+                }
                 setProjectTasks(fresh.filter((t) => !hiddenTaskIds.current.has(t.id)))
                 invalidateHoldups()
             }, ACTIVITY_RELOAD_DELAY_MS)
@@ -1293,6 +1343,9 @@ function ProjectPage() {
                     {/* Summary Tab */}
                     {activeTab === "summary" && (
                         <div className="tab-pane block" id="section-summary">
+                            {projectDescription && (
+                                <p className="mb-lg max-w-3xl text-sm text-soft leading-relaxed">{projectDescription}</p>
+                            )}
                             <div className="bento-grid">
                                 {/* Task Status Overview */}
                                 <div className="col-span-12 bg-raised border border-line p-xl rounded-xl mb-lg">
@@ -1582,7 +1635,7 @@ function ProjectPage() {
                                             <BoardColumnHeader
                                                 column={column}
                                                 count={columnTasks.length}
-                                                dotColor={column.isOverdue ? "bg-error" : STATUS_DOT[column.base_status]}
+                                                dotColor={column.isOverdue ? "bg-error" : statusInfo(column.base_status).dot}
                                                 editable={editable}
                                                 canMoveLeft={columnIndex > 0}
                                                 canMoveRight={columnIndex < boardColumns.length - 1}
@@ -1625,9 +1678,9 @@ function ProjectPage() {
                                                                 {task.priority || 'Normal'}
                                                             </span>
                                                             {/* In the Overdue column, show the task's real status */}
-                                                            {column.key === "overdue" && STATUS_LABELS[task.status] && (
+                                                            {column.key === "overdue" && (
                                                                 <span className="ml-xs inline-flex items-center px-sm py-[2px] rounded text-[10px] font-bold uppercase bg-line text-soft">
-                                                                    {STATUS_LABELS[task.status]}
+                                                                    {statusLabel(task.status, { board: true })}
                                                                 </span>
                                                             )}
                                                         </div>
@@ -2030,7 +2083,27 @@ function ProjectPage() {
                         addSubtasks: canAddTasks === true && canHaveSubtasks(selectedTask),
                         delete: canDeleteProject === true || selectedTask.created_by === currentUserId,
                     }}
-                    historyVersion={selectedTask.updated_at || `${selectedTask.status}|${selectedTask.title}`}
+                    historyVersion={selectedTask.updated_at || `${selectedTask.status}|${selectedTask.title}|${taskDependencies.length}`}
+                    statusNote={selectedTask.status === "waiting" ? waitingLabel(selectedTask, linkedTasks, taskModalDepartments) : null}
+                    notice={<UnblockedBanner task={selectedTask} tasks={linkedTasks} departments={taskModalDepartments} onOpenTask={openTask} />}
+                    detailsExtra={(
+                        <TaskWaitingSection
+                            task={selectedTask}
+                            tasks={linkedTasks}
+                            departments={taskModalDepartments}
+                            can={{
+                                markWaiting: canAddTasks === true && taskWaiting.choices.length > 0,
+                                addDependency: taskWaiting.choices.length > 0,
+                                changeAssignee: canEditTaskDetails,
+                                adjustDueDate: canEditTaskDeadline(selectedTask),
+                            }}
+                            onOpenTask={openTask}
+                            onMarkWaiting={() => taskWaiting.open("waiting")}
+                            onAddDependency={() => taskWaiting.open("dependency")}
+                            onChangeAssignee={() => openPanelControl("#task-assignee")}
+                            onAdjustDueDate={() => openPanelControl("#task-due-date button")}
+                        />
+                    )}
                     dependencies={(
                         <TaskDependenciesPanel
                             key={selectedTask.id}
@@ -2067,6 +2140,18 @@ function ProjectPage() {
             )}
 
             <UndoToast pending={undoable.pending} onUndo={undoable.undo} />
+            {selectedTask && taskWaiting.mode && (
+                <MarkWaitingModal
+                    key={`${selectedTask.id}-${taskWaiting.mode}`}
+                    mode={taskWaiting.mode}
+                    task={selectedTask}
+                    choices={taskWaiting.choices}
+                    departments={taskModalDepartments}
+                    onConfirm={taskWaiting.confirm}
+                    onClose={taskWaiting.close}
+                />
+            )}
+            <Toast toast={panelToast} onClose={closePanelToast} />
 
             {/* Post-upload file review modal */}
             {reviewFile && (

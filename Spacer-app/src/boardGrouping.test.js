@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { groupTasksByColumn, isTaskOverdue, OVERDUE_COLUMN } from "./boardGrouping.js";
+import { groupTasksByColumn, isTaskOverdue, OVERDUE_COLUMN, withStatusColumns } from "./boardGrouping.js";
 
 const NOW = new Date("2026-10-30T12:00:00Z");
 const COLUMNS = [
@@ -42,4 +42,17 @@ test("a task in a custom column is grouped under that column", () => {
     const groups = groupTasksByColumn([{ id: 1, status: "in_progress", column_id: "c1" }], columns, NOW);
     assert.equal(groups.c1.length, 1);
     assert.equal(groups["default-in_progress"].length, 0);
+});
+
+test("a board without a column for a status in use gets one, in status order", () => {
+    const saved = [
+        { id: "c1", key: "c1", name: "Backlog", base_status: "todo" },
+        { id: "c2", key: "c2", name: "Doing", base_status: "in_progress" },
+        { id: "c3", key: "c3", name: "Done", base_status: "done" },
+    ];
+    const tasks = [{ status: "in_review" }, { status: "waiting" }, { status: "todo" }];
+    assert.deepEqual(withStatusColumns(saved, tasks).map((c) => c.name), ["Backlog", "Doing", "Waiting", "In review", "Done"]);
+    assert.equal(withStatusColumns(saved, [{ status: "todo" }]), saved);
+    const grouped = groupTasksByColumn([{ id: 1, status: "waiting" }], withStatusColumns(saved, [{ status: "waiting" }]));
+    assert.deepEqual(grouped["default-waiting"].map((t) => t.id), [1]);
 });

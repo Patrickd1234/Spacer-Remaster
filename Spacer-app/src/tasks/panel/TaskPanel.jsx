@@ -50,7 +50,7 @@ function IconButton({ icon, label, onClick, tone = "hover:text-white" }) {
 export default function TaskPanel({
     task, parent, subtasks, projectName, linkUrl,
     columns, columnKey, departmentId, people, awayPeriods, files, uploadState,
-    can, dependencies, historyVersion,
+    can, dependencies, historyVersion, notice = null, detailsExtra = null, statusNote = null,
     onClose, onOpenTask, onSave, onMove, onDeadlineSave, onChecklistChange,
     onAddSubtask, onToggleSubtask, onUpload, onPreviewFile, onDeleteFile, onDelete, onStep,
 }) {
@@ -128,6 +128,7 @@ export default function TaskPanel({
                                 departmentId={departmentId}
                                 people={people}
                                 awayPeriods={awayPeriods}
+                                statusNote={statusNote}
                                 canEdit={can.edit}
                                 canMove={can.move}
                                 canEditDeadline={can.editDeadline}
@@ -135,9 +136,11 @@ export default function TaskPanel({
                                 onSave={onSave}
                                 onDeadlineSave={onDeadlineSave}
                             />
+                            {detailsExtra}
                         </aside>
 
                         <div className="md:order-1 px-4 md:px-6 pb-8 space-y-7 border-t md:border-t-0 border-line pt-5 md:pt-1">
+                            {notice}
                             <EditableDescription value={task.description} canEdit={can.edit} onSave={(description) => onSave({ description: description || null })} />
                             {!parent && (
                                 <TaskSubtasks

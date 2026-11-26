@@ -67,7 +67,7 @@ export async function createProject(args) {
     if (!error) return { data: { project: data?.project, invitedDepartmentIds: data?.invited_department_ids || [] }, error: null }
     console.error("Creating the project failed:", error)
     if (error.code === "PGRST202") {
-        return { data: null, error: "Creating projects needs a database update: run the 20261124120000_create_project migration in Supabase." }
+        return { data: null, error: "Creating projects needs a database update: run the 20261128090000_project_member_access migration in Supabase." }
     }
     return { data: null, error: readable(error, "Couldn't create the project. Please try again.") }
 }
@@ -78,12 +78,13 @@ export async function updateTaskDepartment(taskId, teamSpaceId) {
     return { error: error ? readable(error, "Couldn't change the department.") : null }
 }
 
-// A project's dependencies (task_dependencies): { task_id, blocker_task_id, created_at, resolved_at }[]
+// A project's dependencies (task_dependencies): { task_id, blocker_task_id,
+// created_at, resolved_at, note }[]. Before 20261128110000_task_waiting there
+// is no note: read without it then.
 export async function fetchTaskDependencies(projectId) {
-    const { data, error } = await supabase
-        .from("task_dependencies")
-        .select("task_id, blocker_task_id, created_at, resolved_at")
-        .eq("project_id", projectId)
+    const read = (columns) => supabase.from("task_dependencies").select(columns).eq("project_id", projectId)
+    let { data, error } = await read("task_id, blocker_task_id, created_at, resolved_at, note")
+    if (error?.code === "42703") ({ data, error } = await read("task_id, blocker_task_id, created_at, resolved_at"))
     if (error) {
         console.error("Loading the project's dependencies failed:", error)
         return { data: [], error: "Couldn't load which tasks wait on which." }
@@ -106,6 +107,25 @@ export async function addTaskDependency(projectId, taskId, blockerId) {
         return { data: null, error: error.code === "23505" ? "It already waits on that task." : dependencyError(error, "Couldn't save the dependency.") }
     }
     return { data, error: null }
+}
+
+/**
+ * Mark as waiting (design screen 05): `taskId` waits on `blockerId`, with an
+ * optional note, and becomes Waiting; with `setWaiting` false only the
+ * dependency is added. One transaction (mark_task_waiting(), migration
+ * 20261128110000_task_waiting). Resolves to { error }.
+ */
+export async function markTaskWaiting({ taskId, blockerId, note = "", setWaiting = true }) {
+    const { error } = await supabase.rpc("mark_task_waiting", {
+        p_task_id: taskId,
+        p_blocker_task_id: blockerId,
+        p_note: note.trim() || null,
+        p_set_waiting: setWaiting,
+    })
+    if (!error) return { error: null }
+    console.error("Marking the task as waiting failed:", error)
+    if (error.code === "PGRST202") return { error: "This needs a database update: run the 20261128110000_task_waiting migration in Supabase." }
+    return { error: dependencyError(error, "Couldn't save. Please try again.") }
 }
 
 export async function removeTaskDependency(taskId, blockerId) {

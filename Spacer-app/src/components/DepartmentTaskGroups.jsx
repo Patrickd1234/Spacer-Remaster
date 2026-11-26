@@ -6,10 +6,12 @@ import { groupTasksByDepartment } from "./groupTasksByDepartment"
 // collapsed and open from their heading, so a big organization doesn't crowd
 // the page.
 
-const STATUS_LABEL = { todo: "To do", in_progress: "In progress", done: "Done" }
+const STATUS_LABEL = { todo: "To do", in_progress: "In progress", waiting: "Waiting", in_review: "In review", done: "Done" }
 const STATUS_STYLE = {
     todo: "bg-muted/15 text-soft border-muted/30",
     in_progress: "bg-[var(--primary-color)]/15 text-accent-ink border-accent-ink/30",
+    waiting: "bg-amber-500/10 text-amber-300 border-amber-400/30",
+    in_review: "bg-violet-500/10 text-violet-300 border-violet-400/30",
     done: "bg-green-500/15 text-green-400 border-green-500/30",
 }
 

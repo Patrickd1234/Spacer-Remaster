@@ -76,14 +76,17 @@ export function addableProjectMembers(rows = [], departments = [], excludeIds = 
         .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
-// A change to one department card on the Collab form. Picking another
-// department forgets the old lead (who may not be in the new one), so the new
-// department's default lead applies; "" stays an explicit "No lead".
+// A change to one department card on the Create Project form. Picking another
+// department forgets the old lead and picked members (who may not be in the
+// new one), so the new department's default lead applies; "" stays an explicit
+// "No lead".
 export function applyDepartmentChange(department, changes) {
     const isNewDepartment = "teamSpaceId" in changes
-        && String(changes.teamSpaceId) !== String(department.teamSpaceId)
-        && !("leadId" in changes);
-    return { ...department, ...changes, ...(isNewDepartment ? { leadId: undefined } : {}) };
+        && String(changes.teamSpaceId) !== String(department.teamSpaceId);
+    const forgotten = isNewDepartment
+        ? { ...("leadId" in changes ? {} : { leadId: undefined }), ...("memberIds" in changes ? {} : { memberIds: [] }) }
+        : {};
+    return { ...department, ...changes, ...forgotten };
 }
 
 // The lead a department card shows and saves: the pick while that person is
