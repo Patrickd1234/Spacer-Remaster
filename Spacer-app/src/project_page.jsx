@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useParams } from "react-router-dom"
+import { useParams, useSearchParams } from "react-router-dom"
 import { supabase, getSessionUser } from "./supabase"
 import Sidebar from "./partials/SidebarRouter"
 import Header from "./partials/header"
@@ -19,7 +19,7 @@ import { TASK_CREATED_EVENT } from "./appEvents"
 import { fetchProjectDepartments, updateTaskDepartment, fetchTaskDependencies, addTaskDependency, removeTaskDependency } from "./crossDepartmentData"
 import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
-import { statusFromSubtasks } from "./taskStatus"
+import { statusFromSubtasks, parseSubtasks } from "./taskStatus"
 import { deleteWorkspaceItem } from "./workspaceDelete"
 import {
     DEFAULT_COLUMNS, fetchProjectColumns, ensureSavedColumns, createColumn, renameColumn,
@@ -30,25 +30,34 @@ import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
 import { findSavedProject } from "./projectListCache"
-import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
 import { dedupeActivity } from "./projectActivity"
 import PlanetLoader from "./components/PlanetLoader"
-import TaskKeyBar from "./tasks/TaskKeyBar"
-import TaskComments from "./tasks/TaskComments"
-import AwayBadge, { AwayDot } from "./availability/AwayBadge"
+import TaskPanel from "./tasks/panel/TaskPanel"
+import { subtasksOf, subtaskProgress, parentOf, canHaveSubtasks, newSubtaskFields } from "./tasks/subtasks"
+import { saveTaskFields, insertTask } from "./tasks/taskPanelData"
+import { TaskKeyText } from "./tasks/TaskKeyBar"
+import { useTaskKeyPrefixes } from "./tasks/taskKeyPrefixes"
+import { formatTaskKey } from "./tasks/taskKey"
+import { filterTasks, sortTasks, groupTasks, bulkSummary } from "./tasks/taskViews"
+import { updateTasks, deleteTasks } from "./tasks/taskViewsData"
+import { useTaskViews, useProjectPeople } from "./tasks/views/useTaskViews"
+import TaskViewToolbar from "./tasks/views/TaskViewToolbar"
+import SavedViewsMenu from "./tasks/views/SavedViewsMenu"
+import TaskListView from "./tasks/views/TaskListView"
+import BulkBar from "./tasks/views/BulkBar"
+import QuickAddTask from "./tasks/views/QuickAddTask"
+import { BoardSkeleton, ListSkeleton, TasksEmptyState } from "./tasks/views/TaskPlaceholders"
+import { useUndoable } from "./useUndoable"
+import UndoToast from "./components/UndoToast"
+import { matchesShortcut } from "./shortcuts"
+import { AwayDot } from "./availability/AwayBadge"
 import { useAwayPeriods } from "./availability/availabilityData"
 import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
 import { MEETING_SAVED_EVENT } from "./appEvents"
 import PersonPhoto from "./avatars/PersonPhoto"
+import { ACCEPTED, MAX_FILE_SIZE_MB, validateFile, getFileStyle, formatBytes } from "./fileUploads"
 
-const ACCEPTED = [
-    "image/*", "application/pdf", "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/zip", "application/x-zip-compressed", "text/plain", "text/csv",
-].join(",")
 
 // How long a Kanban board message stays visible
 const BOARD_NOTICE_MS = 5000
@@ -60,17 +69,19 @@ const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
 const DEPARTMENT_TASK_COLUMNS = "team_space_id"
 // Added by migration 20261119100000_task_keys
 const TASK_KEY_COLUMNS = "task_key_scope, task_number"
+// Board column, subtask parent (migration 20261127090000 adds its rules) and
+// the last change, which tells the task panel's History to reload
+const PANEL_TASK_COLUMNS = "column_id, parent_task_id, updated_at"
 
 // Wait for a burst of task changes (e.g. a drag that also logs) to settle before reloading the feed
 const ACTIVITY_RELOAD_DELAY_MS = 500
-// Fields another person's change may move while a task's panel is open here
-const LIVE_TASK_FIELDS = ["status", "due_date", "assignee_id", "team_space_id"]
 
 // The project's tasks, newest first. Newest columns first; 42703 means a
 // migration isn't applied yet, so drop its columns.
 async function loadProjectTasks(projectId) {
     let result = { data: null, error: null }
     for (const columns of [
+        `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}, ${PANEL_TASK_COLUMNS}`,
         `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
         `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}`,
         `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
@@ -101,136 +112,52 @@ const STATUS_LABELS = { todo: "Backlog", in_progress: "Doing", done: "Done" }
 // Column dot colour by the status a column stands for
 const STATUS_DOT = { todo: "bg-line", in_progress: "bg-[#3b82f6]", done: "bg-primary-fixed-dim" }
 
-const MAX_FILE_SIZE_MB = 50
-const MAX_FILE_SIZE    = MAX_FILE_SIZE_MB * 1024 * 1024   // 50 MB in bytes
 
-// Extensions that are never allowed regardless of MIME type
-const BLOCKED_EXTENSIONS = new Set([
-    "exe","bat","cmd","com","pif","scr","vbs","wsf","reg",
-    "msi","dll","sys","drv","bin","cpl","ocx",
-    "sh","bash","zsh","fish","ps1","psm1","psd1",
-    "jar","class","war","ear","jnlp",
-    "php","php3","php4","php5","phtml","phar",
-    "asp","aspx","ashx","asmx","axd","cshtml",
-    "cgi","pl","rb","py","lua","go",
-    "js","jsx","ts","tsx","mjs","cjs",
-    "html","htm","xhtml",
-    "swf","fla",
-    "dmg","pkg","deb","rpm","run",
-    "iso","img","vmdk",
-])
 
-// Allowed MIME types whitelist — kept in sync with ACCEPTED above
-const ALLOWED_MIME_TYPES = new Set([
-    "image/jpeg","image/png","image/gif","image/webp","image/bmp","image/tiff","image/heic","image/heif",
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/zip","application/x-zip-compressed",
-    "text/plain","text/csv",
-])
-
-// Read the first N bytes of a File (for magic-byte / file-signature verification)
-const readFirstBytes = (file, n) =>
-    new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload  = (e) => resolve(new Uint8Array(e.target.result))
-        reader.onerror = reject
-        reader.readAsArrayBuffer(file.slice(0, n))
-    })
-
-// Full client-side security validation, run before any file is accepted for upload.
-// NOTE: this is a first line of defense for UX (fast feedback, blocks obvious junk).
-// It is NOT a substitute for server-side / storage-bucket-side scanning — a
-// determined attacker can bypass client-side checks entirely, so the same
-// extension/MIME/size rules (and ideally real antivirus/malware scanning,
-// e.g. via a Supabase storage webhook to a scanning service) should also be
-// enforced wherever the file actually lands.
-const validateFile = async (file) => {
-    // 1 — Size
-    if (file.size > MAX_FILE_SIZE)
-        return { valid: false, error: `File too large. Maximum allowed is ${MAX_FILE_SIZE_MB} MB — your file is ${formatBytes(file.size)}.` }
-
-    if (file.size === 0)
-        return { valid: false, error: "File appears to be empty and cannot be uploaded." }
-
-    // 2 — Extension blacklist
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? ""
-    if (!ext)
-        return { valid: false, error: "File has no extension. Please upload a file with a recognised format." }
-    if (BLOCKED_EXTENSIONS.has(ext))
-        return { valid: false, error: `Files with the .${ext} extension are blocked for security reasons. Executable and script files cannot be uploaded.` }
-
-    // 3 — MIME type whitelist (browsers don't always supply a type, so only check if present)
-    if (file.type && !ALLOWED_MIME_TYPES.has(file.type) && !file.type.startsWith("image/"))
-        return { valid: false, error: `File type "${file.type}" is not permitted. Only documents, images, spreadsheets, and archive files are accepted.` }
-
-    // 4 — Magic bytes: verify file content matches its claimed type
-    try {
-        const bytes = await readFirstBytes(file, 8)
-        const is = (sigs) => sigs.every((b, i) => b === null || bytes[i] === b)
-
-        const isJPEG  = is([0xFF, 0xD8, 0xFF])
-        const isPNG   = is([0x89, 0x50, 0x4E, 0x47])
-        const isGIF   = is([0x47, 0x49, 0x46, 0x38])
-        const isPDF   = is([0x25, 0x50, 0x44, 0x46])   // %PDF
-        const isZIP   = is([0x50, 0x4B, 0x03, 0x04])   // PK (ZIP, DOCX, XLSX)
-        const isZIPe  = is([0x50, 0x4B, 0x05, 0x06])   // PK (empty ZIP)
-        const isZIPok = isZIP || isZIPe
-
-        const checks = [
-            { mime: "image/jpeg",       ok: isJPEG,  label: "JPEG" },
-            { mime: "image/png",        ok: isPNG,   label: "PNG"  },
-            { mime: "image/gif",        ok: isGIF,   label: "GIF"  },
-            { mime: "application/pdf",  ok: isPDF,   label: "PDF"  },
-            { mime: "application/zip",  ok: isZIPok, label: "ZIP"  },
-            { mime: "application/x-zip-compressed", ok: isZIPok, label: "ZIP" },
-            { mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  ok: isZIPok, label: "DOCX" },
-            { mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",        ok: isZIPok, label: "XLSX" },
-        ]
-
-        for (const { mime, ok, label } of checks) {
-            if (file.type === mime && !ok)
-                return { valid: false, error: `Security check failed: the file's content does not match its declared format (${label}). This file may be disguised or corrupted and cannot be uploaded.` }
-        }
-
-        // 5 — Block Windows PE executables even if renamed (MZ header)
-        if (bytes[0] === 0x4D && bytes[1] === 0x5A)   // MZ
-            return { valid: false, error: "Security check failed: this file appears to be a Windows executable and cannot be uploaded." }
-
-        // 6 — Block ELF binaries (Linux executables)
-        if (bytes[0] === 0x7F && bytes[1] === 0x45 && bytes[2] === 0x4C && bytes[3] === 0x46)   // \x7fELF
-            return { valid: false, error: "Security check failed: this file appears to be a Linux executable and cannot be uploaded." }
-
-    } catch {
-        // Can't read bytes — allow through on this check, but the earlier
-        // extension/MIME/size checks still applied.
-    }
-
-    return { valid: true, error: null }
+// A board card's key line: "DEV-12", or "DEV-12 · ↳ Parent title" for a subtask
+function TaskCardContext({ task, parent }) {
+    return (
+        <p className="flex items-center gap-1.5 min-w-0 text-[11px] text-muted mb-[2px]">
+            <TaskKeyText task={task} />
+            {parent && (
+                <span className="flex items-center gap-0.5 min-w-0" title={`Subtask of ${parent.title}`}>
+                    <span className="material-symbols-outlined text-[13px]" aria-hidden="true">subdirectory_arrow_right</span>
+                    <span className="truncate">{parent.title}</span>
+                </span>
+            )}
+        </p>
+    )
 }
 
-function getFileStyle(type = "") {
-    if (type.startsWith("image/")) return { icon: "image", color: "text-primary-fixed-dim", bg: "bg-primary-container/20" }
-    if (type === "application/pdf") return { icon: "picture_as_pdf", color: "text-error", bg: "bg-error-container/20" }
-    if (type.includes("word") || type === "application/msword")
-        return { icon: "description", color: "text-muted", bg: "bg-raised" }
-    if (type.includes("sheet") || type === "application/vnd.ms-excel")
-        return { icon: "table", color: "text-accent-ink", bg: "bg-[var(--primary-color)]/10" }
-    if (type.includes("zip")) return { icon: "folder_zip", color: "text-muted", bg: "bg-raised" }
-    if (type.startsWith("text/")) return { icon: "article", color: "text-muted", bg: "bg-raised" }
-    return { icon: "insert_drive_file", color: "text-muted", bg: "bg-raised" }
+// A board card's progress: its subtasks and its checklist, each when it has any
+function TaskCardProgress({ task, tasks }) {
+    const subtasks = subtaskProgress(tasks, task.id)
+    const checklist = parseSubtasks(task.sub_tasks)
+    const ticked = checklist.filter((item) => item.done).length
+    const bars = [
+        subtasks.total > 0 && { key: "subtasks", icon: "account_tree", label: "Subtasks", done: subtasks.done, total: subtasks.total },
+        checklist.length > 0 && { key: "checklist", icon: "checklist", label: "Checklist", done: ticked, total: checklist.length },
+    ].filter(Boolean)
+    if (bars.length === 0) return null
+    return (
+        <div className="mb-md space-y-1.5">
+            {bars.map((bar) => (
+                <div key={bar.key}>
+                    <div className="flex items-center justify-between text-[10px] text-muted mb-1 font-medium">
+                        <span className="flex items-center gap-xs">
+                            <span className="material-symbols-outlined text-[12px]" aria-hidden="true">{bar.icon}</span>
+                            {bar.label}
+                        </span>
+                        <span className="tabular-nums">{bar.done}/{bar.total}</span>
+                    </div>
+                    <div className="w-full bg-surface1 rounded-full h-1 overflow-hidden">
+                        <div className="bg-[var(--primary-color)] h-full transition-all duration-300" style={{ width: `${(bar.done / bar.total) * 100}%` }} />
+                    </div>
+                </div>
+            ))}
+        </div>
+    )
 }
-
-function formatBytes(bytes) {
-    if (!bytes) return ""
-    if (bytes < 1024) return bytes + " B"
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
-}
-
 
 function ProjectPage() {
     const { project_id } = useParams()
@@ -239,6 +166,8 @@ function ProjectPage() {
     const [project_name, setProjectName] = useState(savedProject?.name || "")
     const [project_due_date, setProjectDueDate] = useState(savedProject?.due_date || "")
     const [isProjectLoaded, setIsProjectLoaded] = useState(false)
+    // Until the first load, the Tasks tab shows the board's or list's shape
+    const [isTasksLoaded, setIsTasksLoaded] = useState(false)
     const [project_tasks, setProjectTasks] = useState([])
     const [activityLog, setActivityLog] = useState([])
     const [isActivityCollapsed, setIsActivityCollapsed] = useState(false)
@@ -249,13 +178,38 @@ function ProjectPage() {
     const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false)
     const [createTaskInitialStatus, setCreateTaskInitialStatus] = useState("todo")
     const [dragOverColumn, setDragOverColumn] = useState(null)
-    const [selectedTask, setSelectedTask] = useState(null)
+    // The open task lives in the URL (?task_id=…), so a panel can be linked to,
+    // and Back closes it
+    const [searchParams, setSearchParams] = useSearchParams()
+    const selectedTaskId = searchParams.get("task_id")
+    // Task keys ("DEV-12"), so the Tasks tab's filter finds tasks by key
+    const taskKeyPrefixes = useTaskKeyPrefixes()
+    const taskKeyOf = (task) => formatTaskKey(taskKeyPrefixes.get(task.task_key_scope), task.task_number) || ""
+    const taskViews = useTaskViews(project_id)
+    const taskView = taskViews.view
+    // Tasks ticked in the List view, for the bulk bar
+    const [selectedTaskIds, setSelectedTaskIds] = useState(() => new Set())
+    // Deletes wait a few seconds for Undo; until they go, reloads keep those tasks hidden
+    const undoable = useUndoable()
+    const hiddenTaskIds = useRef(new Set())
+    // Opening a task adds a history entry; going from one task to another replaces it
+    const openTask = useCallback((task) => {
+        if (!task?.id) return
+        const next = new URLSearchParams(searchParams)
+        next.set("task_id", String(task.id))
+        setSearchParams(next, { replace: searchParams.has("task_id") })
+    }, [setSearchParams, searchParams])
+    const closeTask = useCallback(() => {
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev)
+            next.delete("task_id")
+            return next
+        }, { replace: true })
+    }, [setSearchParams])
     const [orgUsers, setOrgUsers] = useState([])
     // Who is away now or later (empty until migration 20261120130000 is applied)
     const awayPeriods = useAwayPeriods()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const [priorityDropdownOpen, setPriorityDropdownOpen] = useState(false)
-    const [newSubtaskTitle, setNewSubtaskTitle] = useState("")
     const [selectedDateEvents, setSelectedDateEvents] = useState(null)
     const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
     const [creatingInSidebar, setCreatingInSidebar] = useState(null)
@@ -270,8 +224,6 @@ function ProjectPage() {
     const [deleteProjectError, setDeleteProjectError] = useState("")
     // null while checking; then whether the server's can_manage_project allows a delete
     const [canDeleteProject, setCanDeleteProject] = useState(null)
-    // Task details: the project's managers (can_manage_project) and the task's assignee
-    const canEditTaskDetails = canDeleteProject === true || Boolean(selectedTask && selectedTask.assignee_id === currentUserId)
     // null while checking; then can_edit_project, the rule for adding tasks here
     const [canAddTasks, setCanAddTasks] = useState(null)
     const [projectDepartmentName, setProjectDepartmentName] = useState(null)
@@ -340,32 +292,6 @@ function ProjectPage() {
     const fileInputRef = useRef()
     const [taskUploading, setTaskUploading] = useState(false)
     const [taskUploadError, setTaskUploadError] = useState("")
-    const taskFileInputRef = useRef()
-
-    const updateTaskPriority = async (taskId, newPriority) => {
-        const task = project_tasks.find(t => String(t.id) === String(taskId))
-        setSelectedTask(prev => prev ? { ...prev, priority: newPriority } : null)
-        setProjectTasks(prevTasks =>
-            prevTasks.map(t =>
-                String(t.id) === String(taskId) ? { ...t, priority: newPriority } : t
-            )
-        )
-        const { error } = await supabase.from('tasks').update({ priority: newPriority }).eq('id', taskId)
-        if (error) {
-            console.error("Error updating priority", error)
-        } else if (task) {
-            const userData = { user: await getSessionUser() }
-            const logEntry = {
-                entity_type: "task",
-                entity_id: taskId,
-                actor_id: userData?.user?.id,
-                action: "priority_changed",
-                new_state: { project_id: project_id, title: task.title, priority: newPriority }
-            }
-            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
-            if (newLog) setActivityLog(prev => [newLog, ...prev])
-        }
-    }
 
     const updateTaskSubtasks = async (taskId, newSubtasks) => {
         const task = project_tasks.find(t => String(t.id) === String(taskId))
@@ -377,7 +303,6 @@ function ProjectPage() {
 
         const serialized = JSON.stringify(newSubtasks)
 
-        setSelectedTask(prev => prev && String(prev.id) === String(taskId) ? { ...prev, sub_tasks: serialized, status: newStatus } : prev)
         setProjectTasks(prevTasks =>
             prevTasks.map(t =>
                 String(t.id) === String(taskId) ? { ...t, sub_tasks: serialized, status: newStatus } : t
@@ -562,16 +487,33 @@ function ProjectPage() {
     // waiting and holding up reads these
     const linkedTasks = attachDependencies(project_tasks, taskDependencies)
     const tasksById = new Map(linkedTasks.map((t) => [String(t.id), t]))
+    // The open task, always the current copy (so live changes show in its panel)
+    const selectedTask = selectedTaskId ? tasksById.get(String(selectedTaskId)) ?? null : null
+    // Task details: the project's managers (can_manage_project) and the task's assignee
+    const canEditTask = (task) => canDeleteProject === true || Boolean(task && task.assignee_id === currentUserId)
+    const canEditTaskDetails = canEditTask(selectedTask)
     const boardTasks = isCrossDepartment
         ? linkedTasks.filter((t) => matchesDepartmentFilter(t, departmentFilter, leadDepartmentId, tasksById))
         : linkedTasks
-    const boardTasksByColumn = groupTasksByColumn(boardTasks, boardColumns)
+    // The Tasks tab's view (board or list, search, quick filters, grouping,
+    // sorting); the Summary and other tabs still count every task
+    const visibleTasks = sortTasks(filterTasks(boardTasks, taskView, { me: currentUserId, keyOf: taskKeyOf }), taskView)
+    const boardTasksByColumn = groupTasksByColumn(visibleTasks, boardColumns)
     // Cards edged red when holding another department up, amber when held up
     const holdupRoles = isCrossDepartment ? taskHoldupRoles(linkedTasks) : new Map()
     const HOLDUP_EDGE = { holding: "border-l-4 border-l-red-400", held: "border-l-4 border-l-amber-400" }
     // New tasks go to the department being viewed, else yours, else the lead department
     const myProjectDepartmentId = projectDepartments.find((d) => myDepartments.some((m) => String(m.team_space_id) === String(d.team_space_id)))?.team_space_id
     const newTaskDepartmentId = departmentFilter.departmentId || myProjectDepartmentId || leadDepartmentId
+    const projectPeople = useProjectPeople(project_id, isCrossDepartment ? projectDepartments.map((d) => d.team_space_id) : [leadDepartmentId])
+    const departmentNameOf = (task) => projectDepartments.find((d) => String(d.team_space_id) === String(task.team_space_id ?? leadDepartmentId))?.name || ""
+    const listGroups = groupTasks(visibleTasks, taskView.groupBy, {
+        columns: boardColumns,
+        columnKeyOf: (t) => columnKeyForTask(t, boardColumns),
+        personName: (id) => orgUsers.find((u) => u.id === id)?.name,
+        departments: isCrossDepartment ? projectDepartments : [],
+        leadDepartmentId,
+    })
     const taskModalDepartments = isCrossDepartment ? projectDepartments : []
 
     // Same rule as the database's tasks_guard_department: the task's assignee or
@@ -592,7 +534,6 @@ function ProjectPage() {
         || Boolean(task && leadsDepartment(task.team_space_id ?? leadDepartmentId))
     const patchTask = (taskId, changes) => {
         setProjectTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...changes } : t)))
-        setSelectedTask((prev) => (prev && String(prev.id) === String(taskId) ? { ...prev, ...changes } : prev))
     }
     // These resolve to an error message for TaskDependenciesPanel, or null once saved
     const handleTaskDepartmentChange = async (taskId, departmentId) => {
@@ -660,13 +601,20 @@ function ProjectPage() {
         if (!taskId) return
         const task = project_tasks.find(t => String(t.id) === String(taskId))
         if (!task) return
+        const message = await moveTask(task, column)
+        if (message) showBoardNotice(message)
+    }
 
-        // Any task can be moved to any column; ticking subtasks still updates its status automatically
+    // Moves a task to a board column (its status follows). Resolves to a
+    // message for the person (a failure, or a note that it still shows under
+    // Overdue), or null. Used by dragging on the board and by the task panel.
+    const moveTask = async (task, column) => {
+        const taskId = task.id
+        // Any task can be moved to any column; ticking checklist items still updates its status automatically
         const newStatus = column.base_status
         const isOverdue = isTaskOverdue({ ...task, status: newStatus })
         if (columnKeyForTask(task, boardColumns) === column.key) {
-            if (isOverdue) showBoardNotice(`"${task.title}" is already in ${column.name} — it shows under Overdue until it's done or its due date changes.`)
-            return
+            return isOverdue ? `"${task.title}" is already in ${column.name}. It shows under Overdue until it's done or its due date changes.` : null
         }
 
         // column_id only exists once the custom-columns migration has been run
@@ -688,11 +636,10 @@ function ProjectPage() {
             setProjectTasks(prevTasks =>
                 prevTasks.map(t => (String(t.id) === String(taskId) ? { ...t, ...previous } : t))
             )
-            showBoardNotice(`Couldn't move "${task.title}". You may not have permission to edit this project.`)
-            return
+            return `Couldn't move "${task.title}". You may not have permission to edit this project.`
         }
-        if (isOverdue) showBoardNotice(`"${task.title}" moved to ${column.name}. It stays under Overdue until it's done or its due date changes.`)
-        if (newStatus === task.status) return // moved between columns of the same status
+        const notice = isOverdue ? `"${task.title}" moved to ${column.name}. It stays under Overdue until it's done or its due date changes.` : null
+        if (newStatus === task.status) return notice // moved between columns of the same status
         const userData = { user: await getSessionUser() }
         const logEntry = {
             entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
@@ -701,32 +648,153 @@ function ProjectPage() {
         }
         const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single()
         if (newLog) setActivityLog(prev => [newLog, ...prev])
+        return notice
     }
 
-    const handleDeleteTask = async (taskId, taskTitle) => {
-        if (!window.confirm("Are you sure you want to delete this task?")) return;
+    // Saves some of a task's fields from the task panel: shown at once, put
+    // back if the save fails. The database logs the change itself.
+    // Resolves to an error message, or null once saved.
+    const saveTask = async (taskId, changes) => {
+        const task = project_tasks.find((t) => String(t.id) === String(taskId))
+        if (!task) return "This task is no longer here."
+        const previous = Object.fromEntries(Object.keys(changes).map((key) => [key, task[key] ?? null]))
+        patchTask(taskId, changes)
+        const { error } = await saveTaskFields(taskId, changes)
+        if (error) patchTask(taskId, previous)
+        return error
+    }
 
-        // Optimistically remove from UI
-        setProjectTasks(prev => prev.filter(t => t.id !== taskId));
+    // A new subtask of `parent`: in the same project and department
+    const addSubtask = async (parent, title) => {
+        if (!organizationId) return "Couldn't find your organization. Reload the page and try again."
+        const { data, error } = await insertTask(newSubtaskFields({ ...parent, organization_id: parent.organization_id || organizationId }, title, currentUserId))
+        if (error) return error
+        setProjectTasks((prev) => (prev.some((t) => String(t.id) === String(data.id)) ? prev : [data, ...prev]))
+        return null
+    }
 
-        const { error } = await supabase
-            .from("tasks")
-            .delete()
-            .eq("id", taskId);
+    // Ticking a subtask moves it to the first Done column; unticking, to the first Backlog one
+    const toggleSubtask = async (subtask, isDone) => {
+        const column = boardColumns.find((c) => c.base_status === (isDone ? "done" : "todo"))
+        if (!column) return "This board has no column for that."
+        const message = await moveTask(subtask, column)
+        return message?.startsWith("Couldn't") ? message : null
+    }
 
-        if (error) {
-            console.error("Error deleting task:", error);
-            // Revert state if needed, but keeping it simple here
-        } else {
-            const userData = { user: await getSessionUser() }
-            const logEntry = {
-                entity_type: "task", entity_id: taskId, actor_id: userData?.user?.id,
-                action: "deleted",
-                new_state: { project_id: project_id, title: taskTitle }
-            };
-            const { data: newLog } = await supabase.from("activity_log").insert(logEntry).select("*, actor:users(name, email)").single();
-            if (newLog) setActivityLog(prev => [newLog, ...prev]);
+    // B / L / F on the Tasks tab: board, list, filter (not while a panel or form is open)
+    useEffect(() => {
+        if (activeTab !== "tasks") return undefined
+        const onKey = (e) => {
+            if (e.defaultPrevented || document.querySelector("[role='dialog']")) return
+            if (matchesShortcut(e, "b")) { e.preventDefault(); setSelectedTaskIds(new Set()); taskViews.change({ mode: "board" }) }
+            else if (matchesShortcut(e, "l")) { e.preventDefault(); taskViews.change({ mode: "list" }) }
+            else if (matchesShortcut(e, "f")) { e.preventDefault(); document.getElementById("task-filter")?.focus() }
         }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    })
+
+    // Adds a task from a board column's or a list group's "+ Add task": it
+    // takes that column, assignee, priority or department. With "Mine" on, it's
+    // yours, so it doesn't vanish from the view. Resolves to an error message, or null.
+    const quickAddTask = async (title, defaults = {}) => {
+        if (!organizationId) return "Couldn't find your organization. Reload the page and try again."
+        const column = defaults.column
+        const assigneeId = defaults.assignee_id ?? (taskView.quick.includes("mine") ? currentUserId : null)
+        const { data, error } = await insertTask({
+            title,
+            project_id,
+            organization_id: organizationId,
+            created_by: currentUserId,
+            status: column?.base_status || "todo",
+            ...(column?.id && columnsAvailable ? { column_id: column.id } : {}),
+            priority: defaults.priority || "medium",
+            assignee_id: assigneeId,
+            ...(isCrossDepartment ? { team_space_id: defaults.team_space_id || newTaskDepartmentId } : {}),
+        })
+        if (error) return error
+        setProjectTasks((prev) => (prev.some((t) => String(t.id) === String(data.id)) ? prev : [data, ...prev]))
+        return null
+    }
+
+    // Changing several tasks at once (List view). Each resolves to { message, isError }.
+    const selectedTaskList = project_tasks.filter((t) => selectedTaskIds.has(t.id))
+    const toggleTaskSelection = (id) => setSelectedTaskIds((prev) => {
+        const next = new Set(prev)
+        if (next.has(id)) next.delete(id)
+        else next.add(id)
+        return next
+    })
+    const setTasksSelected = (ids, isSelected) => setSelectedTaskIds((prev) => {
+        const next = new Set(prev)
+        ids.forEach((id) => (isSelected ? next.add(id) : next.delete(id)))
+        return next
+    })
+    // Applies a bulk change to the tasks it reached, and offers to put each back
+    const applyBulk = async (changes, verb) => {
+        const before = new Map(selectedTaskList.map((t) => [t.id, Object.fromEntries(Object.keys(changes).map((key) => [key, t[key] ?? null]))]))
+        const results = await updateTasks([...before.keys()], changes)
+        const changed = results.filter((r) => !r.error).map((r) => r.id)
+        const changedSet = new Set(changed)
+        setProjectTasks((prev) => prev.map((t) => (changedSet.has(t.id) ? { ...t, ...changes } : t)))
+        const summary = bulkSummary(results, verb)
+        if (changed.length === 0) return summary
+        return {
+            ...summary,
+            undo: async () => {
+                const reverted = await Promise.all(changed.map(async (id) => ({ id, ...(await saveTaskFields(id, before.get(id))) })))
+                const back = new Set(reverted.filter((r) => !r.error).map((r) => r.id))
+                setProjectTasks((prev) => prev.map((t) => (back.has(t.id) ? { ...t, ...before.get(t.id) } : t)))
+                return bulkSummary(reverted, "Put back")
+            },
+        }
+    }
+    const bulkMove = (column) => applyBulk(columnsAvailable ? { status: column.base_status, column_id: column.id || null } : { status: column.base_status }, "Moved")
+    const bulkSave = (changes) => applyBulk(changes, "Changed")
+
+    // Deleting: the tasks go at once and are deleted when the Undo toast has
+    // gone; if that fails, the ones that weren't deleted come back with a message
+    const deleteWithUndo = (tasks) => {
+        if (tasks.length === 0) return
+        const ids = tasks.map((t) => t.id)
+        const idSet = new Set(ids)
+        const subtaskCount = project_tasks.filter((t) => t.parent_task_id && idSet.has(t.parent_task_id) && !idSet.has(t.id)).length
+        ids.forEach((id) => hiddenTaskIds.current.add(id))
+        setProjectTasks((prev) => prev.filter((t) => !idSet.has(t.id)))
+        setSelectedTaskIds((prev) => new Set([...prev].filter((id) => !idSet.has(id))))
+        if (selectedTaskId && idSet.has(selectedTaskId)) closeTask()
+        const what = tasks.length === 1 ? `“${tasks[0].title}”` : `${tasks.length} tasks`
+        const keeps = subtaskCount > 0 ? ` ${subtaskCount} subtask${subtaskCount === 1 ? " stays" : "s stay"}.` : ""
+        const restore = (list) => {
+            list.forEach((t) => hiddenTaskIds.current.delete(t.id))
+            setProjectTasks((prev) => [...list.filter((t) => !prev.some((p) => p.id === t.id)), ...prev])
+        }
+        undoable.offer({
+            message: `Deleted ${what}.${keeps}`,
+            undo: () => restore(tasks),
+            commit: async () => {
+                const results = await deleteTasks(ids)
+                ids.forEach((id) => hiddenTaskIds.current.delete(id))
+                const failed = new Set(results.filter((r) => r.error).map((r) => r.id))
+                if (failed.size > 0) {
+                    restore(tasks.filter((t) => failed.has(t.id)))
+                    showBoardNotice(bulkSummary(results, "Deleted").message)
+                }
+                const user = await getSessionUser()
+                const deleted = tasks.filter((t) => !failed.has(t.id))
+                if (deleted.length > 0 && user) {
+                    const { data: logs } = await supabase.from("activity_log").insert(deleted.map((t) => ({
+                        entity_type: "task", entity_id: t.id, actor_id: user.id, action: "deleted",
+                        new_state: { project_id, title: t.title },
+                    }))).select("*, actor:users(name, email)")
+                    if (logs?.length) setActivityLog((prev) => [...logs, ...prev])
+                }
+            },
+        })
+    }
+    const bulkDelete = async () => {
+        deleteWithUndo(selectedTaskList)
+        return null
     }
 
     // Resolves to an error message for ProjectDeadline, or null once saved
@@ -753,7 +821,6 @@ function ProjectPage() {
             return "Couldn't save the deadline. Only project managers and admins can change it."
         }
         const withDeadline = t => (String(t.id) === String(taskId) ? { ...t, due_date: nextDate } : t)
-        setSelectedTask(prev => (prev ? withDeadline(prev) : prev))
         setProjectTasks(prev => prev.map(withDeadline))
         return null
     }
@@ -763,7 +830,7 @@ function ProjectPage() {
         if (!project_id) return
         const { data, error } = await supabase
             .from("project_files")
-            .select("id, project_id, name, type, size, path, url, uploaded_by, created_at")
+            .select("id, project_id, task_id, name, type, size, path, url, uploaded_by, created_at")
             .eq("project_id", project_id)
             .order("created_at", { ascending: false })
         if (!error) setProjectFiles(await withSignedUrls(data || []))
@@ -872,17 +939,9 @@ function ProjectPage() {
             else {
                 // Show statuses as stored; they're only derived when subtasks are edited
                 const corrected = data || [];
-                setProjectTasks(corrected);
-                const urlParams = new URLSearchParams(window.location.search);
-                const taskIdParam = urlParams.get("task_id");
-                if (taskIdParam) {
-                    const taskToOpen = corrected.find(t => String(t.id) === String(taskIdParam));
-                    if (taskToOpen) {
-                        setSelectedTask(taskToOpen);
-                        setActiveTab("tasks");
-                    }
-                }
+                setProjectTasks(corrected.filter((t) => !hiddenTaskIds.current.has(t.id)));
             }
+            setIsTasksLoaded(true)
         }
 
         const fetchActivity = async () => {
@@ -924,14 +983,8 @@ function ProjectPage() {
                 if (!dependencies.error) setTaskDependencies(dependencies.data)
                 if (tasks.error) { console.error("Reloading tasks failed:", tasks.error); return }
                 const fresh = tasks.data || []
-                setProjectTasks(fresh)
+                setProjectTasks(fresh.filter((t) => !hiddenTaskIds.current.has(t.id)))
                 invalidateHoldups()
-                // An open task panel takes the fields others may have changed
-                setSelectedTask((prev) => {
-                    const latest = prev && fresh.find((t) => String(t.id) === String(prev.id))
-                    if (!latest) return prev
-                    return { ...prev, ...Object.fromEntries(LIVE_TASK_FIELDS.filter((key) => key in latest).map((key) => [key, latest[key]])) }
-                })
             }, ACTIVITY_RELOAD_DELAY_MS)
         }
         const reloadDepartments = () => setDepartmentsVersion((v) => v + 1)
@@ -1020,9 +1073,10 @@ function ProjectPage() {
         const { data: deleted, error } = await supabase.from("project_files").delete().eq("id", f.id).select("id")
         if (error || !deleted?.length) {
             if (error) console.error("Deleting file failed:", error)
-            setUploadError(`Couldn't delete "${f.name}". You may not have permission.`)
+            const message = `Couldn't delete "${f.name}". You may not have permission.`
+            setUploadError(message)
             setConfirmDeleteId(null)
-            return
+            return message
         }
         const { error: storageError } = await supabase.storage.from("project-files").remove([f.path])
         if (storageError) console.error("Removing the stored file failed:", storageError)
@@ -1039,6 +1093,7 @@ function ProjectPage() {
             if (newLog) setActivityLog(prev => [newLog, ...prev])
         }
         setConfirmDeleteId(null); fetchFiles()
+        return null
     }
 
     const uploadTaskFile = async (file, taskId) => {
@@ -1153,7 +1208,7 @@ function ProjectPage() {
         <div className="bg-canvas min-h-screen text-white font-sans antialiased">
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <Header />
-            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} p-lg h-[calc(100vh-64px)] overflow-y-auto scroll-hide transition-all duration-300 ease-out`}>
+            <main className={`${sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"} p-4 md:p-lg h-[calc(100vh-64px)] overflow-y-auto scroll-hide transition-all duration-300 ease-out`}>
                 {/* Project Header */}
                 <div className="mb-lg">
                     <div className="flex items-center gap-md flex-wrap">
@@ -1167,7 +1222,8 @@ function ProjectPage() {
                         )}
                     </div>
                     {/* Sub-Tabs Navigation */}
-                    <div className="flex items-center gap-sm mt-xl mb-lg">
+                    {/* Tabs scroll sideways on a phone */}
+                    <div role="tablist" aria-label="Project sections" className="flex items-center gap-sm mt-lg md:mt-xl mb-lg overflow-x-auto scroll-hide -mx-4 px-4 md:mx-0 md:px-0">
                         {[
                             { id: "summary", label: "Summary", icon: "dashboard" },
                             { id: "tasks", label: "Orbit", icon: "view_kanban" },
@@ -1183,8 +1239,10 @@ function ProjectPage() {
                             <button
                                 key={tab.id}
                                 type="button"
+                                role="tab"
+                                aria-selected={activeTab === tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-md text-xs transition-colors cursor-pointer ${activeTab === tab.id
+                                className={`shrink-0 whitespace-nowrap flex items-center gap-2 px-3 md:px-4 py-2 rounded-md font-label-md text-xs transition-colors cursor-pointer ${activeTab === tab.id
                                     ? "bg-primary-accent text-on-accent font-bold shadow-sm"
                                     : "text-muted hover:text-white hover:bg-line/50"
                                     }`}
@@ -1200,10 +1258,11 @@ function ProjectPage() {
                                 type="button"
                                 title="Delete this project"
                                 onClick={() => setShowDeleteConfirm(true)}
-                                className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-md text-muted hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
+                                aria-label="Delete this project"
+                                className="ml-auto shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-md text-muted hover:text-red-400 hover:bg-red-950/20 transition-colors cursor-pointer text-[13px] font-medium"
                             >
                                 <span className="material-symbols-outlined text-[18px]">delete</span>
-                                Delete project
+                                <span className="hidden lg:inline">Delete project</span>
                             </button>
                         )}
                         {canDeleteProject === false && (
@@ -1354,7 +1413,7 @@ function ProjectPage() {
                             canManage={canDeleteProject === true}
                             leadsDepartment={leadsDepartment}
                             onResolve={(departmentId) => { setDepartmentFilter({ departmentId, isBlockedOnly: false }); setActiveTab("tasks") }}
-                            onOpenTask={setSelectedTask}
+                            onOpenTask={openTask}
                             onDepartmentsChanged={() => setDepartmentsVersion((v) => v + 1)}
                         />
                     )}
@@ -1363,7 +1422,7 @@ function ProjectPage() {
                             tasks={linkedTasks}
                             departments={isCrossDepartment ? projectDepartments : []}
                             projectDueDate={project_due_date}
-                            onOpenTask={setSelectedTask}
+                            onOpenTask={openTask}
                         />
                     )}
                     {activeTab === "sprint" && (
@@ -1373,7 +1432,7 @@ function ProjectPage() {
                             onTasksChange={setProjectTasks}
                             canManage={canDeleteProject === true}
                             members={projectMembers}
-                            onOpenTask={setSelectedTask}
+                            onOpenTask={openTask}
                         />
                     )}
 
@@ -1391,16 +1450,44 @@ function ProjectPage() {
                     {/* Tasks Tab — Orbit Board */}
                     {activeTab === "tasks" && (
                         <div className="tab-pane block" id="section-tasks">
-                            <div className="flex items-center gap-md flex-wrap">
-                                {isCrossDepartment && <DepartmentFilterBar departments={projectDepartments} filter={departmentFilter} onChange={setDepartmentFilter} />}
-                                <button
-                                    type="button"
-                                    onClick={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) }}
-                                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 btn-primary-accent rounded-lg text-sm font-semibold cursor-pointer"
-                                >
-                                    <span className="material-symbols-outlined text-[18px]">add</span>
-                                    Add Task
-                                </button>
+                            <div className="flex items-start gap-md">
+                                <div className="flex-1 min-w-0">
+                                    <TaskViewToolbar
+                                        view={taskView}
+                                        onChange={(changes) => {
+                                            if (changes.mode === "board") setSelectedTaskIds(new Set())
+                                            taskViews.change(changes)
+                                        }}
+                                        shownCount={visibleTasks.length}
+                                        totalCount={boardTasks.length}
+                                        hasDepartments={isCrossDepartment}
+                                        departmentFilter={isCrossDepartment && <DepartmentFilterBar departments={projectDepartments} filter={departmentFilter} onChange={setDepartmentFilter} />}
+                                        views={taskViews.isSavingAvailable && (
+                                            <SavedViewsMenu
+                                                views={taskViews.savedViews}
+                                                activeViewId={taskViews.activeViewId}
+                                                currentView={taskView}
+                                                meId={currentUserId}
+                                                canShare={canDeleteProject === true}
+                                                onApply={taskViews.apply}
+                                                onCreate={taskViews.create}
+                                                onUpdate={taskViews.update}
+                                                onDelete={taskViews.remove}
+                                                onReset={taskViews.reset}
+                                            />
+                                        )}
+                                    />
+                                </div>
+                                {canAddTasks === true && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) }}
+                                        className="shrink-0 flex items-center gap-1.5 h-8 px-3 btn-primary-accent rounded-lg text-sm font-semibold cursor-pointer"
+                                    >
+                                        <span className="material-symbols-outlined text-[18px]">add</span>
+                                        <span className="hidden sm:inline">Add Task</span>
+                                    </button>
+                                )}
                             </div>
                             {boardNotice && (
                                 <div role="status" className="mt-md px-md py-sm rounded-lg border border-[#f59e0b]/40 bg-[#f59e0b]/10 text-[#f59e0b] text-xs">
@@ -1412,7 +1499,55 @@ function ProjectPage() {
                                     Custom columns need a database update: run the <span className="text-white">20261026100000_project_columns</span> migration in Supabase.
                                 </p>
                             )}
-                            <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md" style={{ minHeight: 'calc(100vh - 280px)' }}>
+                            {!isTasksLoaded && (taskView.mode === "list" ? <ListSkeleton /> : <BoardSkeleton />)}
+                            {isTasksLoaded && visibleTasks.length === 0 && (
+                                <TasksEmptyState
+                                    isFiltered={boardTasks.length > 0}
+                                    canAdd={canAddTasks === true}
+                                    onClear={() => { taskViews.change({ search: "", quick: [] }); setDepartmentFilter({ departmentId: null, isBlockedOnly: false }) }}
+                                    onAdd={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) }}
+                                />
+                            )}
+                            {isTasksLoaded && taskView.mode === "list" && (
+                                <TaskListView
+                                    groups={listGroups}
+                                    isGrouped={taskView.groupBy !== "none"}
+                                    selectedIds={selectedTaskIds}
+                                    canQuickAdd={canAddTasks === true}
+                                    onQuickAdd={quickAddTask}
+                                    onToggleMany={setTasksSelected}
+                                    columns={boardColumns}
+                                    columnKeyOf={(t) => columnKeyForTask(t, boardColumns)}
+                                    people={projectPeople}
+                                    departmentName={departmentNameOf}
+                                    parentOf={(t) => parentOf(t, tasksById)}
+                                    isCrossDepartment={isCrossDepartment}
+                                    can={{ edit: canEditTask, move: canAddTasks === true, editDeadline: canEditTaskDeadline }}
+                                    handlers={{
+                                        onOpen: openTask,
+                                        onToggleSelect: toggleTaskSelection,
+                                        onMove: moveTask,
+                                        onSave: (task, changes) => saveTask(task.id, changes),
+                                        onDeadline: (task, date) => handleTaskDeadlineSave(task.id, date),
+                                        onNotice: showBoardNotice,
+                                    }}
+                                />
+                            )}
+                            {taskView.mode === "list" && selectedTaskList.length > 0 && (
+                                <BulkBar
+                                    count={selectedTaskList.length}
+                                    columns={boardColumns}
+                                    people={projectPeople}
+                                    canDelete={selectedTaskList.some((t) => canDeleteProject === true || t.created_by === currentUserId)}
+                                    onMove={bulkMove}
+                                    onSave={bulkSave}
+                                    onDelete={bulkDelete}
+                                    onClear={() => setSelectedTaskIds(new Set())}
+                                />
+                            )}
+                            {isTasksLoaded && taskView.mode === "board" && (
+                            // On phones the board scrolls a column at a time
+                            <div className="flex gap-md overflow-x-auto scroll-hide pb-md mt-md snap-x snap-mandatory md:snap-none scroll-px-4" style={{ minHeight: 'calc(100vh - 280px)' }}>
                                 {[...boardColumns, OVERDUE_COLUMN].map((column, columnIndex) => {
                                     const columnTasks = boardTasksByColumn[column.key] ?? [];
                                     // "Overdue" is derived from the due date, not a column you can drop into
@@ -1441,7 +1576,7 @@ function ProjectPage() {
                                                     handleDrop(e, column)
                                                 }
                                             } : undefined}
-                                            className={`orbit-column flex-shrink-0 w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-raised/50 border ${isDropTarget ? 'border-accent-ink bg-[var(--primary-color)]/5' : 'border-line/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
+                                            className={`orbit-column snap-start flex-shrink-0 w-[85vw] max-w-[320px] sm:w-[280px] flex flex-col rounded-xl transition-all duration-200 bg-raised/50 border ${isDropTarget ? 'border-accent-ink bg-[var(--primary-color)]/5' : 'border-line/30'} ${draggingColumnKey === column.key ? 'opacity-50' : ''}`}
                                         >
                                             {/* Column Header */}
                                             <BoardColumnHeader
@@ -1472,7 +1607,7 @@ function ProjectPage() {
                                                         draggable
                                                         onDragStart={(e) => handleDragStart(e, task.id)}
                                                         onDragEnd={() => setDragOverColumn(null)}
-                                                        onClick={() => setSelectedTask(task)}
+                                                        onClick={() => openTask(task)}
                                                         className={`bg-raised border border-line rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-accent-ink/50 transition-all group ${HOLDUP_EDGE[holdupRoles.get(String(task.id))] || ""}`}
                                                     >
                                                         {/* Priority Badge */}
@@ -1497,8 +1632,8 @@ function ProjectPage() {
                                                             )}
                                                         </div>
 
-                                                        {/* Project Name */}
-                                                        <p className="text-[11px] text-muted mb-[2px]">{project_name}</p>
+                                                        {/* Key, and the parent when it's a subtask */}
+                                                        <TaskCardContext task={task} parent={parentOf(task, tasksById)} />
 
                                                         {/* Task Title */}
                                                         <h4 className="text-sm text-white font-bold leading-snug mb-xs">{task.title}</h4>
@@ -1511,54 +1646,8 @@ function ProjectPage() {
                                                             <p className="text-[11px] text-muted/70 leading-relaxed mb-md" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
                                                         )}
 
-                                                        {/* Sub-tasks Progress Bar */}
-                                                        {(() => {
-                                                            let subtasksList = [];
-                                                            if (task.sub_tasks) {
-                                                                if (Array.isArray(task.sub_tasks)) {
-                                                                    subtasksList = task.sub_tasks;
-                                                                } else if (typeof task.sub_tasks === "string") {
-                                                                    const trimmed = task.sub_tasks.trim();
-                                                                    if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                                                        try {
-                                                                            const parsed = JSON.parse(trimmed);
-                                                                            if (Array.isArray(parsed)) {
-                                                                                subtasksList = parsed;
-                                                                            } else {
-                                                                                console.warn("Malformed sub_tasks (expected array) for task", task.id, parsed);
-                                                                                subtasksList = [];
-                                                                            }
-                                                                        } catch (e) {
-                                                                            console.warn("Malformed sub_tasks for task", task.id, e);
-                                                                            subtasksList = [];
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                            if (subtasksList.length === 0) return null;
-
-                                                            const completedCount = subtasksList.filter(st => st.done).length;
-                                                            const totalCount = subtasksList.length;
-                                                            const percent = (completedCount / totalCount) * 100;
-
-                                                            return (
-                                                                <div className="mb-md">
-                                                                    <div className="flex items-center justify-between text-[10px] text-muted mb-1 font-medium">
-                                                                        <span className="flex items-center gap-xs">
-                                                                            <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
-                                                                            Sub-tasks
-                                                                        </span>
-                                                                        <span>{completedCount}/{totalCount}</span>
-                                                                    </div>
-                                                                    <div className="w-full bg-surface1 rounded-full h-1 overflow-hidden">
-                                                                        <div
-                                                                            className="bg-[var(--primary-color)] h-full transition-all duration-300"
-                                                                            style={{ width: `${percent}%` }}
-                                                                        ></div>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
+                                                        {/* Subtasks and checklist progress */}
+                                                        <TaskCardProgress task={task} tasks={linkedTasks} />
 
                                                         {/* Footer */}
                                                         <div className="flex items-center justify-between mt-auto pt-sm border-t border-line/20">
@@ -1587,7 +1676,7 @@ function ProjectPage() {
                                                                 )}
                                                                 <button
                                                                     type="button"
-                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id, task.title); }}
+                                                                    onClick={(e) => { e.stopPropagation(); deleteWithUndo([task]); }}
                                                                     className="text-muted hover:text-error transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
                                                                     title="Delete Task"
                                                                 >
@@ -1604,11 +1693,17 @@ function ProjectPage() {
                                                     </div>
                                                 )}
                                             </div>
+                                            {!column.isOverdue && canAddTasks === true && (
+                                                <div className="px-sm pb-sm">
+                                                    <QuickAddTask onAdd={(title) => quickAddTask(title, { column })} />
+                                                </div>
+                                            )}
                                         </div>
                                     )
                                 })}
                                 {canManageColumns && <AddColumnTile columns={boardColumns} onAdd={handleAddColumn} saving={columnSaving} />}
                             </div>
+                            )}
                         </div>
                     )}
 
@@ -1718,7 +1813,7 @@ function ProjectPage() {
                                                 key={(item.isEvent ? 'evt-' : 'tsk-') + item.id}
                                                 onClick={() => {
                                                     if (!item.isEvent) {
-                                                        setSelectedTask(item);
+                                                        openTask(item);
                                                     }
                                                 }}
                                                 className={`bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
@@ -1879,7 +1974,7 @@ function ProjectPage() {
 
                     {/* Calendar Tab */}
                     {activeTab === "calendar" && (
-                        <ProjectCalendar tasks={project_tasks} onPickDay={setSelectedDateEvents} onOpenTask={setSelectedTask} />
+                        <ProjectCalendar tasks={project_tasks} onPickDay={setSelectedDateEvents} onOpenTask={openTask} />
                     )}
                 </div>
             </main>
@@ -1912,379 +2007,66 @@ function ProjectPage() {
                     onCreated={(newTask) => { setProjectTasks(prev => [newTask, ...prev]) }} />
             )}
 
-            {/* Task Details Sidebar */}
+            {/* Task panel (?task_id=…) */}
             {selectedTask && (
-                <div className="fixed inset-0 z-[60] flex justify-end">
-                    {/* Backdrop */}
-                    <div
-                        className="absolute inset-0 bg-canvas/80 backdrop-blur-sm transition-opacity"
-                        onClick={() => setSelectedTask(null)}
-                    ></div>
-
-                    {/* Sidebar */}
-                    <div className="relative w-1/2 bg-raised shadow-2xl h-full overflow-y-auto flex flex-col transform transition-transform duration-300 border-l border-line">
-                        {/* Header */}
-                        <div className="flex items-center justify-between p-lg border-b border-line/30 bg-surface1">
-                            <h2 className="font-headline-md text-white font-bold flex items-center gap-sm">
-                                <span className="material-symbols-outlined">task</span>
-                                Task Details
-                            </h2>
-                            <button
-                                className="text-muted hover:text-white hover:bg-line w-8 h-8 rounded flex items-center justify-center transition-colors cursor-pointer"
-                                onClick={() => setSelectedTask(null)}
-                            >
-                                <span className="material-symbols-outlined">close</span>
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="p-lg space-y-xl flex-1">
-                            <div>
-                                <h1 className="font-headline-lg text-white font-bold mb-sm leading-tight">{selectedTask.title}</h1>
-                                <TaskKeyBar task={selectedTask} className="mb-md" />
-                                <div className="flex flex-wrap gap-sm">
-                                    {(() => {
-                                        const isOverdue = isTaskOverdue(selectedTask);
-                                        const displayStatus = isOverdue ? 'overdue' : selectedTask.status;
-                                        return (
-                                            <span className={`px-md py-1.5 border rounded text-xs uppercase font-bold tracking-wider flex items-center gap-xs ${isOverdue ? 'bg-error/10 border-error/30 text-error' : 'bg-surface1 border border-line/50 text-muted'
-                                                }`}>
-                                                <span className="material-symbols-outlined text-[14px]">{isOverdue ? 'error' : 'flag'}</span>
-                                                {displayStatus.replace('_', ' ')}
-                                            </span>
-                                        );
-                                    })()}
-                                    <div className="relative">
-                                        <button
-                                            className={`px-md py-1.5 rounded border text-xs font-bold uppercase tracking-wider flex items-center gap-xs cursor-pointer hover:opacity-80 transition-opacity ${selectedTask.priority === 'urgent' ? 'bg-error/10 border-error/30 text-error' :
-                                                selectedTask.priority === 'high' ? 'bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]' :
-                                                    selectedTask.priority === 'medium' ? 'bg-tertiary/10 border-tertiary/30 text-tertiary' :
-                                                        'bg-primary-fixed-dim/10 border-primary-fixed-dim/30 text-primary-fixed-dim'
-                                                }`}
-                                            onClick={() => setPriorityDropdownOpen(!priorityDropdownOpen)}
-                                        >
-                                            <span className="material-symbols-outlined text-[14px]">bolt</span>
-                                            {selectedTask.priority || 'Normal'}
-                                        </button>
-                                        {priorityDropdownOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setPriorityDropdownOpen(false)}></div>
-                                                <div className="font-body-md absolute left-0 top-full mt-1 w-32 bg-surface1 border border-line rounded-lg shadow-xl z-[70] overflow-hidden flex flex-col">
-                                                    {['low', 'medium', 'high', 'urgent'].map(p => (
-                                                        <button
-                                                            key={p}
-                                                            className={`text-left px-4 py-2 hover:bg-line transition-colors text-xs font-bold uppercase cursor-pointer ${selectedTask.priority === p ? 'text-primary' : 'text-white'}`}
-                                                            onClick={() => {
-                                                                updateTaskPriority(selectedTask.id, p);
-                                                                setPriorityDropdownOpen(false);
-                                                            }}
-                                                        >
-                                                            {p}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h3 className="font-label-md text-muted uppercase tracking-wider mb-sm flex items-center gap-xs">
-                                    <span className="material-symbols-outlined text-[16px]">description</span>
-                                    Description
-                                </h3>
-                                {selectedTask.description ? (
-                                    <p className="text-sm text-white whitespace-pre-wrap leading-relaxed bg-panel p-md rounded-xl border border-line/20">{selectedTask.description}</p>
-                                ) : (
-                                    <div className="bg-canvas p-md rounded-xl border border-line/20 border-dashed flex flex-col items-center justify-center gap-sm text-center">
-                                        <span className="material-symbols-outlined text-muted/50 text-3xl">notes</span>
-                                        <p className="text-xs text-muted/70 italic">No description provided for this task.</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <h3 className="font-label-md text-muted uppercase tracking-wider mb-sm flex items-center gap-xs">
-                                    <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
-                                    Sub-tasks
-                                </h3>
-                                {(() => {
-                                    const canEditSubtasks = canEditTaskDetails;
-                                    let subtasksList = [];
-                                    if (selectedTask.sub_tasks) {
-                                        if (Array.isArray(selectedTask.sub_tasks)) {
-                                            subtasksList = selectedTask.sub_tasks;
-                                        } else if (typeof selectedTask.sub_tasks === "string") {
-                                            const trimmed = selectedTask.sub_tasks.trim();
-                                            if (trimmed && trimmed !== "null" && trimmed !== "undefined") {
-                                                try {
-                                                    const parsed = JSON.parse(trimmed);
-                                                    if (Array.isArray(parsed)) {
-                                                        subtasksList = parsed;
-                                                    } else {
-                                                        console.warn("Malformed sub_tasks (expected array) for task", selectedTask.id, parsed);
-                                                        subtasksList = [];
-                                                    }
-                                                } catch (e) {
-                                                    console.warn("Malformed sub_tasks for task", selectedTask.id, e);
-                                                    subtasksList = [];
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    const handleToggleSubtask = (stId) => {
-                                        const updated = subtasksList.map(st =>
-                                            st.id === stId ? { ...st, done: !st.done } : st
-                                        );
-                                        updateTaskSubtasks(selectedTask.id, updated);
-                                    };
-
-                                    const handleDeleteSubtask = (stId) => {
-                                        const updated = subtasksList.filter(st => st.id !== stId);
-                                        updateTaskSubtasks(selectedTask.id, updated);
-                                    };
-
-                                    const handleAddSubtask = (e) => {
-                                        e.preventDefault();
-                                        if (!newSubtaskTitle.trim()) return;
-                                        const newSub = {
-                                            id: Math.random().toString(36).substring(2, 9),
-                                            title: newSubtaskTitle.trim(),
-                                            done: false
-                                        };
-                                        updateTaskSubtasks(selectedTask.id, [...subtasksList, newSub]);
-                                        setNewSubtaskTitle("");
-                                    };
-
-                                    return (
-                                        <div className="space-y-sm bg-panel p-md rounded-xl border border-line/20">
-                                            {subtasksList.length > 0 ? (
-                                                <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
-                                                    {subtasksList.map(st => (
-                                                        <div key={st.id} className="flex items-center justify-between gap-sm group/sub">
-                                                            <label className="flex items-center gap-sm cursor-pointer flex-1 py-0.5">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => { if (canEditSubtasks) handleToggleSubtask(st.id) }}
-                                                                    disabled={!canEditSubtasks}
-                                                                    className={`check-btn ${!st.done ? '!bg-transparent !shadow-none !border !border-line hover:!bg-line' : ''} disabled:opacity-50 disabled:cursor-not-allowed !p-0 !w-4 !h-4 !rounded flex items-center justify-center shrink-0`}
-                                                                    title={st.done ? "Mark as incomplete" : "Mark as done"}
-                                                                >
-                                                                    <svg className={`check-icon transition-opacity ${!st.done ? 'opacity-0' : 'opacity-100'} !w-3 !h-3`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                                                                    </svg>
-                                                                </button>
-                                                                <span className={`text-sm text-white leading-tight transition-all ${st.done ? 'line-through text-muted/50' : ''}`}>
-                                                                    {st.title}
-                                                                </span>
-                                                            </label>
-                                                            {canEditSubtasks && (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => handleDeleteSubtask(st.id)}
-                                                                    className="text-muted hover:text-white opacity-0 group-hover/sub:opacity-100 transition-opacity cursor-pointer flex items-center justify-center p-0.5 rounded hover:bg-line"
-                                                                >
-                                                                    <span className="material-symbols-outlined text-[16px]">delete</span>
-                                                                </button>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <p className="text-xs text-muted/60 italic pb-xs">No sub-tasks yet.</p>
-                                            )}
-                                            {canEditSubtasks && (
-                                                <form onSubmit={handleAddSubtask} className="flex items-center gap-xs pt-xs border-t border-line/10">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Add a sub-task..."
-                                                        value={newSubtaskTitle}
-                                                        onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                                                        className="flex-1 bg-canvas border border-line/20 rounded px-sm py-[5px] text-sm text-white placeholder-muted/40 focus:outline-none focus:border-primary/50"
-                                                    />
-                                                    <button
-                                                        type="submit"
-                                                        className="bg-primary text-on-primary hover:bg-primary/90 text-xs font-bold px-sm py-[7px] rounded flex items-center gap-xs cursor-pointer transition-colors"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[14px]">add</span> Add
-                                                    </button>
-                                                </form>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-
-                            <div>
-                                <div className="flex items-center justify-between mb-sm">
-                                    <h3 className="font-label-md text-muted uppercase tracking-wider flex items-center gap-xs">
-                                        <span className="material-symbols-outlined text-[16px]">attach_file</span>
-                                        Attachments
-                                    </h3>
-                                    {canEditTaskDetails && (
-                                        <div>
-                                            <input
-                                                ref={taskFileInputRef}
-                                                type="file"
-                                                accept={ACCEPTED}
-                                                className="hidden"
-                                                onChange={(e) => {
-                                                    if (e.target.files?.[0]) {
-                                                        uploadTaskFile(e.target.files[0], selectedTask.id);
-                                                    }
-                                                }}
-                                            />
-                                            <button
-                                                type="button"
-                                                disabled={taskUploading}
-                                                onClick={() => taskFileInputRef.current?.click()}
-                                                className="flex items-center gap-xs text-xs text-primary font-bold hover:underline cursor-pointer disabled:opacity-50"
-                                            >
-                                                {taskUploading ? (
-                                                    <>
-                                                        <PlanetLoader className="text-[14px]" />
-                                                        Uploading…
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <span className="material-symbols-outlined text-[14px]">add</span>
-                                                        Attach File
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                                {taskUploadError && (
-                                    <p className="text-xs text-error mb-xs">{taskUploadError}</p>
-                                )}
-                                {canEditTaskDetails && !taskUploadError && (
-                                    <p className="text-[10px] text-muted/60 mb-xs">Max file size: {MAX_FILE_SIZE_MB} MB · Files are screened for viruses and disguised executables</p>
-                                )}
-                                {(() => {
-                                    const taskFiles = projectFiles.filter(f => String(f.task_id) === String(selectedTask.id));
-                                    return (
-                                        <div className="space-y-xs bg-panel p-md rounded-xl border border-line/20">
-                                            {taskFiles.length > 0 ? (
-                                                <div className="space-y-xs max-h-48 overflow-y-auto pr-xs">
-                                                    {taskFiles.map(f => {
-                                                        const { icon, color, bg } = getFileStyle(f.type);
-                                                        return (
-                                                            <div key={f.id} className="flex items-center justify-between gap-sm group/file p-1 hover:bg-line/30 rounded transition-colors">
-                                                                <div
-                                                                    onClick={() => setReviewFile(f)}
-                                                                    className="flex items-center gap-sm cursor-pointer min-w-0 flex-1"
-                                                                >
-                                                                    <div className={`w-8 h-8 ${bg} flex items-center justify-center rounded shrink-0`}>
-                                                                        <span className={`material-symbols-outlined text-[18px] ${color}`} style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
-                                                                    </div>
-                                                                    <div className="min-w-0">
-                                                                        <p className="text-sm font-semibold text-white truncate" title={f.name}>{f.name}</p>
-                                                                        <p className="text-[10px] text-muted">
-                                                                            {f.size ? formatBytes(f.size) : ""} {f.uploaded_by ? `· by ${f.uploaded_by}` : ""}
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="flex items-center gap-xs opacity-0 group-hover/file:opacity-100 transition-opacity shrink-0">
-                                                                    <button
-                                                                        type="button"
-                                                                        title="Preview"
-                                                                        onClick={() => setReviewFile(f)}
-                                                                        className="material-symbols-outlined text-muted hover:text-white transition-colors text-[16px] cursor-pointer"
-                                                                    >
-                                                                        visibility
-                                                                    </button>
-                                                                    <a
-                                                                        href={f.url}
-                                                                        download={f.name}
-                                                                        target="_blank"
-                                                                        rel="noreferrer"
-                                                                        title="Download"
-                                                                        className="material-symbols-outlined text-muted hover:text-white transition-colors text-[16px] cursor-pointer"
-                                                                    >
-                                                                        download
-                                                                    </a>
-                                                                    {canEditTaskDetails && (
-                                                                        <button
-                                                                            type="button"
-                                                                            title="Delete"
-                                                                            onClick={() => deleteFile(f)}
-                                                                            className="material-symbols-outlined text-muted hover:text-error transition-colors text-[16px] cursor-pointer"
-                                                                        >
-                                                                            delete
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <p className="text-xs text-muted/60 italic">No attachments yet.</p>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-
-                            <TaskDependenciesPanel
-                                key={selectedTask.id}
-                                task={tasksById.get(String(selectedTask.id)) || { ...selectedTask, blocked_by: [] }}
-                                tasks={linkedTasks}
-                                departments={isCrossDepartment ? projectDepartments : []}
-                                canChangeDepartment={canEditTaskDetails || canDeleteProject === true}
-                                canSetFor={canBlockTask}
-                                onDepartmentChange={(id) => handleTaskDepartmentChange(selectedTask.id, id)}
-                                onAddDependency={handleAddDependency}
-                                onRemoveDependency={handleRemoveDependency}
-                            />
-
-                            <div className="grid grid-cols-2 gap-md">
-                                <div className="bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-muted uppercase tracking-wider flex items-center gap-xs">
-                                        <span className="material-symbols-outlined text-[14px]">person</span> Assignee
-                                    </h3>
-                                    {(() => {
-                                        const assignee = selectedTask.assignee_id ? orgUsers.find(u => u.id === selectedTask.assignee_id) : null;
-                                        return assignee ? (
-                                            <div className="flex items-center gap-sm mt-1">
-                                                <div className="w-6 h-6 rounded-full overflow-hidden bg-surface1 border border-line/50 flex items-center justify-center text-[10px] font-bold text-muted uppercase">
-                                                    <PersonPhoto userId={assignee.id} fallback={assignee.name.charAt(0)} />
-                                                </div>
-                                                <div className="min-w-0 space-y-1">
-                                                    <p className="text-sm text-white font-semibold">{assignee.name}</p>
-                                                    <AwayBadge person={awayPeriods.get(assignee.id)} />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <p className="text-sm text-white mt-1 italic opacity-70">Unassigned</p>
-                                        );
-                                    })()}
-                                </div>
-                                <div className="bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs">
-                                    <h3 className="font-label-sm text-muted uppercase tracking-wider flex items-center gap-xs">
-                                        <span className="material-symbols-outlined text-[14px]">calendar_today</span> Deadline
-                                    </h3>
-                                    <TaskDeadline
-                                        key={selectedTask.id}
-                                        dueDate={selectedTask.due_date}
-                                        canEdit={canEditTaskDeadline(selectedTask)}
-                                        onSave={(nextDate) => handleTaskDeadlineSave(selectedTask.id, nextDate)}
-                                    />
-                                </div>
-                            </div>
-
-                            <TaskComments key={selectedTask.id} taskId={selectedTask.id} />
-
-                            <div className="pt-md mt-auto flex justify-end items-center text-[11px] text-muted border-t border-line/20">
-                                <span>Created {new Date(selectedTask.created_at).toLocaleDateString()}</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <TaskPanel
+                    key={selectedTask.id}
+                    task={selectedTask}
+                    parent={parentOf(selectedTask, tasksById)}
+                    subtasks={subtasksOf(linkedTasks, selectedTask.id)}
+                    projectName={project_name}
+                    linkUrl={`${window.location.origin}/project_page/${project_id}?task_id=${selectedTask.id}`}
+                    columns={boardColumns}
+                    columnKey={columnKeyForTask(selectedTask, boardColumns)}
+                    departmentId={selectedTask.team_space_id ?? leadDepartmentId}
+                    people={orgUsers}
+                    awayPeriods={awayPeriods}
+                    files={projectFiles.filter((f) => String(f.task_id) === String(selectedTask.id))}
+                    uploadState={{ isUploading: taskUploading, error: taskUploadError }}
+                    can={{
+                        edit: canEditTaskDetails,
+                        move: canAddTasks === true,
+                        editDeadline: canEditTaskDeadline(selectedTask),
+                        addSubtasks: canAddTasks === true && canHaveSubtasks(selectedTask),
+                        delete: canDeleteProject === true || selectedTask.created_by === currentUserId,
+                    }}
+                    historyVersion={selectedTask.updated_at || `${selectedTask.status}|${selectedTask.title}`}
+                    dependencies={(
+                        <TaskDependenciesPanel
+                            key={selectedTask.id}
+                            task={selectedTask}
+                            tasks={linkedTasks}
+                            departments={isCrossDepartment ? projectDepartments : []}
+                            canChangeDepartment={canEditTaskDetails || canDeleteProject === true}
+                            canSetFor={canBlockTask}
+                            onDepartmentChange={(id) => handleTaskDepartmentChange(selectedTask.id, id)}
+                            onAddDependency={handleAddDependency}
+                            onRemoveDependency={handleRemoveDependency}
+                        />
+                    )}
+                    onClose={closeTask}
+                    onOpenTask={openTask}
+                    onSave={(changes) => saveTask(selectedTask.id, changes)}
+                    onMove={(column) => moveTask(selectedTask, column).then((m) => (m?.startsWith("Couldn't") ? m : null))}
+                    onDeadlineSave={(nextDate) => handleTaskDeadlineSave(selectedTask.id, nextDate)}
+                    onChecklistChange={(items) => updateTaskSubtasks(selectedTask.id, items)}
+                    onAddSubtask={(title) => addSubtask(selectedTask, title)}
+                    onToggleSubtask={toggleSubtask}
+                    onUpload={(file) => uploadTaskFile(file, selectedTask.id)}
+                    onPreviewFile={setReviewFile}
+                    onDeleteFile={async (f) => { const message = await deleteFile(f); setTaskUploadError(message || "") }}
+                    onDelete={(task) => deleteWithUndo([task])}
+                    onStep={(direction) => {
+                        // J / K: the next or previous task in what the Tasks tab shows
+                        const order = visibleTasks.some((t) => String(t.id) === String(selectedTask.id)) ? visibleTasks : linkedTasks
+                        const at = order.findIndex((t) => String(t.id) === String(selectedTask.id))
+                        const next = order[at + direction]
+                        if (next) openTask(next)
+                    }}
+                />
             )}
+
+            <UndoToast pending={undoable.pending} onUndo={undoable.undo} />
 
             {/* Post-upload file review modal */}
             {reviewFile && (

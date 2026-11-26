@@ -489,7 +489,7 @@ export default function Reports() {
 
         <main
           className={`${
-            sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"
+            sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"
           } flex-1 flex flex-col transition-all duration-300 ease-out`}
         >
           <div className="p-6 md:p-8 space-y-7 max-w-[1400px] w-full mx-auto">

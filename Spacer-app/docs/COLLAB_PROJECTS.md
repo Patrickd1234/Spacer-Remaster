@@ -21,7 +21,7 @@ After a review on 25 Nov 2026 ("collaboration isn't smooth; show when a departme
 | A | Trustworthy signal: "waiting" vs "holding up", live updates on the project page, a lead needed when accepting an invite, department dates follow the deadline | Done, applied 26 Nov 2026 |
 | B | Visible everywhere: health pill in the project header, hold-ups panel on Home, red dots in the sidebar, edged board cards, hourly automatic alerts | Done, applied 26 Nov 2026 |
 | C | Steps 3 to 5 above | Done, applied 26 Nov 2026 |
-| D | Several dependencies per task (either side), department timeline with dependency arrows, department scorecard in Reports | Code done; migration `20261126120000` not applied yet |
+| D | Several dependencies per task (either side), department timeline with dependency arrows, department scorecard in Reports | Done, applied 26 Nov 2026 |
 
 Decisions: an invited department must accept; the overall project lead comes from the lead department and gets no extra rights; removing a department moves its tasks to the lead department; department leads get exactly the three rights in step 4.
 
@@ -77,7 +77,7 @@ Decisions: an invited department must accept; the overall project lead comes fro
 | `20261126090000_realtime_project_departments` (applied 26 Nov 2026) | `supabase/rollback/20261126090000_realtime_project_departments_rollback.sql` | Broadcast `project_departments` over Realtime for the project page |
 | `20261126100000_department_holdup_alerts` (applied 26 Nov 2026) | `supabase/rollback/20261126100000_department_holdup_alerts_rollback.sql` | `task_holdup_alerts`, `notify_department_holdups()`, hourly cron job, notification type `department_holdup`. Dry run on live, rolled back: see the development log |
 | `20261126110000_collab_department_management` (applied 26 Nov 2026) | `supabase/rollback/20261126110000_collab_department_management_rollback.sql` | `leads_department_on_project()`, `add_project_department()`, moving a removed department's tasks, department leads' rights (task deadlines, adding their people, their part's due date). Dry run on live, rolled back: see the development log |
-| `20261126120000_task_dependencies` (not applied) | `supabase/rollback/20261126120000_task_dependencies_rollback.sql` | `task_dependencies` (RLS, Realtime), rights, loop check, guard, notices, resolving on done, the old column retired, the hourly alerts reading the new table. Dry run on live, rolled back: see the development log |
+| `20261126120000_task_dependencies` (applied 26 Nov 2026) | `supabase/rollback/20261126120000_task_dependencies_rollback.sql` | `task_dependencies` (RLS, Realtime), rights, loop check, guard, notices, resolving on done, the old column retired, the hourly alerts reading the new table. Dry run on live, rolled back: see the development log |
 
 Apply `20261124130000_department_invites` before using an app build with invites: the Create Project form lists departments through `organization_departments()` and reads `create_project()`'s new result.
 

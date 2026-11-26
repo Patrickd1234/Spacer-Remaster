@@ -1,38 +1,8 @@
 import { useEffect, useState } from "react"
-import { supabase } from "../supabase"
 import { formatTaskKey, branchName } from "./taskKey"
+import { useTaskKeyPrefix } from "./taskKeyPrefixes"
 
 const COPIED_MS = 1500
-
-// Every prefix in the viewer's organization as Map(scope id -> prefix): one
-// per project, plus the organization's own (task_key_prefixes()). Loaded
-// once per page; empty when unavailable (e.g. before migration
-// 20261119100000_task_keys), and tried again next time.
-let prefixRequest = null
-function loadPrefixes() {
-    if (!prefixRequest) {
-        prefixRequest = supabase.rpc("task_key_prefixes").then(({ data, error }) => {
-            if (error) {
-                console.warn("Task key prefixes unavailable:", error)
-                prefixRequest = null
-            }
-            return new Map((data || []).map((row) => [row.scope_id, row.prefix]))
-        })
-    }
-    return prefixRequest
-}
-
-// The prefix of the project (or organization) the task counts in
-function useTaskKeyPrefix(scopeId) {
-    const [prefix, setPrefix] = useState(null)
-    useEffect(() => {
-        if (!scopeId) return
-        let active = true
-        loadPrefixes().then((prefixes) => { if (active) setPrefix(prefixes.get(scopeId) ?? null) })
-        return () => { active = false }
-    }, [scopeId])
-    return prefix
-}
 
 function CopyButton({ text, icon, label, copiedLabel, className }) {
     const [isCopied, setIsCopied] = useState(false)
@@ -87,4 +57,10 @@ export default function TaskKeyBar({ task, className = "" }) {
             />
         </div>
     )
+}
+
+// Just the key ("DEVNGT-12") as quiet text, for lists; nothing until known
+export function TaskKeyText({ task, className = "" }) {
+    const key = formatTaskKey(useTaskKeyPrefix(task?.task_key_scope), task?.task_number)
+    return key ? <span className={`font-mono text-[11px] text-muted ${className}`}>{key}</span> : null
 }

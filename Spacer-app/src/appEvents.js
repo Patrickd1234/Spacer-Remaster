@@ -17,3 +17,11 @@ export const AVAILABILITY_SAVED_EVENT = "availability_saved";
 // Someone changed or removed their own photo (generalData.updateMyAvatar /
 // removeMyAvatar); detail is { userId, path }, path null when removed
 export const AVATAR_CHANGED_EVENT = "avatar_changed";
+// Ask the header's Create menu to open one of its forms ("task", "project" or
+// "meeting"), e.g. from the command palette or the C shortcut; detail is { action }
+export const OPEN_CREATE_EVENT = "open_create";
+export const requestCreate = (action) => window.dispatchEvent(new CustomEvent(OPEN_CREATE_EVENT, { detail: { action } }));
+// Open the command palette (the header's search button); no detail
+export const OPEN_PALETTE_EVENT = "open_command_palette";
+// Open or close the sidebar on a phone (the header's menu button); no detail
+export const TOGGLE_NAV_EVENT = "toggle_nav";

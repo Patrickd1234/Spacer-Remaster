@@ -75,7 +75,7 @@ function Home() {
                     breadcrumb={isSuperAdmin ? { icon: "home", label: "Home" } : { icon: "person", label: "My Space" }}
                     insetLeft={sidebarCollapsed ? 72 : 260}
                 />
-                <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
+                <main className={`${sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
                     <div className="p-8 space-y-6 max-w-[1400px] w-full mx-auto">
                         {!isReady && (
                             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

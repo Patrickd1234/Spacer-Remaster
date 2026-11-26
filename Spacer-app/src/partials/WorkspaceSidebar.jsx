@@ -10,7 +10,7 @@ import { projectsInDepartment } from "../projectDepartments"
 import { readSavedOrgName, saveOrgName } from "../orgNameCache"
 import { readSavedProjectList, saveProjectList } from "../projectListCache"
 import { visibleProjects } from "../projectVisibility"
-import { PROJECT_CREATED_EVENT } from "../appEvents"
+import { PROJECT_CREATED_EVENT, TOGGLE_NAV_EVENT } from "../appEvents"
 import { useHoldups } from "../holdupsData"
 import { heldUpProjects } from "../holdups"
 
@@ -51,7 +51,24 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
     const [dbUser, setDbUser] = useState(null)
     const [orgName, setOrgName] = useState(readSavedOrgName)
     const [showCreateModal, setShowCreateModal] = useState(false)
-    const isExpanded = !collapsed || hovered
+    // On a phone the sidebar is a drawer, opened from the header's menu button.
+    // It's open for the page it was opened on, so going anywhere closes it.
+    const [drawerPath, setDrawerPath] = useState(null)
+    const isDrawerOpen = drawerPath !== null && drawerPath === location.pathname
+    const closeDrawer = () => setDrawerPath(null)
+    useEffect(() => {
+        const onToggle = () => setDrawerPath((open) => (open === window.location.pathname ? null : window.location.pathname))
+        window.addEventListener(TOGGLE_NAV_EVENT, onToggle)
+        return () => window.removeEventListener(TOGGLE_NAV_EVENT, onToggle)
+    }, [])
+    useEffect(() => {
+        if (!isDrawerOpen) return undefined
+        const onKey = (e) => { if (e.key === "Escape") setDrawerPath(null) }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    }, [isDrawerOpen])
+    // Labels always show in the drawer
+    const isExpanded = !collapsed || hovered || isDrawerOpen
     // Red dots on projects where one department is holding another up
     const holdups = useHoldups()
     const heldUp = heldUpProjects(holdups.rows, holdups.nameOf)
@@ -200,8 +217,10 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
 
     return (
         <>
+            {isDrawerOpen && <div className="md:hidden fixed inset-0 z-[49] bg-canvas/70 backdrop-blur-[2px]" onClick={closeDrawer} aria-hidden="true" />}
             <aside
-                className={`fixed left-0 top-0 h-full ${isExpanded ? "w-[260px]" : "w-[72px]"} border-r border-line bg-surface1 flex flex-col pt-5 pb-3 z-50 transition-all duration-300 ease-out overflow-hidden`}
+                aria-label="Workspace navigation"
+                className={`fixed left-0 top-0 h-full ${isExpanded ? "w-[260px]" : "w-[72px]"} max-w-[85vw] border-r border-line bg-surface1 flex flex-col pt-5 pb-3 z-50 transition-all duration-300 ease-out overflow-hidden ${isDrawerOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"} md:translate-x-0 md:shadow-none`}
                 onMouseEnter={() => { if (collapsed) setHovered(true) }}
                 onMouseLeave={() => setHovered(false)}
                 onClick={() => { if (collapsed && hovered) setCollapsedState(false) }}
@@ -278,7 +297,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                         {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={pathname === `/project_page/${p.id}`} alert={heldUp.get(String(p.id)) ?? null} />)}
                     </NavSection>
 
-                    <NavButton icon="chat" label="Messages" onClick={onOpenMessages} isActive={isMessagesOpen} isExpanded={isExpanded} badge={unreadMessages} />
+                    <NavButton icon="chat" label="Messages" onClick={() => { closeDrawer(); onOpenMessages?.() }} isActive={isMessagesOpen} isExpanded={isExpanded} badge={unreadMessages} />
                     <NavLink to="/calendar" icon="calendar_today" label="Calendar" isActive={pathname === "/calendar"} isExpanded={isExpanded} />
                     <NavLink to="/reports" icon="bar_chart" label="Reports" isActive={pathname === "/reports"} isExpanded={isExpanded} />
                 </nav>

@@ -195,7 +195,8 @@ function CommentItem({ comment, selfId, canModerate, people, names, onSaved, onD
 
 // The conversation on a task: everyone who can see the task reads and adds
 // comments; changes from others appear live.
-export default function TaskComments({ taskId }) {
+// `showHeading` false when a surrounding tab already says "Comments"
+export default function TaskComments({ taskId, showHeading = true }) {
     const [comments, setComments] = useState(null)
     const [loadError, setLoadError] = useState(false)
     const [actionError, setActionError] = useState("")
@@ -250,10 +251,12 @@ export default function TaskComments({ taskId }) {
 
     return (
         <section aria-label="Comments" className="space-y-3">
-            <h4 className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">forum</span>
-                Comments{comments?.length ? ` (${comments.length})` : ""}
-            </h4>
+            {showHeading && (
+                <h4 className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">forum</span>
+                    Comments{comments?.length ? ` (${comments.length})` : ""}
+                </h4>
+            )}
             {comments === null && <p className="text-[12px] text-muted">Loading comments…</p>}
             {loadError && (
                 <p role="alert" className="text-[12px] text-red-400">

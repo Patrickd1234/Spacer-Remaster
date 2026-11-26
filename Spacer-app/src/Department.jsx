@@ -450,7 +450,7 @@ return (
     <div className="bg-canvas min-h-screen text-white font-sans antialiased flex flex-col">
         <Sidebar onCollapsedChange={setSidebarCollapsed} />
         <Header />
-        <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
+        <main className={`${sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
 
             {/* Top Controls Header */}
             <div className="bg-field border-b border-line px-8 py-4 flex items-center justify-between sticky top-16 z-30">
@@ -905,4 +905,4 @@ return (
 )
 }
 
-export default Department;
+export default Department;

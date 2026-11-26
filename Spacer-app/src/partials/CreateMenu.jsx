@@ -3,7 +3,7 @@ import { useMatch, useNavigate } from "react-router-dom"
 import { supabase, getSessionUser } from "../supabase"
 import { useRole } from "../RoleContext"
 import { createdToast, failedToast } from "../createDepartment"
-import { DEPARTMENT_CREATED_EVENT, TASK_CREATED_EVENT, MEETING_SAVED_EVENT } from "../appEvents"
+import { DEPARTMENT_CREATED_EVENT, TASK_CREATED_EVENT, MEETING_SAVED_EVENT, OPEN_CREATE_EVENT } from "../appEvents"
 import CreateDepartmentModal from "./CreateDepartmentModal"
 import CreateProjectModal from "./CreateProjectModal"
 import CreateTaskModal from "./CreateTaskModal"
@@ -89,6 +89,16 @@ export default function CreateMenu({ isSuperAdmin }) {
             setOpenModal(action)
         }
     }
+    // The command palette and the C shortcut open a form here
+    useEffect(() => {
+        const onRequest = (e) => {
+            const action = e.detail?.action
+            if (["task", "project", "meeting"].includes(action)) choose(action)
+        }
+        window.addEventListener(OPEN_CREATE_EVENT, onRequest)
+        return () => window.removeEventListener(OPEN_CREATE_EVENT, onRequest)
+    })
+
     // New tasks on a cross-department project go to your department there, else the lead one
     const projectDepartments = projectContext?.departments ?? []
     const defaultDepartmentId = projectDepartments.find((d) => departments.some((m) => String(m.team_space_id) === String(d.team_space_id)))?.team_space_id
@@ -125,11 +135,12 @@ export default function CreateMenu({ isSuperAdmin }) {
                     onClick={() => setIsOpen((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={isOpen}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-raised border border-line text-sm text-white hover:border-line-strong transition-colors cursor-pointer"
+                    aria-label="Create"
+                    className="flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-lg bg-raised border border-line text-sm text-white hover:border-line-strong transition-colors cursor-pointer"
                 >
-                    <span className="material-symbols-outlined text-[18px] text-muted">add_circle</span>
-                    Create
-                    <span className={`material-symbols-outlined text-[18px] text-muted transition-transform ${isOpen ? "rotate-180" : ""}`}>expand_more</span>
+                    <span className="material-symbols-outlined text-[18px] text-muted" aria-hidden="true">add_circle</span>
+                    <span className="hidden sm:inline">Create</span>
+                    <span className={`hidden sm:inline material-symbols-outlined text-[18px] text-muted transition-transform ${isOpen ? "rotate-180" : ""}`} aria-hidden="true">expand_more</span>
                 </button>
                 {isOpen && (
                     <div role="menu" className="font-body-md absolute right-0 mt-2 w-52 bg-raised border border-line rounded-xl shadow-xl p-1 z-50">

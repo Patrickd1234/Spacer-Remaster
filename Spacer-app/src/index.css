@@ -905,3 +905,18 @@ body.orbit-app aside.fixed.left-0 {
   background-repeat: no-repeat;
   backdrop-filter: blur(2px);
 }
+
+/* The task panel slides in from the right (TaskPanel.jsx) */
+@keyframes task-panel-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [class*="task-panel-in"] { animation: none !important; }
+}
+
+/* The undo toast's time running down (UndoToast.jsx) */
+@keyframes undo-countdown {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}

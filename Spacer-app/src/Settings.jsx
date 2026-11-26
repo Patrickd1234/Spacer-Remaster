@@ -184,7 +184,7 @@ export default function Settings() {
                 </div>
             )}
 
-            <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col min-h-screen bg-canvas text-white transition-all duration-300 ease-out`}>
+            <main className={`${sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"} flex-1 flex flex-col min-h-screen bg-canvas text-white transition-all duration-300 ease-out`}>
                 <div className="p-lg space-y-lg max-w-7xl w-full mx-auto">
 
                     {/* Header & Breadcrumb */}

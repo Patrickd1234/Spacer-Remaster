@@ -16,7 +16,7 @@ export function GeneralShell({ page, section = "General Space", icon = "workspac
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <div className="flex-1 flex flex-col min-w-0">
                 <Header breadcrumb={{ icon, label: section ? `${section} › ${page}` : page }} insetLeft={inset} />
-                <main className="flex-1 flex flex-col transition-all duration-300 ease-out" style={{ marginLeft: inset }}>
+                <main className="flex-1 flex flex-col transition-all duration-300 ease-out md:ml-[var(--inset)]" style={{ "--inset": `${inset}px` }}>
                     <div className="p-8 space-y-6 max-w-[1400px] w-full mx-auto">{children}</div>
                 </main>
             </div>

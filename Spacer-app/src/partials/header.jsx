@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import CommandPalette from "../search/CommandPalette";
+import { OPEN_PALETTE_EVENT, TOGGLE_NAV_EVENT } from "../appEvents";
 import { useNavigate } from "react-router-dom";
-import { supabase, getSessionUser } from "../supabase";
+import { getSessionUser } from "../supabase";
 import {
     fetchNotificationActivities,
     fetchOpenAssignedTasks,
@@ -16,7 +18,6 @@ import { usePreferences } from "../PreferencesContext";
 import { useRole } from "../RoleContext";
 import CreateMenu from "./CreateMenu";
 import PlanetLoader from "../components/PlanetLoader";
-import PersonPhoto from "../avatars/PersonPhoto";
 
 // `breadcrumb` ({ icon, label }) is optional; pages that show their own keep it off.
 // The header sits under the fixed sidebar, so `insetLeft` (px) moves the breadcrumb clear of it.
@@ -37,8 +38,8 @@ const PERSONAL_MESSAGES = {
 }
 const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble", task_blocked: "hourglass_top", task_unblocked: "lock_open", department_nudge: "campaign", department_invite: "handshake", department_invite_reply: "handshake", department_holdup: "hourglass_top" }
 
-function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
-    const { isSuperAdmin, isAdmin, roleLoading } = useRole();
+function Header({ breadcrumb = null, insetLeft = 0 }) {
+    const { isSuperAdmin, isAdmin, roleLoading, canAnywhere } = useRole();
     const navigate = useNavigate();
     const [showNotifications, setShowNotifications] = useState(() => {
         if (typeof window === "undefined") return false;
@@ -49,8 +50,6 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
         }
         return false;
     });
-    const [searchQuery, setSearchQuery] = useState("");
-    const [searchIndex, setSearchIndex] = useState(-1);
     const [activities, setActivities] = useState([]);
     const [reminders, setReminders] = useState([]);
     const [personal, setPersonal] = useState([]);
@@ -58,74 +57,8 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const [readState, setReadState] = useState({ lastReadAt: null, ids: [] });
     const [notificationsLoading, setNotificationsLoading] = useState(false);
     
-    // Search dropdown state
-    const [searchResults, setSearchResults] = useState({ tasks: [], projects: [], users: [] });
-    const [isSearching, setIsSearching] = useState(false);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const searchRef = useRef(null);
     const notificationRef = useRef(null);
     const { preferences } = usePreferences();
-
-    const searchItems = [
-        ...searchResults.projects.map((project) => ({
-            type: "project",
-            id: `project-${project.id}`,
-            label: project.name,
-            path: `/project_page/${project.id}`,
-        })),
-        ...searchResults.tasks.map((task) => ({
-            type: "task",
-            id: `task-${task.id}`,
-            label: task.title,
-            path: "/tasks",
-        })),
-        ...searchResults.users.map((user) => ({
-            type: "user",
-            id: `user-${user.id}`,
-            label: user.name,
-            path: null,
-        })),
-    ];
-
-    const handleSearchResultSelect = (item) => {
-        if (!item) return;
-
-        setSearchQuery(item.label);
-        setShowDropdown(false);
-        setSearchIndex(-1);
-
-        if (item.path) {
-            navigate(item.path);
-        }
-    };
-
-    const handleSearchInputKeyDown = (event) => {
-        if (!showDropdown || searchItems.length === 0) return;
-
-        if (event.key === "ArrowDown") {
-            event.preventDefault();
-            setSearchIndex((prevIndex) => Math.min(prevIndex + 1, searchItems.length - 1));
-            return;
-        }
-
-        if (event.key === "ArrowUp") {
-            event.preventDefault();
-            setSearchIndex((prevIndex) => Math.max(prevIndex - 1, 0));
-            return;
-        }
-
-        if (event.key === "Enter") {
-            event.preventDefault();
-            const selectedItem = searchItems[searchIndex >= 0 ? searchIndex : 0];
-            handleSearchResultSelect(selectedItem);
-            return;
-        }
-
-        if (event.key === "Escape") {
-            event.preventDefault();
-            setShowDropdown(false);
-        }
-    };
 
     const formatTime = (value) => {
         if (!value) return "Just now";
@@ -136,12 +69,9 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
         return `${Math.floor(diffInSeconds / 86400)}d ago`;
     };
 
-    // Handle outside click for search and notification dropdowns
+    // Handle outside click for the notification dropdown
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (searchRef.current && !searchRef.current.contains(event.target)) {
-                setShowDropdown(false);
-            }
             if (notificationRef.current && !notificationRef.current.contains(event.target)) {
                 setShowNotifications(false);
             }
@@ -149,41 +79,6 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
-
-    // Debounced search effect
-    useEffect(() => {
-        const fetchResults = async () => {
-            if (!searchQuery.trim()) {
-                setSearchResults({ tasks: [], projects: [], users: [] });
-                setIsSearching(false);
-                setSearchIndex(-1);
-                return;
-            }
-
-            setIsSearching(true);
-            const query = `%${searchQuery.trim()}%`;
-
-            const [tasksRes, projectsRes, usersRes] = await Promise.all([
-                supabase.from('tasks').select('id, title').ilike('title', query).limit(3),
-                supabase.from('project_spaces').select('id, name').ilike('name', query).limit(3),
-                supabase.from('users').select('id, name, email').ilike('name', query).limit(3)
-            ]);
-
-            setSearchResults({
-                tasks: tasksRes.data || [],
-                projects: projectsRes.data || [],
-                users: usersRes.data || []
-            });
-            setIsSearching(false);
-            setShowDropdown(true);
-        };
-
-        const timer = setTimeout(() => {
-            fetchResults();
-        }, 300); // 300ms debounce
-
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
 
     const formatActivityTitle = (activity) => {
         const actorName = activity.actor?.name || "Someone";
@@ -319,15 +214,22 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
         }
     };
 
-    const hasResults = searchResults.tasks.length > 0 || searchResults.projects.length > 0 || searchResults.users.length > 0;
     const unreadCount = notifications.filter((notification) => notification.unread).length;
 
     return (
         <>
             {/* HEADER */}
             <header className="h-16 flex items-center justify-between gap-3 px-3 sm:px-lg w-full border-b border-line bg-canvas sticky top-0 z-40">
+                <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent(TOGGLE_NAV_EVENT))}
+                    aria-label="Open the menu"
+                    className="md:hidden w-9 h-9 shrink-0 flex items-center justify-center rounded-lg border border-line text-muted hover:text-white transition-colors cursor-pointer"
+                >
+                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">menu</span>
+                </button>
                 {breadcrumb && (
-                    <div className="flex items-center gap-2 text-sm text-white font-medium transition-[margin] duration-300" style={{ marginLeft: insetLeft }}>
+                    <div className="hidden sm:flex items-center gap-2 text-sm text-white font-medium transition-[margin] duration-300 md:ml-[var(--inset)]" style={{ "--inset": `${insetLeft}px` }}>
                         <span className="material-symbols-outlined text-[18px] text-muted">{breadcrumb.icon}</span>
                         {breadcrumb.label}
                     </div>
@@ -336,103 +238,18 @@ function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
                     {!roleLoading && <CreateMenu isSuperAdmin={isSuperAdmin} />}
 
                     
-                    {/* SEARCH BAR CONTAINER */}
-                    <div className="relative w-full max-w-[220px] sm:max-w-[260px]" ref={searchRef}>
-                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-muted">search</span>
-                        <input
-                            className="w-full bg-raised border border-line rounded-lg pl-10 pr-4 py-2 text-white text-xs focus:ring-1 focus:ring-accent-ink focus:outline-none transition-colors"
-                            placeholder="Search workspace..."
-                            type="text"
-                            value={searchQuery}
-                            onFocus={() => { if (searchQuery) setShowDropdown(true); }}
-                            onChange={(e) => {
-                                setSearchQuery(e.target.value);
-                                setSearchIndex(-1);
-                                onSearch(e.target.value); // Keep passing up if Home needs it
-                            }}
-                            onKeyDown={handleSearchInputKeyDown}
-                        />
-
-                        {/* SEARCH DROPDOWN */}
-                        {showDropdown && searchQuery.trim().length > 0 && (
-                            <div className="font-body-md absolute top-full left-0 right-0 mt-2 bg-surface1 border border-line rounded-xl shadow-xl overflow-hidden z-50">
-                                {isSearching ? (
-                                    <div className="p-4 text-center text-sm text-muted flex items-center justify-center gap-2">
-                                        <PlanetLoader className="text-[16px]" />
-                                        Searching...
-                                    </div>
-                                ) : !hasResults ? (
-                                    <div className="p-4 text-center text-sm text-muted">
-                                        No results found for "{searchQuery}"
-                                    </div>
-                                ) : (
-                                    <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
-                                        {searchResults.projects.length > 0 && (
-                                            <div className="py-2">
-                                                <div className="px-3 py-1 text-xs font-bold text-muted uppercase tracking-wider">Projects</div>
-                                                {searchResults.projects.map((p) => {
-                                                    const itemIndex = searchItems.findIndex((item) => item.id === `project-${p.id}`);
-                                                    return (
-                                                        <div
-                                                            key={p.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-line" : "hover:bg-line"}`}
-                                                            onMouseEnter={() => setSearchIndex(itemIndex)}
-                                                            onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
-                                                        >
-                                                            <span className="material-symbols-outlined text-[16px] text-pink-400">book</span>
-                                                            <span className="truncate">{p.name}</span>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
-                                        {searchResults.tasks.length > 0 && (
-                                            <div className="py-2 border-t border-line/50">
-                                                <div className="px-3 py-1 text-xs font-bold text-muted uppercase tracking-wider">Tasks</div>
-                                                {searchResults.tasks.map((t) => {
-                                                    const itemIndex = searchItems.findIndex((item) => item.id === `task-${t.id}`);
-                                                    return (
-                                                        <div
-                                                            key={t.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-line" : "hover:bg-line"}`}
-                                                            onMouseEnter={() => setSearchIndex(itemIndex)}
-                                                            onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
-                                                        >
-                                                            <span className="material-symbols-outlined text-[16px] text-primary-accent">task_alt</span>
-                                                            <span className="truncate">{t.title}</span>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
-                                        {searchResults.users.length > 0 && (
-                                            <div className="py-2 border-t border-line/50">
-                                                <div className="px-3 py-1 text-xs font-bold text-muted uppercase tracking-wider">People</div>
-                                                {searchResults.users.map((u) => {
-                                                    const itemIndex = searchItems.findIndex((item) => item.id === `user-${u.id}`);
-                                                    return (
-                                                        <div
-                                                            key={u.id}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center gap-2 text-sm transition-colors ${searchIndex === itemIndex ? "bg-line" : "hover:bg-line"}`}
-                                                            onMouseEnter={() => setSearchIndex(itemIndex)}
-                                                            onMouseDown={() => handleSearchResultSelect(searchItems[itemIndex])}
-                                                        >
-                                                            <div className="w-5 h-5 rounded-full overflow-hidden bg-line-strong flex items-center justify-center text-[10px] font-bold">
-                                                                <PersonPhoto userId={u.id} fallback={u.name.charAt(0).toUpperCase()} />
-                                                            </div>
-                                                            <div className="flex flex-col truncate">
-                                                                <span>{u.name}</span>
-                                                            </div>
-                                                        </div>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
+                    {/* Search: opens the command palette (Ctrl+K) */}
+                    <button
+                        type="button"
+                        onClick={() => window.dispatchEvent(new CustomEvent(OPEN_PALETTE_EVENT))}
+                        aria-label="Search and jump (Ctrl+K)"
+                        className="flex items-center gap-2 h-9 w-9 sm:w-[240px] justify-center sm:justify-start sm:px-3 rounded-lg bg-raised border border-line text-muted hover:text-white hover:border-line-strong transition-colors cursor-pointer"
+                    >
+                        <span className="material-symbols-outlined text-[18px]" aria-hidden="true">search</span>
+                        <span className="hidden sm:inline flex-1 text-left text-xs">Search or jump to…</span>
+                        <kbd className="hidden sm:inline-flex items-center h-5 px-1.5 rounded border border-line text-[10px] font-semibold font-sans">Ctrl K</kbd>
+                    </button>
+                    <CommandPalette canCreateProject={isSuperAdmin || canAnywhere("project.create")} />
 
                     <div className="relative" ref={notificationRef}>
                         <button

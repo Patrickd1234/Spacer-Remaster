@@ -20,7 +20,7 @@ function SubtaskProgress({ task }) {
             <div className="flex items-center justify-between text-[10px] text-muted mb-1 font-medium">
                 <span className="flex items-center gap-1">
                     <span className="material-symbols-outlined text-[12px]">format_list_bulleted</span>
-                    Sub-tasks
+                    Checklist
                 </span>
                 <span>{done}/{subtasks.length}</span>
             </div>
@@ -168,11 +168,11 @@ export function TaskDetailsDrawer({ task, onClose, onSubtasksChange, onStatusCha
                     <div className="mb-6 space-y-3">
                         <h4 className="text-xs font-semibold text-muted uppercase tracking-wider flex items-center gap-1">
                             <span className="material-symbols-outlined text-[14px]">format_list_bulleted</span>
-                            Sub-tasks
+                            Checklist
                         </h4>
                         <div className="bg-panel p-4 rounded-xl border border-line space-y-2">
                             {subtasks.length === 0 ? (
-                                <p className="text-[11px] text-muted italic">No sub-tasks added yet.</p>
+                                <p className="text-[11px] text-muted italic">Nothing on the checklist yet.</p>
                             ) : (
                                 <div className="space-y-1">
                                     {subtasks.map((st) => (

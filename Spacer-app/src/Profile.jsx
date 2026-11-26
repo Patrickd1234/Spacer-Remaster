@@ -239,7 +239,7 @@ function Profile() {
         <>
             <Sidebar />
             <Header />
-            <main className="ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-soft">
+            <main className="md:ml-[260px] flex-1 flex flex-col min-h-screen bg-background text-soft">
                 {/* Toast Notification */}
                 {toast && (
                     <div className={`fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md transition-all animate-bounce ${toast.type === "error" ? "bg-red-950/80 border-red-500/50 text-red-200" : "bg-emerald-950/80 border-emerald-500/50 text-emerald-200"}`}>

@@ -35,7 +35,7 @@ export default function TaskDeadline({ dueDate, canEdit, onSave }) {
                     disabled={saving}
                     defaultValue={dueDate ? dueDate.slice(0, 10) : ""}
                     onChange={(e) => e.target.value && save(e.target.value)}
-                    onKeyDown={(e) => e.key === "Escape" && cancel()}
+                    onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); cancel() } }}
                     aria-label="Task deadline"
                     className="bg-canvas border border-line rounded-md px-2 py-1 text-xs text-white focus:outline-none focus:border-accent-ink/50"
                 />

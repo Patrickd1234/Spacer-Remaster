@@ -232,7 +232,7 @@ export default function Tasks() {
             <Sidebar onCollapsedChange={setSidebarCollapsed} />
             <div className="flex-1 flex flex-col min-w-0">
                 <Header />
-                <main className={`${sidebarCollapsed ? "ml-[72px]" : "ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
+                <main className={`${sidebarCollapsed ? "md:ml-[72px]" : "md:ml-[260px]"} flex-1 flex flex-col transition-all duration-300 ease-out`}>
                     <div className="p-8 space-y-8 max-w-[1400px] w-full mx-auto">
 
                         {/* Page Header */}
