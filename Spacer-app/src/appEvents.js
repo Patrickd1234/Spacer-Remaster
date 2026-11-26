@@ -10,6 +10,11 @@ export const TASK_CREATED_EVENT = "task_created";
 export const PROJECT_CREATED_EVENT = "project_created";
 export const announceProjectCreated = (project, extraDepartmentIds = []) =>
     window.dispatchEvent(new CustomEvent(PROJECT_CREATED_EVENT, { detail: { project, extraDepartmentIds } }));
+// A project was renamed on its page (B-06), so the sidebar shows the new name;
+// detail is { projectId, name }
+export const PROJECT_RENAMED_EVENT = "project_renamed";
+export const announceProjectRenamed = (projectId, name) =>
+    window.dispatchEvent(new CustomEvent(PROJECT_RENAMED_EVENT, { detail: { projectId, name } }));
 // A meeting was scheduled or changed (ScheduleMeetingModal); detail is the event row
 export const MEETING_SAVED_EVENT = "meeting_saved";
 // Someone changed their own away period (availability/AvailabilityCard); detail is { userId }

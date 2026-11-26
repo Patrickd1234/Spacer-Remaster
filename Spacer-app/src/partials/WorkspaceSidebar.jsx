@@ -10,7 +10,7 @@ import { projectsInDepartment } from "../projectDepartments"
 import { readSavedOrgName, saveOrgName } from "../orgNameCache"
 import { readSavedProjectList, saveProjectList } from "../projectListCache"
 import { visibleProjects } from "../projectVisibility"
-import { PROJECT_CREATED_EVENT } from "../appEvents"
+import { PROJECT_CREATED_EVENT, PROJECT_RENAMED_EVENT } from "../appEvents"
 
 // Projects (among `projectIds`) the signed-in user was added to or has a task in.
 // On a failed lookup that part counts as none, so nothing extra is shown.
@@ -136,6 +136,19 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
         window.addEventListener(PROJECT_CREATED_EVENT, addCreatedProject)
         return () => window.removeEventListener(PROJECT_CREATED_EVENT, addCreatedProject)
     }, [teamKey, projects, projectLinks])
+
+    // A project renamed on its page shows its new name here at once (B-06)
+    useEffect(() => {
+        const renameProject = (event) => {
+            const { projectId, name } = event.detail || {}
+            if (!projectId || !name || !projects.some((p) => String(p.id) === String(projectId))) return
+            const nextProjects = projects.map((p) => (String(p.id) === String(projectId) ? { ...p, name } : p))
+            setProjects(nextProjects)
+            saveProjectList({ projects: nextProjects, links: projectLinks })
+        }
+        window.addEventListener(PROJECT_RENAMED_EVENT, renameProject)
+        return () => window.removeEventListener(PROJECT_RENAMED_EVENT, renameProject)
+    }, [projects, projectLinks])
 
     useEffect(() => {
         let active = true

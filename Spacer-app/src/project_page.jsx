@@ -12,7 +12,7 @@ import TaskBlockPanel from "./components/TaskBlockPanel"
 import { DepartmentFilterBar, TaskDependencyNote } from "./components/DepartmentTaskBadges"
 import { matchesDepartmentFilter } from "./crossDepartment"
 import { addableProjectMembers } from "./projectDepartments"
-import { TASK_CREATED_EVENT } from "./appEvents"
+import { TASK_CREATED_EVENT, announceProjectRenamed } from "./appEvents"
 import { fetchProjectDepartments, updateTaskDepartment, setTaskBlock } from "./crossDepartmentData"
 import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
@@ -26,6 +26,7 @@ import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./component
 import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
+import ProjectName from "./components/ProjectName"
 import { findSavedProject } from "./projectListCache"
 import TaskDeadline from "./components/TaskDeadline"
 import { OVERDUE_COLUMN, isTaskOverdue, groupTasksByColumn } from "./boardGrouping"
@@ -677,14 +678,35 @@ function ProjectPage() {
         }
     }
 
-    // Resolves to an error message for ProjectDeadline, or null once saved
+    // Resolves to an error message for ProjectDeadline, or null once saved.
+    // .select() confirms a row changed: permissions can silently update 0 rows (B-06).
     const handleDeadlineSave = async (nextDate) => {
-        const { error } = await supabase.from("project_spaces").update({ due_date: nextDate }).eq("id", project_id)
-        if (error) {
+        const { data: updated, error } = await supabase
+            .from("project_spaces")
+            .update({ due_date: nextDate })
+            .eq("id", project_id)
+            .select("id")
+        if (error || !updated?.length) {
             console.error("Error saving project deadline:", error)
             return "Couldn't save the deadline."
         }
         setProjectDueDate(nextDate || "")
+        return null
+    }
+
+    // Resolves to an error message for ProjectName, or null once saved (B-06)
+    const handleNameSave = async (nextName) => {
+        const { data: updated, error } = await supabase
+            .from("project_spaces")
+            .update({ name: nextName })
+            .eq("id", project_id)
+            .select("id, name")
+        if (error || !updated?.length) {
+            console.error("Error renaming project:", error)
+            return "Couldn't rename the project."
+        }
+        setProjectName(updated[0].name)
+        announceProjectRenamed(project_id, updated[0].name)
         return null
     }
 
@@ -1089,7 +1111,9 @@ function ProjectPage() {
 
     // Name and deadline: shown at once when saved, otherwise placeholder bars until the fetch returns
     const projectHeading = project_name || isProjectLoaded
-        ? <h2 className="font-headline-xl text-2xl text-primary leading-tight shrink-0">{project_name || "Project not found"}</h2>
+        ? (project_name
+            ? <ProjectName key={project_name} name={project_name} canEdit={canDeleteProject === true} onSave={handleNameSave} />
+            : <h2 className="font-headline-xl text-2xl text-primary leading-tight shrink-0">Project not found</h2>)
         : <div className="h-8 w-56 rounded-md bg-line animate-pulse" aria-label="Loading project" />
     const isDeadlinePending = !project_due_date && (!isProjectLoaded || canDeleteProject === null)
     const projectDeadline = isDeadlinePending
