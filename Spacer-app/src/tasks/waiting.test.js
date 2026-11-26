@@ -51,9 +51,16 @@ test("choices narrow to one department; the lead department owns tasks without o
     assert.equal(taskDepartmentName(choices[0], []), "")
 })
 
-test("newly unblocked: my tasks that were Waiting and now aren't", () => {
-    const before = [task("a", { status: "waiting", assignee_id: "me" }), task("b", { status: "waiting", assignee_id: "you" }), task("c", { status: "waiting", assignee_id: "me" })]
-    const after = [task("a", { status: "in_progress", assignee_id: "me" }), task("b", { status: "todo", assignee_id: "you" }), task("c", { status: "done", assignee_id: "me" })]
+test("newly unblocked: my Waiting tasks whose wait ended, not ones simply moved", () => {
+    const open = [edge("x")]
+    const ended = [edge("x", { resolved_at: "2026-11-26T10:00:00Z" })]
+    const before = ["a", "b", "c", "d"].map((id) => task(id, { status: "waiting", assignee_id: id === "b" ? "you" : "me", blocked_by: open }))
+    const after = [
+        task("a", { status: "in_progress", assignee_id: "me", blocked_by: ended }),
+        task("b", { status: "todo", assignee_id: "you", blocked_by: ended }),
+        task("c", { status: "done", assignee_id: "me", blocked_by: ended }),
+        task("d", { status: "in_review", assignee_id: "me", blocked_by: open }), // moved by hand
+    ]
     assert.deepEqual(newlyUnblocked(before, after, "me").map((t) => t.id), ["a"])
     assert.deepEqual(newlyUnblocked(before, after, null), [])
 })

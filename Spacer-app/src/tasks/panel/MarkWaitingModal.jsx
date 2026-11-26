@@ -33,11 +33,17 @@ export default function MarkWaitingModal({ mode = "waiting", task, choices, depa
     const shown = choicesInDepartment(choices, departments, departmentId)
     const pickedId = shown.some((t) => String(t.id) === String(blockerId)) ? blockerId : ""
 
-    // Focus the first picker
-    useEffect(() => { fieldsRef.current?.querySelector("button")?.focus() }, [])
+    // Focus the first picker; give focus back to what opened the window
+    useEffect(() => {
+        const opener = document.activeElement
+        fieldsRef.current?.querySelector("button")?.focus()
+        return () => { if (opener instanceof HTMLElement && opener.isConnected) opener.focus() }
+    }, [])
     useEffect(() => {
         const onKey = (e) => {
             if (e.key !== "Escape" || e.defaultPrevented) return
+            // An open picker list closes first (Select handles that Escape)
+            if (document.querySelector("[role='listbox']")) return
             // Close only this window, not the task panel under it
             e.preventDefault()
             e.stopPropagation()
@@ -66,6 +72,9 @@ export default function MarkWaitingModal({ mode = "waiting", task, choices, depa
                 aria-labelledby={titleId}
                 onSubmit={submit}
                 onClick={(e) => e.stopPropagation()}
+                // Keys typed here (a picker's type-ahead "E", say) must not
+                // reach the task panel's J/K/E shortcuts underneath
+                onKeyDown={(e) => { if (e.key !== "Escape") e.nativeEvent.stopPropagation() }}
                 className="w-full max-w-md rounded-xl border border-line bg-raised shadow-2xl"
             >
                 <div className="flex items-start justify-between gap-3 px-5 pt-5">

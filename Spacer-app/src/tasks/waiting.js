@@ -76,13 +76,20 @@ export function choicesInDepartment(choices = [], departments = [], departmentId
 }
 
 /**
- * Tasks whose wait ended between two loads of the project, assigned to
- * `userId`: Waiting before, and now neither Waiting nor done. For the
- * "Task unblocked" notice.
+ * Tasks unblocked between two loads of the project, assigned to `userId`:
+ * Waiting before, now neither Waiting nor done, and one of their waits ended
+ * in between (so a task someone simply moved doesn't count). Both lists carry
+ * `blocked_by` edges (attachDependencies). For the "Task unblocked" notice.
  */
 export function newlyUnblocked(before = [], after = [], userId) {
     if (!userId) return []
-    const was = new Map(before.map((t) => [String(t.id), t.status]))
-    return after.filter((t) => String(t.assignee_id) === String(userId)
-        && was.get(String(t.id)) === "waiting" && t.status !== "waiting" && t.status !== "done")
+    const was = new Map(before.map((t) => [String(t.id), t]))
+    const endedIn = (task) => new Set(edgesOf(task).filter((e) => e.resolved_at).map((e) => String(e.id)))
+    return after.filter((t) => {
+        const old = was.get(String(t.id))
+        if (String(t.assignee_id) !== String(userId) || old?.status !== "waiting") return false
+        if (t.status === "waiting" || t.status === "done") return false
+        const endedBefore = endedIn(old)
+        return edgesOf(t).some((e) => e.resolved_at && !endedBefore.has(String(e.id)))
+    })
 }

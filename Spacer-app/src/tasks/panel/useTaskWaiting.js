@@ -13,8 +13,11 @@ import { taskDepartmentName } from "../waiting"
  * Returns { mode, choices, open(mode), close, confirm }.
  */
 export default function useTaskWaiting({ task, tasks, departments, canSetFor, onSaved, notify }) {
-    const [mode, setMode] = useState(null) // null | "waiting" | "dependency"
+    // { mode: "waiting" | "dependency", taskId } or null; it only shows for
+    // the task it was opened for, so it can't reappear on another one
+    const [opened, setOpened] = useState(null)
     const taskId = task?.id ?? null
+    const mode = opened && String(opened.taskId) === String(taskId) ? opened.mode : null
     const all = taskId ? blockableTasks(tasks, taskId) : []
     const choices = task && canSetFor(task) ? all : all.filter(canSetFor)
 
@@ -26,7 +29,7 @@ export default function useTaskWaiting({ task, tasks, departments, canSetFor, on
         const blocker = tasks.find((t) => String(t.id) === String(blockerId))
         const department = taskDepartmentName(blocker, departments)
         const what = department || (blocker ? `“${blocker.title}”` : "another task")
-        setMode(null)
+        setOpened(null)
         notify(isWaiting
             ? { type: "success", title: "Task marked as waiting", message: `This task is now waiting on ${what}. The project will be updated.` }
             : { type: "success", title: "Dependency added", message: `This task now waits on ${what}.` })
@@ -37,8 +40,8 @@ export default function useTaskWaiting({ task, tasks, departments, canSetFor, on
     return {
         mode,
         choices,
-        open: (next) => setMode(next),
-        close: () => setMode(null),
+        open: (next) => setOpened(taskId ? { mode: next, taskId } : null),
+        close: () => setOpened(null),
         confirm,
     }
 }

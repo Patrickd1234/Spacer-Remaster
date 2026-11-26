@@ -27,7 +27,6 @@ export default function UnblockedBanner({ task, tasks, departments, onOpenTask }
     const unblock = recentUnblock(task, tasks, departments)
     if (!unblock?.blocker) return null
     const ownDepartment = taskDepartmentName(task, departments)
-    const who = unblock.departmentName || "Someone"
     const meta = (name, rest) => [name, rest].filter(Boolean).join(" · ")
 
     return (
@@ -37,8 +36,12 @@ export default function UnblockedBanner({ task, tasks, departments, onOpenTask }
                     <span className="material-symbols-outlined text-[16px]" aria-hidden="true">check</span>
                 </span>
                 <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-white">Dependency resolved — {who} completed “{unblock.blocker.title}”.</p>
-                    <p className="text-[12px] text-soft mt-0.5">{ownDepartment ? `${ownDepartment} can` : "You can"} continue work.</p>
+                    <p className="text-[13px] font-semibold text-white">
+                        {unblock.departmentName
+                            ? `Dependency resolved — ${unblock.departmentName} completed “${unblock.blocker.title}”.`
+                            : `Dependency resolved — “${unblock.blocker.title}” was completed.`}
+                    </p>
+                    <p className="text-[12px] text-soft mt-0.5">{ownDepartment ? `${ownDepartment} can continue work.` : "You can continue working on this task."}</p>
                 </div>
             </div>
             <div>

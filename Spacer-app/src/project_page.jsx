@@ -1006,12 +1006,12 @@ function ProjectPage() {
     // up without a refresh; a change to its departments (an invite answered, a
     // part signed off) reloads those.
     // What the live reload compares with, to tell you when a task of yours is unblocked
-    const tasksSeenRef = useRef([])
+    const tasksSeenRef = useRef([]) // with their waits (blocked_by)
     const currentUserRef = useRef(null)
     useEffect(() => {
-        tasksSeenRef.current = project_tasks
+        tasksSeenRef.current = attachDependencies(project_tasks, taskDependencies)
         currentUserRef.current = currentUserId
-    }, [project_tasks, currentUserId])
+    }, [project_tasks, taskDependencies, currentUserId])
     useEffect(() => {
         if (!project_id) return
         let reloadTimer = null
@@ -1023,7 +1023,9 @@ function ProjectPage() {
                 if (!dependencies.error) setTaskDependencies(dependencies.data)
                 if (tasks.error) { console.error("Reloading tasks failed:", tasks.error); return }
                 const fresh = tasks.data || []
-                const unblocked = newlyUnblocked(tasksSeenRef.current, fresh, currentUserRef.current)
+                const unblocked = dependencies.error
+                    ? []
+                    : newlyUnblocked(tasksSeenRef.current, attachDependencies(fresh, dependencies.data), currentUserRef.current)
                 if (unblocked.length > 0) {
                     setPanelToast({
                         type: "success",
@@ -2083,7 +2085,11 @@ function ProjectPage() {
                         addSubtasks: canAddTasks === true && canHaveSubtasks(selectedTask),
                         delete: canDeleteProject === true || selectedTask.created_by === currentUserId,
                     }}
-                    historyVersion={selectedTask.updated_at || `${selectedTask.status}|${selectedTask.title}|${taskDependencies.length}`}
+                    historyVersion={[
+                        selectedTask.updated_at || `${selectedTask.status}|${selectedTask.title}`,
+                        // A dependency added, removed or ended doesn't touch the task row
+                        ...(selectedTask.blocked_by || []).map((e) => `${e.id}:${e.resolved_at || ""}`),
+                    ].join("|")}
                     statusNote={selectedTask.status === "waiting" ? waitingLabel(selectedTask, linkedTasks, taskModalDepartments) : null}
                     notice={<UnblockedBanner task={selectedTask} tasks={linkedTasks} departments={taskModalDepartments} onOpenTask={openTask} />}
                     detailsExtra={(
