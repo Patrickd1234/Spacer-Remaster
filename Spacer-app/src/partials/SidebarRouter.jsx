@@ -3,8 +3,9 @@ import { supabase, getSessionUser } from "../supabase";
 import WorkspaceSidebar from "./WorkspaceSidebar";
 import GroupChat from "../components/GroupChat";
 import { useRole } from "../RoleContext";
-import { attachmentDisplay, dmAttachmentPath, formatFileSize, validateDmAttachment } from "../dmAttachmentFiles";
+import { attachmentDisplay, dmAttachmentName, dmAttachmentPath, formatFileSize, validateDmAttachment } from "../dmAttachmentFiles";
 import { removeDmAttachment, uploadDmAttachment, withDmAttachmentLinks } from "../dmAttachments";
+import { dmReadStamp, latestDmPerContact, mapDmRow, mergeDmMessages } from "../dmThread";
 import UploadingBubble from "../components/UploadingBubble";
 import PlanetLoader from "../components/PlanetLoader";
 import PersonPhoto from "../avatars/PersonPhoto";
@@ -12,20 +13,20 @@ import PersonPhoto from "../avatars/PersonPhoto";
 // How close (px) to the bottom of the DM list still counts as "at the bottom"
 const NEAR_BOTTOM_PX = 120;
 
-// direct_message_reactions rows -> [{ emoji, users: [userId, ...] }] as the chat UI expects
-function groupReactions(rows) {
-    const usersByEmoji = new Map();
-    (rows || []).forEach(({ emoji, user_id }) => {
-        usersByEmoji.set(emoji, [...(usersByEmoji.get(emoji) || []), user_id]);
-    });
-    return [...usersByEmoji.entries()].map(([emoji, users]) => ({ emoji, users }));
-}
+// P-04: new messages arrive over Realtime (migration 20261126090000); this
+// re-fetch only catches anything missed, and is skipped while the tab is hidden
+const DM_POLL_FALLBACK_MS = 15000;
+// Newest messages loaded for an open conversation
+const DM_THREAD_LIMIT = 200;
+// Newest messages read to build the inbox (each contact's latest message)
+const DM_INBOX_LIMIT = 1000;
 
 // When this browser last read a DM thread (drives the unread dot), kept in
 // localStorage between visits. Outside the component: Date.now() is for event
-// handlers only, never render.
-function storeDmReadNow(otherUserId) {
-    const at = Date.now();
+// handlers only, never render. Never earlier than the newest message seen, so
+// a computer clock running behind doesn't leave the thread "unread" (B-07).
+function storeDmReadNow(otherUserId, latestCreatedAt) {
+    const at = dmReadStamp(Date.now(), latestCreatedAt);
     localStorage.setItem(`dm_last_read_${otherUserId}`, at);
     return at;
 }
@@ -38,8 +39,8 @@ export default function SidebarRouter(props) {
     // Read times marked in this session. Being state, marking one re-renders the
     // unread dots; a bare localStorage write wouldn't once the component is compiled.
     const [dmReadAt, setDmReadAt] = useState({});
-    const markDmRead = (otherUserId) => {
-        const at = storeDmReadNow(otherUserId);
+    const markDmRead = (otherUserId, latestCreatedAt) => {
+        const at = storeDmReadNow(otherUserId, latestCreatedAt);
         setDmReadAt(prev => ({ ...prev, [otherUserId]: at }));
     };
     const dmLastRead = (otherUserId) => dmReadAt[otherUserId] ?? storedDmRead(otherUserId);
@@ -77,7 +78,46 @@ export default function SidebarRouter(props) {
     const isNearBottomRef = useRef(true);
     const lastMessageCountRef = useRef(0);
     const lastScrolledChatRef = useRef(null);
+    // The open conversation, so a slow fetch for one opened earlier is ignored
+    const openRecipientIdRef = useRef(null);
+    // My messages shown but not yet saved, kept through re-fetches until saved
+    const pendingDmIdsRef = useRef(new Set());
 
+    // Open a conversation (or none). A different one starts empty, so the
+    // previous conversation's messages never show under the new name.
+    const selectRecipient = (recipient) => {
+        const nextId = recipient?.user_id ?? null;
+        if (nextId !== openRecipientIdRef.current) setChatMessages([]);
+        openRecipientIdRef.current = nextId;
+        setChatRecipient(recipient);
+    };
+
+    // Whether the chat window is open and not minimized (kept for async callbacks)
+    const chatVisibleRef = useRef(false);
+    useEffect(() => {
+        chatVisibleRef.current = showChatModal && !isChatMinimized;
+    }, [showChatModal, isChatMinimized]);
+
+    // The newest message of a conversation, however it arrived (live, re-fetch):
+    // it becomes the inbox's latest, and counts as read if that chat is on
+    // screen (B-07)
+    const noteLatestDm = (otherId, latest) => {
+        if (!latest) return;
+        const latestAt = new Date(latest.created_at).getTime();
+        setDmLatestMessages(prev => {
+            const known = prev[otherId];
+            if (known && (known.id === latest.id || new Date(known.created_at).getTime() > latestAt)) return prev;
+            return { ...prev, [otherId]: latest };
+        });
+        const isOnScreen = chatVisibleRef.current && openRecipientIdRef.current === otherId;
+        if (isOnScreen && latestAt > dmLastRead(otherId)) markDmRead(otherId, latest.created_at);
+    };
+
+    // Un-minimizing an open conversation reads it, like opening it does
+    const restoreChat = () => {
+        setIsChatMinimized(false);
+        if (chatRecipient) markDmRead(chatRecipient.user_id, chatMessages[chatMessages.length - 1]?.created_at);
+    };
 
     // Initial role and coworkers load
     useEffect(() => {
@@ -109,18 +149,14 @@ export default function SidebarRouter(props) {
 
                 // All DMs for this user, to find the latest message per contact
                 const dmWork = (async () => {
-                    const { data: allDms } = await supabase
+                    const { data: allDms, error: dmsError } = await supabase
                         .from("direct_messages")
-                        .select("id, sender_id, receiver_id, created_at, content")
+                        .select("id, sender_id, receiver_id, created_at, content, file_attachment")
                         .or(`sender_id.eq.${authUser.id},receiver_id.eq.${authUser.id}`)
-                        .order("created_at", { ascending: false });
-
-                    const dmsMap = {};
-                    (allDms || []).forEach(msg => {
-                        const otherId = msg.sender_id === authUser.id ? msg.receiver_id : msg.sender_id;
-                        if (!dmsMap[otherId]) dmsMap[otherId] = msg;
-                    });
-                    setDmLatestMessages(dmsMap);
+                        .order("created_at", { ascending: false })
+                        .limit(DM_INBOX_LIMIT);
+                    if (dmsError) console.error("Error loading the inbox:", dmsError);
+                    setDmLatestMessages(latestDmPerContact(allDms, authUser.id));
                 })();
 
                 // Groups, then the latest message of every group in parallel
@@ -196,12 +232,12 @@ export default function SidebarRouter(props) {
         if (!userId) return;
         const handleOpenChatEvent = async (e) => {
             const member = e.detail;
-            setChatRecipient(member);
+            selectRecipient(member);
             setShowChatModal(true);
             setIsChatMinimized(false);
             await fetchChatMessages(member.user_id);
 
-            markDmRead(member.user_id);
+            markDmRead(member.user_id, dmLatestMessages[member.user_id]?.created_at);
         };
         window.addEventListener("open_coworker_chat", handleOpenChatEvent);
         return () => window.removeEventListener("open_coworker_chat", handleOpenChatEvent);
@@ -214,14 +250,18 @@ export default function SidebarRouter(props) {
         // 1. Initial load
         fetchChatMessages(chatRecipient.user_id);
 
-        // 2. Database Polling fallback (every 3 seconds)
-        const intervalId = setInterval(() => {
-            fetchChatMessages(chatRecipient.user_id);
-        }, 3000);
+        // 2. Fallback re-fetch while the tab is visible, and on coming back to it (P-04)
+        const refetchIfVisible = () => {
+            if (document.visibilityState === "visible") fetchChatMessages(chatRecipient.user_id);
+        };
+        const intervalId = setInterval(refetchIfVisible, DM_POLL_FALLBACK_MS);
+        document.addEventListener("visibilitychange", refetchIfVisible);
 
-        // 3. Database Real-time postgres_changes listener
+        // 3. Database Real-time postgres_changes listener. Inserts are mapped like
+        // fetched rows, so attachments show and nothing appears twice (B-07).
+        const recipientId = chatRecipient.user_id;
         const channel = supabase
-            .channel(`dm_${userId}_${chatRecipient.user_id}`)
+            .channel(`dm_${userId}_${recipientId}`)
             .on(
                 "postgres_changes",
                 {
@@ -229,22 +269,22 @@ export default function SidebarRouter(props) {
                     schema: "public",
                     table: "direct_messages",
                 },
-                (payload) => {
+                async (payload) => {
                     const newMsg = payload.new;
-                    const isBetween = (newMsg.sender_id === userId && newMsg.receiver_id === chatRecipient.user_id) ||
-                                      (newMsg.sender_id === chatRecipient.user_id && newMsg.receiver_id === userId);
-                    if (isBetween) {
-                        setChatMessages(prev => {
-                            if (prev.some(m => m.id === newMsg.id)) return prev;
-                            return [...prev, newMsg];
-                        });
-                    }
+                    const isBetween = (newMsg.sender_id === userId && newMsg.receiver_id === recipientId) ||
+                                      (newMsg.sender_id === recipientId && newMsg.receiver_id === userId);
+                    if (!isBetween) return;
+                    const [msg] = await withDmAttachmentLinks([mapDmRow(newMsg)]);
+                    if (openRecipientIdRef.current !== recipientId) return;
+                    setChatMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
+                    noteLatestDm(recipientId, msg);
                 }
             )
             .subscribe();
 
         return () => {
             clearInterval(intervalId);
+            document.removeEventListener("visibilitychange", refetchIfVisible);
             supabase.removeChannel(channel);
         };
     }, [showChatModal, chatRecipient, userId]);
@@ -297,11 +337,11 @@ export default function SidebarRouter(props) {
                     const newMsg = payload.new;
                     if (newMsg.receiver_id === userId || newMsg.sender_id === userId) {
                         const otherId = newMsg.sender_id === userId ? newMsg.receiver_id : newMsg.sender_id;
-                        setDmLatestMessages(prev => ({ ...prev, [otherId]: newMsg }));
-                        
+                        setDmLatestMessages(prev => ({ ...prev, [otherId]: mapDmRow(newMsg) }));
+
                         const isCurrentlyOpen = showChatModal && !isChatMinimized && chatRecipient?.user_id === otherId;
                         if (isCurrentlyOpen) {
-                            markDmRead(otherId);
+                            markDmRead(otherId, newMsg.created_at);
                         }
                     }
                 }
@@ -358,26 +398,21 @@ export default function SidebarRouter(props) {
     async function fetchChatMessages(recipientId) {
         if (!userId || !recipientId) return;
         try {
+            // The newest messages only (P-04), shown oldest first
             const { data, error } = await supabase
                 .from("direct_messages")
                 .select("*, direct_message_reactions(emoji, user_id)")
                 .or(`and(sender_id.eq.${userId},receiver_id.eq.${recipientId}),and(sender_id.eq.${recipientId},receiver_id.eq.${userId})`)
-                .order("created_at", { ascending: true });
+                .order("created_at", { ascending: false })
+                .limit(DM_THREAD_LIMIT);
 
             if (error) console.error("Fetch direct messages error:", error);
             if (!error && data) {
-                const mappedData = data.map(m => ({
-                    id: m.id,
-                    sender_id: m.sender_id,
-                    receiver_id: m.receiver_id,
-                    content: m.content,
-                    created_at: m.created_at,
-                    replyToId: m.reply_to_id,
-                    fileAttachment: m.file_attachment,
-                    pinned: m.pinned || false,
-                    reactions: groupReactions(m.direct_message_reactions)
-                }));
-                setChatMessages(await withDmAttachmentLinks(mappedData));
+                const fetched = await withDmAttachmentLinks(data.map(mapDmRow).reverse());
+                // Another conversation was opened while this one loaded (B-07)
+                if (openRecipientIdRef.current !== recipientId) return;
+                setChatMessages(prev => mergeDmMessages(fetched, prev, pendingDmIdsRef.current));
+                noteLatestDm(recipientId, fetched[fetched.length - 1]);
             }
         } catch (err) {
             console.error("Fetch direct messages error:", err);
@@ -385,10 +420,10 @@ export default function SidebarRouter(props) {
     };
 
     const handleOpenChat = async (recipient) => {
-        setChatRecipient(recipient);
+        selectRecipient(recipient);
         setShowChatModal(true);
         setIsChatMinimized(false);
-        markDmRead(recipient.user_id);
+        markDmRead(recipient.user_id, dmLatestMessages[recipient.user_id]?.created_at);
         await fetchChatMessages(recipient.user_id);
     };
 
@@ -420,10 +455,12 @@ export default function SidebarRouter(props) {
                 isSendingRef.current = false;
                 return;
             }
-            fileAttachment = { name: fileToSend.name, size: fileToSend.size, type: fileToSend.type, path };
+            fileAttachment = { name: dmAttachmentName(fileToSend.name), size: fileToSend.size, type: fileToSend.type, path };
         }
         setNewMessage("");
         isSendingRef.current = false;
+        // Kept on screen through re-fetches until the database has it (B-07)
+        pendingDmIdsRef.current.add(messageId);
 
         const [newMsgObj] = await withDmAttachmentLinks([{
             id: messageId,
@@ -462,6 +499,8 @@ export default function SidebarRouter(props) {
             setChatMessages(prev => prev.filter(m => m.id !== messageId));
             setNewMessage(current => current || msgContent);
             setAttachError("Your message wasn't sent. Please try again.");
+        } finally {
+            pendingDmIdsRef.current.delete(messageId);
         }
     };
 
@@ -640,7 +679,7 @@ export default function SidebarRouter(props) {
             {...props}
             unreadMessages={getUnreadConversationsCount()}
             isMessagesOpen={showChatModal && !isChatMinimized}
-            onOpenMessages={() => { setShowChatModal(true); setIsChatMinimized(false); }}
+            onOpenMessages={() => { setShowChatModal(true); restoreChat(); }}
         />
     );
 
@@ -675,7 +714,7 @@ export default function SidebarRouter(props) {
                 >
                     {/* Header */}
                     <div 
-                        onClick={() => isChatMinimized && setIsChatMinimized(false)}
+                        onClick={() => isChatMinimized && restoreChat()}
                         className={`px-4 py-3 border-b border-line flex items-center justify-between bg-black/20 ${isChatMinimized ? 'cursor-pointer hover:bg-black/30' : ''}`}
                     >
                         <div className="flex items-center gap-2 overflow-hidden">
@@ -683,7 +722,7 @@ export default function SidebarRouter(props) {
                                 <button 
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setChatRecipient(null);
+                                        selectRecipient(null);
                                         setActiveGroupChat(null);
                                     }}
                                     className="text-muted hover:text-white cursor-pointer mr-1 flex items-center"
@@ -716,7 +755,7 @@ export default function SidebarRouter(props) {
                             <button 
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    setIsChatMinimized(!isChatMinimized);
+                                    if (isChatMinimized) restoreChat(); else setIsChatMinimized(true);
                                 }}
                                 className="text-muted hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
                             >
@@ -726,7 +765,7 @@ export default function SidebarRouter(props) {
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     setShowChatModal(false);
-                                    setChatRecipient(null);
+                                    selectRecipient(null);
                                     setActiveGroupChat(null);
                                 }}
                                 className="text-muted hover:text-white cursor-pointer p-0.5 flex items-center justify-center transition-colors"
@@ -829,7 +868,7 @@ export default function SidebarRouter(props) {
                                                         <div 
                                                             key={`dm_${item.user_id}`}
                                                             onClick={() => {
-                                                                markDmRead(item.user_id);
+                                                                markDmRead(item.user_id, item.latestMsg?.created_at);
                                                                 handleOpenChat(item);
                                                             }}
                                                             className="px-4 py-3 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer"

@@ -7,6 +7,8 @@ import PlanetLoader from "./PlanetLoader";
 import PersonPhoto from "../avatars/PersonPhoto";
 
 const CHAT_ATTACHMENTS_BUCKET = 'chat-attachments';
+// Newest messages loaded for a channel (P-04)
+const CHANNEL_MESSAGE_LIMIT = 200;
 
 export default function GroupChat({ projectId, departmentId, currentUserId, members = [], fabMode = false, activeChannelFromFab = null }) {
     const [channels, setChannels] = useState([]);
@@ -139,12 +141,14 @@ export default function GroupChat({ projectId, departmentId, currentUserId, memb
                     parent_message:parent_message_id ( id, content, users(name) )
                 `)
                 .eq('channel_id', channelId)
-                .order('created_at', { ascending: true });
+                .order('created_at', { ascending: false })
+                .limit(CHANNEL_MESSAGE_LIMIT);
 
             if (error) throw error;
 
-            // Attachments store a storage path; sign them so they can be opened
-            const rows = data || [];
+            // Attachments store a storage path; sign them so they can be opened.
+            // Fetched newest first (for the limit), shown oldest first.
+            const rows = (data || []).reverse();
             const linkByPath = await createSignedLinks(
                 CHAT_ATTACHMENTS_BUCKET,
                 rows.flatMap(m => (m.message_attachments || []).map(att => att.file_url))
