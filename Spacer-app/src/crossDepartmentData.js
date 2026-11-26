@@ -78,20 +78,50 @@ export async function updateTaskDepartment(taskId, teamSpaceId) {
     return { error: error ? readable(error, "Couldn't change the department.") : null }
 }
 
-// Marks a task as waiting on another task, or clears that with `blockerId` null
-export async function setTaskBlock(taskId, blockerId) {
+// A project's dependencies (task_dependencies): { task_id, blocker_task_id, created_at, resolved_at }[]
+export async function fetchTaskDependencies(projectId) {
     const { data, error } = await supabase
-        .from("tasks")
-        .update({ blocked_by_task_id: blockerId })
-        .eq("id", taskId)
-        .select("id, blocked_by_task_id, blocked_at")
+        .from("task_dependencies")
+        .select("task_id, blocker_task_id, created_at, resolved_at")
+        .eq("project_id", projectId)
     if (error) {
-        console.error("Saving the task's block failed:", error)
-        return { data: null, error: readable(error, "Couldn't save the block.") }
+        console.error("Loading the project's dependencies failed:", error)
+        return { data: [], error: "Couldn't load which tasks wait on which." }
     }
-    // Row-level security can quietly update nothing
-    if (!data?.length) return { data: null, error: "You can't change this task's block." }
-    return { data: data[0], error: null }
+    return { data: data || [], error: null }
+}
+
+const NO_RIGHTS = "Only either task's assignee or creator, a lead of its department, or a project manager can change this."
+const dependencyError = (error, fallback) => (error?.code === "42501" ? NO_RIGHTS : readable(error, fallback))
+
+// `taskId` waits on `blockerId` (either task's side may set it)
+export async function addTaskDependency(projectId, taskId, blockerId) {
+    const { data, error } = await supabase
+        .from("task_dependencies")
+        .insert({ project_id: projectId, task_id: taskId, blocker_task_id: blockerId })
+        .select("task_id, blocker_task_id, created_at, resolved_at")
+        .single()
+    if (error) {
+        console.error("Adding the dependency failed:", error)
+        return { data: null, error: error.code === "23505" ? "It already waits on that task." : dependencyError(error, "Couldn't save the dependency.") }
+    }
+    return { data, error: null }
+}
+
+export async function removeTaskDependency(taskId, blockerId) {
+    const { data, error } = await supabase
+        .from("task_dependencies")
+        .delete()
+        .eq("task_id", taskId)
+        .eq("blocker_task_id", blockerId)
+        .select("task_id")
+    if (error) {
+        console.error("Removing the dependency failed:", error)
+        return { error: dependencyError(error, "Couldn't remove the dependency.") }
+    }
+    // Row-level security can quietly delete nothing
+    if (!data?.length) return { error: NO_RIGHTS }
+    return { error: null }
 }
 
 export async function nudgeDepartment(projectId, teamSpaceId) {
@@ -112,5 +142,53 @@ export async function setDepartmentSignOff(projectId, teamSpaceId, isSignedOff) 
         return { error: readable(error, "Couldn't save the sign-off.") }
     }
     if (!data?.length) return { error: "Only the department's lead or a project manager can sign it off." }
+    return { error: null }
+}
+
+/**
+ * A project manager adds a department to an existing project
+ * (add_project_department()): it joins at once where they can create projects,
+ * otherwise it is invited. Resolves to { status: "active" | "invited", error }.
+ */
+export async function addProjectDepartment({ projectId, teamSpaceId, leadId = null, dueDate = null }) {
+    const { data, error } = await supabase.rpc("add_project_department", {
+        p_project_id: projectId, p_team_space_id: teamSpaceId, p_lead_id: leadId || null, p_due_date: dueDate || null,
+    })
+    if (error) console.error("Adding the department failed:", error)
+    return { status: error ? null : data, error: error ? readable(error, "Couldn't add the department.") : null }
+}
+
+/**
+ * Change a department's lead (project managers) or due date (managers, or the
+ * department's lead). `changes`: { lead_id?, due_date? }.
+ */
+export async function updateProjectDepartment(projectId, teamSpaceId, changes) {
+    const { data, error } = await supabase
+        .from("project_departments")
+        .update(changes)
+        .eq("project_id", projectId)
+        .eq("team_space_id", teamSpaceId)
+        .select("team_space_id")
+    if (error) {
+        console.error("Changing the department failed:", error)
+        return { error: readable(error, "Couldn't save the change.") }
+    }
+    if (!data?.length) return { error: "You can't change this department." }
+    return { error: null }
+}
+
+// A project manager removes a department; its tasks move to the lead department
+export async function removeProjectDepartment(projectId, teamSpaceId) {
+    const { data, error } = await supabase
+        .from("project_departments")
+        .delete()
+        .eq("project_id", projectId)
+        .eq("team_space_id", teamSpaceId)
+        .select("team_space_id")
+    if (error) {
+        console.error("Removing the department failed:", error)
+        return { error: readable(error, "Couldn't remove the department.") }
+    }
+    if (!data?.length) return { error: "Only the project's managers can remove a department, and never the lead one." }
     return { error: null }
 }

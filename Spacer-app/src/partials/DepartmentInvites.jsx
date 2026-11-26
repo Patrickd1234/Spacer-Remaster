@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import Select from "../components/Select"
+import { getSessionUser } from "../supabase"
 import { fetchMyDepartmentInvites, fetchDepartmentPeople, respondToDepartmentInvite } from "../departmentInvitesData"
 import { announceProjectCreated } from "../appEvents"
 
@@ -13,24 +14,35 @@ const formatDay = (value) => {
 }
 const inviteKey = (invite) => `${invite.project_id}:${invite.team_space_id}`
 
-// Accepting: pick who leads the department's part and, optionally, change the
-// proposed due date (on or before the project's deadline)
+// Accepting: pick who leads the department's part (you, if you're in it, by
+// default; a lead is needed so nudges and "waiting on you" notices reach
+// someone) and, optionally, change the proposed due date (on or before the
+// project's deadline)
 function AcceptForm({ invite, isSaving, onConfirm, onBack }) {
     const [people, setPeople] = useState(null)
-    const [leadId, setLeadId] = useState("")
+    const [pickedLeadId, setLeadId] = useState(null)
+    const [myId, setMyId] = useState(null)
     const [dueDate, setDueDate] = useState(invite.due_date || "")
     useEffect(() => {
         let active = true
-        fetchDepartmentPeople(invite.team_space_id).then(({ data }) => { if (active) setPeople(data) })
+        Promise.all([fetchDepartmentPeople(invite.team_space_id), getSessionUser()]).then(([{ data }, user]) => {
+            if (!active) return
+            setPeople(data)
+            setMyId(user?.id ?? null)
+        })
         return () => { active = false }
     }, [invite.team_space_id])
+    const hasPeople = (people || []).length > 0
+    const leadId = pickedLeadId ?? ((people || []).some((p) => p.id === myId) ? myId : "")
+    // A department with nobody in it yet can join without a lead
+    const canJoin = people !== null && (!hasPeople || Boolean(leadId))
 
     return (
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-sm items-end pt-sm border-t border-line/40">
             <label className="space-y-1">
                 <span className="block text-[11px] text-muted">Who leads {invite.department_name}&apos;s part</span>
                 <Select className={fieldClass} value={leadId} onChange={(e) => setLeadId(e.target.value)} disabled={!people}>
-                    <option value="">{people === null ? "Loading people…" : "No lead for now"}</option>
+                    <option value="">{people === null ? "Loading people…" : hasPeople ? "Pick who leads it" : "Nobody in the department yet"}</option>
                     {(people || []).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
                 </Select>
             </label>
@@ -40,7 +52,7 @@ function AcceptForm({ invite, isSaving, onConfirm, onBack }) {
             </label>
             <div className="flex gap-sm">
                 <button type="button" onClick={onBack} disabled={isSaving} className={`${buttonClass} border border-line text-soft hover:text-white hover:bg-line`}>Back</button>
-                <button type="button" onClick={() => onConfirm({ leadId, dueDate })} disabled={isSaving} className={`${buttonClass} bg-accent text-on-accent hover:bg-accent-hover`}>
+                <button type="button" onClick={() => onConfirm({ leadId, dueDate })} disabled={isSaving || !canJoin} title={canJoin ? undefined : "Pick who leads the department's part"} className={`${buttonClass} bg-accent text-on-accent hover:bg-accent-hover`}>
                     {isSaving ? "Joining…" : "Join the project"}
                 </button>
             </div>

@@ -19,6 +19,12 @@ export function describeActivity(row) {
         case "project:project_deleted": return { title: "Deleted a project", icon: "folder_delete", badge: "Projects" };
         case "project:department_invited": return { title: `Invited ${s.department || "a department"} to ${projectName(s)}`, icon: "handshake", badge: "Projects" };
         case "project:department_joined": return { title: `${s.department || "A department"} joined ${projectName(s)}`, icon: "group_add", badge: "Projects" };
+        case "project:department_added": return { title: `Added ${s.department || "a department"} to ${projectName(s)}`, icon: "group_add", badge: "Projects" };
+        case "project:department_removed": {
+            const moved = Number(s.moved_tasks) || 0;
+            const note = moved > 0 ? ` (${moved} task${moved === 1 ? "" : "s"} moved to the lead department)` : "";
+            return { title: `Removed ${s.department || "a department"} from ${projectName(s)}${note}`, icon: "group_remove", badge: "Projects" };
+        }
         case "project:department_declined": return { title: `${s.department || "A department"} declined to work on ${projectName(s)}`, icon: "do_not_disturb_on", badge: "Projects" };
         case "department:department_deleted": return { title: "Deleted a department", icon: "domain_disabled", badge: "Departments" };
         case "file:file_added": return { title: `Uploaded ${quoted(s.name)}`, icon: "upload_file", badge: "Files" };

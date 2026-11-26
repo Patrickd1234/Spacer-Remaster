@@ -11,6 +11,8 @@ import { readSavedOrgName, saveOrgName } from "../orgNameCache"
 import { readSavedProjectList, saveProjectList } from "../projectListCache"
 import { visibleProjects } from "../projectVisibility"
 import { PROJECT_CREATED_EVENT } from "../appEvents"
+import { useHoldups } from "../holdupsData"
+import { heldUpProjects } from "../holdups"
 
 // Projects (among `projectIds`) the signed-in user was added to or has a task in.
 // On a failed lookup that part counts as none, so nothing extra is shown.
@@ -50,6 +52,9 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
     const [orgName, setOrgName] = useState(readSavedOrgName)
     const [showCreateModal, setShowCreateModal] = useState(false)
     const isExpanded = !collapsed || hovered
+    // Red dots on projects where one department is holding another up
+    const holdups = useHoldups()
+    const heldUp = heldUpProjects(holdups.rows, holdups.nameOf)
 
     const teams = isSuperAdmin ? orgTeams : departments.map((d) => ({ id: d.team_space_id, name: d.name }))
     const teamKey = teams.map((t) => t.id).join(",")
@@ -245,6 +250,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                                     onOpenDepartment={() => openDepartment(t.id)}
                                     isActive={openedDepartment && String(t.id) === shownDepartmentId}
                                     activePath={pathname}
+                                    alerts={heldUp}
                                 />
                             ))}
                     </NavSection>
@@ -269,7 +275,7 @@ export default function WorkspaceSidebar({ userEmail = "", userData = null, onCo
                     >
                         {projects.length === 0 && !projectsLoaded && <SkeletonRows />}
                         {projects.length === 0 && projectsLoaded && <EmptyNote>No projects yet</EmptyNote>}
-                        {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={pathname === `/project_page/${p.id}`} />)}
+                        {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={pathname === `/project_page/${p.id}`} alert={heldUp.get(String(p.id)) ?? null} />)}
                     </NavSection>
 
                     <NavButton icon="chat" label="Messages" onClick={onOpenMessages} isActive={isMessagesOpen} isExpanded={isExpanded} badge={unreadMessages} />

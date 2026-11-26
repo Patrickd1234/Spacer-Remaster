@@ -6,6 +6,7 @@ import { useRole } from "./RoleContext"
 import OrgOverview from "./OrgOverview"
 import MySpace from "./myspace/MySpace"
 import DepartmentInvites from "./partials/DepartmentInvites"
+import HoldupsPanel from "./partials/HoldupsPanel"
 import GreetingSky from "./myspace/GreetingSky"
 import { greetingFor } from "./myspace/taskStats"
 import { StatCardSkeleton } from "./components/DashboardParts"
@@ -92,6 +93,7 @@ function Home() {
                                     <p className="text-muted text-sm mt-1">Organization's overview and activity.</p>
                                 </section>
                                 <DepartmentInvites />
+                                <HoldupsPanel userId={userData.id} />
                                 <OrgOverview userId={userData.id} orgId={orgId} />
                             </>
                         )}

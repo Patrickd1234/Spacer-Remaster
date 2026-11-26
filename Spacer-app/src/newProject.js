@@ -68,3 +68,15 @@ export function createProjectArgs({ name, deadline, projectLeadId, departments }
         })),
     }
 }
+
+/**
+ * Department dates after the overall deadline changes: an empty date, one that
+ * followed the old deadline, or one now after the new deadline takes the new
+ * deadline; dates picked by hand that still fit stay. Clearing the deadline
+ * changes nothing.
+ */
+export function applyDeadlineChange(departments, oldDeadline, newDeadline) {
+    if (!newDeadline) return departments
+    const follows = (d) => !d.dueDate || d.dueDate === oldDeadline || daysBetween(newDeadline, d.dueDate) > 0
+    return departments.map((d) => (follows(d) ? { ...d, dueDate: newDeadline } : d))
+}

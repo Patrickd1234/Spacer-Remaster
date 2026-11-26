@@ -1,24 +1,13 @@
 import { useState } from "react"
 import {
     summarizeDepartments, projectDelayStatus, delayCulprits, culpritHeadline, delayingTasks,
-    departmentNote, daysBetween, DEPARTMENT_STATUS,
+    departmentNote, daysBetween, DEPARTMENT_STATUS, PROJECT_STATUS, DEFAULT_DELAY_RULES,
 } from "../crossDepartment"
-import { nudgeDepartment, setDepartmentSignOff } from "../crossDepartmentData"
+import { TONES } from "./statusTones"
+import { nudgeDepartment } from "../crossDepartmentData"
+import DepartmentCardActions from "./DepartmentCardActions"
+import AddDepartmentForm from "./AddDepartmentForm"
 import { cancelDepartmentInvite } from "../departmentInvitesData"
-
-// Colours per status tone (the light theme remaps these text colours to deep inks)
-const TONES = {
-    green: { pill: "bg-green-500/15 text-green-400", bar: "bg-green-500", text: "text-muted", card: "border-line" },
-    amber: { pill: "bg-amber-500/15 text-amber-400", bar: "bg-amber-400", text: "text-amber-400", card: "border-line" },
-    red: { pill: "bg-red-500/15 text-red-400", bar: "bg-red-400", text: "text-red-400", card: "border-red-400/60" },
-    muted: { pill: "bg-line text-soft", bar: "bg-line-strong", text: "text-muted", card: "border-line" },
-}
-const PROJECT_STATUS = {
-    on_track: { label: "On track", tone: "green" },
-    at_risk: { label: "At risk", tone: "amber" },
-    delayed: { label: "Delayed", tone: "red" },
-    done: { label: "Done", tone: "muted" },
-}
 
 const formatDay = (value, withYear = false) => {
     if (!value) return ""
@@ -32,8 +21,11 @@ const Pill = ({ tone, children }) => <span className={`px-2.5 py-0.5 rounded-ful
 // holding the project up, progress per department, who waits on whom, and the
 // tasks behind the delay, and invites still waiting for an answer.
 // `departments`: the ones working on it; `invitedDepartments`: status "invited".
-// `canManage`: the server's can_manage_project.
-export default function DepartmentsTab({ projectId, projectDueDate, departments, invitedDepartments = [], tasks, orgUsers, currentUserId, canManage, onResolve, onOpenTask, onDepartmentsChanged }) {
+// `canManage`: the server's can_manage_project. `leadsDepartment(id)`: whether
+// the user leads that department here (its named lead or project.manage there).
+// Managers add, edit and remove departments here; a department's lead moves its
+// due date and signs its part off.
+export default function DepartmentsTab({ projectId, projectDueDate, departments, invitedDepartments = [], tasks, orgUsers, currentUserId, canManage, leadsDepartment = () => false, onResolve, onOpenTask, onDepartmentsChanged }) {
     const [notice, setNotice] = useState(null)
     const [busyId, setBusyId] = useState(null)
     const now = new Date()
@@ -61,13 +53,12 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
         setNotice(error ? { isError: true, text: error } : { isError: false, text: `The invite to ${department.name} was cancelled.` })
         if (!error) onDepartmentsChanged?.()
     }
-    const signOff = async (summary, isSignedOff) => {
-        setBusyId(summary.id)
-        const { error } = await setDepartmentSignOff(projectId, summary.team_space_id, isSignedOff)
-        setBusyId(null)
-        if (error) setNotice({ isError: true, text: error })
-        else onDepartmentsChanged?.()
+    const handleChanged = (message) => {
+        setNotice({ isError: false, text: message })
+        onDepartmentsChanged?.()
     }
+    const leadDepartmentName = departments.find((d) => d.is_lead_department)?.name || "the lead department"
+    const onProjectIds = [...departments, ...invitedDepartments].map((d) => d.team_space_id)
 
     return (
         <div className="space-y-lg">
@@ -92,7 +83,7 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                         </button>
                     )}
                     <button type="button" onClick={() => onResolve(culprit.team_space_id)} className="px-md py-1.5 rounded-lg bg-accent text-on-accent text-xs font-bold hover:bg-accent-hover transition-colors cursor-pointer">
-                        Resolve
+                        Show their tasks
                     </button>
                 </div>
             )}
@@ -129,7 +120,6 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                     {summaries.map((s) => {
                         const status = DEPARTMENT_STATUS[s.status]
                         const tone = TONES[status.tone]
-                        const canSignOff = canManage || (s.lead_id && s.lead_id === currentUserId)
                         return (
                             <div key={s.id} className={`rounded-xl border bg-panel p-md flex flex-col ${tone.card}`}>
                                 <div className="flex items-start justify-between gap-sm">
@@ -149,21 +139,24 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                                 <p className="text-[11px] text-soft mt-md">{s.done} of {s.total} task{s.total === 1 ? "" : "s"} done</p>
                                 <p className="text-[11px] text-soft">{s.overdue} overdue · {s.waitingOnOthers} waiting on others</p>
                                 <p className={`text-[11px] mt-md leading-relaxed ${tone.text}`}>{departmentNote(s, nameOf)}</p>
-                                {/* The department's lead signs its part off; a finished part needs no sign-off */}
-                                {canSignOff && (s.signedOff || s.status !== "done") && (
-                                    <button
-                                        type="button"
-                                        disabled={busyId === s.id}
-                                        onClick={() => signOff(s, !s.signedOff)}
-                                        className="mt-md self-start text-[11px] font-semibold text-accent-ink hover:underline disabled:opacity-50 cursor-pointer"
-                                    >
-                                        {s.signedOff ? "Undo sign-off" : "Sign off this part"}
-                                    </button>
-                                )}
+                                <DepartmentCardActions
+                                    projectId={projectId}
+                                    projectDueDate={projectDueDate}
+                                    summary={s}
+                                    canManage={canManage}
+                                    isLead={leadsDepartment(s.team_space_id)}
+                                    leadDepartmentName={leadDepartmentName}
+                                    onChanged={handleChanged}
+                                />
                             </div>
                         )
                     })}
                 </div>
+                {canManage && (
+                    <div className="mt-md">
+                        <AddDepartmentForm projectId={projectId} projectDueDate={projectDueDate} onProjectIds={onProjectIds} onAdded={handleChanged} />
+                    </div>
+                )}
             </section>
 
             <section>
@@ -174,19 +167,26 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                     ) : (
                         <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-md items-center">
                             <div className="space-y-sm">
-                                {links.map((link) => (
-                                    <div key={`${link.from}>${link.departmentId}`} className="flex items-center gap-sm">
-                                        <span className="w-36 shrink-0 text-center px-sm py-2 rounded-lg border border-amber-400/60 bg-amber-500/10 text-xs font-semibold text-white truncate">{nameOf(link.from)}</span>
-                                        <div className="flex-1 min-w-[80px] text-center">
-                                            <p className="text-[10px] text-red-400">waiting {link.days} day{link.days === 1 ? "" : "s"} · {link.tasks} task{link.tasks === 1 ? "" : "s"}</p>
-                                            <div className="relative h-px bg-red-400/70 mt-1"><span className="absolute -right-0.5 -top-[5px] text-red-400 text-[10px] leading-none">▶</span></div>
+                                {links.map((link) => {
+                                    // Red only when the wait holds someone up; a normal hand-off stays quiet
+                                    const isHolding = link.holdingTasks > 0
+                                    const label = isHolding
+                                        ? `holding up ${link.holdingTasks} task${link.holdingTasks === 1 ? "" : "s"} · ${link.days} day${link.days === 1 ? "" : "s"}`
+                                        : `${link.tasks} task${link.tasks === 1 ? "" : "s"} · on schedule`
+                                    return (
+                                        <div key={`${link.from}>${link.departmentId}`} className="flex items-center gap-sm">
+                                            <span className={`w-36 shrink-0 text-center px-sm py-2 rounded-lg border text-xs font-semibold text-white truncate ${isHolding ? "border-amber-400/60 bg-amber-500/10" : "border-line bg-raised"}`}>{nameOf(link.from)}</span>
+                                            <div className="flex-1 min-w-[80px] text-center">
+                                                <p className={`text-[10px] ${isHolding ? "text-red-400" : "text-muted"}`}>{label}</p>
+                                                <div className={`relative h-px mt-1 ${isHolding ? "bg-red-400/70" : "bg-line-strong"}`}><span className={`absolute -right-0.5 -top-[5px] text-[10px] leading-none ${isHolding ? "text-red-400" : "text-muted"}`}>▶</span></div>
+                                            </div>
+                                            <span className={`w-36 shrink-0 text-center px-sm py-2 rounded-lg border text-xs font-semibold text-white truncate ${isHolding ? "border-red-400/60 bg-red-500/10" : "border-line bg-raised"}`}>{nameOf(link.departmentId)}</span>
                                         </div>
-                                        <span className="w-36 shrink-0 text-center px-sm py-2 rounded-lg border border-red-400/60 bg-red-500/10 text-xs font-semibold text-white truncate">{nameOf(link.departmentId)}</span>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                             <p className="text-[11px] text-muted leading-relaxed">
-                                The arrow always points at the department being waited on. When it finishes the tasks others wait on, they unblock automatically.
+                                The arrow points at the department being waited on. It turns red only when that department is holding the other up: its task is overdue, due after it&apos;s needed, or (with no due date) waited on for {DEFAULT_DELAY_RULES.waitingDays}+ days. Finished tasks unblock the others automatically.
                             </p>
                         </div>
                     )}

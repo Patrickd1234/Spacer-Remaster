@@ -8,6 +8,7 @@ import { TaskCard, TaskCardSkeleton, ActivityList, ActivitySkeleton, MeetingRow,
 import { useResource } from "./useResource"
 import GreetingSky from "./GreetingSky"
 import DepartmentInvites from "../partials/DepartmentInvites"
+import HoldupsPanel from "../partials/HoldupsPanel"
 import { fetchUpcomingMeetings } from "../meetings/meetingData"
 import { localDateKey, summarizeTasks, boardTasks, greetingFor } from "./taskStats"
 
@@ -170,6 +171,7 @@ export default function MySpace({ userId, displayName }) {
             </section>
 
             <DepartmentInvites />
+            <HoldupsPanel userId={userId} />
 
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatRow tasksState={tasksState} todayKey={todayKey} onRetry={reloadTasks} />

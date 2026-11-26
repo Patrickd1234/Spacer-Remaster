@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { normalizeDepartments, newProjectProblem, createProjectArgs } from "./newProject.js"
+import { normalizeDepartments, newProjectProblem, createProjectArgs, applyDeadlineChange } from "./newProject.js"
 
 const allowed = [{ id: "a", name: "Design" }, { id: "b", name: "Marketing" }, { id: "c", name: "IT" }]
 const nameOf = (id) => allowed.find((t) => t.id === id)?.name || "Department"
@@ -66,4 +66,15 @@ test("an invited department is sent without a lead; its lead is picked when it a
         departments: [{ teamSpaceId: "a", leadId: "u2", dueDate: "" }, { teamSpaceId: "d", leadId: "u3", dueDate: "", isInvite: true }],
     })
     assert.deepEqual(args.p_departments[1], { team_space_id: "d", lead_id: null, due_date: null })
+})
+
+test("a new deadline moves the department dates that followed the old one, or now fall after it", () => {
+    const departments = [
+        { teamSpaceId: "a", dueDate: "" },
+        { teamSpaceId: "b", dueDate: "2026-12-15" },  // was the old deadline
+        { teamSpaceId: "c", dueDate: "2026-12-01" },  // picked by hand, still fits
+        { teamSpaceId: "d", dueDate: "2026-12-12" },  // picked by hand, now too late
+    ]
+    assert.deepEqual(applyDeadlineChange(departments, "2026-12-15", "2026-12-10").map((d) => d.dueDate), ["2026-12-10", "2026-12-10", "2026-12-01", "2026-12-10"])
+    assert.deepEqual(applyDeadlineChange(departments, "2026-12-15", "").map((d) => d.dueDate), ["", "2026-12-15", "2026-12-01", "2026-12-12"])
 })

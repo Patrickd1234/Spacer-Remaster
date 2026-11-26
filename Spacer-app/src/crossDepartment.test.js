@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import {
     summarizeDepartments, projectDelayStatus, delayCulprits, delayingTasks,
-    departmentNote, culpritHeadline, wouldCreateCycle, blockableTasks, validateDepartmentDates, matchesDepartmentFilter,
+    departmentNote, culpritHeadline, wouldCreateCycle, blockableTasks, validateDepartmentDates, matchesDepartmentFilter, dependencyState, projectHealth, taskHoldupRoles, attachDependencies, openBlockers,
 } from "./crossDepartment.js"
 
 // The template's example: Operations leads, Customer Support waits on IT
@@ -191,4 +191,110 @@ test("one day overdue shows as overdue, though the department isn't delayed for 
     const [it] = summarizeDepartments({ departments: [departments[2]], tasks: list, now: NOW })
     assert.equal(it.overdue, 1)
     assert.equal(it.status, "on_track")
+})
+
+// ── Waiting vs holding up ──
+// Design waits on Development's API. That is only "holding up" when the API is
+// late, due after Design needs it, or (with no due date) waited on too long.
+const DEV = "dev", DESIGN = "design"
+const pair = [
+    { team_space_id: DEV, name: "Development", is_lead_department: true, due_date: "2026-12-20" },
+    { team_space_id: DESIGN, name: "Design", due_date: "2026-12-20" },
+]
+const api = (fields = {}) => task("api", DEV, { due_date: "2026-12-01", ...fields })
+const ui = (fields = {}) => task("ui", DESIGN, { due_date: "2026-12-10", blocked_by_task_id: "api", blocked_at: "2026-11-16T09:00:00", ...fields })
+
+test("waiting on a task that is on schedule is not holding anyone up", () => {
+    const list = [api(), ui()]
+    const s = byId(summarizeDepartments({ departments: pair, tasks: list, now: NOW }))
+    assert.equal(dependencyState(list[1], list[0], NOW), "on_schedule")
+    assert.equal(s[DEV].status, "on_track")
+    assert.equal(s[DESIGN].status, "on_track")
+    assert.deepEqual(delayCulprits(Object.values(s)), [])
+    assert.equal(projectDelayStatus(Object.values(s), "2026-12-20", NOW), "on_track")
+    assert.deepEqual(delayingTasks(list, Object.values(s), NOW), [])
+    assert.equal(departmentNote(s[DEV], (id) => s[id]?.name), "Design is waiting on 1 of its tasks, on schedule.")
+    assert.equal(departmentNote(s[DESIGN], (id) => s[id]?.name), "Waiting on 1 Development task, on schedule.")
+})
+
+test("an overdue blocking task holds the other department up", () => {
+    const list = [api({ due_date: "2026-11-14" }), ui()]
+    const s = summarizeDepartments({ departments: pair, tasks: list, now: NOW })
+    assert.equal(dependencyState(list[1], list[0], NOW), "late")
+    assert.equal(byId(s)[DESIGN].status, "blocked")
+    assert.deepEqual(delayCulprits(s).map((d) => d.id), [DEV])
+})
+
+test("a blocking task due after the waiting task needs it is a date conflict", () => {
+    const list = [api({ due_date: "2026-12-15" }), ui()]
+    const s = summarizeDepartments({ departments: pair, tasks: list, now: NOW })
+    assert.equal(dependencyState(list[1], list[0], NOW), "conflict")
+    assert.equal(byId(s)[DEV].status, "at_risk")
+    assert.deepEqual(delayCulprits(s).map((d) => d.id), [DEV])
+    assert.equal(culpritHeadline(delayCulprits(s)[0], s, list, NOW).detail, "Design is waiting on 1 of its tasks, due after Design needs it.")
+})
+
+test("a blocking task with no due date holds others up once waited on too long", () => {
+    assert.equal(dependencyState(ui({ blocked_at: "2026-11-15T09:00:00" }), api({ due_date: null }), NOW), "stalled")
+    assert.equal(dependencyState(ui({ blocked_at: "2026-11-16T09:00:00" }), api({ due_date: null }), NOW), "on_schedule")
+})
+
+test("the project's health names who is holding it up, or nobody", () => {
+    const late = projectHealth({ departments: pair, tasks: [api({ due_date: "2026-11-14" }), ui()], projectDueDate: "2026-12-20", now: NOW })
+    assert.equal(late.status, "at_risk")
+    assert.equal(late.culpritName, "Development")
+    assert.equal(late.text, "At risk · Development is holding this up")
+    const fine = projectHealth({ departments: pair, tasks: [api(), ui()], projectDueDate: "2026-12-20", now: NOW })
+    assert.equal(fine.text, "On track")
+    assert.equal(fine.culpritName, null)
+})
+
+test("board cards know whether a task holds others up or is held up", () => {
+    const late = taskHoldupRoles([api({ due_date: "2026-11-14" }), ui()], NOW)
+    assert.equal(late.get("api"), "holding")
+    assert.equal(late.get("ui"), "held")
+    assert.equal(taskHoldupRoles([api(), ui()], NOW).size, 0)
+})
+
+// ── Several dependencies per task (task_dependencies) ──
+const deps = (...pairs) => pairs.map(([task_id, blocker_task_id, created_at = "2026-11-16T09:00:00"]) => ({ task_id, blocker_task_id, created_at, resolved_at: null }))
+
+test("dependencies attach to their tasks, each with when the wait began", () => {
+    const list = attachDependencies([task("a", DEV), task("b", DEV), task("c", DESIGN)], deps(["c", "a"], ["c", "b", "2026-11-10T09:00:00"]))
+    const c = list.find((t) => t.id === "c")
+    assert.deepEqual(c.blocked_by, [{ id: "a", blocked_at: "2026-11-16T09:00:00" }, { id: "b", blocked_at: "2026-11-10T09:00:00" }])
+    assert.deepEqual(list.find((t) => t.id === "a").blocked_by, [])
+})
+
+test("a task waiting on two tasks is held up by the late one only", () => {
+    const list = attachDependencies([
+        task("late", DEV, { due_date: "2026-11-14" }),
+        task("fine", DEV, { due_date: "2026-12-01" }),
+        task("ui", DESIGN, { due_date: "2026-12-10" }),
+    ], deps(["ui", "late"], ["ui", "fine"]))
+    const byKey = new Map(list.map((t) => [t.id, t]))
+    assert.deepEqual(openBlockers(byKey.get("ui"), byKey).map((w) => w.blocker.id), ["late", "fine"])
+    const s = byId(summarizeDepartments({ departments: pair, tasks: list, now: NOW }))
+    assert.equal(s[DESIGN].status, "blocked")
+    assert.deepEqual(s[DEV].waitedOnBy.map((l) => [l.tasks, l.holdingTasks]), [[2, 1]])
+    const roles = taskHoldupRoles(list, NOW)
+    assert.equal(roles.get("late"), "holding")
+    assert.equal(roles.has("fine"), false)
+    assert.deepEqual(delayingTasks(list, Object.values(s), NOW).map((r) => r.task.id), ["late"])
+})
+
+test("finished blockers stop counting, and loops are found through any path", () => {
+    const list = attachDependencies([task("a", DEV, { status: "done" }), task("b", DEV), task("c", DESIGN)], deps(["c", "a"], ["c", "b"], ["b", "x"]))
+    const byKey = new Map(list.map((t) => [t.id, t]))
+    assert.deepEqual(openBlockers(byKey.get("c"), byKey).map((w) => w.blocker.id), ["b"])
+    // c waits on b; b waiting on c would loop
+    assert.equal(wouldCreateCycle(list, "b", "c"), true)
+    assert.equal(wouldCreateCycle(list, "a", "c"), true)
+    assert.equal(wouldCreateCycle(list, "c", "a"), false)
+})
+
+test("a task can wait on any open task of the project, in any department, once", () => {
+    const list = attachDependencies([task("a", DEV), task("b", DESIGN), task("c", DEV), task("d", DEV, { status: "done" })], deps(["a", "b"]))
+    assert.deepEqual(blockableTasks(list, "a").map((t) => t.id), ["c"])
+    assert.deepEqual(blockableTasks(list, "a", DEV).map((t) => t.id), ["c"])
 })

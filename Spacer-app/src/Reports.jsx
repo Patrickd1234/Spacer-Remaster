@@ -8,6 +8,7 @@ import { supabase, getSessionUser } from "./supabase"
 import { useRole } from "./RoleContext"
 import { projectStatus, isInDoingColumn, matchesStatusFilter } from "./projectStatus"
 import PlanetLoader from "./components/PlanetLoader"
+import DepartmentScorecard from "./components/DepartmentScorecard"
 
 const STATUS_COLORS = {
   todo: "#818cf8",
@@ -764,6 +765,11 @@ export default function Reports() {
                 </div>
               )}
             </div>
+
+            {/* Department scorecard: who holds whom up across projects (admins, whole workspace) */}
+            {isAdminLevel && scope === "workspace" && (
+              <DepartmentScorecard refreshKey={lastUpdated?.getTime() ?? 0} style={staggerStyle(6)} className="reports-rise" />
+            )}
 
             {/* ══════════════════════════════════════════════════════════════════════
                 4. PROJECTS PERFORMANCE SECTION (STRUCTURED & INTUITIVE)

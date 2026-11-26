@@ -62,10 +62,18 @@ export function NavSection({ icon, label, isExpanded, defaultOpen = false, actio
     )
 }
 
-export function SubLink({ to, label, isActive }) {
+// `alert`: a short line when the project is held up ("Development is holding up
+// Design"); shown as a red dot, with the line as its tooltip and screen-reader text
+export function SubLink({ to, label, isActive, alert = null }) {
     return (
-        <Link to={to} aria-current={isActive ? "page" : undefined} className={`block rounded-md px-3 py-1.5 text-[13px] truncate transition-colors ${isActive ? SUB_ACTIVE : SUB_INACTIVE}`}>
-            {label}
+        <Link to={to} aria-current={isActive ? "page" : undefined} title={alert || undefined} className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-[13px] transition-colors ${isActive ? SUB_ACTIVE : SUB_INACTIVE}`}>
+            <span className="truncate">{label}</span>
+            {alert && (
+                <>
+                    <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-red-400" aria-hidden="true" />
+                    <span className="sr-only">{alert}</span>
+                </>
+            )}
         </Link>
     )
 }
@@ -89,14 +97,20 @@ export function SkeletonRows() {
 }
 
 // A department row that opens its projects; the name itself opens the department
-export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, isActive = false, isLoading = false }) {
+// `alerts`: Map of project id -> hold-up line (heldUpProjects in holdups.js)
+export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, isActive = false, isLoading = false, alerts = null }) {
     const [isOpen, setIsOpen] = useState(false)
+    const heldUpCount = alerts ? projects.filter((p) => alerts.has(String(p.id))).length : 0
     return (
         <div>
             <div className={`flex items-center rounded-md transition-colors ${isActive ? "bg-primary-accent-dim" : "hover:bg-line"}`}>
                 <button type="button" onClick={onOpenDepartment} aria-current={isActive ? "page" : undefined} className={`flex-1 min-w-0 text-left px-3 py-1.5 text-[13px] truncate cursor-pointer ${isActive ? "text-primary-accent font-semibold" : "text-muted hover:text-white"}`}>
                     {name}
                 </button>
+                {/* Closed group: one dot says a project inside is held up */}
+                {!isOpen && heldUpCount > 0 && (
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" title={`${heldUpCount} project${heldUpCount === 1 ? " is" : "s are"} held up`} aria-label={`${heldUpCount} held up`} />
+                )}
                 <button type="button" onClick={() => setIsOpen((open) => !open)} aria-label={`${isOpen ? "Hide" : "Show"} ${name} projects`} aria-expanded={isOpen} className="px-1.5 text-muted hover:text-white cursor-pointer">
                     <span className={`material-symbols-outlined text-[16px] transition-transform ${isOpen ? "rotate-90" : ""}`}>chevron_right</span>
                 </button>
@@ -105,7 +119,7 @@ export function TeamSpaceGroup({ name, projects, onOpenDepartment, activePath, i
                 <div className="ml-3 pl-3 border-l border-line space-y-0.5">
                     {projects.length === 0 && isLoading && <SkeletonRows />}
                     {projects.length === 0 && !isLoading && <EmptyNote>No projects yet</EmptyNote>}
-                    {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={activePath === `/project_page/${p.id}`} />)}
+                    {projects.length > 0 && projects.map((p) => <SubLink key={p.id} to={`/project_page/${p.id}`} label={p.name} isActive={activePath === `/project_page/${p.id}`} alert={alerts?.get(String(p.id)) ?? null} />)}
                 </div>
             )}
         </div>

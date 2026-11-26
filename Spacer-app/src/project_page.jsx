@@ -8,12 +8,15 @@ import DocViewer from "./components/DocViewer"
 import GroupChat from "./components/GroupChat"
 import SprintTab from "./sprints/SprintTab"
 import DepartmentsTab from "./components/DepartmentsTab"
-import TaskBlockPanel from "./components/TaskBlockPanel"
+import TaskDependenciesPanel from "./components/TaskDependenciesPanel"
+import ProjectTimeline from "./components/ProjectTimeline"
 import { DepartmentFilterBar, TaskDependencyNote } from "./components/DepartmentTaskBadges"
-import { matchesDepartmentFilter } from "./crossDepartment"
+import { matchesDepartmentFilter, projectHealth, taskHoldupRoles, attachDependencies } from "./crossDepartment"
+import ProjectHealthPill from "./components/ProjectHealthPill"
+import { invalidateHoldups } from "./holdupsData"
 import { addableProjectMembers } from "./projectDepartments"
 import { TASK_CREATED_EVENT } from "./appEvents"
-import { fetchProjectDepartments, updateTaskDepartment, setTaskBlock } from "./crossDepartmentData"
+import { fetchProjectDepartments, updateTaskDepartment, fetchTaskDependencies, addTaskDependency, removeTaskDependency } from "./crossDepartmentData"
 import { useRole } from "./RoleContext"
 import { withSignedUrls } from "./projectFiles"
 import { statusFromSubtasks } from "./taskStatus"
@@ -54,12 +57,31 @@ const TASK_COLUMNS = "id, project_id, organization_id, title, description, statu
 // Added by migration 20261031090000_sprints
 const SPRINT_TASK_COLUMNS = "sprint_id, story_points, completed_at"
 // Added by migration 20261120100000_cross_department_projects
-const DEPARTMENT_TASK_COLUMNS = "team_space_id, blocked_by_task_id, blocked_at"
+const DEPARTMENT_TASK_COLUMNS = "team_space_id"
 // Added by migration 20261119100000_task_keys
 const TASK_KEY_COLUMNS = "task_key_scope, task_number"
 
 // Wait for a burst of task changes (e.g. a drag that also logs) to settle before reloading the feed
 const ACTIVITY_RELOAD_DELAY_MS = 500
+// Fields another person's change may move while a task's panel is open here
+const LIVE_TASK_FIELDS = ["status", "due_date", "assignee_id", "team_space_id"]
+
+// The project's tasks, newest first. Newest columns first; 42703 means a
+// migration isn't applied yet, so drop its columns.
+async function loadProjectTasks(projectId) {
+    let result = { data: null, error: null }
+    for (const columns of [
+        `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
+        `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}`,
+        `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
+        `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`,
+        TASK_COLUMNS,
+    ]) {
+        result = await supabase.from("tasks").select(columns).eq("project_id", projectId).order("created_at", { ascending: false })
+        if (result.error?.code !== "42703") break
+    }
+    return result
+}
 
 // The project's recent activity by anyone: entries about its work, plus its own
 // "project created" entry (logged without a project_id). Returns { data, error }.
@@ -253,9 +275,6 @@ function ProjectPage() {
     // null while checking; then can_edit_project, the rule for adding tasks here
     const [canAddTasks, setCanAddTasks] = useState(null)
     const [projectDepartmentName, setProjectDepartmentName] = useState(null)
-    // Task deadlines: super admins, admins and project managers (can_manage_project,
-    // the same rule the database's tasks_guard_due_date trigger checks)
-    const canEditTaskDeadline = canDeleteProject === true
 
     // Same rule the delete-workspace-item function enforces: team lead or higher in
     // the project's own department, or an org admin. Being a direct member is not enough.
@@ -470,6 +489,8 @@ function ProjectPage() {
     // departments, lead first. Empty until that migration is applied.
     // Every row, invited ones included; projectDepartments are the ones working on it
     const [allProjectDepartments, setProjectDepartments] = useState([])
+    // task_dependencies rows: { task_id, blocker_task_id, created_at, resolved_at }
+    const [taskDependencies, setTaskDependencies] = useState([])
     const projectDepartments = allProjectDepartments.filter((d) => d.status !== "invited")
     const invitedDepartments = allProjectDepartments.filter((d) => d.status === "invited")
     const [departmentsVersion, setDepartmentsVersion] = useState(0)
@@ -487,11 +508,20 @@ function ProjectPage() {
         loadDepartments()
         return () => { cancelled = true }
     }, [project_id, departmentsVersion])
+    // Whether you lead a department here: its named lead, or project.manage in it
+    // (the database's leads_department_on_project). Such a lead changes their
+    // department's task deadlines and part due date and adds its people.
+    const leadsDepartment = (departmentId) => projectDepartments.some((d) =>
+        String(d.team_space_id) === String(departmentId) && (d.lead_id === currentUserId || can("project.manage", d.team_space_id)))
+    const departmentsILead = projectDepartments.filter((d) => leadsDepartment(d.team_space_id))
     // Add Members offers the members of the project's department, or of all its
-    // departments on a cross-department project. Waits until those are known.
-    const memberDepartments = projectDepartments.length > 0
+    // departments on a cross-department project; a department's lead who doesn't
+    // manage the project, only their own departments' people. Waits until known.
+    const allMemberDepartments = projectDepartments.length > 0
         ? projectDepartments
         : (teamSpaceId ? [{ team_space_id: teamSpaceId, name: projectDepartmentName || "" }] : [])
+    const memberDepartments = canDeleteProject === true ? allMemberDepartments : departmentsILead
+    const canAddMembers = canDeleteProject === true || departmentsILead.length > 0
     const memberDepartmentKey = hasLoadedDepartments ? memberDepartments.map((d) => d.team_space_id).join(",") : ""
     const [departmentMemberRows, setDepartmentMemberRows] = useState([])
     const [loadedMemberKey, setLoadedMemberKey] = useState(null)
@@ -525,13 +555,20 @@ function ProjectPage() {
     const leadDepartmentId = projectDepartments[0]?.team_space_id ?? teamSpaceId
     const isCrossDepartment = projectDepartments.length > 1
     // The Departments tab also shows invites still waiting for an answer
-    const hasDepartmentsTab = isCrossDepartment || invitedDepartments.length > 0
+    // and, for its managers, how to bring in another department
+    const hasDepartmentsTab = isCrossDepartment || invitedDepartments.length > 0 || canDeleteProject === true
     // The board can show one department, or only blocked tasks; the Summary still counts everything
-    const tasksById = new Map(project_tasks.map((t) => [String(t.id), t]))
+    // The tasks with what each waits on (task_dependencies); every rule about
+    // waiting and holding up reads these
+    const linkedTasks = attachDependencies(project_tasks, taskDependencies)
+    const tasksById = new Map(linkedTasks.map((t) => [String(t.id), t]))
     const boardTasks = isCrossDepartment
-        ? project_tasks.filter((t) => matchesDepartmentFilter(t, departmentFilter, leadDepartmentId, tasksById))
-        : project_tasks
+        ? linkedTasks.filter((t) => matchesDepartmentFilter(t, departmentFilter, leadDepartmentId, tasksById))
+        : linkedTasks
     const boardTasksByColumn = groupTasksByColumn(boardTasks, boardColumns)
+    // Cards edged red when holding another department up, amber when held up
+    const holdupRoles = isCrossDepartment ? taskHoldupRoles(linkedTasks) : new Map()
+    const HOLDUP_EDGE = { holding: "border-l-4 border-l-red-400", held: "border-l-4 border-l-amber-400" }
     // New tasks go to the department being viewed, else yours, else the lead department
     const myProjectDepartmentId = projectDepartments.find((d) => myDepartments.some((m) => String(m.team_space_id) === String(d.team_space_id)))?.team_space_id
     const newTaskDepartmentId = departmentFilter.departmentId || myProjectDepartmentId || leadDepartmentId
@@ -546,22 +583,37 @@ function ProjectPage() {
         return canDeleteProject === true
             || task.assignee_id === currentUserId
             || task.created_by === currentUserId
-            || projectDepartments.some((d) => String(d.team_space_id) === department && d.lead_id === currentUserId)
+            || leadsDepartment(department)
             || can("project.manage", department)
     }
+    // Task deadlines: the project's managers and the task's department lead (the
+    // same rule the database's tasks_guard_due_date trigger checks)
+    const canEditTaskDeadline = (task) => canDeleteProject === true
+        || Boolean(task && leadsDepartment(task.team_space_id ?? leadDepartmentId))
     const patchTask = (taskId, changes) => {
         setProjectTasks((prev) => prev.map((t) => (String(t.id) === String(taskId) ? { ...t, ...changes } : t)))
         setSelectedTask((prev) => (prev && String(prev.id) === String(taskId) ? { ...prev, ...changes } : prev))
     }
-    // Both resolve to an error message for TaskBlockPanel, or null once saved
+    // These resolve to an error message for TaskDependenciesPanel, or null once saved
     const handleTaskDepartmentChange = async (taskId, departmentId) => {
         const { error } = await updateTaskDepartment(taskId, departmentId)
         if (!error) patchTask(taskId, { team_space_id: departmentId })
         return error
     }
-    const handleTaskBlockSave = async (taskId, blockerId) => {
-        const { data, error } = await setTaskBlock(taskId, blockerId)
-        if (!error) patchTask(taskId, { blocked_by_task_id: data.blocked_by_task_id, blocked_at: data.blocked_at })
+    const handleAddDependency = async (taskId, blockerId) => {
+        const { data, error } = await addTaskDependency(project_id, taskId, blockerId)
+        if (!error) {
+            setTaskDependencies((prev) => [...prev.filter((d) => !(String(d.task_id) === String(taskId) && String(d.blocker_task_id) === String(blockerId))), data])
+            invalidateHoldups()
+        }
+        return error
+    }
+    const handleRemoveDependency = async (taskId, blockerId) => {
+        const { error } = await removeTaskDependency(taskId, blockerId)
+        if (!error) {
+            setTaskDependencies((prev) => prev.filter((d) => !(String(d.task_id) === String(taskId) && String(d.blocker_task_id) === String(blockerId))))
+            invalidateHoldups()
+        }
         return error
     }
 
@@ -814,24 +866,8 @@ function ProjectPage() {
 
         const fetchTasks = async () => {
             if (!project_id) return
-            const queryTasks = (columns) => supabase
-                .from("tasks")
-                .select(columns)
-                .eq("project_id", project_id)
-                .order("created_at", { ascending: false })
-            // Newest columns first; 42703 means a migration isn't applied yet, so drop its columns
-            let data = null
-            let error = null
-            for (const columns of [
-                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
-                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${DEPARTMENT_TASK_COLUMNS}`,
-                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}, ${TASK_KEY_COLUMNS}`,
-                `${TASK_COLUMNS}, ${SPRINT_TASK_COLUMNS}`,
-                TASK_COLUMNS,
-            ]) {
-                ({ data, error } = await queryTasks(columns))
-                if (error?.code !== "42703") break
-            }
+            const [{ data, error }, dependencies] = await Promise.all([loadProjectTasks(project_id), fetchTaskDependencies(project_id)])
+            if (!dependencies.error) setTaskDependencies(dependencies.data)
             if (error) { console.error("Error fetching tasks:", error) }
             else {
                 // Show statuses as stored; they're only derived when subtasks are edited
@@ -872,21 +908,38 @@ function ProjectPage() {
         fetchProjectMembers()
     }, [project_id])
 
-    // Live feed: any task change in this project (by anyone, including the
-    // database's own task log) reloads Recent Activity
+    // Live: any task change in this project (by anyone, including the database's
+    // own task log and automatic unblocking) reloads the tasks and Recent
+    // Activity, so the board and the Departments tab show who is holding things
+    // up without a refresh; a change to its departments (an invite answered, a
+    // part signed off) reloads those.
     useEffect(() => {
         if (!project_id) return
         let reloadTimer = null
         const reload = () => {
             clearTimeout(reloadTimer)
             reloadTimer = setTimeout(async () => {
-                const { data, error } = await fetchProjectActivity(project_id)
-                if (!error) setActivityLog(data)
+                const [activity, tasks, dependencies] = await Promise.all([fetchProjectActivity(project_id), loadProjectTasks(project_id), fetchTaskDependencies(project_id)])
+                if (!activity.error) setActivityLog(activity.data)
+                if (!dependencies.error) setTaskDependencies(dependencies.data)
+                if (tasks.error) { console.error("Reloading tasks failed:", tasks.error); return }
+                const fresh = tasks.data || []
+                setProjectTasks(fresh)
+                invalidateHoldups()
+                // An open task panel takes the fields others may have changed
+                setSelectedTask((prev) => {
+                    const latest = prev && fresh.find((t) => String(t.id) === String(prev.id))
+                    if (!latest) return prev
+                    return { ...prev, ...Object.fromEntries(LIVE_TASK_FIELDS.filter((key) => key in latest).map((key) => [key, latest[key]])) }
+                })
             }, ACTIVITY_RELOAD_DELAY_MS)
         }
+        const reloadDepartments = () => setDepartmentsVersion((v) => v + 1)
         const channel = supabase
-            .channel(`project-activity-${project_id}`)
+            .channel(`project-live-${project_id}`)
             .on("postgres_changes", { event: "*", schema: "public", table: "tasks", filter: `project_id=eq.${project_id}` }, reload)
+            .on("postgres_changes", { event: "*", schema: "public", table: "project_departments", filter: `project_id=eq.${project_id}` }, reloadDepartments)
+            .on("postgres_changes", { event: "*", schema: "public", table: "task_dependencies", filter: `project_id=eq.${project_id}` }, reload)
             .subscribe()
         return () => {
             clearTimeout(reloadTimer)
@@ -1106,6 +1159,12 @@ function ProjectPage() {
                     <div className="flex items-center gap-md flex-wrap">
                         {projectHeading}
                         {projectDeadline}
+                        {isCrossDepartment && (
+                            <ProjectHealthPill
+                                health={projectHealth({ departments: projectDepartments, tasks: linkedTasks, projectDueDate: project_due_date })}
+                                onOpen={() => setActiveTab("departments")}
+                            />
+                        )}
                     </div>
                     {/* Sub-Tabs Navigation */}
                     <div className="flex items-center gap-sm mt-xl mb-lg">
@@ -1114,6 +1173,7 @@ function ProjectPage() {
                             { id: "tasks", label: "Orbit", icon: "view_kanban" },
                             // Only projects shared by more than one department
                             ...(hasDepartmentsTab ? [{ id: "departments", label: "Departments", icon: "lan" }] : []),
+                            { id: "timeline", label: "Timeline", icon: "view_timeline" },
                             { id: "calendar", label: "Calendar", icon: "calendar_month" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
@@ -1260,8 +1320,8 @@ function ProjectPage() {
                                                             {activity.action === "sprint_started" && (
                                                                 <>started <span className="text-primary-fixed-dim font-bold">{activity.new_state?.name}</span> with {activity.new_state?.totalTasks} task{activity.new_state?.totalTasks === 1 ? "" : "s"}{activity.new_state?.committedPoints > 0 && ` (${activity.new_state.committedPoints} pts)`}</>
                                                             )}
-                                                            {["department_invited", "department_joined", "department_declined"].includes(activity.action) && (
-                                                                <>{{ department_invited: "invited", department_joined: "accepted the invite for", department_declined: "declined the invite for" }[activity.action]} <span className="text-primary-fixed-dim font-bold">{activity.new_state?.department || "a department"}</span>{activity.action === "department_invited" ? " to work on this project" : ""}</>
+                                                            {["department_invited", "department_joined", "department_declined", "department_added", "department_removed"].includes(activity.action) && (
+                                                                <>{{ department_invited: "invited", department_joined: "accepted the invite for", department_declined: "declined the invite for", department_added: "added", department_removed: "removed" }[activity.action]} <span className="text-primary-fixed-dim font-bold">{activity.new_state?.department || "a department"}</span>{activity.action === "department_invited" ? " to work on this project" : ""}</>
                                                             )}
                                                             {activity.action === "department_nudged" && (
                                                                 <>nudged <span className="text-primary-fixed-dim font-bold">{activity.new_state?.department || "a department"}</span> about this project</>
@@ -1288,13 +1348,22 @@ function ProjectPage() {
                             projectDueDate={project_due_date}
                             departments={projectDepartments}
                             invitedDepartments={invitedDepartments}
-                            tasks={project_tasks}
+                            tasks={linkedTasks}
                             orgUsers={orgUsers}
                             currentUserId={currentUserId}
                             canManage={canDeleteProject === true}
+                            leadsDepartment={leadsDepartment}
                             onResolve={(departmentId) => { setDepartmentFilter({ departmentId, isBlockedOnly: false }); setActiveTab("tasks") }}
                             onOpenTask={setSelectedTask}
                             onDepartmentsChanged={() => setDepartmentsVersion((v) => v + 1)}
+                        />
+                    )}
+                    {activeTab === "timeline" && (
+                        <ProjectTimeline
+                            tasks={linkedTasks}
+                            departments={isCrossDepartment ? projectDepartments : []}
+                            projectDueDate={project_due_date}
+                            onOpenTask={setSelectedTask}
                         />
                     )}
                     {activeTab === "sprint" && (
@@ -1404,7 +1473,7 @@ function ProjectPage() {
                                                         onDragStart={(e) => handleDragStart(e, task.id)}
                                                         onDragEnd={() => setDragOverColumn(null)}
                                                         onClick={() => setSelectedTask(task)}
-                                                        className="bg-raised border border-line rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-accent-ink/50 transition-all group"
+                                                        className={`bg-raised border border-line rounded-lg p-md cursor-grab active:cursor-grabbing hover:border-accent-ink/50 transition-all group ${HOLDUP_EDGE[holdupRoles.get(String(task.id))] || ""}`}
                                                     >
                                                         {/* Priority Badge */}
                                                         <div className="mb-sm">
@@ -1435,7 +1504,7 @@ function ProjectPage() {
                                                         <h4 className="text-sm text-white font-bold leading-snug mb-xs">{task.title}</h4>
 
                                                         {/* Waiting on another department / holding others up */}
-                                                        {isCrossDepartment && <TaskDependencyNote task={task} tasks={project_tasks} departments={projectDepartments} />}
+                                                        <TaskDependencyNote task={task} tasks={linkedTasks} departments={isCrossDepartment ? projectDepartments : []} />
 
                                                         {/* Description */}
                                                         {task.description && (
@@ -1819,7 +1888,7 @@ function ProjectPage() {
             {(() => {
                 const fabConfig = {
                     files:   { icon: "upload",      label: "Upload File",    action: () => { setShowUploadZone(true); window.scrollTo({ top: 0, behavior: "smooth" }) } },
-                    members: { icon: "person_add",  label: "Add Member",     action: () => setShowAddMemberModal(true) },
+                    ...(canAddMembers ? { members: { icon: "person_add", label: "Add Member", action: () => setShowAddMemberModal(true) } } : {}),
                 }
                 const cfg = fabConfig[activeTab]
                 if (!cfg) return null
@@ -2160,18 +2229,17 @@ function ProjectPage() {
                                 })()}
                             </div>
 
-                            {isCrossDepartment && (
-                                <TaskBlockPanel
-                                    key={`${selectedTask.id}-${selectedTask.blocked_by_task_id ?? ""}`}
-                                    task={selectedTask}
-                                    tasks={project_tasks}
-                                    departments={projectDepartments}
-                                    canChangeDepartment={canEditTaskDetails || canDeleteProject === true}
-                                    canBlock={canBlockTask(selectedTask)}
-                                    onDepartmentChange={(id) => handleTaskDepartmentChange(selectedTask.id, id)}
-                                    onBlockSave={(blockerId) => handleTaskBlockSave(selectedTask.id, blockerId)}
-                                />
-                            )}
+                            <TaskDependenciesPanel
+                                key={selectedTask.id}
+                                task={tasksById.get(String(selectedTask.id)) || { ...selectedTask, blocked_by: [] }}
+                                tasks={linkedTasks}
+                                departments={isCrossDepartment ? projectDepartments : []}
+                                canChangeDepartment={canEditTaskDetails || canDeleteProject === true}
+                                canSetFor={canBlockTask}
+                                onDepartmentChange={(id) => handleTaskDepartmentChange(selectedTask.id, id)}
+                                onAddDependency={handleAddDependency}
+                                onRemoveDependency={handleRemoveDependency}
+                            />
 
                             <div className="grid grid-cols-2 gap-md">
                                 <div className="bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs">
@@ -2202,7 +2270,7 @@ function ProjectPage() {
                                     <TaskDeadline
                                         key={selectedTask.id}
                                         dueDate={selectedTask.due_date}
-                                        canEdit={canEditTaskDeadline}
+                                        canEdit={canEditTaskDeadline(selectedTask)}
                                         onSave={(nextDate) => handleTaskDeadlineSave(selectedTask.id, nextDate)}
                                     />
                                 </div>
@@ -2299,7 +2367,9 @@ function ProjectPage() {
                 const available = addableProjectMembers(departmentMemberRows, memberDepartments, alreadyIn)
                 // Who can be added is only known once every list is in
                 const isReady = isMembersLoaded && isOrgUsersLoaded && memberDepartmentKey !== "" && loadedMemberKey === memberDepartmentKey
-                const fromWhere = isCrossDepartment ? "this project's departments" : (projectDepartmentName || "this project's department")
+                const fromWhere = canDeleteProject !== true && departmentsILead.length > 0
+                    ? departmentsILead.map((d) => d.name).join(" and ")
+                    : isCrossDepartment ? "this project's departments" : (projectDepartmentName || "this project's department")
 
                 const addMember = (user) => addProjectMember(user)
 

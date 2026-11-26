@@ -37,3 +37,10 @@ test("department invites, joins and declines name the department and project", (
     assert.equal(describeActivity({ entity_type: "project", action: "department_joined", new_state: state }).title, "Development joined “Nightfall”");
     assert.equal(describeActivity({ entity_type: "project", action: "department_declined", new_state: state }).title, "Development declined to work on “Nightfall”");
 });
+
+test("a department added or removed names it and the tasks that moved", () => {
+    const state = { department: "Design", project_name: "Nightfall", moved_tasks: 3 };
+    assert.equal(describeActivity({ entity_type: "project", action: "department_added", new_state: state }).title, "Added Design to “Nightfall”");
+    assert.equal(describeActivity({ entity_type: "project", action: "department_removed", new_state: state }).title, "Removed Design from “Nightfall” (3 tasks moved to the lead department)");
+    assert.equal(describeActivity({ entity_type: "project", action: "department_removed", new_state: { ...state, moved_tasks: 0 } }).title, "Removed Design from “Nightfall”");
+});

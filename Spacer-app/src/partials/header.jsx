@@ -33,8 +33,9 @@ const PERSONAL_MESSAGES = {
     department_nudge: "Your department is holding up a project.",
     department_invite: "Accept or decline it on your Home page.",
     department_invite_reply: "See the project's Departments tab.",
+    department_holdup: "Another department is waiting on this task.",
 }
-const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble", task_blocked: "hourglass_top", task_unblocked: "lock_open", department_nudge: "campaign", department_invite: "handshake", department_invite_reply: "handshake" }
+const PERSONAL_ICONS = { assignment: "assignment_ind", project_added: "group_add", status_change: "sync", mention: "alternate_email", meeting_invite: "event", comment: "chat_bubble", task_blocked: "hourglass_top", task_unblocked: "lock_open", department_nudge: "campaign", department_invite: "handshake", department_invite_reply: "handshake", department_holdup: "hourglass_top" }
 
 function Header({ onSearch = () => {}, breadcrumb = null, insetLeft = 0 }) {
     const { isSuperAdmin, isAdmin, roleLoading } = useRole();

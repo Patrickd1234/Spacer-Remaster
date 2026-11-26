@@ -4,7 +4,7 @@ import { supabase, getSessionUser } from "../supabase";
 import Select from "../components/Select";
 import { useRole } from "../RoleContext";
 import { addableDepartments, departmentLeadOptions, applyDepartmentChange, resolveDepartmentLead } from "../projectDepartments";
-import { normalizeDepartments, newProjectProblem, createProjectArgs } from "../newProject";
+import { normalizeDepartments, newProjectProblem, createProjectArgs, applyDeadlineChange } from "../newProject";
 import { createProject, fetchOrganizationDepartments } from "../crossDepartmentData";
 import { announceProjectCreated } from "../appEvents";
 import ProjectDepartmentCard from "./ProjectDepartmentCard";
@@ -102,10 +102,10 @@ export default function CreateProjectModal({ onClose }) {
     const addDepartment = () => {
         if (nextDepartment) setPicked([...departments, { teamSpaceId: nextDepartment.id, dueDate: deadline }]);
     };
-    // A new overall deadline fills in departments that have no due date yet
+    // Department dates that followed the deadline (or no longer fit) move with it
     const changeDeadline = (value) => {
+        setPicked(applyDeadlineChange(departments, deadline, value));
         setDeadline(value);
-        setPicked(departments.map((d) => (d.dueDate ? d : { ...d, dueDate: value })));
     };
 
     const submit = async () => {
