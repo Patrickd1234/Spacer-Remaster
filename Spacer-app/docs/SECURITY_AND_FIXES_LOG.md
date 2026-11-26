@@ -309,6 +309,7 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261121100000_project_departments_mfa.sql` | ✅ | ✅ |
 | `20261121110000_sync_user_email.sql` | ✅ | ✅ |
 | `20261124090000_pin_org_roles_to_org.sql` | ✅ (24 Nov) | ✅ |
+| `20261126090000_realtime_direct_messages.sql` | ⏳ not yet | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
 
@@ -356,7 +357,12 @@ Since November migrations are applied with `supabase db push` or the SQL Editor;
 1. P-07: monitoring (no error reporting from the live site yet).
 2. Confirm project files open after a remembered-device sign-in (§7).
 
-**Medium:** B-06 project fields not saved/editable, B-07 DM duplicates/false unread, X-08/X-03 DM attachment file-name sanitising (base64 attachments replaced by a private bucket on 30 Oct), P-04 polling and unbounded queries, B-05 sprint completion not logged.
+**Medium, fixed 26 Nov (frontend; one migration still to apply):**
+- B-06: managers rename a project by clicking its name on the project page (`components/ProjectName.jsx`); the sidebar and its saved list update at once (`PROJECT_RENAMED_EVENT`). Renames and deadline changes now check a row was really saved.
+- B-07: live DMs are mapped like fetched ones (`src/dmThread.js`), so attachments show and nothing appears twice. A slow fetch for a chat you've left is ignored, and switching chats never shows the previous one. A message being sent survives re-fetches. "Read" is never stamped earlier than the newest message's server time (a slow computer clock left threads unread), and an open, un-minimized chat counts as read whenever a message arrives. Read state is still per browser (localStorage).
+- X-08/X-03: the attachment name shown and offered for download drops control characters, right-to-left overrides and folder parts, and is capped at 120 characters (`dmAttachmentName`); old messages are cleaned when shown. The storage name never starts with a dot.
+- P-04: `direct_messages` added to the Realtime publication (`20261126090000`). The open chat's 3-second re-fetch is now every 15 seconds, only while the tab is visible. An open DM and a group channel load their newest 200 messages; the inbox reads the newest 1,000 DMs.
+- B-05: `complete_sprint` already logged `sprint_completed` (since 31 Oct). The project's Recent Activity now reloads when a sprint is completed, instead of only on the next task change.
 
 **Low:** B-08 small bugs, P-05 bundle size, P-06 very large files, P-08 lint, account cleanup, signup activity-log insert.
 
