@@ -19,5 +19,9 @@ export default defineConfig(({ mode }) => {
       react(),
       babel({ presets: [reactCompilerPreset()] })
     ],
+    // Which deploy an error came from in Sentry: the commit Vercel built
+    define: {
+      'import.meta.env.VITE_APP_RELEASE': JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA || ''),
+    },
   }
 })

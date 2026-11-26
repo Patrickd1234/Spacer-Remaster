@@ -13,6 +13,7 @@
     "db:backup": "node scripts/backup-data.mjs"
   },
   "dependencies": {
+    "@sentry/react": "11.11.0",
     "@supabase/supabase-js": "^2.110.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

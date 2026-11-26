@@ -15,8 +15,9 @@ export default class ErrorBoundary extends Component {
     }
 
     componentDidCatch(error, info) {
-        // Hook a monitoring service in here (e.g. Sentry) when one is added
-        console.error("Page crashed:", error, info?.componentStack);
+        // Sentry gets this from createRoot's onCaughtError (src/monitoring);
+        // warn rather than error so the console capture doesn't report it twice
+        console.warn("Page crashed:", error, info?.componentStack);
     }
 
     render() {
