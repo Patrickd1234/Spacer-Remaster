@@ -309,8 +309,8 @@ All in `supabase/migrations/`; undo scripts in `supabase/rollback/`. Migrations 
 | `20261121100000_project_departments_mfa.sql` | ✅ | ✅ |
 | `20261121110000_sync_user_email.sql` | ✅ | ✅ |
 | `20261124090000_pin_org_roles_to_org.sql` | ✅ (24 Nov) | ✅ |
-| `20261126090000_realtime_direct_messages.sql` | ⏳ not yet | ✅ |
-| `20261126100000_delete_channel_message.sql` | ⏳ not yet | ✅ |
+| `20261126090000_realtime_direct_messages.sql` | ✅ (26 Nov) | ✅ |
+| `20261126100000_delete_channel_message.sql` | ✅ (26 Nov) | ✅ |
 
 Undo scripts restore the **previous, insecure** state. Use them only to unblock the app while a policy is fixed.
 
@@ -358,7 +358,7 @@ Since November migrations are applied with `supabase db push` or the SQL Editor;
 1. P-07: monitoring (no error reporting from the live site yet).
 2. Confirm project files open after a remembered-device sign-in (§7).
 
-**Medium, fixed 26 Nov (frontend; one migration still to apply):**
+**Medium, fixed 26 Nov (frontend, plus migration 20261126090000, applied 26 Nov):**
 - B-06: managers rename a project by clicking its name on the project page (`components/ProjectName.jsx`); the sidebar and its saved list update at once (`PROJECT_RENAMED_EVENT`). Renames and deadline changes now check a row was really saved.
 - B-07: live DMs are mapped like fetched ones (`src/dmThread.js`), so attachments show and nothing appears twice. A slow fetch for a chat you've left is ignored, and switching chats never shows the previous one. A message being sent survives re-fetches. "Read" is never stamped earlier than the newest message's server time (a slow computer clock left threads unread), and an open, un-minimized chat counts as read whenever a message arrives. Read state is still per browser (localStorage).
 - X-08/X-03: the attachment name shown and offered for download drops control characters, right-to-left overrides and folder parts, and is capped at 120 characters (`dmAttachmentName`); old messages are cleaned when shown. The storage name never starts with a dot.
