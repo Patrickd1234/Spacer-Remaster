@@ -26,7 +26,6 @@ import {
     saveColumnOrder, deleteColumn, fallbackColumn, columnKeyForTask,
 } from "./projectColumns"
 import { BoardColumnHeader, AddColumnTile, DeleteColumnModal } from "./components/BoardColumns"
-import ProjectCalendar from "./components/ProjectCalendar"
 import ProjectMembers from "./components/ProjectMembers"
 import ProjectDeadline from "./components/ProjectDeadline"
 import { findSavedProject } from "./projectListCache"
@@ -40,10 +39,11 @@ import { saveTaskFields, insertTask } from "./tasks/taskPanelData"
 import { TaskKeyText } from "./tasks/TaskKeyBar"
 import { useTaskKeyPrefixes } from "./tasks/taskKeyPrefixes"
 import { formatTaskKey } from "./tasks/taskKey"
-import { filterTasks, sortTasks, groupTasks, bulkSummary } from "./tasks/taskViews"
+import { filterTasks, sortTasks, groupTasks, bulkSummary, CLEARED_FILTERS } from "./tasks/taskViews"
 import { updateTasks, deleteTasks } from "./tasks/taskViewsData"
 import { useTaskViews, useProjectPeople } from "./tasks/views/useTaskViews"
 import TaskViewToolbar from "./tasks/views/TaskViewToolbar"
+import DependencySummaryBar from "./tasks/views/DependencySummaryBar"
 import SavedViewsMenu from "./tasks/views/SavedViewsMenu"
 import TaskListView from "./tasks/views/TaskListView"
 import BulkBar from "./tasks/views/BulkBar"
@@ -54,8 +54,6 @@ import UndoToast from "./components/UndoToast"
 import { matchesShortcut } from "./shortcuts"
 import { AwayDot } from "./availability/AwayBadge"
 import { useAwayPeriods } from "./availability/availabilityData"
-import ScheduleMeetingModal from "./meetings/ScheduleMeetingModal"
-import { MEETING_SAVED_EVENT } from "./appEvents"
 import Toast from "./components/Toast"
 import MarkWaitingModal from "./tasks/panel/MarkWaitingModal"
 import TaskWaitingSection from "./tasks/panel/TaskWaitingSection"
@@ -215,9 +213,6 @@ function ProjectPage() {
     // Who is away now or later (empty until migration 20261120130000 is applied)
     const awayPeriods = useAwayPeriods()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const [selectedDateEvents, setSelectedDateEvents] = useState(null)
-    const [sidebarActionMenuOpen, setSidebarActionMenuOpen] = useState(false)
-    const [creatingInSidebar, setCreatingInSidebar] = useState(null)
     const [currentUserId, setCurrentUserId] = useState(null)
 
     // The departments you're in (for cross-department projects)
@@ -430,12 +425,15 @@ function ProjectPage() {
     const [departmentsVersion, setDepartmentsVersion] = useState(0)
     const [departmentFilter, setDepartmentFilter] = useState({ departmentId: null, isBlockedOnly: false })
     const [hasLoadedDepartments, setHasLoadedDepartments] = useState(false)
+    // Shown on the Departments tab, so a failed load doesn't look like "no departments"
+    const [departmentsError, setDepartmentsError] = useState(null)
     useEffect(() => {
         if (!project_id) return undefined
         let cancelled = false
         const loadDepartments = async () => {
-            const { data } = await fetchProjectDepartments(project_id)
+            const { data, error } = await fetchProjectDepartments(project_id)
             if (cancelled) return
+            setDepartmentsError(error)
             setProjectDepartments(data)
             setHasLoadedDepartments(true)
         }
@@ -1282,7 +1280,6 @@ function ProjectPage() {
                             // Only projects shared by more than one department
                             ...(hasDepartmentsTab ? [{ id: "departments", label: "Departments", icon: "lan" }] : []),
                             { id: "timeline", label: "Timeline", icon: "view_timeline" },
-                            { id: "calendar", label: "Calendar", icon: "calendar_month" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
                             { id: "sprint", label: "Sprint", icon: "directions_run" },
@@ -1456,6 +1453,9 @@ function ProjectPage() {
                     )}
 
                     {/* Sprint Tab */}
+                    {activeTab === "departments" && departmentsError && (
+                        <p role="alert" className="mb-md text-xs text-red-400">{departmentsError} Reload the page to try again.</p>
+                    )}
                     {activeTab === "departments" && hasDepartmentsTab && (
                         <DepartmentsTab
                             projectId={project_id}
@@ -1464,6 +1464,7 @@ function ProjectPage() {
                             invitedDepartments={invitedDepartments}
                             tasks={linkedTasks}
                             orgUsers={orgUsers}
+                            memberIds={isMembersLoaded ? projectMembers.map((m) => m.user_id) : null}
                             currentUserId={currentUserId}
                             canManage={canDeleteProject === true}
                             leadsDepartment={leadsDepartment}
@@ -1477,6 +1478,7 @@ function ProjectPage() {
                             tasks={linkedTasks}
                             departments={isCrossDepartment ? projectDepartments : []}
                             projectDueDate={project_due_date}
+                            people={orgUsers}
                             onOpenTask={openTask}
                         />
                     )}
@@ -1516,6 +1518,7 @@ function ProjectPage() {
                                         shownCount={visibleTasks.length}
                                         totalCount={boardTasks.length}
                                         hasDepartments={isCrossDepartment}
+                                        people={projectPeople}
                                         departmentFilter={isCrossDepartment && <DepartmentFilterBar departments={projectDepartments} filter={departmentFilter} onChange={setDepartmentFilter} />}
                                         views={taskViews.isSavingAvailable && (
                                             <SavedViewsMenu
@@ -1559,7 +1562,7 @@ function ProjectPage() {
                                 <TasksEmptyState
                                     isFiltered={boardTasks.length > 0}
                                     canAdd={canAddTasks === true}
-                                    onClear={() => { taskViews.change({ search: "", quick: [] }); setDepartmentFilter({ departmentId: null, isBlockedOnly: false }) }}
+                                    onClear={() => { taskViews.change(CLEARED_FILTERS); setDepartmentFilter({ departmentId: null, isBlockedOnly: false }) }}
                                     onAdd={() => { setCreateTaskInitialStatus("todo"); setIsCreateTaskModalOpen(true) }}
                                 />
                             )}
@@ -1759,140 +1762,14 @@ function ProjectPage() {
                                 {canManageColumns && <AddColumnTile columns={boardColumns} onAdd={handleAddColumn} saving={columnSaving} />}
                             </div>
                             )}
+                            <DependencySummaryBar
+                                tasks={linkedTasks}
+                                departments={taskModalDepartments}
+                                hasAnyDependency={taskDependencies.some((d) => !d.resolved_at)}
+                                viewLabel={hasDepartmentsTab ? "View dependencies" : "View timeline"}
+                                onView={() => setActiveTab(hasDepartmentsTab ? "departments" : "timeline")}
+                            />
                         </div>
-                    )}
-
-                    {selectedDateEvents && (
-                        <>
-                            {/* Backdrop */}
-                            <div
-                                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-                                onClick={() => setSelectedDateEvents(null)}
-                            ></div>
-                            {/* Sidebar */}
-                            <div className="fixed top-0 right-0 z-50 w-1/2 h-full bg-raised border-l border-line shadow-2xl flex flex-col transform transition-transform duration-300">
-                                <div className="flex items-center justify-between p-lg border-b border-line/20 shrink-0">
-                                    <h2 className="font-headline-md text-white">
-                                        Schedule for {selectedDateEvents.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-                                    </h2>
-                                    <div className="flex items-center gap-sm relative">
-                                        <button
-                                            className="text-muted hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-line transition-colors relative"
-                                            onClick={() => setSidebarActionMenuOpen(!sidebarActionMenuOpen)}
-                                        >
-                                            <span className="material-symbols-outlined">add</span>
-                                        </button>
-                                        {sidebarActionMenuOpen && (
-                                            <>
-                                                <div className="fixed inset-0 z-40" onClick={() => setSidebarActionMenuOpen(false)}></div>
-                                                <div className="font-body-md absolute right-0 top-full mt-1 w-48 bg-surface1 border border-line rounded-lg shadow-xl z-[70] overflow-hidden">
-                                                    {canAddTasks === true && (
-                                                        <button
-                                                            className="w-full text-left px-4 py-3 hover:bg-line transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
-                                                            onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('task'); }}
-                                                        >
-                                                            <span className="material-symbols-outlined text-[18px]">task</span> Add Task
-                                                        </button>
-                                                    )}
-                                                    <button
-                                                        className="w-full text-left px-4 py-3 hover:bg-line transition-colors flex items-center gap-3 text-sm font-medium text-white cursor-pointer"
-                                                        onClick={() => { setSidebarActionMenuOpen(false); setCreatingInSidebar('meeting'); }}
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">event</span> Add Meeting
-                                                    </button>
-                                                </div>
-                                            </>
-                                        )}
-                                        <button className="text-muted hover:text-white cursor-pointer w-8 h-8 flex items-center justify-center rounded-full hover:bg-line transition-colors" onClick={() => { setSelectedDateEvents(null); setCreatingInSidebar(null); setSidebarActionMenuOpen(false); }}>
-                                            <span className="material-symbols-outlined">close</span>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="p-lg overflow-y-auto flex-1 scroll-hide space-y-md">
-                                    {creatingInSidebar === 'task' ? (
-                                        <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-muted flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
-                                                <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
-                                            </button>
-                                            <CreateTaskModal
-                                                projectId={project_id}
-                                                organizationId={organizationId}
-                                                teamSpaceId={teamSpaceId}
-                                                departments={taskModalDepartments}
-                                                defaultDepartmentId={newTaskDepartmentId}
-                                                initialStatus="todo"
-                                                initialDate={selectedDateEvents ? `${selectedDateEvents.getFullYear()}-${String(selectedDateEvents.getMonth() + 1).padStart(2, '0')}-${String(selectedDateEvents.getDate()).padStart(2, '0')}T09:00` : ""}
-                                                isInline={true}
-                                                onClose={() => setCreatingInSidebar(null)}
-                                                onCreated={(newTask) => {
-                                                    setProjectTasks(prev => [newTask, ...prev])
-                                                    setCreatingInSidebar(null)
-                                                }}
-                                            />
-                                        </div>
-                                    ) : creatingInSidebar === 'meeting' ? (
-                                        <div className="h-full flex flex-col">
-                                            <button onClick={() => setCreatingInSidebar(null)} className="mb-4 text-sm font-medium text-muted flex items-center gap-1 hover:text-white transition-colors cursor-pointer w-fit">
-                                                <span className="material-symbols-outlined text-[16px]">arrow_back</span> Back to schedule
-                                            </button>
-                                            <ScheduleMeetingModal
-                                                organizer={currentUserId && organizationId ? { id: currentUserId, organization_id: organizationId } : null}
-                                                defaultDate={selectedDateEvents || new Date()}
-                                                onClose={() => setCreatingInSidebar(null)}
-                                                onSaved={(meeting) => {
-                                                    setCreatingInSidebar(null)
-                                                    window.dispatchEvent(new CustomEvent(MEETING_SAVED_EVENT, { detail: meeting }))
-                                                }}
-                                            />
-                                        </div>
-                                    ) : (() => {
-                                        const formatYMD = (date) => {
-                                            if (!date) return ""
-                                            const y = date.getFullYear()
-                                            const m = String(date.getMonth() + 1).padStart(2, '0')
-                                            const d = String(date.getDate()).padStart(2, '0')
-                                            return `${y}-${m}-${d}`
-                                        }
-                                        const dateString = formatYMD(selectedDateEvents);
-                                        const dayTasks = project_tasks.filter(t => t.due_date && t.due_date.substring(0, 10) === dateString);
-                                        const combined = [
-                                            ...dayTasks.map(t => ({ ...t, isTask: true, sortTime: new Date(t.due_date).getTime(), originalDateStr: t.due_date }))
-                                        ].sort((a, b) => a.sortTime - b.sortTime);
-
-                                        if (combined.length === 0) {
-                                            return <p className="text-muted text-center italic py-md">Nothing scheduled for this day.</p>;
-                                        }
-
-                                        return combined.map(item => (
-                                            <div
-                                                key={(item.isEvent ? 'evt-' : 'tsk-') + item.id}
-                                                onClick={() => {
-                                                    if (!item.isEvent) {
-                                                        openTask(item);
-                                                    }
-                                                }}
-                                                className={`bg-raised p-md rounded-xl border border-line/20 flex flex-col gap-xs ${!item.isEvent ? 'cursor-pointer hover:border-primary-fixed-dim/50 transition-colors hover:shadow-lg' : ''}`}
-                                            >
-                                                <div className="flex items-center justify-between">
-                                                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded flex items-center gap-1 ${item.isEvent ? 'bg-[#9c27b0]/20 text-[#9c27b0]' : 'bg-primary-fixed-dim/20 text-primary-fixed-dim'
-                                                        }`}>
-                                                        <span className="material-symbols-outlined text-[12px]">{item.isEvent ? 'event' : 'task'}</span>
-                                                        {item.isEvent ? 'Event' : 'Task'}
-                                                    </span>
-                                                    <span className="text-xs text-muted font-medium">
-                                                        {(item.originalDateStr.includes('T') || item.originalDateStr.includes(' '))
-                                                            ? new Date(item.sortTime).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-                                                            : 'All Day'}
-                                                    </span>
-                                                </div>
-                                                <h3 className="text-base text-white font-semibold mt-1">{item.title}</h3>
-                                                {item.description && <p className="text-xs text-muted line-clamp-2">{item.description}</p>}
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-                            </div>
-                        </>
                     )}
 
                     {/* Public Files Tab */}
@@ -2027,10 +1904,6 @@ function ProjectPage() {
                         />
                     )}
 
-                    {/* Calendar Tab */}
-                    {activeTab === "calendar" && (
-                        <ProjectCalendar tasks={project_tasks} onPickDay={setSelectedDateEvents} onOpenTask={openTask} />
-                    )}
                 </div>
             </main>
             {/* ── Floating button: only where the tab's main action has no other home.

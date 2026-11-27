@@ -1,6 +1,6 @@
 import { DateBadge } from "../general/GeneralParts"
 
-// Tasks on the shared calendar views (personal Calendar and a project's Calendar tab).
+// Tasks on the shared calendar views (the personal Calendar).
 // Items come from taskItem() in generalFormat.
 
 export function TaskChip({ task, onOpen }) {

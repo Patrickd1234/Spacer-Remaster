@@ -301,3 +301,15 @@ test("a task can wait on any open task of the project, in any department, once",
     assert.deepEqual(blockableTasks(list, "a").map((t) => t.id), ["c"])
     assert.deepEqual(blockableTasks(list, "a", DEV).map((t) => t.id), ["c"])
 })
+
+test("in progress counts open work being done or reviewed, not tasks waiting on another", () => {
+    const list = attachDependencies([
+        task("a", DEV, { status: "in_progress" }),
+        task("b", DEV, { status: "in_review" }),
+        task("c", DEV, { status: "in_progress" }),
+        task("d", DESIGN, { status: "todo" }),
+    ], deps(["c", "d"]))
+    const s = Object.fromEntries(summarizeDepartments({ departments: [{ team_space_id: DEV, name: "Dev", is_lead_department: true }, { team_space_id: DESIGN, name: "Design" }], tasks: list, now: NOW }).map((r) => [r.id, r]))
+    assert.equal(s[DEV].inProgress, 2)
+    assert.equal(s[DESIGN].inProgress, 0)
+})

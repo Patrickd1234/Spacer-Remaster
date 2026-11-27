@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { DEFAULT_VIEW, normalizeView, sameView, filterTasks, sortTasks, groupTasks, bulkSummary } from "./taskViews.js"
+import { DEFAULT_VIEW, normalizeView, sameView, filterTasks, sortTasks, groupTasks, bulkSummary, isFilteredView, CLEARED_FILTERS, UNASSIGNED_FILTER } from "./taskViews.js"
 
 const NOW = new Date(2026, 10, 27, 12) // 27 Nov 2026
 const task = (id, fields = {}) => ({ id, title: id, status: "todo", priority: "medium", due_date: null, assignee_id: null, created_at: `2026-11-0${id.length}`, ...fields })
@@ -14,7 +14,7 @@ const tasks = [
 test("a saved view from untrusted JSON keeps only known values", () => {
     assert.deepEqual(normalizeView(null), { ...DEFAULT_VIEW, quick: [] })
     assert.deepEqual(normalizeView({ mode: "list", search: 42, quick: ["mine", "mine", "evil"], groupBy: "x", sortBy: "due" }), {
-        mode: "list", search: "", quick: ["mine"], groupBy: "status", sortBy: "due",
+        mode: "list", search: "", quick: ["mine"], groupBy: "status", sortBy: "due", assignee: "", status: "", priority: "",
     })
     assert.equal(normalizeView({ search: "a".repeat(500) }).search.length, 200)
     assert.equal(sameView({ quick: ["mine", "overdue"] }, { quick: ["overdue", "mine"] }), true)
@@ -62,4 +62,22 @@ test("bulk summary says what didn't change and why", () => {
     assert.deepEqual(bulkSummary([{ error: null }, { error: null }]), { message: "Changed 2 tasks.", isError: false })
     assert.deepEqual(bulkSummary([{ error: null }, { error: "No right." }, { error: "No right." }]), { message: "Changed 1 of 3 tasks. 2 weren't: No right.", isError: true })
     assert.deepEqual(bulkSummary([{ error: "No right." }], "Deleted"), { message: "Nothing was deleted. 1 wasn't: No right.", isError: true })
+})
+
+test("dropdown filters: assignee (or nobody), status and priority combine and clear", () => {
+    const tasks = [
+        { id: 1, title: "A", assignee_id: "u1", status: "waiting", priority: "high" },
+        { id: 2, title: "B", assignee_id: null, status: "todo", priority: "low" },
+        { id: 3, title: "C", assignee_id: "u1", status: "todo" },
+    ]
+    const ids = (view) => filterTasks(tasks, view).map((t) => t.id)
+    assert.deepEqual(ids({ assignee: "u1" }), [1, 3])
+    assert.deepEqual(ids({ assignee: UNASSIGNED_FILTER }), [2])
+    assert.deepEqual(ids({ status: "todo", assignee: "u1" }), [3])
+    assert.deepEqual(ids({ priority: "medium" }), [3])
+    assert.deepEqual(ids({ status: "nonsense" }), [1, 2, 3])
+    assert.equal(isFilteredView({ priority: "high" }), true)
+    assert.equal(isFilteredView({ ...normalizeView({ status: "done", quick: ["mine"] }), ...CLEARED_FILTERS }), false)
+    assert.equal(sameView({ status: "done" }, {}), false)
+    assert.equal(normalizeView({ assignee: "x".repeat(65) }).assignee, "")
 })

@@ -26,9 +26,11 @@ export function useTaskViews(projectId) {
         rememberLastView(projectId, next)
         return next
     })
+    // The saved view replaces the whole view: a filter it doesn't mention (one
+    // saved before that filter existed) goes back to "all" rather than staying
     const apply = (savedView) => {
         setActiveViewId(savedView.id)
-        change(savedView.config)
+        change(normalizeView(savedView.config))
     }
     const create = async ({ name, isShared }) => {
         const { data, error } = await createTaskView(projectId, { name, config: view, isShared })

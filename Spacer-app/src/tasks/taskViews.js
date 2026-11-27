@@ -1,7 +1,8 @@
 // Views of a project's tasks (part F): board or list, a search, quick
 // filters, grouping and sorting. A view is plain data, so it can be saved
 // (task_views.config), remembered per project, and checked when it comes back.
-// No imports, so `npm test` can load it.
+// No Supabase, so `npm test` can load it.
+import { STATUS_VALUES } from "../taskStatuses.js"
 
 export const VIEW_MODES = ["board", "list"]
 export const QUICK_FILTERS = [
@@ -27,6 +28,9 @@ export const SORT_OPTIONS = [
 export const PRIORITY_ORDER = ["urgent", "high", "medium", "low"]
 const PRIORITY_NAMES = { urgent: "Urgent", high: "High", medium: "Medium", low: "Low" }
 const SEARCH_MAX = 200
+const ID_MAX = 64
+// The assignee filter's value for tasks nobody has
+export const UNASSIGNED_FILTER = "none"
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEK_DAYS = 7
 
@@ -36,6 +40,10 @@ export const DEFAULT_VIEW = Object.freeze({
     quick: [],
     groupBy: "status",
     sortBy: "created",
+    // The dropdown filters (design screen 04); "" = all
+    assignee: "",
+    status: "",
+    priority: "",
 })
 
 const oneOf = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback)
@@ -50,14 +58,27 @@ export function normalizeView(raw) {
         quick: Array.isArray(view.quick) ? [...new Set(view.quick.filter((k) => quickKeys.includes(k)))] : [],
         groupBy: oneOf(view.groupBy, GROUP_OPTIONS.map((g) => g.key), DEFAULT_VIEW.groupBy),
         sortBy: oneOf(view.sortBy, SORT_OPTIONS.map((s) => s.key), DEFAULT_VIEW.sortBy),
+        assignee: typeof view.assignee === "string" && view.assignee.length <= ID_MAX ? view.assignee : "",
+        status: oneOf(view.status, STATUS_VALUES, ""),
+        priority: oneOf(view.priority, PRIORITY_ORDER, ""),
     }
 }
+
+/** Whether the view hides any task (search, quick or dropdown filters). */
+export function isFilteredView(view) {
+    const v = normalizeView(view)
+    return v.search.trim() !== "" || v.quick.length > 0 || v.assignee !== "" || v.status !== "" || v.priority !== ""
+}
+
+// What Clear resets
+export const CLEARED_FILTERS = Object.freeze({ search: "", quick: [], assignee: "", status: "", priority: "" })
 
 /** Whether two views show the same thing (to tell a saved view has been changed). */
 export function sameView(a, b) {
     const x = normalizeView(a)
     const y = normalizeView(b)
     return x.mode === y.mode && x.search === y.search && x.groupBy === y.groupBy && x.sortBy === y.sortBy
+        && x.assignee === y.assignee && x.status === y.status && x.priority === y.priority
         && x.quick.length === y.quick.length && x.quick.every((k) => y.quick.includes(k))
 }
 
@@ -72,7 +93,7 @@ const dueDay = (task) => {
  * gives its key ("DEV-12") so search finds it by key too.
  */
 export function filterTasks(tasks, view, { me = null, now = new Date(), keyOf = () => "" } = {}) {
-    const { search, quick } = normalizeView(view)
+    const { search, quick, assignee, status, priority } = normalizeView(view)
     const needle = search.trim().toLowerCase()
     const today = dayStart(now)
     const tests = {
@@ -84,6 +105,9 @@ export function filterTasks(tasks, view, { me = null, now = new Date(), keyOf = 
     }
     return tasks.filter((t) => {
         if (needle && !`${t.title || ""} ${keyOf(t) || ""}`.toLowerCase().includes(needle)) return false
+        if (assignee === UNASSIGNED_FILTER ? Boolean(t.assignee_id) : assignee && String(t.assignee_id) !== assignee) return false
+        if (status && t.status !== status) return false
+        if (priority && (t.priority || "medium") !== priority) return false
         return quick.every((key) => tests[key](t))
     })
 }

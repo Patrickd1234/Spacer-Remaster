@@ -111,7 +111,7 @@ const waitsOn = (task, blockerId) => blockerEdges(task).some((e) => String(e.id)
 // The one meaning of "overdue" on screen (card count, banner, delay list): open,
 // past its due date, and not waiting on another task, since that lateness isn't
 // its department's. The grace days only decide when a department turns Delayed.
-const isOwnOverdue = (task, tasksById, now) => overdueDays(task, now) > 0 && !openBlocker(task, tasksById)
+export const isOwnOverdue = (task, tasksById, now) => overdueDays(task, now) > 0 && !openBlocker(task, tasksById)
 
 /**
  * How a wait between two tasks stands:
@@ -213,6 +213,8 @@ export function summarizeDepartments({ departments = [], tasks = [], now = new D
             progress: own.length > 0 ? done / own.length : 0,
             overdue: open.filter((t) => isOwnOverdue(t, byId, now)).length,
             waitingOnOthers: blocked.length,
+            // Being worked on or reviewed, and not waiting on anyone
+            inProgress: open.filter((t) => !isWaiting(t) && (t.status === "in_progress" || t.status === "in_review")).length,
             signedOff: dept.status === "signed_off",
             // The delay status; the saved sign-off is `signedOff`
             status: statusFor(dept, figures, settings),

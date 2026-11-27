@@ -1,15 +1,24 @@
-// Where things go on a project's Timeline: one lane per department, a bar per
-// task from when it was created to its due date, and an arrow from each task
-// to every task waiting on it (red when it holds that task up). Days, not
-// pixels: the component multiplies by its day width. Kept free of React and
-// Supabase so `npm test` can load it.
-import { daysBetween, openBlockers, dependencyState, isHoldingUp } from "./crossDepartment.js"
+// What a project's Timeline shows (design screen 7): a window of days (a
+// two-week or six-week view you move through), one row per task grouped by
+// department, a bar from when the task was created to its due date, arrows
+// from a task to the tasks waiting on it, and the tiles, key dates and
+// insights around it. Days, not pixels: the component multiplies by its day
+// width. Kept free of React and Supabase so `npm test` can load it.
+import {
+    daysBetween, openBlockers, dependencyState, isHoldingUp,
+    summarizeDepartments, delayCulprits, culpritHeadline, isOwnOverdue,
+} from "./crossDepartment.js"
 
-const MARGIN_DAYS = 2
-const DEFAULT_MAX_DAYS = 180
+export const TIMELINE_VIEWS = {
+    week: { key: "week", label: "Week view", days: 14, step: 7, dayWidth: 64 },
+    month: { key: "month", label: "Month view", days: 42, step: 28, dayWidth: 26 },
+}
+const SOON_DAYS = 7
+const MAX_INSIGHTS = 3
 
-const toDay = (value) => {
+export const toDay = (value) => {
     if (!value) return null
+    if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate())
     const text = String(value)
     const day = /^(\d{4})-(\d{2})-(\d{2})/.exec(text)
     if (!day) return null
@@ -20,81 +29,171 @@ const toDay = (value) => {
     }
     return new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]))
 }
-// A Date as its local calendar day, "2026-11-25"
-const dayKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+export const addDays = (date, days) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days)
+const mondayOf = (date) => addDays(date, -((date.getDay() + 6) % 7))
+const isDone = (t) => t.status === "done"
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`
 
-/**
- * The days shown: from a little before the earliest of today and every task,
- * to a little after the latest of today, every due date and the deadline,
- * at most `maxDays` (keeping the end).
- * @returns {{ start: Date, end: Date, days: number }}
- */
-export function timelineRange(tasks, projectDueDate, now = new Date(), { maxDays = DEFAULT_MAX_DAYS } = {}) {
-    const today = toDay(dayKey(now))
-    const dates = [today, toDay(projectDueDate), ...tasks.flatMap((t) => [toDay(t.created_at), toDay(t.due_date)])].filter(Boolean)
-    const first = new Date(Math.min(...dates))
-    const last = new Date(Math.max(...dates))
-    const end = addDays(last, MARGIN_DAYS)
-    let start = addDays(first, -MARGIN_DAYS)
-    if (daysBetween(start, end) + 1 > maxDays) start = addDays(end, -(maxDays - 1))
-    return { start, end, days: daysBetween(start, end) + 1 }
+/** The first day shown: this week's Monday (week view), or the Monday before the month's 1st (month view). */
+export function windowStart(viewKey, anchor = new Date()) {
+    const day = toDay(anchor)
+    if (viewKey === "month") return mondayOf(new Date(day.getFullYear(), day.getMonth(), 1))
+    return mondayOf(day)
 }
 
 /**
- * Rows for bars so none overlap: Map-like object id -> row, earliest rows first.
- * @param {Array<{id, from, to}>} bars in days, sorted by `from`
+ * The window moved a step back (-1) or forward (+1): a week in the week view,
+ * a calendar month in the month view (the month shown is the one around the
+ * window's middle).
  */
-export function packRows(bars) {
-    const rowEnds = []
-    const rows = {}
-    for (const bar of bars) {
-        let row = rowEnds.findIndex((end) => end < bar.from)
-        if (row === -1) row = rowEnds.length
-        rowEnds[row] = bar.to
-        rows[bar.id] = row
+export function shiftWindow(start, viewKey, direction) {
+    if (viewKey === "month") {
+        const middle = addDays(start, 14)
+        return windowStart("month", new Date(middle.getFullYear(), middle.getMonth() + direction, 1))
     }
-    return rows
+    return addDays(start, direction * TIMELINE_VIEWS.week.step)
+}
+
+/** A task's span: created day to due day (just the created day without a due date). */
+export function taskSpan(task) {
+    const due = toDay(task.due_date)
+    const created = toDay(task.created_at) || due || toDay(new Date())
+    if (!due) return { start: created, end: created, hasNoDueDate: true }
+    return { start: created <= due ? created : due, end: due, hasNoDueDate: false }
 }
 
 /**
- * Everything the Timeline draws.
- * `departments`: the project's departments (empty or one = a single lane);
- * tasks carry `blocked_by` (attachDependencies).
+ * Where a span falls in the window, in day indexes: { from, to, startsBefore,
+ * endsAfter }, or null when it's wholly outside.
  */
-export function layoutTimeline({ tasks = [], departments = [], projectDueDate = null, now = new Date() }) {
-    const range = timelineRange(tasks, projectDueDate, now)
-    const dayOf = (value) => {
-        const day = toDay(value)
-        return day ? Math.min(range.days - 1, Math.max(0, daysBetween(range.start, day))) : null
-    }
-    const isSplit = departments.length > 1
-    const leadId = String(departments.find((d) => d.is_lead_department)?.team_space_id ?? departments[0]?.team_space_id ?? "")
-    const laneOf = (task) => (isSplit ? String(task.team_space_id ?? leadId) : "all")
-    const laneDefs = isSplit
-        ? departments.map((d) => ({ id: String(d.team_space_id), name: d.name, dueDay: dayOf(d.due_date) }))
-        : [{ id: "all", name: "Tasks", dueDay: null }]
-    const todayDay = dayOf(dayKey(now))
+export function placeInWindow(span, start, days) {
+    const from = daysBetween(start, span.start)
+    const to = daysBetween(start, span.end)
+    if (to < 0 || from > days - 1) return null
+    return { from: Math.max(0, from), to: Math.min(days - 1, to), startsBefore: from < 0, endsAfter: to > days - 1 }
+}
 
-    const barFor = (task) => {
-        const due = dayOf(task.due_date)
-        const created = dayOf(task.created_at) ?? todayDay
-        if (due === null) return { task, from: created, to: created, hasNoDueDate: true }
-        return { task, from: Math.min(created, due), to: due, hasNoDueDate: false }
+/**
+ * Rows grouped by department (one group, "Tasks", on a one-department
+ * project), tasks in each by start, then due date. `departments` lead first.
+ * Returns [{ id, name, dueDate, tasks }].
+ */
+export function timelineGroups(tasks = [], departments = []) {
+    const byStart = (a, b) => taskSpan(a).start - taskSpan(b).start || taskSpan(a).end - taskSpan(b).end
+        || String(a.title || "").localeCompare(String(b.title || ""))
+    if (departments.length < 2) return [{ id: "all", name: "Tasks", dueDate: null, tasks: [...tasks].sort(byStart) }]
+    const leadId = String(departments.find((d) => d.is_lead_department)?.team_space_id ?? departments[0].team_space_id)
+    const known = new Set(departments.map((d) => String(d.team_space_id)))
+    // A task in a department that isn't on the project (any more) shows with the lead department
+    const groupOf = (t) => {
+        const id = String(t.team_space_id ?? leadId)
+        return known.has(id) ? id : leadId
     }
-    const lanes = laneDefs.map((lane) => {
-        const bars = tasks.filter((t) => laneOf(t) === lane.id).map(barFor)
-            .sort((a, b) => a.from - b.from || String(a.task.id).localeCompare(String(b.task.id)))
-        const rows = packRows(bars.map((b) => ({ id: String(b.task.id), from: b.from, to: b.to })))
-        const placed = bars.map((b) => ({ ...b, row: rows[String(b.task.id)] }))
-        return { ...lane, bars: placed, rowCount: Math.max(1, ...placed.map((b) => b.row + 1)) }
-    })
+    return departments.map((d) => ({
+        id: String(d.team_space_id),
+        name: d.name,
+        dueDate: d.due_date || null,
+        tasks: tasks.filter((t) => groupOf(t) === String(d.team_space_id)).sort(byStart),
+    }))
+}
 
+/** Arrows from each open task waited on to the open task waiting on it: [{ fromId, toId, isHolding }]. */
+export function timelineArrows(tasks = [], now = new Date()) {
     const byId = new Map(tasks.map((t) => [String(t.id), t]))
-    const arrows = tasks.flatMap((task) => openBlockers(task, byId).map(({ blocker }) => ({
+    return tasks.flatMap((task) => openBlockers(task, byId).map(({ blocker }) => ({
         fromId: String(blocker.id),
         toId: String(task.id),
         isHolding: isHoldingUp(dependencyState(task, blocker, now)),
     })))
-    return { range, dayOf, todayDay, projectDueDay: dayOf(projectDueDate), lanes, arrows }
+}
+
+// Overdue as everywhere else (isOwnOverdue): open, past due, and not waiting on another task
+const ownOverdue = (tasks, now) => {
+    const byId = new Map(tasks.map((t) => [String(t.id), t]))
+    return tasks.filter((t) => isOwnOverdue(t, byId, now))
+}
+
+/** The four tiles: progress (Done of all), total tasks, overdue (see ownOverdue) and open dependencies. */
+export function timelineStats(tasks = [], now = new Date()) {
+    const done = tasks.filter(isDone).length
+    const overdue = ownOverdue(tasks, now).length
+    return {
+        progress: tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0,
+        total: tasks.length,
+        overdue,
+        activeDependencies: timelineArrows(tasks, now).length,
+    }
+}
+
+/**
+ * Key dates: when the work started (the earliest task), the deadline, and the
+ * next milestone (the next department due date still open, else the next open
+ * task's due date). Dates are Date objects or null.
+ */
+export function keyDates({ tasks = [], departments = [], projectDueDate = null, now = new Date() }) {
+    const today = toDay(now)
+    const starts = tasks.map((t) => toDay(t.created_at)).filter(Boolean)
+    const upcomingDepartment = departments
+        .filter((d) => d.status !== "signed_off" && toDay(d.due_date) && toDay(d.due_date) >= today)
+        .sort((a, b) => toDay(a.due_date) - toDay(b.due_date))[0]
+    const upcomingTask = tasks
+        .filter((t) => !isDone(t) && toDay(t.due_date) && toDay(t.due_date) >= today)
+        .sort((a, b) => toDay(a.due_date) - toDay(b.due_date))[0]
+    const milestone = departments.length > 1 && upcomingDepartment
+        ? { label: `${upcomingDepartment.name} due`, date: toDay(upcomingDepartment.due_date) }
+        : upcomingTask ? { label: `“${upcomingTask.title}” due`, date: toDay(upcomingTask.due_date) } : null
+    return {
+        start: starts.length > 0 ? new Date(Math.min(...starts)) : null,
+        deadline: toDay(projectDueDate),
+        milestone,
+    }
+}
+
+/**
+ * Up to three insights worked out from the tasks: who is delaying the project
+ * (on a Collab project), overdue work, a department or task due soon with work
+ * left, tasks without a due date. On schedule when none apply.
+ * Each { tone: "warning" | "info" | "ok", title, detail }.
+ */
+export function timelineInsights({ tasks = [], departments = [], now = new Date() }) {
+    const today = toDay(now)
+    const insights = []
+    const isSplit = departments.length > 1
+    if (isSplit) {
+        const summaries = summarizeDepartments({ departments, tasks, now })
+        const culprit = delayCulprits(summaries)[0]
+        if (culprit) {
+            const headline = culpritHeadline(culprit, summaries, tasks, now)
+            insights.push({ tone: "warning", title: headline.title, detail: headline.detail })
+        }
+        const soon = summaries
+            .filter((s) => s.remaining > 0 && s.dueInDays !== null && s.dueInDays >= 0 && s.dueInDays <= SOON_DAYS)
+            .sort((a, b) => a.dueInDays - b.dueInDays)[0]
+        if (soon) {
+            const when = soon.dueInDays === 0 ? "today" : `in ${plural(soon.dueInDays, "day")}`
+            insights.push({ tone: "info", title: `${soon.name} is due ${when}.`, detail: `${plural(soon.remaining, "task")} still open.` })
+        }
+    }
+    const overdue = ownOverdue(tasks, now)
+    if (overdue.length > 0 && !insights.some((i) => i.tone === "warning")) {
+        const oldest = [...overdue].sort((a, b) => toDay(a.due_date) - toDay(b.due_date))[0]
+        const ago = daysBetween(toDay(oldest.due_date), today)
+        insights.push({ tone: "warning", title: `${plural(overdue.length, "task")} ${overdue.length === 1 ? "is" : "are"} overdue.`, detail: `The oldest, “${oldest.title}”, was due ${ago === 1 ? "yesterday" : `${ago} days ago`}.` })
+    }
+    if (!isSplit) {
+        const next = tasks.filter((t) => !isDone(t) && toDay(t.due_date) && toDay(t.due_date) >= today)
+            .sort((a, b) => toDay(a.due_date) - toDay(b.due_date))[0]
+        const inDays = next ? daysBetween(today, toDay(next.due_date)) : null
+        if (next && inDays <= SOON_DAYS) {
+            insights.push({ tone: "info", title: `“${next.title}” is due ${inDays === 0 ? "today" : `in ${plural(inDays, "day")}`}.`, detail: "The next due date on this project." })
+        }
+    }
+    const undated = tasks.filter((t) => !isDone(t) && !t.due_date).length
+    if (undated > 0) {
+        insights.push({ tone: "info", title: `${plural(undated, "open task")} ${undated === 1 ? "has" : "have"} no due date.`, detail: "They show as a short dashed bar on the day they were created." })
+    }
+    if (insights.length === 0) {
+        insights.push({ tone: "ok", title: "On schedule.", detail: tasks.length > 0 ? "No overdue tasks or hold-ups." : "Add tasks with due dates to plan the work here." })
+    }
+    return insights.slice(0, MAX_INSIGHTS)
 }

@@ -12,6 +12,7 @@ import { createProject, fetchOrganizationDepartments } from "../crossDepartmentD
 import { announceProjectCreated } from "../appEvents"
 import ProjectDepartmentCard from "./ProjectDepartmentCard"
 import useOrganizationPeople, { asLeadRows } from "./createProject/useOrganizationPeople"
+import DepartmentPicker from "./createProject/DepartmentPicker"
 
 const fieldClass = "w-full bg-canvas border border-line rounded-lg px-3 py-2 text-[13px] text-white focus:outline-none focus:border-accent-ink/50 transition-all placeholder:text-muted/50"
 const nameOfTeam = (teamSpaces, id) => teamSpaces.find((t) => String(t.id) === String(id))?.name || "Department"
@@ -124,11 +125,12 @@ export default function CreateProjectModal({ onClose }) {
     const remove = (index) => setPicked(departments.filter((_, i) => i !== index))
     // The lead department must be one you can create projects in; the others can be any
     const choicesFor = (index, teamId) => addableDepartments(index === 0 ? creatableTeamSpaces : teamSpaces, leadTeamId, pickedIds.slice(1), teamId)
-    const nextDepartment = addableDepartments(teamSpaces, leadTeamId, pickedIds.slice(1))[0]
-    const addDepartment = () => {
-        if (!nextDepartment) return
-        setPicked([...departments, { teamSpaceId: nextDepartment.id, dueDate: deadline, memberIds: [] }])
-        setExpandedId(nextDepartment.id)
+    // Departments not on the project yet, for the Add department search
+    const addable = addableDepartments(teamSpaces, leadTeamId, pickedIds.slice(1))
+    const addDepartment = (department) => {
+        if (!addable.some((d) => String(d.id) === String(department.id))) return
+        setPicked([...departments, { teamSpaceId: department.id, dueDate: deadline, memberIds: [] }])
+        setExpandedId(department.id)
     }
     // Department dates that followed the deadline (or no longer fit) move with it
     const changeDeadline = (value) => {
@@ -226,16 +228,11 @@ export default function CreateProjectModal({ onClose }) {
                         You can only create projects in a department where you&apos;re a team lead or admin.
                     </p>
                 )}
-                <button
-                    type="button"
-                    onClick={addDepartment}
-                    disabled={!nextDepartment}
-                    title={nextDepartment ? "Add a department that will work on this project" : "Every department is already on it"}
-                    className="w-full py-2.5 rounded-xl border border-line text-accent-ink text-[12px] font-semibold hover:bg-accent/5 hover:border-accent-ink/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1"
-                >
-                    <span className="material-symbols-outlined text-[16px]" aria-hidden="true">add</span>
-                    Add department
-                </button>
+                <DepartmentPicker
+                    choices={addable}
+                    isInvite={(id) => !creatableIds.has(String(id))}
+                    onPick={addDepartment}
+                />
                 {invitedNames.length > 0 && (
                     <p className="text-[11px] text-muted">{invitedNames.join(", ")} will be invited and join once their lead accepts.</p>
                 )}

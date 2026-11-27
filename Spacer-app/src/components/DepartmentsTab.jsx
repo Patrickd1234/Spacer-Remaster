@@ -1,44 +1,66 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
-    summarizeDepartments, projectDelayStatus, delayCulprits, culpritHeadline, delayingTasks,
-    departmentNote, daysBetween, DEPARTMENT_STATUS, PROJECT_STATUS, DEFAULT_DELAY_RULES,
+    summarizeDepartments, projectDelayStatus, delayCulprits, culpritHeadline, delayingTasks, departmentNote,
+    daysBetween, DEPARTMENT_STATUS, PROJECT_STATUS, DEFAULT_DELAY_RULES,
 } from "../crossDepartment"
+import { departmentStats, filterByStatus, dependencyPairs, departmentMemberCounts, formatDay } from "../departmentsView"
 import { TONES } from "./statusTones"
-import { nudgeDepartment } from "../crossDepartmentData"
+import Select from "./Select"
+import { nudgeDepartment, fetchDepartmentMemberships } from "../crossDepartmentData"
 import DepartmentCardActions from "./DepartmentCardActions"
 import AddDepartmentForm from "./AddDepartmentForm"
 import { cancelDepartmentInvite } from "../departmentInvitesData"
+import { SectionHeading, StatTile, DepartmentCard, DependencyPairs, BreakdownTable } from "./DepartmentsParts"
 
-const formatDay = (value, withYear = false) => {
-    if (!value) return ""
-    const [y, m, d] = String(value).slice(0, 10).split("-").map(Number)
-    return new Date(y, m - 1, d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", ...(withYear ? { year: "numeric" } : {}) })
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`
+const buttonClass = "px-md py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
+
+// How many of the project's members are in each department (org_team_memberships()).
+// `memberIds` null while the project's members load. Returns { counts, error }:
+// counts null while loading or after a failure.
+function useMemberCounts(memberIds) {
+    const [state, setState] = useState({ memberships: null, error: null })
+    useEffect(() => {
+        let active = true
+        fetchDepartmentMemberships().then(({ data, error }) => { if (active) setState({ memberships: error ? null : data, error }) })
+        return () => { active = false }
+    }, [])
+    const counts = state.memberships && memberIds ? departmentMemberCounts(memberIds, state.memberships) : null
+    return { counts, error: state.error }
 }
-const Heading = ({ children }) => <h3 className="text-[11px] font-bold uppercase tracking-wider text-accent-ink mb-sm">{children}</h3>
-const Pill = ({ tone, children }) => <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${TONES[tone].pill}`}>{children}</span>
 
 // The Departments tab of a cross-department project (design screen 2): who is
-// holding the project up, progress per department, who waits on whom, and the
-// tasks behind the delay, and invites still waiting for an answer.
+// holding the project up, four figures, a card per department (with its lead's
+// and the managers' actions), who waits on whom, a task breakdown, and the
+// tasks behind any delay; invites still waiting for an answer.
 // `departments`: the ones working on it; `invitedDepartments`: status "invited".
 // `canManage`: the server's can_manage_project. `leadsDepartment(id)`: whether
-// the user leads that department here (its named lead or project.manage there).
-// Managers add, edit and remove departments here; a department's lead moves its
-// due date and signs its part off.
-export default function DepartmentsTab({ projectId, projectDueDate, departments, invitedDepartments = [], tasks, orgUsers, currentUserId, canManage, leadsDepartment = () => false, onResolve, onOpenTask, onDepartmentsChanged }) {
+// the user leads that department here. `memberIds`: the project's members.
+export default function DepartmentsTab({
+    projectId, projectDueDate, departments, invitedDepartments = [], tasks, orgUsers, memberIds = null, currentUserId,
+    canManage, leadsDepartment = () => false, onResolve, onOpenTask, onDepartmentsChanged,
+}) {
     const [notice, setNotice] = useState(null)
     const [busyId, setBusyId] = useState(null)
+    const [pickedStatus, setStatusFilter] = useState("")
+    const { counts: memberCounts, error: memberError } = useMemberCounts(memberIds)
     const now = new Date()
     const summaries = summarizeDepartments({ departments, tasks, now })
+    const presentStatuses = Object.keys(DEPARTMENT_STATUS).filter((key) => summaries.some((s) => s.status === key))
+    // A status no department has any more (one was signed off, say) falls back to all
+    const statusFilter = presentStatuses.includes(pickedStatus) ? pickedStatus : ""
+    const shown = filterByStatus(summaries, statusFilter)
+    const stats = departmentStats(summaries)
     const nameOf = (id) => summaries.find((s) => s.id === String(id))?.name || "Another department"
     const overall = PROJECT_STATUS[projectDelayStatus(summaries, projectDueDate, now)]
     const culprit = delayCulprits(summaries)[0]
     const headline = culprit ? culpritHeadline(culprit, summaries, tasks, now) : null
     const causes = delayingTasks(tasks, summaries, now)
-    const links = summaries.flatMap((s) => s.waitingOn.map((link) => ({ from: s.id, ...link })))
     const daysLeft = projectDueDate ? daysBetween(now, projectDueDate) : null
     const isDepartmentLead = departments.some((d) => d.lead_id && d.lead_id === currentUserId)
     const canNudge = canManage || isDepartmentLead
+    const leadDepartmentName = departments.find((d) => d.is_lead_department)?.name || "the lead department"
+    const onProjectIds = [...departments, ...invitedDepartments].map((d) => d.team_space_id)
 
     const nudge = async (summary) => {
         setBusyId(summary.id)
@@ -57,41 +79,44 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
         setNotice({ isError: false, text: message })
         onDepartmentsChanged?.()
     }
-    const leadDepartmentName = departments.find((d) => d.is_lead_department)?.name || "the lead department"
-    const onProjectIds = [...departments, ...invitedDepartments].map((d) => d.team_space_id)
+    const showDelayed = () => document.getElementById("delay-causes")?.scrollIntoView({ behavior: "smooth", block: "start" })
 
     return (
         <div className="space-y-lg">
-            <div className="flex items-center justify-between gap-md flex-wrap">
-                <p className="text-sm text-soft">
-                    {projectDueDate ? `Due ${formatDay(projectDueDate, true)}` : "No overall deadline"}
-                    {daysLeft !== null && ` · ${daysLeft >= 0 ? `${daysLeft} day${daysLeft === 1 ? "" : "s"} left` : `${-daysLeft} day${daysLeft === -1 ? "" : "s"} past`}`}
-                    {` · ${departments.length} department${departments.length === 1 ? "" : "s"}`}
-                </p>
-                <Pill tone={overall.tone}>{overall.label.toUpperCase()}</Pill>
-            </div>
-
             {headline && (
-                <div className="rounded-xl border border-red-400/40 bg-red-500/10 p-md flex items-center gap-md flex-wrap">
+                <div className="rounded-xl border border-amber-400/30 bg-amber-500/[0.07] p-md flex items-center gap-md flex-wrap">
+                    <span className="material-symbols-outlined text-[22px] text-amber-400" aria-hidden="true">error</span>
                     <div className="flex-1 min-w-[240px]">
-                        <p className="text-sm font-bold text-red-400">{headline.title}</p>
-                        <p className="text-xs text-soft mt-1">{headline.detail}</p>
+                        <p className="text-sm font-semibold text-white">{headline.title}</p>
+                        <p className="text-xs text-soft mt-0.5">{headline.detail}</p>
                     </div>
                     {canNudge && culprit.lead_id && (
-                        <button type="button" disabled={busyId === culprit.id} onClick={() => nudge(culprit)} className="px-md py-1.5 rounded-lg border border-line text-xs font-bold text-white hover:bg-line transition-colors disabled:opacity-50 cursor-pointer">
+                        <button type="button" disabled={busyId === culprit.id} onClick={() => nudge(culprit)} className={`${buttonClass} border border-line text-soft hover:text-white hover:bg-line`}>
                             Nudge {culprit.name}
                         </button>
                     )}
-                    <button type="button" onClick={() => onResolve(culprit.team_space_id)} className="px-md py-1.5 rounded-lg bg-accent text-on-accent text-xs font-bold hover:bg-accent-hover transition-colors cursor-pointer">
+                    <button type="button" onClick={() => onResolve(culprit.team_space_id)} className={`${buttonClass} border border-line text-soft hover:text-white hover:bg-line`}>
                         Show their tasks
+                    </button>
+                    <button type="button" onClick={showDelayed} className={`${buttonClass} border border-line text-white hover:bg-line flex items-center gap-1`}>
+                        View delayed tasks
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_forward</span>
                     </button>
                 </div>
             )}
+            {memberError && <p className="text-[11px] text-muted">{memberError} The member counts are left out.</p>}
             {notice && <p role="status" className={`text-xs ${notice.isError ? "text-red-400" : "text-accent-ink"}`}>{notice.text}</p>}
 
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-sm">
+                <StatTile icon="stacks" value={stats.departments} label={stats.departments === 1 ? "Department" : "Departments"} />
+                <StatTile icon="task_alt" value={`${stats.done} / ${stats.total}`} label="Tasks completed" />
+                <StatTile icon="schedule" value={stats.overdue} label={stats.overdue === 1 ? "Overdue task" : "Overdue tasks"} />
+                <StatTile icon="link" value={stats.waitingDepartments} label={stats.waitingDepartments === 1 ? "Department waiting" : "Departments waiting"} />
+            </div>
+
             {invitedDepartments.length > 0 && (
-                <section>
-                    <Heading>Invited, waiting for a reply</Heading>
+                <section aria-label="Invited departments">
+                    <SectionHeading>Invited, waiting for a reply</SectionHeading>
                     <div className="space-y-sm">
                         {invitedDepartments.map((d) => (
                             <div key={d.team_space_id} className="rounded-xl border border-dashed border-line-strong bg-panel px-md py-sm flex items-center gap-md flex-wrap">
@@ -104,7 +129,7 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                                     </p>
                                 </div>
                                 {canManage && (
-                                    <button type="button" disabled={busyId === d.team_space_id} onClick={() => cancelInvite(d)} className="px-md py-1.5 rounded-lg border border-line text-xs font-bold text-soft hover:text-white hover:bg-line transition-colors disabled:opacity-50 cursor-pointer">
+                                    <button type="button" disabled={busyId === d.team_space_id} onClick={() => cancelInvite(d)} className={`${buttonClass} border border-line text-soft hover:text-white hover:bg-line`}>
                                         Cancel invite
                                     </button>
                                 )}
@@ -114,44 +139,49 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                 </section>
             )}
 
-            <section>
-                <Heading>Department progress</Heading>
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-md">
-                    {summaries.map((s) => {
-                        const status = DEPARTMENT_STATUS[s.status]
-                        const tone = TONES[status.tone]
-                        return (
-                            <div key={s.id} className={`rounded-xl border bg-panel p-md flex flex-col ${tone.card}`}>
-                                <div className="flex items-start justify-between gap-sm">
-                                    <p className="text-sm font-bold text-white flex items-center gap-2">
-                                        {s.name}
-                                        {s.is_lead_department && <span className="px-2 py-0.5 rounded-full bg-accent text-on-accent text-[10px] font-bold tracking-wider">LEAD</span>}
-                                    </p>
-                                    <Pill tone={status.tone}>{status.label}</Pill>
-                                </div>
-                                <p className="text-[11px] text-muted mt-0.5">
-                                    {s.lead_name || "No lead"}{s.due_date && ` · due ${formatDay(s.due_date)}`}
-                                </p>
-                                <p className="text-3xl font-bold text-white mt-md">{Math.round(s.progress * 100)}%</p>
-                                <div className="h-1.5 rounded-full bg-line overflow-hidden mt-sm">
-                                    <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.round(s.progress * 100)}%` }} />
-                                </div>
-                                <p className="text-[11px] text-soft mt-md">{s.done} of {s.total} task{s.total === 1 ? "" : "s"} done</p>
-                                <p className="text-[11px] text-soft">{s.overdue} overdue · {s.waitingOnOthers} waiting on others</p>
-                                <p className={`text-[11px] mt-md leading-relaxed ${tone.text}`}>{departmentNote(s, nameOf)}</p>
-                                <DepartmentCardActions
-                                    projectId={projectId}
-                                    projectDueDate={projectDueDate}
-                                    summary={s}
-                                    canManage={canManage}
-                                    isLead={leadsDepartment(s.team_space_id)}
-                                    leadDepartmentName={leadDepartmentName}
-                                    onChanged={handleChanged}
-                                />
-                            </div>
-                        )
-                    })}
-                </div>
+            <section aria-label="Departments">
+                <SectionHeading aside={(
+                    <div className="flex items-center gap-sm flex-wrap justify-end">
+                        <span className="flex items-center gap-1.5 flex-wrap text-[11px] text-muted">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${TONES[overall.tone].pill}`}>{overall.label}</span>
+                            {projectDueDate ? `Due ${formatDay(projectDueDate, true)}` : "No overall deadline"}
+                            {daysLeft !== null && ` · ${daysLeft >= 0 ? `${plural(daysLeft, "day")} left` : `${plural(-daysLeft, "day")} past`}`}
+                        </span>
+                        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter departments by status" className="h-8 bg-transparent border border-line rounded-lg pl-2.5 pr-2 text-[12px] font-semibold text-soft hover:text-white">
+                            <option value="">All statuses</option>
+                            {presentStatuses.map((key) => <option key={key} value={key}>{DEPARTMENT_STATUS[key].label}</option>)}
+                        </Select>
+                    </div>
+                )}>
+                    Departments ({departments.length})
+                </SectionHeading>
+                {shown.length === 0 ? (
+                    <p className="text-xs text-muted rounded-xl border border-line bg-panel p-md">No department is {DEPARTMENT_STATUS[statusFilter]?.label.toLowerCase() || "here"}.</p>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-md">
+                        {shown.map((s) => (
+                            <DepartmentCard
+                                key={s.id}
+                                summary={s}
+                                // null: still loading; undefined: couldn't be counted
+                                memberCount={memberCounts ? memberCounts.get(s.id) || 0 : memberError ? undefined : null}
+                                note={departmentNote(s, nameOf)}
+                                onShowTasks={() => onResolve(s.team_space_id)}
+                                actions={(
+                                    <DepartmentCardActions
+                                        projectId={projectId}
+                                        projectDueDate={projectDueDate}
+                                        summary={s}
+                                        canManage={canManage}
+                                        isLead={leadsDepartment(s.team_space_id)}
+                                        leadDepartmentName={leadDepartmentName}
+                                        onChanged={handleChanged}
+                                    />
+                                )}
+                            />
+                        ))}
+                    </div>
+                )}
                 {canManage && (
                     <div className="mt-md">
                         <AddDepartmentForm projectId={projectId} projectDueDate={projectDueDate} onProjectIds={onProjectIds} onAdded={handleChanged} />
@@ -159,42 +189,18 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                 )}
             </section>
 
-            <section>
-                <Heading>Who is waiting on whom</Heading>
-                <div className="rounded-xl border border-line bg-panel p-md">
-                    {links.length === 0 ? (
-                        <p className="text-xs text-muted">No department is waiting on another one.</p>
-                    ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-md items-center">
-                            <div className="space-y-sm">
-                                {links.map((link) => {
-                                    // Red only when the wait holds someone up; a normal hand-off stays quiet
-                                    const isHolding = link.holdingTasks > 0
-                                    const label = isHolding
-                                        ? `holding up ${link.holdingTasks} task${link.holdingTasks === 1 ? "" : "s"} · ${link.days} day${link.days === 1 ? "" : "s"}`
-                                        : `${link.tasks} task${link.tasks === 1 ? "" : "s"} · on schedule`
-                                    return (
-                                        <div key={`${link.from}>${link.departmentId}`} className="flex items-center gap-sm">
-                                            <span className={`w-36 shrink-0 text-center px-sm py-2 rounded-lg border text-xs font-semibold text-white truncate ${isHolding ? "border-amber-400/60 bg-amber-500/10" : "border-line bg-raised"}`}>{nameOf(link.from)}</span>
-                                            <div className="flex-1 min-w-[80px] text-center">
-                                                <p className={`text-[10px] ${isHolding ? "text-red-400" : "text-muted"}`}>{label}</p>
-                                                <div className={`relative h-px mt-1 ${isHolding ? "bg-red-400/70" : "bg-line-strong"}`}><span className={`absolute -right-0.5 -top-[5px] text-[10px] leading-none ${isHolding ? "text-red-400" : "text-muted"}`}>▶</span></div>
-                                            </div>
-                                            <span className={`w-36 shrink-0 text-center px-sm py-2 rounded-lg border text-xs font-semibold text-white truncate ${isHolding ? "border-red-400/60 bg-red-500/10" : "border-line bg-raised"}`}>{nameOf(link.departmentId)}</span>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            <p className="text-[11px] text-muted leading-relaxed">
-                                The arrow points at the department being waited on. It turns red only when that department is holding the other up: its task is overdue, due after it&apos;s needed, or (with no due date) waited on for {DEFAULT_DELAY_RULES.waitingDays}+ days. Finished tasks unblock the others automatically.
-                            </p>
-                        </div>
-                    )}
-                </div>
+            <section aria-label="Department dependencies">
+                <SectionHeading>Department dependencies</SectionHeading>
+                <DependencyPairs pairs={dependencyPairs(summaries)} nameOf={nameOf} waitingDays={DEFAULT_DELAY_RULES.waitingDays} />
             </section>
 
-            <section>
-                <Heading>Tasks causing the delay</Heading>
+            <section aria-label="Department task breakdown">
+                <SectionHeading>Department task breakdown</SectionHeading>
+                <BreakdownTable summaries={shown} onShowTasks={(s) => onResolve(s.team_space_id)} />
+            </section>
+
+            <section id="delay-causes" aria-label="Tasks causing the delay" className="scroll-mt-4">
+                <SectionHeading>Tasks causing the delay</SectionHeading>
                 {causes.length === 0 ? (
                     <p className="text-xs text-muted">Nothing is holding this project up.</p>
                 ) : (
@@ -205,7 +211,7 @@ export default function DepartmentsTab({ projectId, projectDueDate, departments,
                                 <button key={task.id} type="button" onClick={() => onOpenTask(task)} className="w-full text-left rounded-xl border border-line bg-panel px-md py-sm grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr_1fr] gap-xs items-center hover:border-line-strong transition-colors cursor-pointer">
                                     <span className="text-sm font-semibold text-white truncate">{task.title}</span>
                                     <span className="text-[11px] text-muted truncate">{assignee} · {nameOf(departmentId)}</span>
-                                    <span className="text-[11px] text-red-400">{overdueDays > 0 ? `${overdueDays} day${overdueDays === 1 ? "" : "s"} overdue` : "Not overdue"}</span>
+                                    <span className="text-[11px] text-red-400">{overdueDays > 0 ? `${plural(overdueDays, "day")} overdue` : "Not overdue"}</span>
                                     <span className="text-[11px] text-amber-400">
                                         {blocks.length === 0 ? "Blocks nothing" : blocks.map((b) => `Blocks ${b.count} ${nameOf(b.departmentId)} task${b.count === 1 ? "" : "s"}`).join(", ")}
                                     </span>

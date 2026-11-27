@@ -9,7 +9,10 @@ export const readable = (error, fallback) => (["42501", "23514", "22023", "P0001
     ? error.message
     : fallback
 
-const DEPARTMENT_COLUMNS = "team_space_id, lead_id, due_date, is_lead_department, status, signed_off_at, invited_at, team_space:team_spaces(name), lead:users(name)"
+// project_departments has two links to users (lead_id, and invited_by since
+// 20261124130000_department_invites), so the lead's embed names its foreign
+// key; without it the API refuses the request as ambiguous (PGRST201)
+const DEPARTMENT_COLUMNS = "team_space_id, lead_id, due_date, is_lead_department, status, signed_off_at, invited_at, team_space:team_spaces(name), lead:users!project_departments_lead_id_fkey(name)"
 
 /**
  * Every department of the caller's organization, { id, name } by name
@@ -76,6 +79,17 @@ export async function updateTaskDepartment(taskId, teamSpaceId) {
     const { error } = await supabase.from("tasks").update({ team_space_id: teamSpaceId }).eq("id", taskId)
     if (error) console.error("Changing the task's department failed:", error)
     return { error: error ? readable(error, "Couldn't change the department.") : null }
+}
+
+// Everyone's department memberships in the organization ({ user_id,
+// team_space_id }), for counting a project's members per department
+export async function fetchDepartmentMemberships() {
+    const { data, error } = await supabase.rpc("org_team_memberships")
+    if (error) {
+        console.error("Loading department memberships failed:", error)
+        return { data: [], error: "Couldn't count each department's members." }
+    }
+    return { data: data || [], error: null }
 }
 
 // A project's dependencies (task_dependencies): { task_id, blocker_task_id,
