@@ -175,40 +175,13 @@ function Login() {
             <AuthBrandPanel
                 showThirdGlow
                 logo={<RocketLogo size={28} />}
-                quote="Spacer helped us organize all our department workspaces into a single unified dashboard."
+                quote="Spacer helps you organize all your department workspaces into a single unified dashboard."
                 tagline={
                     <p className="text-white text-[20px] leading-relaxed max-w-md">
-                        One workspace for every team. HR, Design, Dev and Marketing—each in their own space, all in one place.
+                        One workspace for every team. Dev, Marketing, HR, Design, etc.—each in their own space, all in one place.
                     </p>
                 }
-            >
-                {/* Decorative Showcase */}
-                <div className="relative z-10 w-full max-w-[420px] bg-[color:color-mix(in_srgb,var(--bg-surface-high)_80%,transparent)] backdrop-blur-xl border border-[var(--bg-border)] rounded-2xl p-6 shadow-2xl mt-4 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-xs">
-                                WR
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-semibold text-white">Website Redesign</h4>
-                                <p className="text-xs text-muted">Development • Active</p>
-                            </div>
-                        </div>
-                        <span className="bg-[rgba(var(--primary-color-rgb),0.1)] text-accent-ink border border-[rgba(var(--primary-color-rgb),0.3)] text-[11px] font-bold px-2.5 py-1 rounded-full">
-                            On Track
-                        </span>
-                    </div>
-                    <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-muted">
-                            <span>Sprint Progress</span>
-                            <span className="text-white font-medium">78%</span>
-                        </div>
-                        <div className="w-full bg-[var(--bg-highest)] h-2 rounded-full overflow-hidden">
-                            <div className="bg-[var(--primary-color)] h-full rounded-full" style={{ width: "78%" }}></div>
-                        </div>
-                    </div>
-                </div>
-            </AuthBrandPanel>
+            />
 
             {/* Right Side: Sign In Form */}
             <div className="w-full lg:w-[45%] flex flex-col justify-center px-8 sm:px-16 lg:px-24 bg-[var(--bg-surface)] relative z-10">
