@@ -51,6 +51,7 @@ export default function TaskPanel({
     task, parent, subtasks, projectName, linkUrl,
     columns, columnKey, departmentId, people, awayPeriods, files, uploadState,
     can, dependencies, historyVersion, notice = null, detailsExtra = null, statusNote = null,
+    focusControl = null, onFocusHandled = null,
     onClose, onOpenTask, onSave, onMove, onDeadlineSave, onChecklistChange,
     onAddSubtask, onToggleSubtask, onUpload, onPreviewFile, onDeleteFile, onDelete, onStep,
 }) {
@@ -72,6 +73,18 @@ export default function TaskPanel({
     }, [onClose, onStep, can.edit])
     // Focus moves into the panel, so keyboard and screen reader users land on it
     useEffect(() => { sheetRef.current?.focus() }, [task.id])
+    // Opened to change something (Resolve's Reassign / Adjust due date): open that picker
+    useEffect(() => {
+        if (!focusControl) return undefined
+        const selector = focusControl === "assignee" ? "#task-assignee" : "#task-due-date button"
+        const frame = requestAnimationFrame(() => {
+            const control = sheetRef.current?.querySelector(selector)
+            control?.focus()
+            control?.click()
+            onFocusHandled?.()
+        })
+        return () => cancelAnimationFrame(frame)
+    }, [focusControl, onFocusHandled])
 
     const saveTitle = (title) => (title ? onSave({ title }) : Promise.resolve("A task needs a title."))
     const historyNames = {

@@ -226,3 +226,44 @@ export async function removeProjectDepartment(projectId, teamSpaceId) {
     if (!data?.length) return { error: "Only the project's managers can remove a department, and never the lead one." }
     return { error: null }
 }
+
+// ─── Resolve tab (migration 20261128120000_resolve_project) ─────────────────
+const needsResolveMigration = (error) => error?.code === "PGRST202"
+    ? "This needs a database update: run the 20261128120000_resolve_project migration in Supabase."
+    : null
+
+/** Close the project (every task done, no invite waiting), or reopen it. Resolves to { error }. */
+export async function closeProject(projectId, { reopen = false } = {}) {
+    const { error } = await supabase.rpc("close_project", { p_project_id: projectId, p_reopen: reopen })
+    if (!error) return { error: null }
+    console.error(reopen ? "Reopening the project failed:" : "Closing the project failed:", error)
+    return { error: needsResolveMigration(error) || readable(error, reopen ? "Couldn't reopen the project." : "Couldn't close the project.") }
+}
+
+/** Log a decision or some context on the project. Resolves to { error }. */
+export async function addProjectNote(projectId, note) {
+    const { error } = await supabase.rpc("add_project_note", { p_project_id: projectId, p_note: note })
+    if (!error) return { error: null }
+    console.error("Adding the note failed:", error)
+    return { error: needsResolveMigration(error) || readable(error, "Couldn't save the note.") }
+}
+
+/** The project's notes, newest first: { id, note, created_at, actor_id, actor_name }[]. */
+export async function fetchProjectNotes(projectId, limit = 20) {
+    const { data, error } = await supabase
+        .from("activity_log")
+        .select("id, actor_id, new_state, created_at, actor:users(name)")
+        .eq("entity_type", "project")
+        .eq("entity_id", projectId)
+        .eq("action", "note_added")
+        .order("created_at", { ascending: false })
+        .limit(limit)
+    if (error) {
+        console.error("Loading the project's notes failed:", error)
+        return { data: [], error: "Couldn't load the notes." }
+    }
+    return {
+        data: (data || []).map((row) => ({ id: row.id, note: row.new_state?.note || "", created_at: row.created_at, actor_id: row.actor_id, actor_name: row.actor?.name || "Someone" })),
+        error: null,
+    }
+}

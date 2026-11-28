@@ -10,6 +10,7 @@ import SprintTab from "./sprints/SprintTab"
 import DepartmentsTab from "./components/DepartmentsTab"
 import TaskDependenciesPanel from "./components/TaskDependenciesPanel"
 import ProjectTimeline from "./components/ProjectTimeline"
+import ResolveTab from "./components/ResolveTab"
 import { DepartmentFilterBar, TaskDependencyNote } from "./components/DepartmentTaskBadges"
 import { matchesDepartmentFilter, projectHealth, taskHoldupRoles, attachDependencies } from "./crossDepartment"
 import ProjectHealthPill from "./components/ProjectHealthPill"
@@ -168,6 +169,8 @@ function ProjectPage() {
     const [project_name, setProjectName] = useState(savedProject?.name || "")
     const [project_due_date, setProjectDueDate] = useState(savedProject?.due_date || "")
     const [projectDescription, setProjectDescription] = useState("")
+    // Closed or not (20261128120000_resolve_project): { status, closed_at, closed_by }
+    const [projectState, setProjectState] = useState({ status: "active", closed_at: null, closed_by: null })
     const [isProjectLoaded, setIsProjectLoaded] = useState(false)
     // Until the first load, the Tasks tab shows the board's or list's shape
     const [isTasksLoaded, setIsTasksLoaded] = useState(false)
@@ -202,7 +205,15 @@ function ProjectPage() {
         next.set("task_id", String(task.id))
         setSearchParams(next, { replace: searchParams.has("task_id") })
     }, [setSearchParams, searchParams])
+    // Open a task with its assignee or due-date picker open ("assignee" | "due")
+    const [panelFocus, setPanelFocus] = useState(null)
+    const clearPanelFocus = useCallback(() => setPanelFocus(null), [])
+    const openTaskAt = (task, control = null) => {
+        setPanelFocus(control && task?.id ? { taskId: String(task.id), control } : null)
+        openTask(task)
+    }
     const closeTask = useCallback(() => {
+        setPanelFocus(null)
         setSearchParams((prev) => {
             const next = new URLSearchParams(prev)
             next.delete("task_id")
@@ -925,6 +936,7 @@ function ProjectPage() {
                 setProjectName(project.name || "")
                 setProjectDueDate(project.due_date || "")
                 setProjectDescription(project.description || "")
+                setProjectState({ status: project.status || "active", closed_at: project.closed_at || null, closed_by: project.closed_by || null })
                 if (project.team_space_id) setTeamSpaceId(project.team_space_id)
             }
             // Always found, even when the project or its lead department can't be read
@@ -1264,6 +1276,12 @@ function ProjectPage() {
                     <div className="flex items-center gap-md flex-wrap">
                         {projectHeading}
                         {projectDeadline}
+                        {projectState.status === "closed" && (
+                            <span className="px-2.5 py-1 rounded-full border border-line text-[11px] font-semibold text-soft flex items-center gap-1" title="Closed from the Resolve tab; its managers can reopen it there">
+                                <span className="material-symbols-outlined text-[14px]" aria-hidden="true">lock</span>
+                                Closed
+                            </span>
+                        )}
                         {isCrossDepartment && (
                             <ProjectHealthPill
                                 health={projectHealth({ departments: projectDepartments, tasks: linkedTasks, projectDueDate: project_due_date })}
@@ -1280,6 +1298,7 @@ function ProjectPage() {
                             // Only projects shared by more than one department
                             ...(hasDepartmentsTab ? [{ id: "departments", label: "Departments", icon: "lan" }] : []),
                             { id: "timeline", label: "Timeline", icon: "view_timeline" },
+                            { id: "resolve", label: "Resolve", icon: "bolt" },
                             { id: "files", label: "Public Files", icon: "folder" },
                             { id: "members", label: "Members", icon: "group" },
                             { id: "sprint", label: "Sprint", icon: "directions_run" },
@@ -1480,6 +1499,36 @@ function ProjectPage() {
                             projectDueDate={project_due_date}
                             people={orgUsers}
                             onOpenTask={openTask}
+                        />
+                    )}
+                    {activeTab === "resolve" && (
+                        <ResolveTab
+                            projectId={project_id}
+                            project={projectState}
+                            departments={projectDepartments}
+                            invitedDepartments={invitedDepartments}
+                            tasks={linkedTasks}
+                            people={orgUsers}
+                            canManage={canDeleteProject === true}
+                            canNudge={canDeleteProject === true || projectDepartments.some((d) => d.lead_id && d.lead_id === currentUserId)}
+                            canComplete={canAddTasks === true}
+                            canReassign={canEditTask}
+                            canChangeDueDate={canEditTaskDeadline}
+                            onCompleteTask={async (task) => {
+                                const done = boardColumns.find((c) => c.base_status === "done")
+                                if (!done) return "This board has no Done column."
+                                const message = await moveTask(task, done)
+                                return message?.startsWith("Couldn't") ? message : null
+                            }}
+                            onOpenTask={openTaskAt}
+                            onShowDepartmentTasks={(departmentId) => { setDepartmentFilter({ departmentId, isBlockedOnly: false }); setActiveTab("tasks") }}
+                            onGoToDepartments={hasDepartmentsTab ? () => setActiveTab("departments") : null}
+                            onStatusChanged={(status) => setProjectState((prev) => ({
+                                ...prev,
+                                status,
+                                closed_at: status === "closed" ? new Date().toISOString() : null,
+                                closed_by: status === "closed" ? currentUserId : null,
+                            }))}
                         />
                     )}
                     {activeTab === "sprint" && (
@@ -1963,6 +2012,8 @@ function ProjectPage() {
                         // A dependency added, removed or ended doesn't touch the task row
                         ...(selectedTask.blocked_by || []).map((e) => `${e.id}:${e.resolved_at || ""}`),
                     ].join("|")}
+                    focusControl={panelFocus && panelFocus.taskId === String(selectedTask.id) ? panelFocus.control : null}
+                    onFocusHandled={clearPanelFocus}
                     statusNote={selectedTask.status === "waiting" ? waitingLabel(selectedTask, linkedTasks, taskModalDepartments) : null}
                     notice={<UnblockedBanner task={selectedTask} tasks={linkedTasks} departments={taskModalDepartments} onOpenTask={openTask} />}
                     detailsExtra={(

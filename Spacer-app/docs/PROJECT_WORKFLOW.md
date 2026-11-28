@@ -28,8 +28,8 @@ Calls made without asking (smallest reasonable reading of the design):
 | P2 | 04, 10 | Statuses `waiting` and `in_review` across the app; board columns | Done, applied 26 Nov 2026 |
 | P3 | 03, 05, 09 | Task panel: Blocking this task, actions, Mark as Waiting modal with a note, unblocked banner and chain | Done, applied 26 Nov 2026 |
 | P4 | 02, 04 | Departments tab redesign; board filters and dependency summary | Code done (no migration) |
-| P5 | 06 | Resolve tab and Close project | Planned |
-| P6 | 07 | Timeline week grid, key dates, insights; project Calendar tab removed | Code done (no migration) |
+| P5 | 06 | Resolve tab and Close project | Done, applied 28 Nov 2026 |
+| P6 | 07 | Timeline week grid, key dates, insights; project Calendar tab removed | Done (no migration) |
 | P7 | 08 | Notifications page | Planned |
 
 ## 3. Who can open a project (since P1)
@@ -101,7 +101,18 @@ Who becomes a member:
 - **Insights** (at most three, worked out each time): who is delaying the project and why; a department (or, on a one-department project, a task) due within a week with work left; overdue tasks; open tasks without a due date; otherwise "On schedule".
 - **Project Calendar tab removed**, with the day drawer it opened (a day's tasks, and creating a task or meeting on that day). Tasks are still created from Orbit and meetings from the Create menu.
 
-## 9. Code
+## 9. Resolve tab (P5)
+
+- **Where**: a Resolve tab after Timeline on every project.
+- **Banner**: who is holding the project up (the department behind it on a Collab project, as on the Departments tab; otherwise the most overdue blocking task).
+- **Project blockers**: open tasks that other open tasks wait on, most urgent first ("Overdue by 2 days", "Due today", "Due tomorrow"…), with whose work waits ("Blocking Product"), the assignee, and a menu: Open task, Reassign, Adjust due date, Nudge the department. The tick box marks the task Done (anyone who can move tasks on the board), which lets the waiting tasks go ahead.
+- **Department status & next steps** (Collab projects): status, one line ("2 overdue tasks • Action needed", "1 task blocking another department", "No overdue tasks", "All its tasks are done"), and Nudge team for a department that's behind and has a lead, else View tasks.
+- **Take action**: Nudge department (an in-app reminder to its lead; no email is sent, and the same person can nudge a department once an hour, as before), Reassign task and Adjust deadline (open the task's panel with that picker open; the panel's usual rights apply; department due dates stay on the Departments tab), Add a note (up to 1000 characters; listed under Notes & decisions and in Recent Activity; anyone who can open the project).
+- **Close project**: the project's managers can close it once every task is done and no department invite is waiting; until then the button is locked and says why. Closing asks first. A closed project shows "Closed" by its name and "Closed on … by …" on the Resolve tab, stays readable and editable, and can be reopened by its managers. Closing and reopening are logged.
+- Assumption (the design doesn't say): closing doesn't lock the project or hide it from the sidebar; "complete departments" means every task done, so signing a part off isn't required.
+- If work is added or reopened after closing, the Resolve tab says so and suggests reopening. Reassign and Adjust due date follow the task panel's rules (managers and the assignee; managers and the department lead) and are greyed out otherwise.
+
+## 10. Code
 
 | File | What |
 |---|---|
@@ -120,8 +131,10 @@ Who becomes a member:
 | `src/tasks/taskViews.js`, `src/tasks/views/TaskViewToolbar.jsx`, `DependencySummaryBar.jsx` | Assignee, status and priority filters; the summary bar |
 | `src/timelineLayout.js` | The window, spans, rows by department, arrows, tiles, key dates, insights (tests: `timelineLayout.test.js`) |
 | `src/components/ProjectTimeline.jsx`, `TimelineParts.jsx` | The Timeline tab, key dates and insights cards |
+| `src/resolveView.js` | Blockers, next steps, due wording, when the project can close (tests: `resolveView.test.js`) |
+| `src/components/ResolveTab.jsx`, `ResolveParts.jsx`, `TakeActionPanel.jsx` | The Resolve tab, its rows and cards, Take action |
 
-## 10. Migrations
+## 11. Migrations
 
 | Migration | Rollback | What |
 |---|---|---|
@@ -131,9 +144,11 @@ Who becomes a member:
 
 | `20261128110000_task_waiting` (applied 26 Nov 2026) | `supabase/rollback/20261128110000_task_waiting_rollback.sql` | `task_dependencies.note`; `mark_task_waiting()`; History rows for dependencies added, removed and unblocked (`task_dependencies_log`, `tasks_dependencies_follow()`); `task_department_name()`. Dry run on live, rolled back: see the development log |
 
+| `20261128120000_resolve_project` (applied 28 Nov 2026) | `supabase/rollback/20261128120000_resolve_project_rollback.sql` | `project_spaces.status` may be `closed`, `closed_at`, `closed_by`; `close_project()`; `add_project_note()`. Dry run on live, rolled back: see the development log |
+
 Apply each migration before using a build that needs it: the new form calls `create_project()` with `p_description`, and the five-column board writes the new statuses: the form calls `create_project()` with `p_description`, which only the new version has.
 
-## 11. Open items
+## 12. Open items
 
 - Not checked in a browser yet (needs a signed-in account).
 - Department icons and colours in the design (purple Design, blue Product…) aren't stored anywhere; cards use one neutral icon.

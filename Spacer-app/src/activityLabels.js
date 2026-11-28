@@ -4,6 +4,8 @@ import { TASK_STATUSES } from "./taskStatuses.js";
 
 const STATUS_NAMES = Object.fromEntries(TASK_STATUSES.map((s) => [s.value, s.boardName]));
 
+// A note's first characters in the feed (notes go up to 1000)
+const NOTE_PREVIEW = 80;
 const quoted = (text) => (text ? `“${text}”` : "a task");
 const projectName = (s) => (s.project_name ? `“${s.project_name}”` : "a project");
 
@@ -30,6 +32,12 @@ export function describeActivity(row) {
             const note = moved > 0 ? ` (${moved} task${moved === 1 ? "" : "s"} moved to the lead department)` : "";
             return { title: `Removed ${s.department || "a department"} from ${projectName(s)}${note}`, icon: "group_remove", badge: "Projects" };
         }
+        case "project:note_added": {
+            const note = String(s.note || "");
+            return { title: `Note on ${projectName(s)}: ${quoted(note.length > NOTE_PREVIEW ? `${note.slice(0, NOTE_PREVIEW).trimEnd()}…` : note)}`, icon: "description", badge: "Projects" };
+        }
+        case "project:project_closed": return { title: `Closed ${projectName(s)}`, icon: "lock", badge: "Projects" };
+        case "project:project_reopened": return { title: `Reopened ${projectName(s)}`, icon: "lock_open", badge: "Projects" };
         case "project:department_declined": return { title: `${s.department || "A department"} declined to work on ${projectName(s)}`, icon: "do_not_disturb_on", badge: "Projects" };
         case "department:department_deleted": return { title: "Deleted a department", icon: "domain_disabled", badge: "Departments" };
         case "file:file_added": return { title: `Uploaded ${quoted(s.name)}`, icon: "upload_file", badge: "Files" };
